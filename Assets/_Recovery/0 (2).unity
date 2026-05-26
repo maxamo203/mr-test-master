@@ -467,20 +467,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6053cf9d9157297469ccb74ebc1250c9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARImageAnchor
-  _correctionSpeed: 6
---- !u!114 &223974257
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 223974226}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 998b181605ad1be4faa66a2a74e2deb6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ARTrackingBenchmark
-  _sessionDuration: 30
 --- !u!1 &531426102
 GameObject:
   m_ObjectHideFlags: 0
@@ -1186,14 +1172,6 @@ PrefabInstance:
       propertyPath: m_Enabled
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 6791154920364613369, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
-      propertyPath: <trackablesChanged>k__BackingField.m_PersistentCalls.m_Calls.Array.size
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6791154920364613369, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
-      propertyPath: <trackablesChanged>k__BackingField.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
-      value: 2
-      objectReference: {fileID: 0}
     - target: {fileID: 8167409067047042150, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
       propertyPath: m_HumanSegmentationDepthMode
       value: 1
@@ -1225,9 +1203,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 8631959139027139366, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
       insertIndex: -1
       addedObject: {fileID: 223974248}
-    - targetCorrespondingSourceObject: {fileID: 8631959139027139366, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 223974257}
   m_SourcePrefab: {fileID: 100100000, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

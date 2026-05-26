@@ -24,6 +24,11 @@ public class MRCardboardController : MonoBehaviour
     private Material _bgMat;
     private bool _cardboardMode = false;
 
+    void Awake()
+    {
+        enabled = false; // Cardboard mode not used in this AR build
+    }
+
     void Start()
     {
         RequestCameraPermission();
@@ -69,6 +74,7 @@ public class MRCardboardController : MonoBehaviour
 
     public void ToggleCardboardMode()
     {
+        if (!enabled) return;
         if (_webcamTex == null)
         {
             Debug.LogError("WebcamTexture es null - reintentando init");
