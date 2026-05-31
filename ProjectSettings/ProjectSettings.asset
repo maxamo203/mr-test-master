@@ -146,9 +146,9 @@ PlayerSettings:
   bundleVersion: 0.1
   preloadedAssets:
   - {fileID: -944628639613478452, guid: 289c1b55c9541489481df5cc06664110, type: 3}
-  - {fileID: 7503993742662001001, guid: 1f8a542b80ce101c397edf129e45bbfa, type: 2}
   - {fileID: 4800000, guid: c9f956787b1d945e7b36e0516201fc76, type: 3}
   - {fileID: 4800000, guid: 0945859e5a1034c2cb6dce53cb4fb899, type: 3}
+  - {fileID: 7503993742662001001, guid: 1f8a542b80ce101c397edf129e45bbfa, type: 2}
   metroInputSource: 0
   wsaTransparentSwapchain: 0
   xboxOneDisableKinectGpuReservation: 1
@@ -169,6 +169,7 @@ PlayerSettings:
   androidMinAspectRatio: 1
   applicationIdentifier:
     Standalone: com.DefaultCompany.3D-Project
+    iPhone: com.equipo112.mortuorium
   buildNumber:
     Standalone: 0
     VisionOS: 0
@@ -194,7 +195,7 @@ PlayerSettings:
   VertexChannelCompressionMask: 4054
   iPhoneSdkVersion: 988
   iOSSimulatorArchitecture: 0
-  iOSTargetOSVersionString: 15.0
+  iOSTargetOSVersionString: 26.0
   tvOSSdkVersion: 0
   tvOSSimulatorArchitecture: 0
   tvOSRequireExtendedGameController: 0
@@ -251,8 +252,8 @@ PlayerSettings:
   iOSManualSigningProvisioningProfileType: 0
   tvOSManualSigningProvisioningProfileType: 0
   VisionOSManualSigningProvisioningProfileType: 0
-  appleEnableAutomaticSigning: 0
-  iOSRequireARKit: 0
+  appleEnableAutomaticSigning: 1
+  iOSRequireARKit: 1
   iOSAutomaticallyDetectAndAddCapabilities: 1
   appleEnableProMotion: 0
   shaderPrecisionModel: 0
@@ -589,6 +590,9 @@ PlayerSettings:
   - serializedVersion: 3
     m_BuildTarget: Android
     m_Formats: 03000000
+  - serializedVersion: 3
+    m_BuildTarget: iOS
+    m_Formats: 03000000
   playModeTestRunnerEnabled: 0
   runPlayModeTestAsEditModeTest: 0
   actionOnDotNetUnhandledException: 1
@@ -596,7 +600,7 @@ PlayerSettings:
   enableInternalProfiler: 0
   logObjCUncaughtExceptions: 1
   enableCrashReportAPI: 0
-  cameraUsageDescription: 
+  cameraUsageDescription: Necesario para AR
   locationUsageDescription: 
   microphoneUsageDescription: 
   bluetoothUsageDescription: 
@@ -854,7 +858,8 @@ PlayerSettings:
   webGLCloseOnQuit: 0
   webWasm2023: 0
   webEnableSubmoduleStrippingCompatibility: 0
-  scriptingDefineSymbols: {}
+  scriptingDefineSymbols:
+    iPhone: UNITY_XR_ARKIT_LOADER_ENABLED
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:

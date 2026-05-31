@@ -3,7 +3,10 @@ Shader "AR/Occluder"
     Properties { }
     SubShader
     {
-        Tags { "RenderType"="Opaque" "Queue"="Geometry-1" }
+        // Queue=Background+1 garantiza que renderiza DESPUÉS del AR Camera Background
+        // (que en iOS/Metal limpia el depth buffer al blit). Si renderizáramos antes
+        // (Geometry-1), el depth write quedaría borrado y la oclusión no funcionaría.
+        Tags { "RenderType"="Opaque" "Queue"="Background+1" }
 
         // Pass 1 — oclusor: escribe profundidad pero no color
         Pass
@@ -12,7 +15,7 @@ Shader "AR/Occluder"
             ZWrite On
             ZTest LEqual
             ColorMask 0
-            Cull Back
+            Cull Off
 
             CGPROGRAM
             #pragma vertex vert

@@ -1,0 +1,64 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+// DTOs serializables (via JsonUtility). Todas las posiciones/rotaciones son
+// anchor-relativas — al cargar un scan, se reconstruyen los GameObjects parentados
+// a WorldOrigin con esos local-transforms.
+namespace Scanner
+{
+    [Serializable]
+    public class Vec3
+    {
+        public float x, y, z;
+        public Vec3() { }
+        public Vec3(Vector3 v) { x = v.x; y = v.y; z = v.z; }
+        public Vector3 ToVector3() => new Vector3(x, y, z);
+    }
+
+    [Serializable]
+    public class Quat
+    {
+        public float x, y, z, w;
+        public Quat() { }
+        public Quat(Quaternion q) { x = q.x; y = q.y; z = q.z; w = q.w; }
+        public Quaternion ToQuaternion() => new Quaternion(x, y, z, w);
+    }
+
+    [Serializable]
+    public class DoorData
+    {
+        public string id;
+        public float uMin, uMax;  // a lo largo del eje base de la pared (0..|b-a|)
+        public float vMin, vMax;  // vertical desde la base (0..height)
+    }
+
+    [Serializable]
+    public class WallData
+    {
+        public string id;
+        public Vec3 aLocal;
+        public Vec3 bLocal;
+        public float height;
+        public List<DoorData> doors = new List<DoorData>();
+    }
+
+    [Serializable]
+    public class CubeData
+    {
+        public string id;
+        public Vec3 posLocal;
+        public Quat rotLocal;
+        public Vec3 scaleLocal;
+    }
+
+    [Serializable]
+    public class ScanData
+    {
+        public const string CurrentVersion = "1";
+        public string version = CurrentVersion;
+        public string name;
+        public List<WallData> walls = new List<WallData>();
+        public List<CubeData> cubes = new List<CubeData>();
+    }
+}

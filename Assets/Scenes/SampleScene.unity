@@ -119,11 +119,39 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &40919614 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6704683610357316520, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+  m_PrefabInstance: {fileID: 7197833617756894217}
+  m_PrefabAsset: {fileID: 0}
 --- !u!20 &40919620 stripped
 Camera:
   m_CorrespondingSourceObject: {fileID: 4247777932462926091, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
   m_PrefabInstance: {fileID: 7197833617756894217}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &40919629
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 40919614}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 968053edfd89749c48f4ea5d444abf64, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.XR.ARFoundation::UnityEngine.XR.ARFoundation.ARMeshManager
+  m_MeshPrefab: {fileID: 0}
+  m_Density: 1
+  m_Normals: 1
+  m_Tangents: 0
+  m_TextureCoordinates: 0
+  m_Colors: 0
+  m_Classification: 0
+  m_ConcurrentQueueSize: 4
+  meshInfosChanged:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &65284393
 GameObject:
   m_ObjectHideFlags: 0
@@ -300,6 +328,7 @@ GameObject:
   - component: {fileID: 193648692}
   - component: {fileID: 193648691}
   - component: {fileID: 193648695}
+  - component: {fileID: 193648696}
   m_Layer: 0
   m_Name: NetworkRoot
   m_TagString: Untagged
@@ -321,6 +350,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameBootstrapper
   _host: 127.0.0.1
   _port: 7777
+  _hostName: 
 --- !u!114 &193648692
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -374,6 +404,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c8f41fe0b514119479288f57f77ba114, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkDebugUI
+--- !u!114 &193648696
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 193648690}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1e23f014268d254e903095a87efee5c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LanDiscovery
+  _hostTtl: 5
+  _advertiseInterval: 1
 --- !u!1 &223974226 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 8631959139027139366, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
@@ -467,8 +511,32 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6053cf9d9157297469ccb74ebc1250c9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARImageAnchor
-  _correctionSpeed: 6
+  _anchorManager: {fileID: 223974253}
+--- !u!114 &223974253 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6791154920364613369, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+  m_PrefabInstance: {fileID: 7197833617756894217}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 223974226}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 728ad7fae8e460a4ba41265c7308d757, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.XR.ARFoundation::UnityEngine.XR.ARFoundation.ARAnchorManager
 --- !u!114 &223974257
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 223974226}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 998b181605ad1be4faa66a2a74e2deb6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ARTrackingBenchmark
+  _sessionDuration: 30
+--- !u!114 &223974265
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -477,10 +545,20 @@ MonoBehaviour:
   m_GameObject: {fileID: 223974226}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 998b181605ad1be4faa66a2a74e2deb6, type: 3}
+  m_Script: {fileID: 11500000, guid: 2370659ad43285540a30aa8f24f86f0c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ARTrackingBenchmark
-  _sessionDuration: 30
+  m_EditorClassIdentifier: Assembly-CSharp::LiDARScanner
+  _xrOrigin: {fileID: 0}
+  _meshManager: {fileID: 0}
+  _planeManager: {fileID: 0}
+  _planeOccluder: {fileID: 0}
+  _occlusionManager: {fileID: 0}
+  _meshDensity: 1
+  _disablePlanes: 1
+  _enableClassification: 1
+  _mode: 0
+  _showHUD: 1
+  _tapToToggle: 1
 --- !u!1 &531426102
 GameObject:
   m_ObjectHideFlags: 0
@@ -1178,6 +1256,34 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3158529821527536927, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3158529821527536927, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: _smoothSpeed
+      value: 2.72
+      objectReference: {fileID: 0}
+    - target: {fileID: 3158529821527536927, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: showDebugHUD
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3158529821527536927, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: _minPlaneSize
+      value: 0.01
+      objectReference: {fileID: 0}
+    - target: {fileID: 3158529821527536927, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: debugMaterial
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 3158529821527536927, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: occludeAllPlanes
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3158529821527536927, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: showPlanesForDebug
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 4736471317304938572, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -1194,6 +1300,26 @@ PrefabInstance:
       propertyPath: <trackablesChanged>k__BackingField.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
       value: 2
       objectReference: {fileID: 0}
+    - target: {fileID: 6833915632311172202, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6833915632311172202, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: m_DetectionMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6833915632311172202, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: <trackablesChanged>k__BackingField.m_PersistentCalls.m_Calls.Array.size
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6833915632311172202, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: <trackablesChanged>k__BackingField.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 8167409067047042150, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: m_EnvironmentDepthMode
+      value: 3
+      objectReference: {fileID: 0}
     - target: {fileID: 8167409067047042150, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
       propertyPath: m_HumanSegmentationDepthMode
       value: 1
@@ -1201,6 +1327,18 @@ PrefabInstance:
     - target: {fileID: 8167409067047042150, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
       propertyPath: m_HumanSegmentationStencilMode
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8574505590819830913, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 8574505590819830913, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 8574505590819830913, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 8631959139027139366, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
       propertyPath: m_Name
@@ -1228,6 +1366,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 8631959139027139366, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
       insertIndex: -1
       addedObject: {fileID: 223974257}
+    - targetCorrespondingSourceObject: {fileID: 8631959139027139366, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 223974265}
+    - targetCorrespondingSourceObject: {fileID: 6704683610357316520, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 40919629}
   m_SourcePrefab: {fileID: 100100000, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

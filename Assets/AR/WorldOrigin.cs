@@ -23,8 +23,12 @@ public class WorldOrigin : MonoBehaviour
         if (!IsReady)
             Debug.Log($"[WorldOrigin] Calibrado en {anchorTransform.position}");
 
-        transform.position = anchorTransform.position;
-        transform.rotation = anchorTransform.rotation;
+        // Parentamos al anchor para que, cuando ARCore/ARKit corrija la pose
+        // del ARAnchor (por loop closure del SLAM), WorldOrigin lo siga
+        // automáticamente sin que tengamos que actualizar nada por frame.
+        transform.SetParent(anchorTransform, worldPositionStays: false);
+        transform.localPosition = Vector3.zero;
+        transform.localRotation = Quaternion.identity;
         IsReady = true;
     }
 

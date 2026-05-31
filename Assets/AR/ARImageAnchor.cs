@@ -7,27 +7,30 @@ using UnityEngine.XR.ARSubsystems;
 [RequireComponent(typeof(ARTrackedImageManager))]
 public class ARImageAnchor : MonoBehaviour
 {
-    public event Action OnImageFound;  // solo la primera vez
+    public event Action OnImageFound;       // solo la PRIMERA vez (compat con consumidores actuales)
+    public event Action OnImageReacquired;  // cada vez que se (re)detecta la imagen, incluida la primera
 
     public bool IsFound { get; private set; }
+    public Transform CurrentAnchor => _anchor != null ? _anchor.transform : null;
 
-    // Velocidad a la que el anchor sigue las re-estimaciones del SLAM.
-    // Alto = más fiel al SLAM pero con saltos bruscos visibles.
-    // Bajo = más suave pero tarda más en corregir drift real.
-    [SerializeField] private float _correctionSpeed = 6f;
+    [SerializeField] private ARAnchorManager _anchorManager;
 
     private ARTrackedImageManager _imageManager;
-    private ARTrackedImage        _trackedImage;
-    private GameObject            _anchorGO;
+    private ARPlaneManager        _planeManager;
+    private ARAnchor              _anchor;
+    private GameObject            _anchorVisual;
+    private bool                  _foundEverFired;
 
     private void Awake()
     {
         _imageManager         = GetComponent<ARTrackedImageManager>();
         _imageManager.enabled = false;
 
-        var planeManager = GetComponent<ARPlaneManager>();
-        if (planeManager == null) planeManager = FindFirstObjectByType<ARPlaneManager>();
-        if (planeManager != null) planeManager.enabled = false;
+        if (_anchorManager == null) _anchorManager = FindFirstObjectByType<ARAnchorManager>();
+
+        _planeManager = GetComponent<ARPlaneManager>();
+        if (_planeManager == null) _planeManager = FindFirstObjectByType<ARPlaneManager>();
+        if (_planeManager != null) _planeManager.enabled = false;
     }
 
     public void StartTracking()
@@ -39,69 +42,74 @@ public class ARImageAnchor : MonoBehaviour
 #endif
     }
 
-    // ── Tracking continuo con corrección suavizada ────────────────────────
+    // Vuelve a entrar en modo "buscando imagen". El anchor viejo se destruye
+    // pero los hijos de WorldOrigin se preservan (las posiciones anchor-relativas
+    // se mantienen porque WorldOrigin.SetOrigin re-parentea sin tocar localPos).
+    public void RestartTracking()
+    {
+        IsFound = false;
+
+        if (_anchorVisual != null) Destroy(_anchorVisual);
+        _anchorVisual = null;
+
+        if (_anchor != null) Destroy(_anchor.gameObject);
+        _anchor = null;
+
+#if UNITY_EDITOR
+        StartCoroutine(EditorStub());
+#else
+        _imageManager.enabled = true;
+#endif
+        Debug.Log("[ARImageAnchor] RestartTracking — buscando imagen otra vez.");
+    }
 
     private void Update()
     {
 #if UNITY_EDITOR
         return;
 #endif
-        if (!_imageManager.enabled) return;
+        if (!_imageManager.enabled || IsFound) return;
 
         foreach (var img in _imageManager.trackables)
         {
             if (img.trackingState != TrackingState.Tracking) continue;
 
-            _trackedImage = img;
+            PlaceAnchorAndSpawn(img.transform);
+            IsFound = true;
 
-            if (!IsFound)
+            if (!_foundEverFired)
             {
-                PlaceAnchorAndSpawn(img.transform);
-                IsFound = true;
+                _foundEverFired = true;
                 OnImageFound?.Invoke();
             }
-            else
-            {
-                // La imagen visible ES la fuente de verdad posicional.
-                // Lerp suaviza los micro-saltos del refinamiento SLAM sin perder
-                // la corrección real cuando la cámara se mueve mucho.
-                _anchorGO.transform.position = Vector3.Lerp(
-                    _anchorGO.transform.position,
-                    img.transform.position,
-                    _correctionSpeed * Time.deltaTime
-                );
-                _anchorGO.transform.rotation = Quaternion.Slerp(
-                    _anchorGO.transform.rotation,
-                    img.transform.rotation,
-                    _correctionSpeed * Time.deltaTime
-                );
-                WorldOrigin.Instance.SetOrigin(_anchorGO.transform);
-            }
-            return; // usar solo la primera imagen tracked
+            OnImageReacquired?.Invoke();
+
+            _imageManager.enabled = false;
+            return;
         }
-        // Imagen fuera de encuadre: anchor se congela en la última posición conocida
     }
 
     private void PlaceAnchorAndSpawn(Transform imageTransform)
     {
-        _anchorGO = new GameObject("ImageAnchor");
-        _anchorGO.transform.SetPositionAndRotation(imageTransform.position, imageTransform.rotation);
+        var anchorGO = new GameObject("ImageAnchor");
+        anchorGO.transform.SetPositionAndRotation(imageTransform.position, imageTransform.rotation);
+        _anchor = anchorGO.AddComponent<ARAnchor>();
 
-        WorldOrigin.Instance.SetOrigin(_anchorGO.transform);
-        SpawnVisual(_anchorGO.transform);
+        if (_planeManager != null) _planeManager.enabled = true;
+
+        WorldOrigin.Instance.SetOrigin(_anchor.transform);
+        SpawnVisual(_anchor.transform);
     }
-
-    // ── Visual ────────────────────────────────────────────────────────────
 
     private void SpawnVisual(Transform anchorTransform)
     {
-        var root = new GameObject("AnchorVisual");
-        root.transform.SetParent(anchorTransform);
-        root.transform.localPosition = Vector3.up * 0.05f;
-        root.transform.localRotation = Quaternion.identity;
+        _anchorVisual = new GameObject("AnchorVisual");
+        _anchorVisual.transform.SetParent(anchorTransform);
+        _anchorVisual.transform.localPosition = Vector3.up * 0.05f;
+        _anchorVisual.transform.localRotation = Quaternion.identity;
 
         var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        sphere.transform.SetParent(root.transform);
+        sphere.transform.SetParent(_anchorVisual.transform);
         sphere.transform.localPosition = Vector3.zero;
         sphere.transform.localScale    = Vector3.one * 0.1f;
         Destroy(sphere.GetComponent<Collider>());
@@ -116,8 +124,6 @@ public class ARImageAnchor : MonoBehaviour
         mat.SetColor("_BaseColor", Color.red);
     }
 
-    // ── Editor stub ───────────────────────────────────────────────────────
-
 #if UNITY_EDITOR
     private IEnumerator EditorStub()
     {
@@ -129,7 +135,12 @@ public class ARImageAnchor : MonoBehaviour
 
         SpawnVisual(go.transform);
         IsFound = true;
-        OnImageFound?.Invoke();
+        if (!_foundEverFired)
+        {
+            _foundEverFired = true;
+            OnImageFound?.Invoke();
+        }
+        OnImageReacquired?.Invoke();
     }
 #endif
 }
