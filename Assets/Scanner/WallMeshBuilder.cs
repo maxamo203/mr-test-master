@@ -82,22 +82,33 @@ namespace Scanner
                     Vector3 p11 = aLocal + u1 * baseHat + v1 * up;
                     Vector3 p01 = aLocal + u0 * baseHat + v1 * up;
 
-                    int baseIdx = verts.Count;
-                    verts.Add(p00); verts.Add(p10); verts.Add(p11); verts.Add(p01);
-
                     float lInv = 1f / length;
                     float hInv = height > 0.0001f ? 1f / height : 0f;
-                    uvs.Add(new Vector2(u0 * lInv, v0 * hInv));
-                    uvs.Add(new Vector2(u1 * lInv, v0 * hInv));
-                    uvs.Add(new Vector2(u1 * lInv, v1 * hInv));
-                    uvs.Add(new Vector2(u0 * lInv, v1 * hInv));
+                    var uv00 = new Vector2(u0 * lInv, v0 * hInv);
+                    var uv10 = new Vector2(u1 * lInv, v0 * hInv);
+                    var uv11 = new Vector2(u1 * lInv, v1 * hInv);
+                    var uv01 = new Vector2(u0 * lInv, v1 * hInv);
 
-                    // Cara A (normal segun cross(baseHat, up))
-                    tris.Add(baseIdx + 0); tris.Add(baseIdx + 2); tris.Add(baseIdx + 1);
-                    tris.Add(baseIdx + 0); tris.Add(baseIdx + 3); tris.Add(baseIdx + 2);
-                    // Cara B (visible desde el otro lado)
-                    tris.Add(baseIdx + 0); tris.Add(baseIdx + 1); tris.Add(baseIdx + 2);
-                    tris.Add(baseIdx + 0); tris.Add(baseIdx + 2); tris.Add(baseIdx + 3);
+                    // IMPORTANTE: cada cara usa SUS PROPIOS 4 vertices. Si las dos
+                    // caras (frente/dorso) compartieran vertices, RecalculateNormals
+                    // promediaria normales opuestas y las cancelaria (normal ~ 0),
+                    // dejando el shader lit (Standard) sin iluminacion -> pared
+                    // blanca/negra en iOS. Con vertices separados cada lado obtiene
+                    // su normal correcta.
+
+                    // Cara A (frente)
+                    int a = verts.Count;
+                    verts.Add(p00); verts.Add(p10); verts.Add(p11); verts.Add(p01);
+                    uvs.Add(uv00); uvs.Add(uv10); uvs.Add(uv11); uvs.Add(uv01);
+                    tris.Add(a + 0); tris.Add(a + 2); tris.Add(a + 1);
+                    tris.Add(a + 0); tris.Add(a + 3); tris.Add(a + 2);
+
+                    // Cara B (dorso, winding invertido)
+                    int b = verts.Count;
+                    verts.Add(p00); verts.Add(p10); verts.Add(p11); verts.Add(p01);
+                    uvs.Add(uv00); uvs.Add(uv10); uvs.Add(uv11); uvs.Add(uv01);
+                    tris.Add(b + 0); tris.Add(b + 1); tris.Add(b + 2);
+                    tris.Add(b + 0); tris.Add(b + 2); tris.Add(b + 3);
                 }
             }
 

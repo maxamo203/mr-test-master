@@ -37,6 +37,7 @@ namespace Scanner
 
         private Vector3? _lastFloorLocal;
         private Vector3? _firstFloorLocal;
+        private WallObject _lastWall;   // ultima pared creada en la polilinea actual
         private float    _polylineHeight;
         private string   _currentPolylineId;
         private ScanStateMachine _fsm;
@@ -55,6 +56,7 @@ namespace Scanner
         {
             _firstFloorLocal   = null;
             _lastFloorLocal    = null;
+            _lastWall          = null;
             _polylineHeight    = _defaultHeight;
             _currentPolylineId = System.Guid.NewGuid().ToString("N").Substring(0, 8);
             ClearPreviewSpheres();
@@ -65,6 +67,7 @@ namespace Scanner
         {
             _firstFloorLocal = null;
             _lastFloorLocal  = null;
+            _lastWall        = null;
             ClearPreviewSpheres();
             if (_fsm.Current == ScannerMode.Wall_V1
              || _fsm.Current == ScannerMode.Wall_Height
@@ -177,11 +180,18 @@ namespace Scanner
                 {
                     if (_lastFloorLocal.HasValue)
                     {
-                        var w = WallObject.Create(_lastFloorLocal.Value, anchorLocal, _polylineHeight);
+                        // Arrancamos desde la posicion ACTUAL del ultimo vertice. Si el
+                        // usuario arrastro manualmente el handle B de la pared anterior,
+                        // _lastWall.BLocal ya refleja ese cambio (mientras que el cacheado
+                        // _lastFloorLocal seguiria con la posicion original). Asi el handle
+                        // A de la nueva pared queda pegado al vertice editado.
+                        Vector3 startLocal = _lastWall != null ? _lastWall.BLocal : _lastFloorLocal.Value;
+                        var w = WallObject.Create(startLocal, anchorLocal, _polylineHeight);
                         w.PolylineId = _currentPolylineId;
                         // Primer wall: la preview de V1 ya esta cubierta por el handle A de este wall.
                         RemoveV1Preview();
                         _lastFloorLocal = anchorLocal;
+                        _lastWall       = w;
                     }
                     return;
                 }
