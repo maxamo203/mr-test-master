@@ -66,9 +66,14 @@ namespace Scanner
 
             if (sel is WallObject wall)
             {
-                GUILayout.Label($"Altura: {wall.Height:F2} m");
+                bool inPolyline = !string.IsNullOrEmpty(wall.PolylineId);
+                string altLabel = inPolyline
+                    ? $"Altura (polilinea): {wall.Height:F2} m"
+                    : $"Altura: {wall.Height:F2} m";
+                GUILayout.Label(altLabel);
                 var newH = GUILayout.HorizontalSlider(wall.Height, 0.5f, 5f);
-                if (Mathf.Abs(newH - wall.Height) > 0.001f) wall.SetHeight(newH);
+                if (Mathf.Abs(newH - wall.Height) > 0.001f)
+                    wall.SetHeightForPolyline(newH); // propaga a toda la polilinea
 
                 if (GUILayout.Button("Quitar todas las puertas", GUILayout.Height(40)))
                     wall.ClearDoors();

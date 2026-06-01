@@ -28,8 +28,35 @@ namespace Scanner
         private Material     _matNormal;
         private Material     _matSelected;
 
-        private readonly WallVertexHandle[] _handles = new WallVertexHandle[4];
+        // Solo handles para piso: 0 = A (BL), 1 = B (BR). Los topes se computan
+        // desde aLocal + up*H y bLocal + up*H — no son manipulables.
+        private readonly WallVertexHandle[] _handles = new WallVertexHandle[2];
         private const float VertexHandleRadius = 0.05f;
+
+        // ID compartido por todas las paredes generadas en una misma polilinea.
+        // Usado para propagar cambios de altura del panel a toda la polilinea.
+        public string PolylineId { get; set; }
+
+        // Si el shader del material configurado fue stripeado en el build (tipico
+        // en iOS) o si el material no tiene shader, lo detectamos y avisamos.
+        // En ese caso devolvemos al fallback runtime para evitar render blanco/magenta.
+        private void ValidateShader(Material mat, string label)
+        {
+            if (mat == null) return;
+            if (mat.shader == null || mat.shader.name == "Hidden/InternalErrorShader")
+            {
+                Debug.LogError(
+                    $"[WallObject] Material '{mat.name}' ({label}) tiene shader invalido " +
+                    $"('{(mat.shader != null ? mat.shader.name : "null")}'). " +
+                    $"Probablemente fue stripeado en el build. " +
+                    $"Agregalo a Edit > Project Settings > Graphics > Always Included Shaders. " +
+                    $"Usando fallback runtime.");
+                // Forzamos a usar el runtime: limpiar la referencia para que
+                // el codigo de abajo construya uno nuevo.
+                if (label == "normal")   _matNormal   = null;
+                if (label == "selected") _matSelected = null;
+            }
+        }
 
         public SelectableKind Kind => SelectableKind.Wall;
         public Transform Transform => transform;
@@ -47,6 +74,11 @@ namespace Scanner
             w._mf = go.AddComponent<MeshFilter>();
             w._mr = go.AddComponent<MeshRenderer>();
             w._mc = go.AddComponent<MeshCollider>();
+            // Deshabilitar EnableMeshCleaning para que PhysX no tire warnings
+            // cuando el mesh pasa por estados temporariamente degenerados
+            // durante el drag de vertices.
+            w._mc.cookingOptions = MeshColliderCookingOptions.CookForFasterSimulation
+                                 | MeshColliderCookingOptions.WeldColocatedVertices;
             w.EnsureMaterials();
             w._mr.sharedMaterial = w._matNormal;
 
@@ -63,7 +95,7 @@ namespace Scanner
 
         private void SpawnVertexHandles()
         {
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 2; i++)
             {
                 var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 go.name = $"WallVertex_{i}";
@@ -76,78 +108,53 @@ namespace Scanner
 
         private void RefreshHandlePositions()
         {
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < _handles.Length; i++)
                 if (_handles[i] != null) _handles[i].SnapToCorner();
         }
 
-        // Devuelve el corner en world space.
-        // 0=BL (a), 1=BR (b), 2=TL (a + up*H), 3=TR (b + up*H).
+        // Devuelve el corner de piso en world space. 0=A (BL), 1=B (BR).
         public Vector3 GetCornerWorld(int cornerIdx)
         {
             var wo = WorldOrigin.Instance;
-            Vector3 local;
-            switch (cornerIdx)
-            {
-                case 0: local = ALocal; break;
-                case 1: local = BLocal; break;
-                case 2: local = ALocal + Vector3.up * Height; break;
-                case 3: local = BLocal + Vector3.up * Height; break;
-                default: local = ALocal; break;
-            }
+            Vector3 local = cornerIdx == 0 ? ALocal : BLocal;
             return wo != null ? wo.ToWorld(local) : local;
         }
 
-        // Setea la posicion del corner en world space y actualiza los datos
-        // del wall (a, b, Height) segun el corner manipulado.
-        public void SetCornerWorld(int cornerIdx, Vector3 worldPos)
+        public Vector3 GetCornerLocal(int cornerIdx) => cornerIdx == 0 ? ALocal : BLocal;
+
+        // Setea el corner de piso directamente en anchor-local (sin tocar otros walls).
+        // El WallVertexHandle hace la propagacion a paredes compartidas.
+        public void SetCornerLocal(int cornerIdx, Vector3 local)
         {
-            var wo = WorldOrigin.Instance;
-            if (wo == null) return;
-            var local = wo.ToRelative(worldPos);
-
-            switch (cornerIdx)
-            {
-                case 0: // BL: redefinir aLocal completo
-                    ALocal = local;
-                    break;
-                case 1: // BR: redefinir bLocal completo
-                    BLocal = local;
-                    break;
-                case 2: // TL: X/Z muevien aLocal, Y delta cambia Height
-                {
-                    var newA = ALocal;
-                    newA.x   = local.x;
-                    newA.z   = local.z;
-                    // Y del top relativo a aLocal.y define H.
-                    float newH = Mathf.Max(0.05f, local.y - newA.y);
-                    ALocal = newA;
-                    Height = newH;
-                    break;
-                }
-                case 3: // TR: X/Z mueven bLocal, Y cambia Height
-                {
-                    var newB = BLocal;
-                    newB.x   = local.x;
-                    newB.z   = local.z;
-                    float newH = Mathf.Max(0.05f, local.y - newB.y);
-                    BLocal = newB;
-                    Height = newH;
-                    break;
-                }
-            }
-
+            if (cornerIdx == 0) ALocal = local;
+            else                BLocal = local;
             Rebuild();
-            // No snapeamos el handle seleccionado (esta arrastrando); los otros si.
-            for (int i = 0; i < 4; i++)
+            // Solo refrescamos el handle del OTRO corner (el del corner arrastrado
+            // ya tiene transform.position = posicion deseada, no queremos pisarlo).
+            int other = 1 - cornerIdx;
+            if (_handles[other] != null) _handles[other].SnapToCorner();
+        }
+
+        // Cambia la altura propagando a todos los walls de la misma polilinea.
+        public void SetHeightForPolyline(float h)
+        {
+            var newH = Mathf.Max(0.1f, h);
+            if (string.IsNullOrEmpty(PolylineId))
             {
-                if (i == cornerIdx) continue;
-                if (_handles[i] != null) _handles[i].SnapToCorner();
+                SetHeight(newH);
+                return;
             }
+            var registry = SceneRegistry.Instance;
+            if (registry == null) { SetHeight(newH); return; }
+            foreach (var w in registry.Walls)
+                if (w != null && w.PolylineId == PolylineId)
+                    w.SetHeight(newH);
         }
 
         public static WallObject FromData(WallData d)
         {
             var w = Create(d.aLocal.ToVector3(), d.bLocal.ToVector3(), d.height, d.id);
+            w.PolylineId = d.polylineId;
             if (d.doors != null)
                 foreach (var door in d.doors) w._doors.Add(door);
             w.Rebuild();
@@ -158,11 +165,12 @@ namespace Scanner
         {
             return new WallData
             {
-                id     = Id,
-                aLocal = new Vec3(ALocal),
-                bLocal = new Vec3(BLocal),
-                height = Height,
-                doors  = new List<DoorData>(_doors),
+                id         = Id,
+                polylineId = PolylineId,
+                aLocal     = new Vec3(ALocal),
+                bLocal     = new Vec3(BLocal),
+                height     = Height,
+                doors      = new List<DoorData>(_doors),
             };
         }
 
@@ -236,17 +244,32 @@ namespace Scanner
 
             // MeshCollider necesita unassign + reassign para refrescar.
             _mc.sharedMesh = null;
-            _mf.sharedMesh = mesh;
-            _mc.sharedMesh = mesh;
+            if (mesh != null)
+            {
+                _mf.sharedMesh = mesh;
+                _mc.sharedMesh = mesh;
+            }
+            else
+            {
+                // Pared degenerada (vertices demasiado cerca). Dejamos los slots
+                // vacios — al separar los vertices se rebuild y reaparece.
+                _mf.sharedMesh = null;
+            }
         }
 
         private void EnsureMaterials()
         {
             // 1) Si el WallBuilder tiene materiales asignados desde el Inspector, los usamos.
             if (_matNormal == null && WallBuilder.ConfiguredNormalMat != null)
+            {
                 _matNormal = WallBuilder.ConfiguredNormalMat;
+                ValidateShader(_matNormal, "normal");
+            }
             if (_matSelected == null && WallBuilder.ConfiguredSelectedMat != null)
+            {
                 _matSelected = WallBuilder.ConfiguredSelectedMat;
+                ValidateShader(_matSelected, "selected");
+            }
 
             // 2) Si no hay seleccionado configurado, generamos uno tintado a partir
             //    del normal (o del default runtime).
@@ -284,15 +307,14 @@ namespace Scanner
         public void Delete()
         {
             SceneRegistry.Instance?.Unregister(this);
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < _handles.Length; i++)
                 if (_handles[i] != null) Destroy(_handles[i].gameObject);
             Destroy(gameObject);
         }
 
         private void OnDestroy_Cleanup()
         {
-            // Llamado desde OnDestroy de la WallObject — limpia handles colgados.
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < _handles.Length; i++)
                 if (_handles[i] != null) Destroy(_handles[i].gameObject);
         }
 

@@ -56,10 +56,17 @@ namespace Scanner
 
         private void EnsureMaterials()
         {
+            // 1) Materiales del CubeBuilder Inspector si existen.
+            if (_matNormal == null && CubeBuilder.ConfiguredNormalMat != null)
+                _matNormal = CubeBuilder.ConfiguredNormalMat;
+            if (_matSelected == null && CubeBuilder.ConfiguredSelectedMat != null)
+                _matSelected = CubeBuilder.ConfiguredSelectedMat;
+
+            // 2) Fallback runtime si no hay material configurado.
             if (_matNormal == null)
             {
                 var sh = Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
-                _matNormal = new Material(sh) { name = "CubeMat" };
+                _matNormal = new Material(sh) { name = "CubeMat (runtime)" };
                 var col = new Color(0.6f, 0.8f, 1f, 0.8f);
                 if (_matNormal.HasProperty("_Color"))     _matNormal.color = col;
                 if (_matNormal.HasProperty("_BaseColor")) _matNormal.SetColor("_BaseColor", col);
@@ -67,8 +74,7 @@ namespace Scanner
             }
             if (_matSelected == null)
             {
-                var sh = Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
-                _matSelected = new Material(sh) { name = "CubeMatSelected" };
+                _matSelected = new Material(_matNormal) { name = "CubeMatSelected (runtime)" };
                 var col = new Color(1f, 0.8f, 0.2f, 0.85f);
                 if (_matSelected.HasProperty("_Color"))     _matSelected.color = col;
                 if (_matSelected.HasProperty("_BaseColor")) _matSelected.SetColor("_BaseColor", col);
@@ -96,8 +102,9 @@ namespace Scanner
 
         private void OnDestroy()
         {
-            if (_matNormal   != null) Destroy(_matNormal);
-            if (_matSelected != null) Destroy(_matSelected);
+            // Solo destruir materiales runtime, no los asignados del Inspector.
+            if (_matNormal   != null && _matNormal.name.Contains("(runtime)"))   Destroy(_matNormal);
+            if (_matSelected != null && _matSelected.name.Contains("(runtime)")) Destroy(_matSelected);
         }
     }
 }

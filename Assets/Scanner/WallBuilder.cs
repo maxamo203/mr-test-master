@@ -38,6 +38,7 @@ namespace Scanner
         private Vector3? _lastFloorLocal;
         private Vector3? _firstFloorLocal;
         private float    _polylineHeight;
+        private string   _currentPolylineId;
         private ScanStateMachine _fsm;
         private readonly System.Collections.Generic.List<GameObject> _previewSpheres = new();
 
@@ -52,9 +53,10 @@ namespace Scanner
 
         public void StartPolyline()
         {
-            _firstFloorLocal = null;
-            _lastFloorLocal  = null;
-            _polylineHeight  = _defaultHeight;
+            _firstFloorLocal   = null;
+            _lastFloorLocal    = null;
+            _polylineHeight    = _defaultHeight;
+            _currentPolylineId = System.Guid.NewGuid().ToString("N").Substring(0, 8);
             ClearPreviewSpheres();
             _fsm.SetMode(ScannerMode.Wall_V1);
         }
@@ -70,34 +72,73 @@ namespace Scanner
                 _fsm.SetMode(ScannerMode.Idle);
         }
 
-        private void SpawnPreviewSphere(Vector3 anchorLocal, Color color)
+        private GameObject SpawnPreviewSphere(Vector3 anchorLocal, Color color, PolylinePreviewHandle.PreviewKind kind)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.name = "PolylinePreviewSphere";
-            Destroy(go.GetComponent<Collider>()); // sin collider: no interfiere con seleccion
-            go.transform.SetParent(WorldOrigin.Instance.transform, worldPositionStays: false);
-            go.transform.localPosition = anchorLocal;
-            go.transform.localScale    = Vector3.one * (_previewSphereRadius * 2f);
-
-            var sh  = Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
-            var mat = new Material(sh) { name = "PreviewSphereMat (runtime)" };
-            if (mat.HasProperty("_Color"))     mat.color = color;
-            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
-            go.GetComponent<MeshRenderer>().sharedMaterial = mat;
-
+            go.name = $"PolylinePreview_{kind}";
+            // El SphereCollider se mantiene para ser tappeable.
+            var handle = go.AddComponent<PolylinePreviewHandle>();
+            handle.Init(this, kind, anchorLocal, color, _previewSphereRadius);
             _previewSpheres.Add(go);
+            return go;
+        }
+
+        // Llamado por PolylinePreviewHandle cuando el usuario mueve la esfera V1.
+        public void UpdateV1Floor(Vector3 newLocal)
+        {
+            var oldFirst = _firstFloorLocal;
+            _firstFloorLocal = newLocal;
+            // Si _lastFloorLocal todavia apuntaba a la posicion original de V1
+            // (estamos antes de crear la primer pared), tambien la actualizamos.
+            if (_lastFloorLocal.HasValue && oldFirst.HasValue
+                && (_lastFloorLocal.Value - oldFirst.Value).sqrMagnitude < 1e-6f)
+                _lastFloorLocal = newLocal;
+        }
+
+        // Llamado por PolylinePreviewHandle cuando el usuario mueve la esfera V2 (techo).
+        public void UpdateCeiling(Vector3 newLocal)
+        {
+            if (!_firstFloorLocal.HasValue) return;
+            float h = Mathf.Abs(newLocal.y - _firstFloorLocal.Value.y);
+            _polylineHeight = Mathf.Max(0.1f, h);
+            // Propagar a paredes ya creadas en esta polilinea.
+            var registry = SceneRegistry.Instance;
+            if (registry == null) return;
+            foreach (var w in registry.Walls)
+                if (w != null && w.PolylineId == _currentPolylineId)
+                    w.SetHeight(_polylineHeight);
         }
 
         private void ClearPreviewSpheres()
         {
+            // Si la seleccion actual es una preview, deseleccionar primero para
+            // que el gizmo se detenga limpio.
+            var fsm = ScanStateMachine.Instance;
+            if (fsm != null && fsm.CurrentSelection is PolylinePreviewHandle)
+                fsm.ClearSelection();
+
             foreach (var s in _previewSpheres)
             {
                 if (s == null) continue;
-                var mr = s.GetComponent<MeshRenderer>();
-                if (mr != null && mr.sharedMaterial != null) Destroy(mr.sharedMaterial);
                 Destroy(s);
             }
             _previewSpheres.Clear();
+        }
+
+        // Destruye la preview de V1 (queda redundante con el handle A de la primera pared).
+        private void RemoveV1Preview()
+        {
+            for (int i = _previewSpheres.Count - 1; i >= 0; i--)
+            {
+                var s = _previewSpheres[i];
+                if (s == null) { _previewSpheres.RemoveAt(i); continue; }
+                var h = s.GetComponent<PolylinePreviewHandle>();
+                if (h != null && h.Type == PolylinePreviewHandle.PreviewKind.V1Floor)
+                {
+                    Destroy(s);
+                    _previewSpheres.RemoveAt(i);
+                }
+            }
         }
 
         public void PlaceVertexAtCurrentReticle()
@@ -120,18 +161,15 @@ namespace Scanner
                 {
                     _firstFloorLocal = anchorLocal;
                     _lastFloorLocal  = anchorLocal;
-                    SpawnPreviewSphere(anchorLocal, _previewFloorColor);
+                    SpawnPreviewSphere(anchorLocal, _previewFloorColor, PolylinePreviewHandle.PreviewKind.V1Floor);
                     _fsm.SetMode(ScannerMode.Wall_Height);
                     return;
                 }
                 case ScannerMode.Wall_Height:
                 {
-                    // El segundo vertice marca la altura. Usamos el delta vertical
-                    // (eje Y del anchor) — robusto a que el usuario no apunte
-                    // perfectamente arriba.
                     float h = Mathf.Abs(anchorLocal.y - (_firstFloorLocal?.y ?? anchorLocal.y));
                     _polylineHeight = Mathf.Max(0.1f, h);
-                    SpawnPreviewSphere(anchorLocal, _previewCeilingColor);
+                    SpawnPreviewSphere(anchorLocal, _previewCeilingColor, PolylinePreviewHandle.PreviewKind.Ceiling);
                     _fsm.SetMode(ScannerMode.Wall_Vn);
                     return;
                 }
@@ -139,8 +177,10 @@ namespace Scanner
                 {
                     if (_lastFloorLocal.HasValue)
                     {
-                        WallObject.Create(_lastFloorLocal.Value, anchorLocal, _polylineHeight);
-                        SpawnPreviewSphere(anchorLocal, _previewFloorColor);
+                        var w = WallObject.Create(_lastFloorLocal.Value, anchorLocal, _polylineHeight);
+                        w.PolylineId = _currentPolylineId;
+                        // Primer wall: la preview de V1 ya esta cubierta por el handle A de este wall.
+                        RemoveV1Preview();
                         _lastFloorLocal = anchorLocal;
                     }
                     return;

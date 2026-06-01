@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.EnhancedTouch;
+using ETouch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 
 namespace Scanner
 {
@@ -19,8 +22,8 @@ namespace Scanner
         public static TransformGizmoController Instance { get; private set; }
 
         [SerializeField] private Camera _camera;
-        [Tooltip("Tamanio aparente del gizmo: a 1m de la camara, el gizmo ocupa este factor (en metros).")]
-        [SerializeField] private float _screenSizeFactor = 0.22f;
+        [Tooltip("Tamanio aparente del gizmo: a 1m de la camara, el gizmo ocupa este factor (en metros). Se sube por encima del tamanio del objeto para que sus handles salgan del cubo y sean tappeables.")]
+        [SerializeField] private float _screenSizeFactor = 0.4f;
 
         private Transform _target;
         private GameObject _root;
@@ -48,6 +51,8 @@ namespace Scanner
             else
                 _gizmoLayerMask = 1 << _gizmoLayer;
 
+            if (!EnhancedTouchSupport.enabled) EnhancedTouchSupport.Enable();
+
             BuildGizmoRoot();
             _root.SetActive(false);
         }
@@ -58,6 +63,7 @@ namespace Scanner
             _moveOnly = moveOnly;
             _root.SetActive(target != null);
             // Mostrar/ocultar handles segun el modo.
+            foreach (var h in _moveHandles)   if (h != null) h.SetActive(true);
             foreach (var h in _scaleHandles)  if (h != null) h.SetActive(!moveOnly);
             foreach (var h in _rotateHandles) if (h != null) h.SetActive(!moveOnly);
         }
@@ -84,55 +90,114 @@ namespace Scanner
             HandleInput();
         }
 
+        // Priority Scale/Rotate sobre Move para que la flecha larga del Move
+        // no se coma los taps en los handles Scale/Rotate cercanos.
+        private static int PriorityOf(GizmoOperation op)
+        {
+            switch (op)
+            {
+                case GizmoOperation.Scale:  return 2;
+                case GizmoOperation.Rotate: return 2;
+                default:                    return 1;
+            }
+        }
+
+        // Lee el "puntero primario" via EnhancedTouchSupport (mas robusto en Android)
+        // o Mouse.current como fallback de editor.
+        private bool ReadPointer(out Vector2 pos, out bool began, out bool held, out bool released)
+        {
+            pos = Vector2.zero; began = false; held = false; released = false;
+
+            if (ETouch.activeTouches.Count > 0)
+            {
+                var t = ETouch.activeTouches[0];
+                pos      = t.screenPosition;
+                began    = t.phase == UnityEngine.InputSystem.TouchPhase.Began;
+                released = t.phase == UnityEngine.InputSystem.TouchPhase.Ended
+                        || t.phase == UnityEngine.InputSystem.TouchPhase.Canceled;
+                held     = !released;
+                return true;
+            }
+
+            var ms = Mouse.current;
+            if (ms != null)
+            {
+                bool pressed = ms.leftButton.isPressed;
+                began    = ms.leftButton.wasPressedThisFrame;
+                released = ms.leftButton.wasReleasedThisFrame;
+                if (pressed || began || released)
+                {
+                    pos  = ms.position.ReadValue();
+                    held = pressed;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private void HandleInput()
         {
-            if (Input.touchCount == 0) { _activeHandle = null; return; }
-            var touch = Input.GetTouch(0);
-
-            switch (touch.phase)
+            if (!ReadPointer(out var pos, out var began, out var held, out var released))
             {
-                case TouchPhase.Began:
+                _activeHandle = null;
+                return;
+            }
+
+            if (began)
+            {
+                // Sync transforms para que los colliders de los handles esten
+                // donde el transform los puso. El proyecto tiene autoSync=false.
+                Physics.SyncTransforms();
+
+                var ray = _camera.ScreenPointToRay(pos);
+                if (_gizmoLayerMask != 0)
                 {
-                    var ray = _camera.ScreenPointToRay(touch.position);
-                    if (_gizmoLayerMask != 0 && Physics.Raycast(ray, out var hit, 100f, _gizmoLayerMask))
+                    var hits = Physics.RaycastAll(ray, 100f, _gizmoLayerMask);
+                    GizmoHandle best = null;
+                    int bestPriority = -1;
+                    float bestDist = float.MaxValue;
+                    foreach (var hit in hits)
                     {
                         var h = hit.collider.GetComponentInParent<GizmoHandle>();
-                        if (h != null)
+                        if (h == null) continue;
+                        int pri = PriorityOf(h.Operation);
+                        if (pri > bestPriority || (pri == bestPriority && hit.distance < bestDist))
                         {
-                            _activeHandle = h;
-                            _lastTouchPos = touch.position;
+                            best = h;
+                            bestPriority = pri;
+                            bestDist = hit.distance;
                         }
                     }
-                    break;
-                }
-
-                case TouchPhase.Moved:
-                {
-                    if (_activeHandle == null) return;
-                    var delta = touch.position - _lastTouchPos;
-                    _lastTouchPos = touch.position;
-
-                    var worldAxis = _root.transform.rotation * _activeHandle.LocalAxis();
-
-                    switch (_activeHandle.Operation)
+                    if (best != null)
                     {
-                        case GizmoOperation.Move:
-                            ApplyMove(worldAxis, delta);
-                            break;
-                        case GizmoOperation.Scale:
-                            ApplyScale(_activeHandle.Axis, worldAxis, delta);
-                            break;
-                        case GizmoOperation.Rotate:
-                            ApplyRotateY(worldAxis, touch.position, delta);
-                            break;
+                        _activeHandle = best;
+                        _lastTouchPos = pos;
                     }
-                    break;
                 }
+            }
+            else if (released)
+            {
+                _activeHandle = null;
+            }
+            else if (held && _activeHandle != null)
+            {
+                var delta = pos - _lastTouchPos;
+                _lastTouchPos = pos;
+                if (delta.sqrMagnitude < 0.5f) return; // sin movimiento real
 
-                case TouchPhase.Ended:
-                case TouchPhase.Canceled:
-                    _activeHandle = null;
-                    break;
+                var worldAxis = _root.transform.rotation * _activeHandle.LocalAxis();
+                switch (_activeHandle.Operation)
+                {
+                    case GizmoOperation.Move:
+                        ApplyMove(worldAxis, delta);
+                        break;
+                    case GizmoOperation.Scale:
+                        ApplyScale(_activeHandle.Axis, worldAxis, delta);
+                        break;
+                    case GizmoOperation.Rotate:
+                        ApplyRotateY(worldAxis, pos, delta);
+                        break;
+                }
             }
         }
 
@@ -210,11 +275,16 @@ namespace Scanner
 
         private static Material BuildUnlitMat(Color c)
         {
-            var sh  = Shader.Find("Unlit/Color") ?? Shader.Find("Sprites/Default") ?? Shader.Find("Standard");
+            // GizmoOverlay shader: ZTest Always asi los handles del gizmo siempre
+            // se ven por encima de la geometria (cubos, paredes, etc.).
+            var sh  = Resources.Load<Shader>("GizmoOverlay")
+                   ?? Shader.Find("Hidden/GizmoOverlay")
+                   ?? Shader.Find("Unlit/Color")
+                   ?? Shader.Find("Standard");
             var mat = new Material(sh) { name = "GizmoMat" };
             if (mat.HasProperty("_Color"))     mat.color = c;
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", c);
-            mat.renderQueue = 4000;
+            mat.renderQueue = 5000;
             return mat;
         }
 
@@ -226,7 +296,11 @@ namespace Scanner
             mr.reflectionProbeUsage = ReflectionProbeUsage.Off;
         }
 
-        // Move = flecha (cubo alargado) en el eje.
+        // Move = flecha (cubo alargado) en el eje. Mantenemos el collider del
+        // primitive en su tamano default (1x1x1) que con la localScale del arrow
+        // queda ajustado al visual — sin extension generosa, asi NO pisa los
+        // taps al Scale/Rotate cercanos. La priorizacion en HandleInput hace
+        // el resto.
         private void CreateMoveHandle(GizmoAxis ax)
         {
             var go = NewHandleGO($"Move_{ax}");
@@ -237,22 +311,25 @@ namespace Scanner
 
             var arrow = GameObject.CreatePrimitive(PrimitiveType.Cube);
             arrow.name = "ArrowMesh";
-            Destroy(arrow.GetComponent<BoxCollider>());
             arrow.transform.SetParent(go.transform, worldPositionStays: false);
             arrow.transform.localPosition = h.LocalAxis() * 0.45f;
-            arrow.transform.localScale    = AxisToScale(ax, length: 0.9f, thickness: 0.06f);
+            arrow.transform.localScale    = AxisToScale(ax, length: 0.8f, thickness: 0.08f);
             if (_gizmoLayer >= 0) arrow.layer = _gizmoLayer;
 
             var mr = arrow.GetComponent<MeshRenderer>();
             mr.sharedMaterial = BuildUnlitMat(h.AxisColor());
             SetupRenderer(mr);
 
-            var col = go.AddComponent<BoxCollider>();
-            col.center = h.LocalAxis() * 0.45f;
-            col.size   = AxisToScale(ax, length: 0.9f, thickness: 0.12f);
+            // Mantenemos la longitud del collider igual al visual (no se extiende
+            // hacia donde estan Scale/Rotate) pero ensanchamos en perpendicular
+            // para que sea facil de tappear sin ser sobre-greedy.
+            var bc = arrow.GetComponent<BoxCollider>();
+            bc.center = Vector3.zero;
+            bc.size   = AxisToScale(ax, length: 1.0f, thickness: 2.5f);
         }
 
-        // Scale = cubo solido al final del eje, mas alla del Move handle.
+        // Scale = cubo solido al final del eje, BIEN mas alla del Move handle.
+        // Collider en el propio visual.
         private void CreateScaleHandle(GizmoAxis ax)
         {
             var go = NewHandleGO($"Scale_{ax}");
@@ -263,10 +340,9 @@ namespace Scanner
 
             var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
             cube.name = "ScaleMesh";
-            Destroy(cube.GetComponent<BoxCollider>());
             cube.transform.SetParent(go.transform, worldPositionStays: false);
-            cube.transform.localPosition = h.LocalAxis() * 1.1f;
-            cube.transform.localScale    = new Vector3(0.18f, 0.18f, 0.18f);
+            cube.transform.localPosition = h.LocalAxis() * 1.5f; // muy afuera del Move (0.85 max)
+            cube.transform.localScale    = new Vector3(0.28f, 0.28f, 0.28f);
             if (_gizmoLayer >= 0) cube.layer = _gizmoLayer;
 
             var mr = cube.GetComponent<MeshRenderer>();
@@ -274,12 +350,17 @@ namespace Scanner
             mr.sharedMaterial = BuildUnlitMat(c);
             SetupRenderer(mr);
 
-            var box = go.AddComponent<BoxCollider>();
-            box.center = h.LocalAxis() * 1.1f;
-            box.size   = new Vector3(0.24f, 0.24f, 0.24f);
+            // Agrandar collider para tap mas facil. Como el Move ya no llega
+            // hasta aca y la prioridad en HandleInput es Scale > Move, no hay
+            // riesgo de conflicto.
+            var bc = cube.GetComponent<BoxCollider>();
+            bc.center = Vector3.zero;
+            bc.size   = new Vector3(2.2f, 2.2f, 2.2f);
         }
 
-        // Rotate Y = un toro horizontal (en plano XZ del objeto).
+        // Rotate Y = un toro horizontal (en plano XZ del objeto). El anillo
+        // pasa por entre Move y Scale (radio 1.15) para que la mayor parte del
+        // anillo este en zona "vacia" sin colisionar con otros handles.
         private void CreateRotateY()
         {
             var go = NewHandleGO("Rotate_Y");
@@ -288,7 +369,7 @@ namespace Scanner
             h.Operation = GizmoOperation.Rotate;
             h.Axis      = GizmoAxis.Y;
 
-            var mesh = BuildTorus(majorRadius: 0.75f, minorRadius: 0.05f, majorSegments: 36, minorSegments: 8);
+            var mesh = BuildTorus(majorRadius: 1.15f, minorRadius: 0.11f, majorSegments: 36, minorSegments: 8);
 
             var ring = new GameObject("RotateMesh");
             ring.transform.SetParent(go.transform, worldPositionStays: false);

@@ -19,15 +19,21 @@ namespace Scanner
     // vertices "ya estan" en su lugar relativo al anchor.
     public static class WallMeshBuilder
     {
+        // Umbral minimo para considerar la pared lo suficientemente grande como
+        // para generar geometria. Por debajo, devolvemos un mesh vacio (sin
+        // triangulos) — evita warnings de PhysX al hacer cooking de meshes
+        // degenerados durante el drag de vertices.
+        private const float MinDimension = 0.02f;
+
+        // Devuelve null si la pared seria degenerada. El WallObject limpia los
+        // slots de MeshFilter / MeshCollider en ese caso (sin warnings de PhysX
+        // por mesh sin vertices). Cuando el usuario expanda los vertices al
+        // tamano valido, Rebuild() los reasigna y la pared aparece.
         public static Mesh Build(Vector3 aLocal, Vector3 bLocal, float height, IReadOnlyList<DoorData> doors)
         {
             var baseVec = bLocal - aLocal;
             float length = baseVec.magnitude;
-            if (length < 0.0001f)
-            {
-                var empty = new Mesh { name = "WallMeshEmpty" };
-                return empty;
-            }
+            if (length < MinDimension || height < MinDimension) return null;
             var baseHat = baseVec / length;
             var up      = Vector3.up;
 

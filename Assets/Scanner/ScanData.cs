@@ -37,6 +37,7 @@ namespace Scanner
     public class WallData
     {
         public string id;
+        public string polylineId;
         public Vec3 aLocal;
         public Vec3 bLocal;
         public float height;

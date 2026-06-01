@@ -248,7 +248,7 @@ Canvas:
   m_Enabled: 1
   serializedVersion: 3
   m_RenderMode: 0
-  m_Camera: {fileID: 0}
+  m_Camera: {fileID: 6417897802452540674}
   m_PlaneDistance: 100
   m_PixelPerfect: 0
   m_ReceivesEvents: 1
@@ -564,6 +564,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 78cb84ffbfa7387459a06d1f4327469e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Scanner.CubeBuilder
+  _cubeMaterial: {fileID: 2100000, guid: 5c3e1b4c3a545d34bbfc76ed9e17b916, type: 2}
+  _cubeSelectedMaterial: {fileID: 2100000, guid: 88e168ea27380dd448254052b42113ce, type: 2}
 --- !u!114 &1689158643
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -591,6 +593,9 @@ MonoBehaviour:
   _defaultHeight: 2.5
   _wallMaterial: {fileID: 2100000, guid: f40d721770dd1d147baefdfdaaa02f06, type: 2}
   _wallSelectedMaterial: {fileID: 0}
+  _previewSphereRadius: 0.025
+  _previewFloorColor: {r: 0.2, g: 1, b: 0.4, a: 1}
+  _previewCeilingColor: {r: 1, g: 0.6, b: 0.2, a: 1}
 --- !u!114 &1689158645
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -730,6 +735,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 352e1347382030c4eb374584a2d110d3, type: 3}
+--- !u!20 &6417897802452540674 stripped
+Camera:
+  m_CorrespondingSourceObject: {fileID: 1931103738759002200, guid: 352e1347382030c4eb374584a2d110d3, type: 3}
+  m_PrefabInstance: {fileID: 5837897237761931600}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -20,6 +20,12 @@ namespace Scanner
 
         private void Start()
         {
+            // El proyecto tiene Physics.autoSyncTransforms = false en
+            // DynamicsManager.asset. Para que los SphereColliders de las
+            // esferas-handle se ubiquen donde el transform los puso (sin esperar
+            // un FixedUpdate), forzamos autoSync = true en runtime.
+            Physics.autoSyncTransforms = true;
+
             // WorldOrigin es singleton — si la escena no lo tiene, lo creamos.
             // El que tenia la SampleScene vivia en ARLobbyRoot (escena vieja del
             // multijugador), asi que en la ScannerScene puede no estar.
