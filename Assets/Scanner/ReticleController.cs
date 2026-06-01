@@ -13,10 +13,12 @@ namespace Scanner
 
         private ScanStateMachine _fsm;
         private ResolvedHit _lastHit;
+        private Camera _camera;
 
         private void Awake()
         {
             _fsm = ScanStateMachine.Instance;
+            _camera = Camera.main;
             if (_wallBuilder == null) _wallBuilder = FindFirstObjectByType<WallBuilder>();
             if (_doorBuilder == null) _doorBuilder = FindFirstObjectByType<DoorBuilder>();
             if (_cubeBuilder == null) _cubeBuilder = FindFirstObjectByType<CubeBuilder>();
@@ -32,7 +34,7 @@ namespace Scanner
         private bool IsPlacingMode(ScannerMode m) =>
             m == ScannerMode.Wall_V1 || m == ScannerMode.Wall_Height || m == ScannerMode.Wall_Vn ||
             m == ScannerMode.Door_V1 || m == ScannerMode.Door_V2 ||
-            m == ScannerMode.Cube_Place || m == ScannerMode.EditMoveTarget;
+            m == ScannerMode.Cube_V1 || m == ScannerMode.Cube_V2 || m == ScannerMode.EditMoveTarget;
 
         private static Texture2D _bgTex;
         private static Texture2D BG()
@@ -45,11 +47,15 @@ namespace Scanner
         {
             if (_fsm == null) return;
 
+            UIScale.Begin();
+            float vw = UIScale.VirtualWidth;
+            float vh = UIScale.VirtualHeight;
+
             // ── Reticula central ──────────────────────────────────────────
             if (IsPlacingMode(_fsm.Current))
             {
-                float cx = Screen.width  * 0.5f;
-                float cy = Screen.height * 0.5f;
+                float cx = vw * 0.5f;
+                float cy = vh * 0.5f;
                 float s  = 18f;
                 var ringColor = _lastHit.Source switch
                 {
@@ -73,7 +79,7 @@ namespace Scanner
             }
 
             // ── Botonera de modo + Colocar ────────────────────────────────
-            GUILayout.BeginArea(new Rect(10, 10, 220, Screen.height - 20));
+            GUILayout.BeginArea(new Rect(10, 10, 220, vh - 20));
             DrawModeButtons();
             GUILayout.EndArea();
 
@@ -81,14 +87,14 @@ namespace Scanner
             if (IsPlacingMode(_fsm.Current))
             {
                 float w = 220, h = 90;
-                if (GUI.Button(new Rect((Screen.width - w) * 0.5f, Screen.height - h - 30, w, h), "COLOCAR"))
+                if (GUI.Button(new Rect((vw - w) * 0.5f, vh - h - 30, w, h), "COLOCAR"))
                     OnPlace();
             }
 
             // ── Slider de fallback distance (esquina inf-izq, solo placing)
             if (IsPlacingMode(_fsm.Current) && RaycastResolver.Instance != null)
             {
-                GUILayout.BeginArea(new Rect(10, Screen.height - 90, 320, 80), GUIContent.none);
+                GUILayout.BeginArea(new Rect(10, vh - 90, 320, 80), GUIContent.none);
                 GUILayout.Label($"Distancia fallback: {RaycastResolver.Instance.FallbackDistance:F2}m");
                 RaycastResolver.Instance.FallbackDistance =
                     GUILayout.HorizontalSlider(RaycastResolver.Instance.FallbackDistance, 0.3f, 5f);
@@ -123,10 +129,47 @@ namespace Scanner
                 GUILayout.Label(hint, hStyle);
             }
 
+            // Hint del flujo de cubo (2 vertices de la diagonal).
+            if (_fsm.Current == ScannerMode.Cube_V1 || _fsm.Current == ScannerMode.Cube_V2)
+            {
+                GUI.enabled = true;
+                var cubeHint = new GUIStyle { fontSize = 18, normal = { textColor = Color.yellow } };
+                string hint = _fsm.Current == ScannerMode.Cube_V1
+                    ? "Apunta a la 1ra esquina del cubo y COLOCAR"
+                    : "Apunta a la esquina opuesta (diagonal) y COLOCAR";
+                GUILayout.Label(hint, cubeHint);
+            }
+
             GUI.enabled = _fsm.Current != ScannerMode.Idle && _fsm.Current != ScannerMode.Selected;
             if (GUILayout.Button("Cancelar", GUILayout.Height(40))) _fsm.SetMode(ScannerMode.Idle);
 
             GUI.enabled = true;
+
+            // Ubicacion virtual del jugador, en coordenadas relativas al anchor.
+            DrawPlayerLocation();
+        }
+
+        private void DrawPlayerLocation()
+        {
+            if (_camera == null) _camera = Camera.main;
+            var wo = WorldOrigin.Instance;
+
+            GUILayout.Space(10);
+            var labelStyle = new GUIStyle
+            {
+                fontSize = 18,
+                normal   = { textColor = Color.white, background = BG() },
+                padding  = new RectOffset(8, 8, 6, 6),
+            };
+
+            if (_camera == null || wo == null || !wo.IsReady)
+            {
+                GUILayout.Label("Jugador: (sin calibrar)", labelStyle);
+                return;
+            }
+
+            var p = wo.ToRelative(_camera.transform.position);
+            GUILayout.Label($"Jugador (rel. anchor):\nX {p.x:F2}  Y {p.y:F2}  Z {p.z:F2} m", labelStyle);
         }
 
         private void OnPlace()
@@ -142,8 +185,9 @@ namespace Scanner
                 case ScannerMode.Door_V2:
                     _doorBuilder?.PlaceCornerAtCurrentReticle();
                     break;
-                case ScannerMode.Cube_Place:
-                    _cubeBuilder?.PlaceCubeAtCurrentReticle();
+                case ScannerMode.Cube_V1:
+                case ScannerMode.Cube_V2:
+                    _cubeBuilder?.PlaceCubeVertexAtCurrentReticle();
                     break;
                 case ScannerMode.EditMoveTarget:
                     MoveTargetToCurrentReticle();

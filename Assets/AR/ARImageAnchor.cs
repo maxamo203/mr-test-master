@@ -20,6 +20,7 @@ public class ARImageAnchor : MonoBehaviour
     private ARAnchor              _anchor;
     private GameObject            _anchorVisual;
     private bool                  _foundEverFired;
+    private bool                  _pendingKeepVisual;  // modo elegido en la última recalibración
 
     private void Awake()
     {
@@ -42,12 +43,22 @@ public class ARImageAnchor : MonoBehaviour
 #endif
     }
 
-    // Vuelve a entrar en modo "buscando imagen". El anchor viejo se destruye
-    // pero los hijos de WorldOrigin se preservan (las posiciones anchor-relativas
-    // se mantienen porque WorldOrigin.SetOrigin re-parentea sin tocar localPos).
-    public void RestartTracking()
+    // Vuelve a entrar en modo "buscando imagen". El anchor viejo se destruye, pero
+    // WorldOrigin (y toda la escena escaneada que cuelga de él) sobrevive porque lo
+    // soltamos del anchor ANTES de destruirlo.
+    //   keepVisualPosition = true  → al re-anclar, la escena se queda donde está.
+    //   keepVisualPosition = false → al re-anclar, la escena se mueve con el anchor.
+    public void RestartTracking(bool keepVisualPosition = false)
     {
+        _pendingKeepVisual = keepVisualPosition;
         IsFound = false;
+
+        // CRÍTICO: WorldOrigin es hijo del anchor actual. Si destruimos el anchor
+        // sin soltarlo primero, nos llevamos puesto WorldOrigin y TODO lo escaneado
+        // (eso causaba el NullReference al recalibrar). Lo desparentamos al root
+        // conservando su pose en el mundo para que sobreviva hasta el nuevo anchor.
+        if (WorldOrigin.Instance != null)
+            WorldOrigin.Instance.transform.SetParent(null, worldPositionStays: true);
 
         if (_anchorVisual != null) Destroy(_anchorVisual);
         _anchorVisual = null;
@@ -97,7 +108,7 @@ public class ARImageAnchor : MonoBehaviour
 
         if (_planeManager != null) _planeManager.enabled = true;
 
-        WorldOrigin.Instance.SetOrigin(_anchor.transform);
+        WorldOrigin.Instance.SetOrigin(_anchor.transform, _pendingKeepVisual);
         SpawnVisual(_anchor.transform);
     }
 
@@ -131,7 +142,7 @@ public class ARImageAnchor : MonoBehaviour
 
         var go = new GameObject("EditorAnchor");
         go.transform.position = new Vector3(0f, 0f, 1f);
-        WorldOrigin.Instance.SetOrigin(go.transform);
+        WorldOrigin.Instance.SetOrigin(go.transform, _pendingKeepVisual);
 
         SpawnVisual(go.transform);
         IsFound = true;

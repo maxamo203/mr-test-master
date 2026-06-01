@@ -18,17 +18,45 @@ public class WorldOrigin : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
-    public void SetOrigin(Transform anchorTransform)
+    // keepVisualPosition controla qué pasa con lo ya escaneado al recalibrar:
+    //   false (default) → WorldOrigin se pega al anchor; los hijos conservan su
+    //                     localPosition, así que la escena se MUEVE junto con el
+    //                     anchor (se mantienen las coordenadas relativas).
+    //   true            → WorldOrigin conserva su pose en el mundo; lo escaneado
+    //                     NO se mueve visualmente y solo cambia su posición
+    //                     relativa al nuevo anchor.
+    public void SetOrigin(Transform anchorTransform, bool keepVisualPosition = false)
     {
+        if (anchorTransform == null)
+        {
+            Debug.LogWarning("[WorldOrigin] SetOrigin recibió un anchor null; se ignora la llamada.");
+            return;
+        }
+
+        // La primera calibración siempre fija el origen sobre el anchor: todavía
+        // no hay nada escaneado, así que "conservar posición" no aplica.
+        bool keep = keepVisualPosition && IsReady;
+
         if (!IsReady)
             Debug.Log($"[WorldOrigin] Calibrado en {anchorTransform.position}");
 
-        // Parentamos al anchor para que, cuando ARCore/ARKit corrija la pose
-        // del ARAnchor (por loop closure del SLAM), WorldOrigin lo siga
-        // automáticamente sin que tengamos que actualizar nada por frame.
-        transform.SetParent(anchorTransform, worldPositionStays: false);
-        transform.localPosition = Vector3.zero;
-        transform.localRotation = Quaternion.identity;
+        if (keep)
+        {
+            // Recalibrar SOLO el anchor: WorldOrigin (y todo lo que cuelga de él)
+            // conserva su pose en el mundo. Igual queda parentado al nuevo anchor
+            // para seguir las correcciones de pose del SLAM, pero sin saltar.
+            transform.SetParent(anchorTransform, worldPositionStays: true);
+        }
+        else
+        {
+            // Parentamos al anchor poniéndonos encima de él: cuando ARCore/ARKit
+            // corrija la pose del ARAnchor (loop closure del SLAM), WorldOrigin lo
+            // sigue solo. Los hijos conservan su localPosition => se mueven con él.
+            transform.SetParent(anchorTransform, worldPositionStays: false);
+            transform.localPosition = Vector3.zero;
+            transform.localRotation = Quaternion.identity;
+        }
+
         IsReady = true;
     }
 

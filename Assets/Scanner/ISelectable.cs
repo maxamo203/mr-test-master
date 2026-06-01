@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Scanner
 {
-    public enum SelectableKind { Wall, Cube, WallVertex }
+    public enum SelectableKind { Wall, Cube, WallVertex, CubeVertex }
 
     public interface ISelectable
     {

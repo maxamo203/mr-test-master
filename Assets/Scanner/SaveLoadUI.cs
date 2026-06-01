@@ -27,8 +27,10 @@ namespace Scanner
 
         private void OnGUI()
         {
+            UIScale.Begin();
+
             float w = 320;
-            float x = Screen.width - w - 10;
+            float x = UIScale.VirtualWidth - w - 10;
             float y = 380;
 
             var bgStyle = new GUIStyle(GUI.skin.box) { normal = { background = BG() } };

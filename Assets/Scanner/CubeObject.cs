@@ -15,7 +15,14 @@ namespace Scanner
         private Material     _matNormal;
         private Material     _matSelected;
 
+        // Handles de los dos vertices de la diagonal: 0 = corner (-,-,-), 1 = (+,+,+).
+        // Permiten arrastrar cada esquina para reformar el cubo (el corner opuesto
+        // queda fijo). Son hijos de WorldOrigin, no del cubo, igual que los de pared.
+        private readonly CubeVertexHandle[] _handles = new CubeVertexHandle[2];
+        private const float VertexHandleRadius = 0.04f;
+
         public const float DefaultSize = 0.3f;
+        public const float MinSize     = 0.02f;
 
         public static CubeObject Create(Vector3 posLocal, Quaternion rotLocal, Vector3 scaleLocal, string id = null)
         {
@@ -34,13 +41,71 @@ namespace Scanner
             c.EnsureMaterials();
             c._mr.sharedMaterial = c._matNormal;
 
+            c.SpawnVertexHandles();
             SceneRegistry.Instance?.Register(c);
             return c;
+        }
+
+        // Crea un cubo a partir de los dos vertices de su diagonal (anchor-local).
+        // El cubo resultante queda axis-aligned en anchor space (rotacion identidad);
+        // luego se puede rotar/escalar/mover con el gizmo o arrastrar sus esquinas.
+        public static CubeObject CreateFromDiagonal(Vector3 cornerALocal, Vector3 cornerBLocal, string id = null)
+        {
+            var center = (cornerALocal + cornerBLocal) * 0.5f;
+            var size   = cornerBLocal - cornerALocal;
+            size = new Vector3(
+                Mathf.Max(MinSize, Mathf.Abs(size.x)),
+                Mathf.Max(MinSize, Mathf.Abs(size.y)),
+                Mathf.Max(MinSize, Mathf.Abs(size.z)));
+            return Create(center, Quaternion.identity, size, id);
         }
 
         public static CubeObject FromData(CubeData d)
         {
             return Create(d.posLocal.ToVector3(), d.rotLocal.ToQuaternion(), d.scaleLocal.ToVector3(), d.id);
+        }
+
+        private void SpawnVertexHandles()
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                int sign = i == 0 ? -1 : +1;
+                var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                go.name = $"CubeVertex_{(sign > 0 ? "Max" : "Min")}";
+                var h = go.AddComponent<CubeVertexHandle>();
+                h.Init(this, sign, VertexHandleRadius);
+                _handles[i] = h;
+            }
+        }
+
+        // Posicion world de un vertice de la diagonal. sign: -1 = (-,-,-), +1 = (+,+,+).
+        public Vector3 GetDiagonalCornerWorld(int sign)
+        {
+            return transform.TransformPoint(sign * 0.5f * Vector3.one);
+        }
+
+        // Reforma el cubo cuando se arrastra un vertice: el corner opuesto queda
+        // fijo en el mundo y el arrastrado va a newWorldPos. Mantiene la rotacion.
+        public void SetDiagonalCornerFromHandle(int draggedSign, Vector3 newWorldPos)
+        {
+            // Corner opuesto (fijo) ANTES de tocar el transform.
+            Vector3 oppWorld = transform.TransformPoint(-draggedSign * 0.5f * Vector3.one);
+            Quaternion q = transform.rotation;
+
+            // Diagonal en el frame rotado del cubo => componentes = tamano por eje.
+            Vector3 diagLocal = Quaternion.Inverse(q) * (newWorldPos - oppWorld);
+            var size = new Vector3(
+                Mathf.Max(MinSize, Mathf.Abs(diagLocal.x)),
+                Mathf.Max(MinSize, Mathf.Abs(diagLocal.y)),
+                Mathf.Max(MinSize, Mathf.Abs(diagLocal.z)));
+
+            transform.position   = (oppWorld + newWorldPos) * 0.5f;
+            transform.localScale = size;
+            // rotacion sin cambios
+
+            // Resincronizar SOLO el handle opuesto (el arrastrado lo maneja el gizmo).
+            int otherIdx = draggedSign > 0 ? 0 : 1;
+            if (_handles[otherIdx] != null) _handles[otherIdx].SnapToCorner();
         }
 
         public CubeData ToData()
@@ -97,7 +162,14 @@ namespace Scanner
         public void Delete()
         {
             SceneRegistry.Instance?.Unregister(this);
+            DestroyHandles();
             Destroy(gameObject);
+        }
+
+        private void DestroyHandles()
+        {
+            for (int i = 0; i < _handles.Length; i++)
+                if (_handles[i] != null) Destroy(_handles[i].gameObject);
         }
 
         private void OnDestroy()
@@ -105,6 +177,7 @@ namespace Scanner
             // Solo destruir materiales runtime, no los asignados del Inspector.
             if (_matNormal   != null && _matNormal.name.Contains("(runtime)"))   Destroy(_matNormal);
             if (_matSelected != null && _matSelected.name.Contains("(runtime)")) Destroy(_matSelected);
+            DestroyHandles();
         }
     }
 }

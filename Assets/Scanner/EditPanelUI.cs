@@ -41,19 +41,31 @@ namespace Scanner
             if (_fsm == null || _fsm.CurrentSelection == null) return;
             var sel = _fsm.CurrentSelection;
 
+            UIScale.Begin();
+
             float w = 280;
             var bgStyle = new GUIStyle(GUI.skin.box) { normal = { background = BG() } };
 
-            GUILayout.BeginArea(new Rect(Screen.width - w - 10, 10, w, 360), GUIContent.none, bgStyle);
+            GUILayout.BeginArea(new Rect(UIScale.VirtualWidth - w - 10, 10, w, 360), GUIContent.none, bgStyle);
 
             var title = new GUIStyle { fontSize = 22, normal = { textColor = Color.white } };
             GUILayout.Label($"Sel: {sel.Kind}", title);
             GUILayout.Space(8);
 
-            // Vertice: panel minimal. La edicion es por gizmo MoveOnly (lo activa el handle).
+            // Vertice de pared: panel minimal. La edicion es por gizmo MoveOnly.
             if (sel is WallVertexHandle vh)
             {
                 GUILayout.Label("Arrastra el gizmo para mover el vertice.");
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Listo", GUILayout.Height(50))) _fsm.ClearSelection();
+                GUILayout.EndArea();
+                return;
+            }
+
+            // Vertice (esquina diagonal) de cubo: idem, arrastrar reforma el cubo.
+            if (sel is CubeVertexHandle)
+            {
+                GUILayout.Label("Arrastra el gizmo para reformar el cubo\n(la esquina opuesta queda fija).");
                 GUILayout.FlexibleSpace();
                 if (GUILayout.Button("Listo", GUILayout.Height(50))) _fsm.ClearSelection();
                 GUILayout.EndArea();

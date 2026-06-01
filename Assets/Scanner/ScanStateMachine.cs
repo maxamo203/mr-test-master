@@ -15,7 +15,8 @@ namespace Scanner
         DoorPickWall,     // esperando tap sobre pared para asociar puerta
         Door_V1,          // esperando esquina inferior de puerta
         Door_V2,          // esperando esquina superior opuesta
-        Cube_Place,       // esperando posicion de cubo
+        Cube_V1,          // esperando primer vertice de la diagonal del cubo
+        Cube_V2,          // esperando segundo vertice de la diagonal del cubo
         Selected,         // hay un objeto seleccionado (panel de edicion visible)
         EditMoveTarget,   // moviendo un objeto/vertice ya colocado
     }

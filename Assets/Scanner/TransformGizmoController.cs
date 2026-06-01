@@ -70,9 +70,19 @@ namespace Scanner
 
         public void Detach()
         {
-            _activeHandle = null;
+            SetActiveHandle(null);
             _target = null;
             _root.SetActive(false);
+        }
+
+        // Centraliza el cambio de handle activo para que la opacidad de "presionado"
+        // (feedback de drag) se prenda/apague siempre de forma consistente.
+        private void SetActiveHandle(GizmoHandle h)
+        {
+            if (_activeHandle == h) return;
+            if (_activeHandle != null) _activeHandle.SetPressed(false);
+            _activeHandle = h;
+            if (_activeHandle != null) _activeHandle.SetPressed(true);
         }
 
         private void LateUpdate()
@@ -139,7 +149,7 @@ namespace Scanner
         {
             if (!ReadPointer(out var pos, out var began, out var held, out var released))
             {
-                _activeHandle = null;
+                SetActiveHandle(null);
                 return;
             }
 
@@ -170,14 +180,14 @@ namespace Scanner
                     }
                     if (best != null)
                     {
-                        _activeHandle = best;
+                        SetActiveHandle(best);
                         _lastTouchPos = pos;
                     }
                 }
             }
             else if (released)
             {
-                _activeHandle = null;
+                SetActiveHandle(null);
             }
             else if (held && _activeHandle != null)
             {
@@ -258,8 +268,10 @@ namespace Scanner
 
             foreach (GizmoAxis ax in new[] { GizmoAxis.X, GizmoAxis.Y, GizmoAxis.Z })
             {
-                CreateMoveHandle(ax);
-                CreateScaleHandle(ax);
+                CreateMoveHandle(ax, +1);   // flecha sentido positivo
+                CreateMoveHandle(ax, -1);   // flecha sentido negativo
+                CreateScaleHandle(ax, +1);  // cubo de escala sentido positivo
+                CreateScaleHandle(ax, -1);  // cubo de escala sentido negativo
             }
             CreateRotateY();
         }
@@ -296,59 +308,87 @@ namespace Scanner
             mr.reflectionProbeUsage = ReflectionProbeUsage.Off;
         }
 
-        // Move = flecha (cubo alargado) en el eje. Mantenemos el collider del
-        // primitive en su tamano default (1x1x1) que con la localScale del arrow
-        // queda ajustado al visual — sin extension generosa, asi NO pisa los
-        // taps al Scale/Rotate cercanos. La priorizacion en HandleInput hace
-        // el resto.
-        private void CreateMoveHandle(GizmoAxis ax)
+        // Move = flecha (cubo alargado + punta de cono) en el eje. Hay una por
+        // cada sentido (dir +1 / -1) para poder arrastrar tanto hacia el positivo
+        // como hacia el negativo. La punta de cono indica el sentido.
+        //
+        // Mantenemos el collider con la longitud del shaft (no se extiende hacia
+        // donde estan Scale/Rotate) pero ensanchamos en perpendicular para que
+        // sea facil de tappear sin ser sobre-greedy. La priorizacion en
+        // HandleInput (Scale/Rotate > Move) hace el resto.
+        private void CreateMoveHandle(GizmoAxis ax, int dir)
         {
-            var go = NewHandleGO($"Move_{ax}");
+            string tag = dir > 0 ? "Pos" : "Neg";
+            var go = NewHandleGO($"Move_{ax}_{tag}");
             _moveHandles.Add(go);
             var h  = go.AddComponent<GizmoHandle>();
             h.Operation = GizmoOperation.Move;
             h.Axis      = ax;
+            h.Dir       = dir;
 
+            var axisLocal = h.LocalAxis();           // ya viene con signo
+            var mat       = BuildUnlitMat(h.AxisColor());
+
+            // Shaft (cubo alargado)
             var arrow = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            arrow.name = "ArrowMesh";
+            arrow.name = "ArrowShaft";
             arrow.transform.SetParent(go.transform, worldPositionStays: false);
-            arrow.transform.localPosition = h.LocalAxis() * 0.45f;
+            arrow.transform.localPosition = axisLocal * 0.45f;
             arrow.transform.localScale    = AxisToScale(ax, length: 0.8f, thickness: 0.08f);
             if (_gizmoLayer >= 0) arrow.layer = _gizmoLayer;
 
             var mr = arrow.GetComponent<MeshRenderer>();
-            mr.sharedMaterial = BuildUnlitMat(h.AxisColor());
+            mr.sharedMaterial = mat;
             SetupRenderer(mr);
 
-            // Mantenemos la longitud del collider igual al visual (no se extiende
-            // hacia donde estan Scale/Rotate) pero ensanchamos en perpendicular
-            // para que sea facil de tappear sin ser sobre-greedy.
             var bc = arrow.GetComponent<BoxCollider>();
             bc.center = Vector3.zero;
             bc.size   = AxisToScale(ax, length: 1.0f, thickness: 2.5f);
+
+            // Punta (cono) apuntando hacia afuera, para indicar el sentido del eje.
+            // Sin collider: el tap lo agarra el shaft; asi no toca la priorizacion.
+            var tip = new GameObject("ArrowTip");
+            tip.transform.SetParent(go.transform, worldPositionStays: false);
+            tip.transform.localPosition = axisLocal * 0.9f;
+            tip.transform.localRotation = Quaternion.FromToRotation(Vector3.up, axisLocal);
+            tip.transform.localScale    = new Vector3(0.18f, 0.22f, 0.18f);
+            if (_gizmoLayer >= 0) tip.layer = _gizmoLayer;
+
+            var tmf = tip.AddComponent<MeshFilter>();
+            tmf.sharedMesh = ConeMesh();
+            var tmr = tip.AddComponent<MeshRenderer>();
+            tmr.sharedMaterial = mat;
+            SetupRenderer(tmr);
+
+            h.RegisterMaterial(mat);
         }
 
         // Scale = cubo solido al final del eje, BIEN mas alla del Move handle.
-        // Collider en el propio visual.
-        private void CreateScaleHandle(GizmoAxis ax)
+        // Hay uno por cada sentido (dir +1 / -1) para poder escalar agarrando
+        // cualquiera de los dos lados. Collider en el propio visual.
+        private void CreateScaleHandle(GizmoAxis ax, int dir)
         {
-            var go = NewHandleGO($"Scale_{ax}");
+            string tag = dir > 0 ? "Pos" : "Neg";
+            var go = NewHandleGO($"Scale_{ax}_{tag}");
             _scaleHandles.Add(go);
             var h  = go.AddComponent<GizmoHandle>();
             h.Operation = GizmoOperation.Scale;
             h.Axis      = ax;
+            h.Dir       = dir;
 
             var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
             cube.name = "ScaleMesh";
             cube.transform.SetParent(go.transform, worldPositionStays: false);
-            cube.transform.localPosition = h.LocalAxis() * 1.5f; // muy afuera del Move (0.85 max)
+            cube.transform.localPosition = h.LocalAxis() * 1.5f; // muy afuera del Move (0.85 max), con signo
             cube.transform.localScale    = new Vector3(0.28f, 0.28f, 0.28f);
             if (_gizmoLayer >= 0) cube.layer = _gizmoLayer;
 
             var mr = cube.GetComponent<MeshRenderer>();
             var c  = h.AxisColor(); c.a = 0.95f;
-            mr.sharedMaterial = BuildUnlitMat(c);
+            var mat = BuildUnlitMat(c);
+            mr.sharedMaterial = mat;
             SetupRenderer(mr);
+            h.RegisterMaterial(mat);
 
             // Agrandar collider para tap mas facil. Como el Move ya no llega
             // hasta aca y la prioridad en HandleInput es Scale > Move, no hay
@@ -377,8 +417,10 @@ namespace Scanner
             var mf = ring.AddComponent<MeshFilter>();
             mf.sharedMesh = mesh;
             var mr = ring.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = BuildUnlitMat(h.AxisColor());
+            var mat = BuildUnlitMat(h.AxisColor());
+            mr.sharedMaterial = mat;
             SetupRenderer(mr);
+            h.RegisterMaterial(mat);
 
             var mc = ring.AddComponent<MeshCollider>();
             mc.sharedMesh = mesh;
@@ -393,6 +435,39 @@ namespace Scanner
                 case GizmoAxis.Y: return new Vector3(thickness, length, thickness);
                 default:          return new Vector3(thickness, thickness, length);
             }
+        }
+
+        // Cono cacheado para las puntas de las flechas Move (apex hacia +Y).
+        private static Mesh _coneMesh;
+        private static Mesh ConeMesh() => _coneMesh != null ? _coneMesh : (_coneMesh = BuildCone(0.5f, 1f, 16));
+
+        // Cono con la base en y=0 y el apex en (0, height, 0). Cull Off en el
+        // shader => el winding no importa para la visibilidad.
+        private static Mesh BuildCone(float radius, float height, int segments)
+        {
+            var verts = new List<Vector3> { new Vector3(0f, height, 0f), Vector3.zero }; // 0 = apex, 1 = centro base
+            int baseStart = verts.Count;
+            for (int i = 0; i < segments; i++)
+            {
+                float u = (float)i / segments * Mathf.PI * 2f;
+                verts.Add(new Vector3(Mathf.Cos(u) * radius, 0f, Mathf.Sin(u) * radius));
+            }
+
+            var tris = new List<int>();
+            for (int i = 0; i < segments; i++)
+            {
+                int a = baseStart + i;
+                int b = baseStart + (i + 1) % segments;
+                tris.Add(0); tris.Add(b); tris.Add(a); // cara lateral
+                tris.Add(1); tris.Add(a); tris.Add(b); // tapa de la base
+            }
+
+            var mesh = new Mesh { name = "GizmoCone" };
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         // Toro en plano XZ (perpendicular al eje Y).
