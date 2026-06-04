@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(dir /s /b)",
-      "Bash(powershell *)"
+      "Bash(powershell *)",
+      "Bash(grep -o 'guid: [a-f0-9]*' __TRACKED_VAR__.meta)",
+      "Bash(echo '__TRACKED_VAR__: __CMDSUB_OUTPUT__')"
     ]
   }
 }

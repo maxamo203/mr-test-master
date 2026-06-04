@@ -7,6 +7,8 @@ namespace Scanner
     // Se muestra en una esquina y se expande con un boton.
     public class SaveLoadUI : MonoBehaviour
     {
+        [SerializeField] private ARImageAnchor _imageAnchor;
+
         private bool _expanded;
         private string _newName = "mi cuarto";
         private List<string> _saved = new();
@@ -14,7 +16,11 @@ namespace Scanner
         private string _flash;
         private float  _flashUntil;
 
-        private void OnEnable() => RefreshList();
+        private void OnEnable()
+        {
+            if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
+            RefreshList();
+        }
 
         private void RefreshList() => _saved = ScanSerializer.ListSaved();
 
@@ -59,6 +65,11 @@ namespace Scanner
             if (GUILayout.Button("Guardar", GUILayout.Height(40)))
             {
                 var data = SceneRegistry.Instance.Capture(_newName);
+                // Persistimos también la imagen de referencia capturada en esta
+                // sesión (si hay), para reconocer la zona física al recargar.
+                data.refImageWidthMeters = CapturedReference.WidthMeters;
+                if (CapturedReference.HasImage)
+                    ScanSerializer.SaveRefImage(_newName, CapturedReference.Texture);
                 ScanSerializer.Save(_newName, data);
                 Flash($"Guardado '{_newName}'");
                 RefreshList();
@@ -99,7 +110,24 @@ namespace Scanner
             foreach (var w in data.walls) WallObject.FromData(w);
             foreach (var c in data.cubes) CubeObject.FromData(c);
             _newName = name;
-            Flash($"Cargado '{name}'");
+
+            // Si el escaneo tiene imagen de referencia, la re-registramos en la
+            // librería mutable y reiniciamos el tracking: al volver a enfocar la
+            // zona física, ARKit/ARCore la reconoce y reposiciona el anchor.
+            // keepVisualPosition: true → lo recién cargado se queda donde está y
+            // solo se recalcula su pose relativa al nuevo anchor cuando aparece.
+            var refTex = ScanSerializer.LoadRefImage(name);
+            if (refTex != null && _imageAnchor != null)
+            {
+                CapturedReference.Set(refTex, data.refImageWidthMeters);
+                _imageAnchor.AddReferenceImage(refTex, name, data.refImageWidthMeters, keepVisualPosition: true);
+                ScanStateMachine.Instance?.SetMode(ScannerMode.Calibrating);
+                Flash($"Cargado '{name}' — buscando la zona…");
+            }
+            else
+            {
+                Flash($"Cargado '{name}'");
+            }
         }
 
         private void Flash(string msg) { _flash = msg; _flashUntil = Time.time + 2.5f; }

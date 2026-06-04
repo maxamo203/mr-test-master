@@ -22,6 +22,22 @@ public class ARImageAnchor : MonoBehaviour
     private bool                  _foundEverFired;
     private bool                  _pendingKeepVisual;  // modo elegido en la última recalibración
 
+    // Librería mutable: arranca como copia de la serializada y le agregamos en
+    // runtime las imágenes capturadas con la cámara (ver AddReferenceImage).
+    private MutableRuntimeReferenceImageLibrary _runtimeLib;
+
+    // True una vez que hay al menos una imagen lista para buscar (capturada o
+    // cargada). El bootstrap la usa para no arrancar el tracking en vacío.
+    public bool HasReferenceImage { get; private set; }
+
+    // Ventana mínima de búsqueda tras (re)iniciar el tracking antes de aceptar
+    // una detección. Sin esto, al recalibrar el trackable que quedaba de antes se
+    // re-detecta en el MISMO frame: el modo nunca se ve en Calibrating y se re-
+    // anclaba con una pose vieja. Con el retardo, ARKit/ARCore re-adquiere la
+    // imagen con una pose fresca y el modo se queda en Calibrating mientras tanto.
+    [SerializeField] private float _reacquireDelay = 1.0f;
+    private float _searchSince;
+
     private void Awake()
     {
         _imageManager         = GetComponent<ARTrackedImageManager>();
@@ -36,6 +52,7 @@ public class ARImageAnchor : MonoBehaviour
 
     public void StartTracking()
     {
+        _searchSince = Time.time;
 #if UNITY_EDITOR
         StartCoroutine(EditorStub());
 #else
@@ -66,6 +83,7 @@ public class ARImageAnchor : MonoBehaviour
         if (_anchor != null) Destroy(_anchor.gameObject);
         _anchor = null;
 
+        _searchSince = Time.time;
 #if UNITY_EDITOR
         StartCoroutine(EditorStub());
 #else
@@ -80,6 +98,10 @@ public class ARImageAnchor : MonoBehaviour
         return;
 #endif
         if (!_imageManager.enabled || IsFound) return;
+
+        // Esperamos la ventana de re-adquisición: así el modo se queda en
+        // Calibrating y ARKit/ARCore actualiza la pose de la imagen antes de anclar.
+        if (Time.time - _searchSince < _reacquireDelay) return;
 
         foreach (var img in _imageManager.trackables)
         {
@@ -103,36 +125,178 @@ public class ARImageAnchor : MonoBehaviour
     private void PlaceAnchorAndSpawn(Transform imageTransform)
     {
         var anchorGO = new GameObject("ImageAnchor");
-        anchorGO.transform.SetPositionAndRotation(imageTransform.position, imageTransform.rotation);
+        // El eje Y del anchor SIEMPRE apunta hacia arriba en el mundo, sin
+        // importar la rotación física de la imagen (vertical, horizontal o dada
+        // vuelta). Solo conservamos el rumbo horizontal — ver UprightFromImage.
+        anchorGO.transform.SetPositionAndRotation(imageTransform.position, UprightFromImage(imageTransform));
         _anchor = anchorGO.AddComponent<ARAnchor>();
 
         if (_planeManager != null) _planeManager.enabled = true;
 
         WorldOrigin.Instance.SetOrigin(_anchor.transform, _pendingKeepVisual);
-        SpawnVisual(_anchor.transform);
+        // El visual es solo cosmético: si falla por cualquier motivo, no debe
+        // impedir que el anchor quede confirmado (IsFound / eventos).
+        try { SpawnVisual(_anchor.transform); }
+        catch (Exception e) { Debug.LogWarning($"[ARImageAnchor] SpawnVisual falló: {e.Message}"); }
+    }
+
+    // Devuelve una rotación cuyo eje Y es SIEMPRE el up del mundo. Para el rumbo
+    // (yaw) usamos el eje de la imagen que más apunte en horizontal, proyectado
+    // al plano del piso: así funciona con la imagen en una pared (su normal es
+    // horizontal), apoyada en el piso (su +Y/+X es horizontal) o dada vuelta.
+    private static Quaternion UprightFromImage(Transform img)
+    {
+        Vector3 best = Vector3.zero;
+        float bestMag = 0f;
+        foreach (var axis in new[] { img.forward, img.up, img.right })
+        {
+            var h = new Vector3(axis.x, 0f, axis.z);
+            if (h.sqrMagnitude > bestMag) { bestMag = h.sqrMagnitude; best = h; }
+        }
+        if (bestMag < 1e-6f) best = Vector3.forward;
+        return Quaternion.LookRotation(best.normalized, Vector3.up);
+    }
+
+    // ── Imagen de referencia en runtime ───────────────────────────────────────
+    // Agrega una imagen (un fragmento capturado con la cámara, o una cargada de
+    // disco) a la librería mutable y reinicia la detección para que ARKit/ARCore
+    // la busque en el entorno físico. Asíncrono: el job de validación corre en
+    // background; cuando termina, reiniciamos el tracking.
+    public void AddReferenceImage(Texture2D tex, string imageName, float widthMeters, bool keepVisualPosition = false)
+    {
+        if (tex == null) { Debug.LogWarning("[ARImageAnchor] AddReferenceImage con textura null."); return; }
+#if UNITY_EDITOR
+        // En editor no hay subsistema real: simulamos el anchor con el stub.
+        HasReferenceImage = true;
+        RestartTracking(keepVisualPosition);
+#else
+        StartCoroutine(AddReferenceImageRoutine(tex, imageName, widthMeters, keepVisualPosition));
+#endif
+    }
+
+    private IEnumerator AddReferenceImageRoutine(Texture2D tex, string imageName, float widthMeters, bool keepVisualPosition)
+    {
+        // Necesitamos el subsistema corriendo para crear/usar la librería mutable.
+        _imageManager.enabled = true;
+        while (_imageManager.subsystem == null) yield return null;
+
+        if (!EnsureRuntimeLibrary())
+        {
+            Debug.LogError("[ARImageAnchor] No se pudo crear una librería mutable; la imagen no se agrega.");
+            yield break;
+        }
+
+        if (tex.format != TextureFormat.RGBA32) tex = ToRGBA32(tex);
+        if (widthMeters <= 0f) widthMeters = 0.15f;
+
+        // Construimos el XRReferenceImage con el tamaño físico (ancho, alto) en
+        // metros y se lo pasamos a la sobrecarga de instancia del job.
+        float aspect = tex.width > 0 ? tex.height / (float)tex.width : 1f;
+        var refImage = new XRReferenceImage(
+            new SerializableGuid(0, 0),
+            new SerializableGuid(0, 0),
+            new Vector2(widthMeters, widthMeters * aspect),
+            imageName,
+            tex);
+
+        var jobState = _runtimeLib.ScheduleAddImageWithValidationJob(
+            tex.GetRawTextureData<byte>(),
+            new Vector2Int(tex.width, tex.height),
+            tex.format,
+            refImage);
+
+        while (jobState.status == AddReferenceImageJobStatus.Pending) yield return null;
+
+        if (jobState.status != AddReferenceImageJobStatus.Success)
+            Debug.LogWarning($"[ARImageAnchor] El job de imagen terminó en {jobState.status} " +
+                             "(el fragmento puede tener pocos detalles para trackear).");
+        else
+            Debug.Log($"[ARImageAnchor] Imagen '{imageName}' agregada a la librería ({_runtimeLib.count} total).");
+
+        HasReferenceImage = true;
+
+        // Reiniciamos la detección para que busque la imagen recién agregada.
+        RestartTracking(keepVisualPosition);
+    }
+
+    private bool EnsureRuntimeLibrary()
+    {
+        if (_runtimeLib != null) return true;
+        try
+        {
+            // CreateRuntimeLibrary toma el asset serializado (XRReferenceImageLibrary).
+            // Si el manager ya tiene una librería serializada, la usamos como base
+            // (conserva las imágenes pre-cargadas); si no, creamos una vacía.
+            var serialized = _imageManager.referenceLibrary as XRReferenceImageLibrary;
+            RuntimeReferenceImageLibrary lib = serialized != null
+                ? _imageManager.CreateRuntimeLibrary(serialized)
+                : _imageManager.CreateRuntimeLibrary();
+            _runtimeLib = lib as MutableRuntimeReferenceImageLibrary;
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[ARImageAnchor] CreateRuntimeLibrary falló: {e.Message}");
+            return false;
+        }
+
+        if (_runtimeLib == null)
+        {
+            Debug.LogWarning("[ARImageAnchor] El subsistema no soporta librerías mutables.");
+            return false;
+        }
+
+        _imageManager.referenceLibrary = _runtimeLib;
+        return true;
+    }
+
+    private static Texture2D ToRGBA32(Texture2D src)
+    {
+        var dst = new Texture2D(src.width, src.height, TextureFormat.RGBA32, mipChain: false);
+        dst.SetPixels(src.GetPixels());
+        dst.Apply(updateMipmaps: false);
+        return dst;
     }
 
     private void SpawnVisual(Transform anchorTransform)
     {
         _anchorVisual = new GameObject("AnchorVisual");
-        _anchorVisual.transform.SetParent(anchorTransform);
+        _anchorVisual.transform.SetParent(anchorTransform, worldPositionStays: false);
         _anchorVisual.transform.localPosition = Vector3.up * 0.05f;
         _anchorVisual.transform.localRotation = Quaternion.identity;
 
-        var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        sphere.transform.SetParent(_anchorVisual.transform);
-        sphere.transform.localPosition = Vector3.zero;
-        sphere.transform.localScale    = Vector3.one * 0.1f;
-        Destroy(sphere.GetComponent<Collider>());
+        // Esfera principal (blanca) + satélite (rojo). Las construimos con la malla
+        // built-in y MeshRenderer en vez de GameObject.CreatePrimitive: este último
+        // intenta agregar un SphereCollider y, si el módulo Physics está stripeado
+        // en el build (IL2CPP), tira "class SphereCollider doesn't exist" y rompía
+        // la confirmación del anchor. El visual no necesita colliders.
+        var main = MakeSphere(_anchorVisual.transform, Vector3.zero, 0.1f, Color.white);
+        if (main != null) MakeSphere(main.transform, new Vector3(0.7f, 0f, 0f), 0.35f, Color.red);
+    }
 
-        var mini = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        mini.transform.SetParent(sphere.transform);
-        mini.transform.localPosition = new Vector3(0.7f, 0f, 0f);
-        mini.transform.localScale    = Vector3.one * 0.35f;
-        Destroy(mini.GetComponent<Collider>());
-        var mat = mini.GetComponent<Renderer>().material;
-        mat.color = Color.red;
-        mat.SetColor("_BaseColor", Color.red);
+    private static Mesh _sphereMesh;
+    private static GameObject MakeSphere(Transform parent, Vector3 localPos, float scale, Color color)
+    {
+        if (_sphereMesh == null) _sphereMesh = Resources.GetBuiltinResource<Mesh>("Sphere.fbx");
+        if (_sphereMesh == null)
+        {
+            Debug.LogWarning("[ARImageAnchor] No se pudo obtener la malla built-in 'Sphere.fbx'.");
+            return null;
+        }
+
+        var go = new GameObject("VisualSphere");
+        go.transform.SetParent(parent, worldPositionStays: false);
+        go.transform.localPosition = localPos;
+        go.transform.localScale    = Vector3.one * scale;
+
+        go.AddComponent<MeshFilter>().sharedMesh = _sphereMesh;
+        var mr = go.AddComponent<MeshRenderer>();
+
+        var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+        var mat = new Material(shader);
+        mat.color = color;
+        mat.SetColor("_BaseColor", color); // URP
+        mr.material = mat;
+        return go;
     }
 
 #if UNITY_EDITOR
@@ -144,7 +308,8 @@ public class ARImageAnchor : MonoBehaviour
         go.transform.position = new Vector3(0f, 0f, 1f);
         WorldOrigin.Instance.SetOrigin(go.transform, _pendingKeepVisual);
 
-        SpawnVisual(go.transform);
+        try { SpawnVisual(go.transform); }
+        catch (Exception e) { Debug.LogWarning($"[ARImageAnchor] SpawnVisual falló: {e.Message}"); }
         IsFound = true;
         if (!_foundEverFired)
         {

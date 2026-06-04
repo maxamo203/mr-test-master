@@ -45,9 +45,12 @@ namespace Scanner
 
             _imageAnchor.OnImageReacquired += OnAnchorReady;
 
-            // FSM arranca en Calibrating; encendemos image tracking para que aparezca el anchor.
+            // FSM arranca en Calibrating. NO arrancamos el tracking acá: primero el
+            // usuario captura un fragmento con la cámara (ReferenceCaptureUI), o
+            // carga un escaneo guardado. En ambos casos ARImageAnchor.AddReferenceImage
+            // registra la imagen y arranca la detección. Mientras tanto se muestra
+            // la UI de captura porque la FSM está en Calibrating.
             ScanStateMachine.Instance?.SetMode(ScannerMode.Calibrating);
-            _imageAnchor.StartTracking();
         }
 
         private void OnAnchorReady()

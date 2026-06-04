@@ -86,7 +86,10 @@ public class IOSImageAnchor : MonoBehaviour
     private void PlaceAnchorAndSpawn(Transform imageTransform)
     {
         var anchorGO = new GameObject("ImageAnchor_iOS");
-        anchorGO.transform.SetPositionAndRotation(imageTransform.position, imageTransform.rotation);
+        // El eje Y del anchor SIEMPRE apunta hacia arriba en el mundo, sin
+        // importar la rotación física de la imagen. Conservamos solo el rumbo
+        // horizontal — ver UprightFromImage.
+        anchorGO.transform.SetPositionAndRotation(imageTransform.position, UprightFromImage(imageTransform));
 
         // AddComponent<ARAnchor>() registra el anchor en ARKit.
         // A partir de acá, ARKit lo mantiene fijo respecto al mapa SLAM.
@@ -98,6 +101,22 @@ public class IOSImageAnchor : MonoBehaviour
 
         SpawnVisual(_anchor.transform);
         Debug.Log($"[IOSImageAnchor] Anchor creado en {anchorGO.transform.position}");
+    }
+
+    // Devuelve una rotación cuyo eje Y es SIEMPRE el up del mundo. Para el rumbo
+    // (yaw) usamos el eje de la imagen que más apunte en horizontal, proyectado
+    // al plano del piso (funciona con la imagen en pared, en piso o dada vuelta).
+    private static Quaternion UprightFromImage(Transform img)
+    {
+        Vector3 best = Vector3.zero;
+        float bestMag = 0f;
+        foreach (var axis in new[] { img.forward, img.up, img.right })
+        {
+            var h = new Vector3(axis.x, 0f, axis.z);
+            if (h.sqrMagnitude > bestMag) { bestMag = h.sqrMagnitude; best = h; }
+        }
+        if (bestMag < 1e-6f) best = Vector3.forward;
+        return Quaternion.LookRotation(best.normalized, Vector3.up);
     }
 
     private void SpawnVisual(Transform anchorTransform)

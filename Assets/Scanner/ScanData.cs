@@ -61,5 +61,10 @@ namespace Scanner
         public string name;
         public List<WallData> walls = new List<WallData>();
         public List<CubeData> cubes = new List<CubeData>();
+
+        // Ancho físico real (en metros) de la imagen de referencia capturada con
+        // la cámara. La imagen en sí se guarda como PNG hermano (<name>.png);
+        // refImageWidthMeters > 0 indica que hay imagen asociada al escaneo.
+        public float refImageWidthMeters;
     }
 }
