@@ -198,6 +198,27 @@ namespace Scanner
                     w.SetWidth(newW);
         }
 
+        // Baja (o sube) las dos esquinas de piso a la altura Y indicada (anchor-local),
+        // dejando X/Z igual. Sirve para "Mover al piso": alinear la base al piso.
+        public void MoveToFloor(float floorY)
+        {
+            var a = ALocal; a.y = floorY;
+            var b = BLocal; b.y = floorY;
+            SetEndpoints(a, b);
+        }
+
+        // Igual que MoveToFloor pero para toda la polilinea (todas las paredes
+        // conectadas), asi la pared entera queda apoyada al mismo nivel.
+        public void MoveToFloorForPolyline(float floorY)
+        {
+            if (string.IsNullOrEmpty(PolylineId)) { MoveToFloor(floorY); return; }
+            var registry = SceneRegistry.Instance;
+            if (registry == null) { MoveToFloor(floorY); return; }
+            foreach (var w in registry.Walls)
+                if (w != null && w.PolylineId == PolylineId)
+                    w.MoveToFloor(floorY);
+        }
+
         public static WallObject FromData(WallData d)
         {
             var w = Create(d.aLocal.ToVector3(), d.bLocal.ToVector3(), d.height,

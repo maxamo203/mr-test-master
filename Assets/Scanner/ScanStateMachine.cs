@@ -17,6 +17,7 @@ namespace Scanner
         Door_V2,          // esperando esquina superior opuesta
         Cube_V1,          // esperando primer vertice de la diagonal del cubo
         Cube_V2,          // esperando segundo vertice de la diagonal del cubo
+        Floor_Place,      // esperando colocar (o reubicar) el punto de piso
         Selected,         // hay un objeto seleccionado (panel de edicion visible)
         EditMoveTarget,   // moviendo un objeto/vertice ya colocado
     }

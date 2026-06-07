@@ -34,6 +34,7 @@ namespace Scanner
             foreach (var c in _cubes) if (c != null) Destroy(c.gameObject);
             _walls.Clear();
             _cubes.Clear();
+            if (FloorPoint.Instance != null) FloorPoint.Instance.Delete();
         }
 
         public ScanData Capture(string name)
@@ -41,6 +42,11 @@ namespace Scanner
             var data = new ScanData { name = name };
             foreach (var w in _walls) if (w != null) data.walls.Add(w.ToData());
             foreach (var c in _cubes) if (c != null) data.cubes.Add(c.ToData());
+            if (FloorPoint.Instance != null)
+            {
+                data.hasFloor   = true;
+                data.floorLocal = new Vec3(FloorPoint.Instance.LocalPosition);
+            }
             return data;
         }
     }

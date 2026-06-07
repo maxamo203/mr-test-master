@@ -34,7 +34,8 @@ namespace Scanner
         private bool IsPlacingMode(ScannerMode m) =>
             m == ScannerMode.Wall_V1 || m == ScannerMode.Wall_Height || m == ScannerMode.Wall_Vn ||
             m == ScannerMode.Door_V1 || m == ScannerMode.Door_V2 ||
-            m == ScannerMode.Cube_V1 || m == ScannerMode.Cube_V2 || m == ScannerMode.EditMoveTarget;
+            m == ScannerMode.Cube_V1 || m == ScannerMode.Cube_V2 ||
+            m == ScannerMode.Floor_Place || m == ScannerMode.EditMoveTarget;
 
         private static Texture2D _bgTex;
         private static Texture2D BG()
@@ -112,6 +113,8 @@ namespace Scanner
             if (GUILayout.Button("Pared (polilinea)", GUILayout.Height(50))) _wallBuilder?.StartPolyline();
             if (GUILayout.Button("Puerta",            GUILayout.Height(50))) _doorBuilder?.StartDoor();
             if (GUILayout.Button("Cubo",              GUILayout.Height(50))) _cubeBuilder?.StartCube();
+            string pisoLabel = FloorPoint.Instance != null ? "Piso (reubicar)" : "Piso";
+            if (GUILayout.Button(pisoLabel,           GUILayout.Height(50))) _fsm.SetMode(ScannerMode.Floor_Place);
 
             GUI.enabled = _fsm.Current == ScannerMode.Wall_V1
                        || _fsm.Current == ScannerMode.Wall_Height
@@ -144,6 +147,14 @@ namespace Scanner
                     ? "Apunta a la 1ra esquina del cubo y COLOCAR"
                     : "Apunta a la esquina opuesta (diagonal) y COLOCAR";
                 GUILayout.Label(hint, cubeHint);
+            }
+
+            // Hint del flujo de piso.
+            if (_fsm.Current == ScannerMode.Floor_Place)
+            {
+                GUI.enabled = true;
+                var floorHint = new GUIStyle { fontSize = 18, normal = { textColor = Color.yellow } };
+                GUILayout.Label("Apunta al piso real y COLOCAR\n(podes reubicarlo despues arrastrandolo)", floorHint);
             }
 
             GUI.enabled = _fsm.Current != ScannerMode.Idle && _fsm.Current != ScannerMode.Selected;
@@ -195,10 +206,22 @@ namespace Scanner
                 case ScannerMode.Cube_V2:
                     _cubeBuilder?.PlaceCubeVertexAtCurrentReticle();
                     break;
+                case ScannerMode.Floor_Place:
+                    PlaceFloorAtCurrentReticle();
+                    break;
                 case ScannerMode.EditMoveTarget:
                     MoveTargetToCurrentReticle();
                     break;
             }
+        }
+
+        private void PlaceFloorAtCurrentReticle()
+        {
+            if (WorldOrigin.Instance == null) return;
+            var hit = RaycastResolver.Instance?.ResolveFromScreenCenter() ?? ResolvedHit.Miss;
+            if (!hit.Hit) return;
+            FloorPoint.Create(WorldOrigin.Instance.ToRelative(hit.Position));
+            _fsm.SetMode(ScannerMode.Idle);
         }
 
         private void MoveTargetToCurrentReticle()

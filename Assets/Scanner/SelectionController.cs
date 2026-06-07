@@ -176,6 +176,16 @@ namespace Scanner
                 var d = Vector2.Distance(new Vector2(sp.x, sp.y), screenPoint);
                 if (d < bestHandleDist) { bestHandleDist = d; handleHit = dh; }
             }
+            if (FloorPoint.Instance != null)
+            {
+                handlesChecked++;
+                var sp = _camera.WorldToScreenPoint(FloorPoint.Instance.transform.position);
+                if (sp.z > 0f)
+                {
+                    var d = Vector2.Distance(new Vector2(sp.x, sp.y), screenPoint);
+                    if (d < bestHandleDist) { bestHandleDist = d; handleHit = FloorPoint.Instance; }
+                }
+            }
 
             var ray = _camera.ScreenPointToRay(screenPoint);
 
@@ -200,6 +210,7 @@ namespace Scanner
                 if (sel.Kind == SelectableKind.WallVertex) continue;
                 if (sel.Kind == SelectableKind.CubeVertex) continue;
                 if (sel.Kind == SelectableKind.DoorVertex) continue;
+                if (sel.Kind == SelectableKind.Floor) continue;
                 if (hit.distance < bestAnyDist) { bestAnyDist = hit.distance; bestAny = sel; }
             }
 

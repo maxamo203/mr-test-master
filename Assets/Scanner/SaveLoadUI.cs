@@ -109,6 +109,8 @@ namespace Scanner
             SceneRegistry.Instance.ClearAll();
             foreach (var w in data.walls) WallObject.FromData(w);
             foreach (var c in data.cubes) CubeObject.FromData(c);
+            if (data.hasFloor && data.floorLocal != null)
+                FloorPoint.Create(data.floorLocal.ToVector3());
             _newName = name;
 
             // Si el escaneo tiene imagen de referencia, la re-registramos en la

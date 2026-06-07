@@ -73,6 +73,11 @@ namespace Scanner
         public List<WallData> walls = new List<WallData>();
         public List<CubeData> cubes = new List<CubeData>();
 
+        // Punto de piso (un solo punto, anchor-relativo). hasFloor indica si existe;
+        // su Y sirve para "Mover al piso" (alinear las esquinas de las paredes).
+        public bool hasFloor;
+        public Vec3 floorLocal;
+
         // Ancho físico real (en metros) de la imagen de referencia capturada con
         // la cámara. La imagen en sí se guarda como PNG hermano (<name>.png);
         // refImageWidthMeters > 0 indica que hay imagen asociada al escaneo.

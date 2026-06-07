@@ -46,7 +46,7 @@ namespace Scanner
             float w = 280;
             var bgStyle = new GUIStyle(GUI.skin.box) { normal = { background = BG() } };
 
-            GUILayout.BeginArea(new Rect(UIScale.VirtualWidth - w - 10, 10, w, 420), GUIContent.none, bgStyle);
+            GUILayout.BeginArea(new Rect(UIScale.VirtualWidth - w - 10, 10, w, 470), GUIContent.none, bgStyle);
 
             var title = new GUIStyle { fontSize = 22, normal = { textColor = Color.white } };
             GUILayout.Label($"Sel: {sel.Kind}", title);
@@ -83,6 +83,19 @@ namespace Scanner
                 return;
             }
 
+            // Punto de piso: se arrastra para ubicarlo sobre el piso real.
+            if (sel is FloorPoint floor)
+            {
+                GUILayout.Label("Arrastra el gizmo para ubicar\nel punto sobre el piso real.");
+                GUILayout.FlexibleSpace();
+                bool delFloor = GUILayout.Button("Borrar piso", GUILayout.Height(50));
+                bool doneFloor = GUILayout.Button("Listo", GUILayout.Height(50));
+                GUILayout.EndArea();
+                if (delFloor)       floor.Delete();
+                else if (doneFloor) _fsm.ClearSelection();
+                return;
+            }
+
             // Para Wall y Cube, opciones generales.
             if (GUILayout.Button("Mover", GUILayout.Height(50)))
                 _fsm.SetMode(ScannerMode.EditMoveTarget);
@@ -105,6 +118,13 @@ namespace Scanner
                 var newW = GUILayout.HorizontalSlider(wall.Width, 0.05f, 0.5f);
                 if (Mathf.Abs(newW - wall.Width) > 0.001f)
                     wall.SetWidthForPolyline(newW); // propaga a toda la polilinea
+
+                // Mover al piso: alinea en Y las esquinas (toda la polilinea) al
+                // nivel del punto de piso. Requiere que exista un piso colocado.
+                GUI.enabled = FloorPoint.Instance != null;
+                if (GUILayout.Button("Mover al piso", GUILayout.Height(40)))
+                    wall.MoveToFloorForPolyline(FloorPoint.Instance.LocalY);
+                GUI.enabled = true;
 
                 if (GUILayout.Button("Quitar todas las puertas", GUILayout.Height(40)))
                     wall.ClearDoors();
