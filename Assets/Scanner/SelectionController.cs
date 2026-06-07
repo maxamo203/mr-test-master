@@ -167,6 +167,15 @@ namespace Scanner
                 var d = Vector2.Distance(new Vector2(sp.x, sp.y), screenPoint);
                 if (d < bestHandleDist) { bestHandleDist = d; handleHit = cv; }
             }
+            foreach (var dh in FindObjectsByType<DoorHandle>(FindObjectsSortMode.None))
+            {
+                if (dh == null) continue;
+                handlesChecked++;
+                var sp = _camera.WorldToScreenPoint(dh.transform.position);
+                if (sp.z <= 0f) continue;
+                var d = Vector2.Distance(new Vector2(sp.x, sp.y), screenPoint);
+                if (d < bestHandleDist) { bestHandleDist = d; handleHit = dh; }
+            }
 
             var ray = _camera.ScreenPointToRay(screenPoint);
 
@@ -190,6 +199,7 @@ namespace Scanner
                 // Excluir handles del raycast: ya los manejamos por screen-space.
                 if (sel.Kind == SelectableKind.WallVertex) continue;
                 if (sel.Kind == SelectableKind.CubeVertex) continue;
+                if (sel.Kind == SelectableKind.DoorVertex) continue;
                 if (hit.distance < bestAnyDist) { bestAnyDist = hit.distance; bestAny = sel; }
             }
 

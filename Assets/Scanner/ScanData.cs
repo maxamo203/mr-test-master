@@ -41,6 +41,13 @@ namespace Scanner
         public Vec3 aLocal;
         public Vec3 bLocal;
         public float height;
+        // Grosor de la caja 3D (m). La pared se extruye desde la cara cercana
+        // (la linea aLocal->bLocal) a lo largo de su normal horizontal.
+        public float width;
+        // Lado de extrusion: +1/-1 sobre cross(up, baseHat). Se decide al crear
+        // el primer segmento de la polilinea (apuntando lejos de la camara) y lo
+        // comparten todos los segmentos de esa polilinea.
+        public int side = 1;
         public List<DoorData> doors = new List<DoorData>();
     }
 

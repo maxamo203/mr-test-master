@@ -130,9 +130,11 @@ namespace Scanner
             // 2) Fallback runtime si no hay material configurado.
             if (_matNormal == null)
             {
-                var sh = Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
+                // Preferimos el shader de aristas+grid; si no esta, caemos a Unlit/Color.
+                var sh = Shader.Find("Custom/EdgeGrid") ?? Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
+                bool edgeGrid = sh != null && sh.name == "Custom/EdgeGrid";
                 _matNormal = new Material(sh) { name = "CubeMat (runtime)" };
-                var col = new Color(0.6f, 0.8f, 1f, 0.8f);
+                var col = edgeGrid ? new Color(0.6f, 0.8f, 1f, 0.13f) : new Color(0.6f, 0.8f, 1f, 0.8f);
                 if (_matNormal.HasProperty("_Color"))     _matNormal.color = col;
                 if (_matNormal.HasProperty("_BaseColor")) _matNormal.SetColor("_BaseColor", col);
                 _matNormal.renderQueue = 3000;

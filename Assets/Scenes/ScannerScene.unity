@@ -580,8 +580,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 78cb84ffbfa7387459a06d1f4327469e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Scanner.CubeBuilder
-  _cubeMaterial: {fileID: 2100000, guid: 5c3e1b4c3a545d34bbfc76ed9e17b916, type: 2}
-  _cubeSelectedMaterial: {fileID: 2100000, guid: 88e168ea27380dd448254052b42113ce, type: 2}
+  _cubeMaterial: {fileID: 2100000, guid: 2a3b4c5d6e7f8091a2b3c4d5e6f70819, type: 2}
+  _cubeSelectedMaterial: {fileID: 0}
 --- !u!114 &1689158643
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -607,7 +607,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Scanner.WallBuilder
   _defaultHeight: 2.5
-  _wallMaterial: {fileID: 2100000, guid: f40d721770dd1d147baefdfdaaa02f06, type: 2}
+  _wallMaterial: {fileID: 2100000, guid: 1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f, type: 2}
   _wallSelectedMaterial: {fileID: 0}
   _previewSphereRadius: 0.025
   _previewFloorColor: {r: 0.2, g: 1, b: 0.4, a: 1}

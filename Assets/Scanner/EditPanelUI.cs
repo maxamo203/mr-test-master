@@ -46,7 +46,7 @@ namespace Scanner
             float w = 280;
             var bgStyle = new GUIStyle(GUI.skin.box) { normal = { background = BG() } };
 
-            GUILayout.BeginArea(new Rect(UIScale.VirtualWidth - w - 10, 10, w, 360), GUIContent.none, bgStyle);
+            GUILayout.BeginArea(new Rect(UIScale.VirtualWidth - w - 10, 10, w, 420), GUIContent.none, bgStyle);
 
             var title = new GUIStyle { fontSize = 22, normal = { textColor = Color.white } };
             GUILayout.Label($"Sel: {sel.Kind}", title);
@@ -72,6 +72,17 @@ namespace Scanner
                 return;
             }
 
+            // Esquina de puerta: arrastrar reforma el hueco. La esquina de piso se
+            // desliza sobre la base; la libre define el borde opuesto y la altura.
+            if (sel is DoorHandle)
+            {
+                GUILayout.Label("Arrastra el gizmo para mover\nla esquina de la puerta.");
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Listo", GUILayout.Height(50))) _fsm.ClearSelection();
+                GUILayout.EndArea();
+                return;
+            }
+
             // Para Wall y Cube, opciones generales.
             if (GUILayout.Button("Mover", GUILayout.Height(50)))
                 _fsm.SetMode(ScannerMode.EditMoveTarget);
@@ -86,6 +97,14 @@ namespace Scanner
                 var newH = GUILayout.HorizontalSlider(wall.Height, 0.5f, 5f);
                 if (Mathf.Abs(newH - wall.Height) > 0.001f)
                     wall.SetHeightForPolyline(newH); // propaga a toda la polilinea
+
+                string anchoLabel = inPolyline
+                    ? $"Ancho (polilinea): {wall.Width:F2} m"
+                    : $"Ancho: {wall.Width:F2} m";
+                GUILayout.Label(anchoLabel);
+                var newW = GUILayout.HorizontalSlider(wall.Width, 0.05f, 0.5f);
+                if (Mathf.Abs(newW - wall.Width) > 0.001f)
+                    wall.SetWidthForPolyline(newW); // propaga a toda la polilinea
 
                 if (GUILayout.Button("Quitar todas las puertas", GUILayout.Height(40)))
                     wall.ClearDoors();

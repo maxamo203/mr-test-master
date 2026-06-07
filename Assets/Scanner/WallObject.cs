@@ -19,9 +19,37 @@ namespace Scanner
         public Vector3 ALocal { get; private set; }
         public Vector3 BLocal { get; private set; }
         public float Height { get; private set; } = 2.5f;
+        // Grosor de la caja 3D (m) y lado de extrusion (+1/-1 sobre cross(up,baseHat)).
+        public float Width { get; private set; } = 0.15f;
+        public int   Side  { get; private set; } = 1;
         public IReadOnlyList<DoorData> Doors => _doors;
 
+        // Direccion horizontal a lo largo de la base (aLocal -> bLocal).
+        public Vector3 BaseHat
+        {
+            get
+            {
+                var d = BLocal - ALocal;
+                float m = d.magnitude;
+                return m > 1e-5f ? d / m : Vector3.forward;
+            }
+        }
+
+        // Normal horizontal de extrusion del grosor (unitaria). La cara cercana
+        // (puntos colocados) esta en w=0; la caja crece hacia +Normal.
+        public Vector3 Normal
+        {
+            get
+            {
+                var n = Vector3.Cross(Vector3.up, BaseHat);
+                if (n.sqrMagnitude < 1e-6f) n = Vector3.right;
+                return Side * n.normalized;
+            }
+        }
+
         private readonly List<DoorData> _doors = new();
+        // Handles de esquina de las puertas (2 por puerta: piso + libre).
+        private readonly List<DoorHandle> _doorHandles = new();
         private MeshFilter   _mf;
         private MeshRenderer _mr;
         private MeshCollider _mc;
@@ -63,7 +91,8 @@ namespace Scanner
 
         // Factory: crea un GO con los componentes minimos, parentea a WorldOrigin,
         // y arranca con esos valores.
-        public static WallObject Create(Vector3 aLocal, Vector3 bLocal, float height, string id = null)
+        public static WallObject Create(Vector3 aLocal, Vector3 bLocal, float height,
+                                        float width = 0.15f, int side = 1, string id = null)
         {
             var go = new GameObject("Wall");
             go.transform.SetParent(WorldOrigin.Instance.transform, worldPositionStays: false);
@@ -86,6 +115,8 @@ namespace Scanner
             w.ALocal = aLocal;
             w.BLocal = bLocal;
             w.Height = Mathf.Max(0.1f, height);
+            w.Width  = Mathf.Max(0.02f, width);
+            w.Side   = side >= 0 ? 1 : -1;
 
             w.Rebuild();
             w.SpawnVertexHandles();
@@ -151,12 +182,33 @@ namespace Scanner
                     w.SetHeight(newH);
         }
 
+        // Cambia el grosor (ancho) propagando a toda la polilinea, igual que la altura.
+        public void SetWidthForPolyline(float width)
+        {
+            var newW = Mathf.Max(0.02f, width);
+            if (string.IsNullOrEmpty(PolylineId))
+            {
+                SetWidth(newW);
+                return;
+            }
+            var registry = SceneRegistry.Instance;
+            if (registry == null) { SetWidth(newW); return; }
+            foreach (var w in registry.Walls)
+                if (w != null && w.PolylineId == PolylineId)
+                    w.SetWidth(newW);
+        }
+
         public static WallObject FromData(WallData d)
         {
-            var w = Create(d.aLocal.ToVector3(), d.bLocal.ToVector3(), d.height, d.id);
+            var w = Create(d.aLocal.ToVector3(), d.bLocal.ToVector3(), d.height,
+                           d.width > 0f ? d.width : 0.15f, d.side, d.id);
             w.PolylineId = d.polylineId;
             if (d.doors != null)
-                foreach (var door in d.doors) w._doors.Add(door);
+                foreach (var door in d.doors)
+                {
+                    w._doors.Add(door);
+                    w.SpawnDoorHandles(door);
+                }
             w.Rebuild();
             return w;
         }
@@ -170,6 +222,8 @@ namespace Scanner
                 aLocal     = new Vec3(ALocal),
                 bLocal     = new Vec3(BLocal),
                 height     = Height,
+                width      = Width,
+                side       = Side,
                 doors      = new List<DoorData>(_doors),
             };
         }
@@ -189,16 +243,59 @@ namespace Scanner
             RefreshHandlePositions();
         }
 
+        public void SetWidth(float width)
+        {
+            Width = Mathf.Max(0.02f, width);
+            Rebuild();
+            RefreshHandlePositions();
+        }
+
         public void AddDoor(DoorData door)
         {
             _doors.Add(door);
+            SpawnDoorHandles(door);
             Rebuild();
         }
 
         public void ClearDoors()
         {
             _doors.Clear();
+            DestroyDoorHandles();
             Rebuild();
+        }
+
+        // ── Puertas: handles de esquina ───────────────────────────────────────
+        public DoorData GetDoor(string id)
+        {
+            foreach (var d in _doors) if (d != null && d.id == id) return d;
+            return null;
+        }
+
+        // Llamado por DoorHandle al arrastrar una esquina: refresca la malla.
+        // El otro handle de la puerta se re-snapea solo (su LateUpdate cuando no
+        // esta seleccionado lee la DoorData actualizada).
+        public void UpdateDoor(string id) => Rebuild();
+
+        private void SpawnDoorHandles(DoorData door)
+        {
+            if (door == null) return;
+            _doorHandles.Add(DoorHandle.Create(this, door.id, DoorHandle.Corner.Floor));
+            _doorHandles.Add(DoorHandle.Create(this, door.id, DoorHandle.Corner.Free));
+        }
+
+        private void DestroyDoorHandles()
+        {
+            foreach (var h in _doorHandles)
+                if (h != null) Destroy(h.gameObject);
+            _doorHandles.Clear();
+        }
+
+        // Punto en world sobre la CARA CERCANA de la caja (w=0), dado UV de pared.
+        public Vector3 WallUVToWorld(float u, float v)
+        {
+            var local = ALocal + u * BaseHat + v * Vector3.up;
+            var wo = WorldOrigin.Instance;
+            return wo != null ? wo.ToWorld(local) : local;
         }
 
         // Convierte un punto en world space a coordenadas locales del wall:
@@ -240,7 +337,7 @@ namespace Scanner
             if (_mc == null) _mc = GetComponent<MeshCollider>();
 
             if (_mf.sharedMesh != null) Destroy(_mf.sharedMesh);
-            var mesh = WallMeshBuilder.Build(ALocal, BLocal, Height, _doors);
+            var mesh = WallMeshBuilder.Build(ALocal, BLocal, Height, Width, Normal, _doors);
 
             // MeshCollider necesita unassign + reassign para refrescar.
             _mc.sharedMesh = null;
@@ -275,9 +372,13 @@ namespace Scanner
             //    del normal (o del default runtime).
             if (_matNormal == null)
             {
-                var sh = Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
+                // Preferimos el shader de aristas+grid; si no esta, caemos a Unlit/Color.
+                var sh = Shader.Find("Custom/EdgeGrid") ?? Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
+                bool edgeGrid = sh != null && sh.name == "Custom/EdgeGrid";
                 _matNormal = new Material(sh) { name = "WallMat (runtime)" };
-                var col = new Color(0.85f, 0.85f, 0.95f, 0.85f);
+                // Con EdgeGrid el relleno va mas transparente para que se vea el grid.
+                var col = edgeGrid ? new Color(0.8f, 0.85f, 0.95f, 0.12f)
+                                   : new Color(0.85f, 0.85f, 0.95f, 0.85f);
                 if (_matNormal.HasProperty("_Color"))     _matNormal.color = col;
                 if (_matNormal.HasProperty("_BaseColor")) _matNormal.SetColor("_BaseColor", col);
                 _matNormal.renderQueue = 3000;
@@ -309,6 +410,7 @@ namespace Scanner
             SceneRegistry.Instance?.Unregister(this);
             for (int i = 0; i < _handles.Length; i++)
                 if (_handles[i] != null) Destroy(_handles[i].gameObject);
+            DestroyDoorHandles();
             Destroy(gameObject);
         }
 
@@ -316,6 +418,7 @@ namespace Scanner
         {
             for (int i = 0; i < _handles.Length; i++)
                 if (_handles[i] != null) Destroy(_handles[i].gameObject);
+            DestroyDoorHandles();
         }
 
         private void OnDestroy()

@@ -127,6 +127,12 @@ namespace Scanner
                     ? "Apunta arriba (cielorraso) y COLOCAR"
                     : $"Altura polilinea: {_wallBuilder.CurrentPolylineHeight:F2}m";
                 GUILayout.Label(hint, hStyle);
+
+                // Slider de grosor (ancho) en vivo: propaga a toda la polilinea.
+                GUILayout.Label($"Ancho pared: {_wallBuilder.CurrentPolylineWidth:F2}m", hStyle);
+                float newW = GUILayout.HorizontalSlider(_wallBuilder.CurrentPolylineWidth, 0.05f, 0.5f);
+                if (Mathf.Abs(newW - _wallBuilder.CurrentPolylineWidth) > 0.001f)
+                    _wallBuilder.SetPolylineWidth(newW);
             }
 
             // Hint del flujo de cubo (2 vertices de la diagonal).

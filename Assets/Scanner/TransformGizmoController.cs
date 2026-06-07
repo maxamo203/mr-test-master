@@ -30,6 +30,11 @@ namespace Scanner
         private int _gizmoLayer = -1;
         private int _gizmoLayerMask = 0;
         private bool _moveOnly;
+        // Orientacion del gizmo. Si es null, usa la rotacion del target. Se setea
+        // para que los handles-esfera (vertice de cubo, puerta) orienten el gizmo
+        // al frame del OBJETO (las flechas apuntan a las aristas / ejes del objeto)
+        // en vez de al frame del propio handle (que esta alineado a WorldOrigin).
+        private Quaternion? _orientation;
 
         // Estado de drag
         private GizmoHandle _activeHandle;
@@ -57,10 +62,11 @@ namespace Scanner
             _root.SetActive(false);
         }
 
-        public void Attach(Transform target, bool moveOnly = false)
+        public void Attach(Transform target, bool moveOnly = false, Quaternion? orientation = null)
         {
-            _target   = target;
-            _moveOnly = moveOnly;
+            _target      = target;
+            _moveOnly    = moveOnly;
+            _orientation = orientation;
             _root.SetActive(target != null);
             // Mostrar/ocultar handles segun el modo.
             foreach (var h in _moveHandles)   if (h != null) h.SetActive(true);
@@ -71,7 +77,8 @@ namespace Scanner
         public void Detach()
         {
             SetActiveHandle(null);
-            _target = null;
+            _target      = null;
+            _orientation = null;
             _root.SetActive(false);
         }
 
@@ -91,7 +98,7 @@ namespace Scanner
             _root.SetActive(true);
 
             _root.transform.position = _target.position;
-            _root.transform.rotation = _target.rotation;
+            _root.transform.rotation = _orientation ?? _target.rotation;
 
             float dist = Vector3.Distance(_camera.transform.position, _target.position);
             float s    = Mathf.Max(0.05f, dist * _screenSizeFactor);

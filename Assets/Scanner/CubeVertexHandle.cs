@@ -58,7 +58,11 @@ namespace Scanner
         {
             _selected = true;
             if (_mr != null && _matSelected != null) _mr.sharedMaterial = _matSelected;
-            TransformGizmoController.Instance?.Attach(transform, moveOnly: true);
+            // Orientamos el gizmo al frame del cubo: las flechas apuntan a las
+            // aristas del cubo y arrastrarlas mueve a lo largo de sus ejes locales
+            // (importa cuando el cubo esta rotado).
+            var orient = Owner != null ? Owner.transform.rotation : (Quaternion?)null;
+            TransformGizmoController.Instance?.Attach(transform, moveOnly: true, orient);
         }
 
         public void OnDeselect()

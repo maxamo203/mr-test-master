@@ -16,6 +16,8 @@ namespace Scanner
         [Header("Defaults")]
         [Tooltip("Altura inicial sugerida (m). Se sobreescribe con el segundo vertice del polilinea.")]
         [SerializeField] private float _defaultHeight = 2.5f;
+        [Tooltip("Grosor inicial de la pared-caja (m). Ajustable con el slider de ancho.")]
+        [SerializeField] private float _defaultWidth = 0.15f;
 
         [Header("Materiales (opcional, asignar desde el Inspector)")]
         [Tooltip("Material aplicado a las paredes en estado normal. Si esta vacio se crea uno semitransparente en runtime.")]
@@ -39,15 +41,20 @@ namespace Scanner
         private Vector3? _firstFloorLocal;
         private WallObject _lastWall;   // ultima pared creada en la polilinea actual
         private float    _polylineHeight;
+        private float    _polylineWidth;
+        private int?     _polylineSide;  // null hasta crear el primer segmento
         private string   _currentPolylineId;
         private ScanStateMachine _fsm;
+        private Camera   _camera;
         private readonly System.Collections.Generic.List<GameObject> _previewSpheres = new();
 
         public float CurrentPolylineHeight => _polylineHeight;
+        public float CurrentPolylineWidth  => _polylineWidth;
 
         private void Awake()
         {
             _fsm = ScanStateMachine.Instance;
+            _camera = Camera.main;
             ConfiguredNormalMat   = _wallMaterial;
             ConfiguredSelectedMat = _wallSelectedMaterial;
         }
@@ -58,9 +65,23 @@ namespace Scanner
             _lastFloorLocal    = null;
             _lastWall          = null;
             _polylineHeight    = _defaultHeight;
+            _polylineWidth     = _defaultWidth;
+            _polylineSide      = null;
             _currentPolylineId = System.Guid.NewGuid().ToString("N").Substring(0, 8);
             ClearPreviewSpheres();
             _fsm.SetMode(ScannerMode.Wall_V1);
+        }
+
+        // Cambia el grosor de la polilinea en curso y lo propaga a las paredes ya
+        // creadas (mismo patron que la altura).
+        public void SetPolylineWidth(float width)
+        {
+            _polylineWidth = Mathf.Max(0.02f, width);
+            var registry = SceneRegistry.Instance;
+            if (registry == null) return;
+            foreach (var w in registry.Walls)
+                if (w != null && w.PolylineId == _currentPolylineId)
+                    w.SetWidth(_polylineWidth);
         }
 
         public void EndPolyline()
@@ -186,7 +207,14 @@ namespace Scanner
                         // _lastFloorLocal seguiria con la posicion original). Asi el handle
                         // A de la nueva pared queda pegado al vertice editado.
                         Vector3 startLocal = _lastWall != null ? _lastWall.BLocal : _lastFloorLocal.Value;
-                        var w = WallObject.Create(startLocal, anchorLocal, _polylineHeight);
+                        // El lado de extrusion se decide UNA vez (primer segmento) para
+                        // que toda la polilinea tenga grosor del mismo lado. Se elige el
+                        // signo que apunta la normal lejos de la camara (cara cercana
+                        // hacia el jugador).
+                        if (!_polylineSide.HasValue)
+                            _polylineSide = DecideSide(startLocal, anchorLocal);
+                        var w = WallObject.Create(startLocal, anchorLocal, _polylineHeight,
+                                                  _polylineWidth, _polylineSide.Value);
                         w.PolylineId = _currentPolylineId;
                         // Primer wall: la preview de V1 ya esta cubierta por el handle A de este wall.
                         RemoveV1Preview();
@@ -196,6 +224,29 @@ namespace Scanner
                     return;
                 }
             }
+        }
+
+        // Elige el lado (+1/-1 sobre cross(up, baseHat)) tal que la normal de grosor
+        // apunte alejandose de la camara: asi la cara cercana (los puntos colocados)
+        // queda del lado del jugador y la pared crece "hacia adentro".
+        private int DecideSide(Vector3 aLocal, Vector3 bLocal)
+        {
+            var baseVec = bLocal - aLocal;
+            if (baseVec.sqrMagnitude < 1e-6f) return 1;
+            var baseHat = baseVec.normalized;
+            var n0 = Vector3.Cross(Vector3.up, baseHat);
+            if (n0.sqrMagnitude < 1e-6f) return 1;
+            n0.Normalize();
+
+            if (_camera == null) _camera = Camera.main;
+            var wo = WorldOrigin.Instance;
+            if (_camera == null || wo == null) return 1;
+
+            var camLocal = wo.ToRelative(_camera.transform.position);
+            var mid      = (aLocal + bLocal) * 0.5f;
+            float dot    = Vector3.Dot(n0, mid - camLocal);
+            // dot>0 => n0 ya apunta lejos de la camara => side=+1; si no, -1.
+            return dot >= 0f ? 1 : -1;
         }
 
         private void OnDestroy() => ClearPreviewSpheres();
