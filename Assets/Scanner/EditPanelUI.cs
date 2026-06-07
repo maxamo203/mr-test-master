@@ -23,9 +23,10 @@ namespace Scanner
         {
             if (sel is CubeObject cube && TransformGizmoController.Instance != null)
                 TransformGizmoController.Instance.Attach(cube.transform, moveOnly: false);
-            // Para WallVertex el gizmo lo activa el propio handle (con moveOnly=true).
-            // Para Wall el gizmo no se usa (la edicion es via panel).
-            else if (sel == null || sel is WallObject)
+            // Para los handles-esfera (WallVertex/CubeVertex/Door/Floor) y para Wall
+            // el gizmo lo maneja el propio objeto en su OnSelect (Wall crea el
+            // PolylineMoveHandle). Solo detachamos cuando no hay nada seleccionado.
+            else if (sel == null)
                 TransformGizmoController.Instance?.Detach();
         }
 
@@ -46,7 +47,9 @@ namespace Scanner
             float w = 280;
             var bgStyle = new GUIStyle(GUI.skin.box) { normal = { background = BG() } };
 
-            GUILayout.BeginArea(new Rect(UIScale.VirtualWidth - w - 10, 10, w, 470), GUIContent.none, bgStyle);
+            var panelRect = new Rect(UIScale.VirtualWidth - w - 10, 10, w, 470);
+            UIBlocker.AddVirtualRect(panelRect);
+            GUILayout.BeginArea(panelRect, GUIContent.none, bgStyle);
 
             var title = new GUIStyle { fontSize = 22, normal = { textColor = Color.white } };
             GUILayout.Label($"Sel: {sel.Kind}", title);

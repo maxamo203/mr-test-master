@@ -414,16 +414,21 @@ namespace Scanner
             }
         }
 
+        // Gizmo para mover toda la polilinea (aparece en el medio del piso).
+        private PolylineMoveHandle _polyMover;
+
         public void OnSelect()
         {
             EnsureMaterials();
             if (_mr != null) _mr.sharedMaterial = _matSelected;
+            if (_polyMover == null) _polyMover = PolylineMoveHandle.Create(this);
         }
 
         public void OnDeselect()
         {
             EnsureMaterials();
             if (_mr != null) _mr.sharedMaterial = _matNormal;
+            if (_polyMover != null) { _polyMover.Dispose(); _polyMover = null; }
         }
 
         public void Delete()
@@ -432,6 +437,7 @@ namespace Scanner
             for (int i = 0; i < _handles.Length; i++)
                 if (_handles[i] != null) Destroy(_handles[i].gameObject);
             DestroyDoorHandles();
+            if (_polyMover != null) { _polyMover.Dispose(); _polyMover = null; }
             Destroy(gameObject);
         }
 

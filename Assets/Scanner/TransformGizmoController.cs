@@ -17,9 +17,16 @@ namespace Scanner
     //
     // El gizmoRoot se posiciona/orienta sobre el target y escala segun la
     // distancia a la camara para tamano constante en pantalla.
+    // Orden bajo para que su OnGUI (que consume los eventos de mouse durante un
+    // drag) corra ANTES que los OnGUI de los paneles, y asi soltar el gizmo sobre
+    // un boton no lo dispare.
+    [DefaultExecutionOrder(-100)]
     public class TransformGizmoController : MonoBehaviour
     {
         public static TransformGizmoController Instance { get; private set; }
+
+        // Transform al que esta pegado el gizmo (null si no hay).
+        public Transform Target => _target;
 
         [SerializeField] private Camera _camera;
         [Tooltip("Tamanio aparente del gizmo: a 1m de la camara, el gizmo ocupa este factor (en metros). Se sube por encima del tamanio del objeto para que sus handles salgan del cubo y sean tappeables.")]
@@ -39,6 +46,9 @@ namespace Scanner
         // Estado de drag
         private GizmoHandle _activeHandle;
         private Vector2 _lastTouchPos;
+        // Frame en que se solto el ultimo drag, para consumir el evento IMGUI de ese
+        // release (si no, el boton que quedo debajo del dedo se dispararia).
+        private int _dragReleaseFrame = -10;
 
         private readonly System.Collections.Generic.List<GameObject> _moveHandles   = new();
         private readonly System.Collections.Generic.List<GameObject> _scaleHandles  = new();
@@ -88,6 +98,20 @@ namespace Scanner
             _target      = null;
             _orientation = null;
             _root.SetActive(false);
+        }
+
+        // Mientras se arrastra un gizmo (o en el frame en que se solto), consumimos
+        // los eventos de mouse de IMGUI para que no lleguen a los botones de los
+        // paneles. Corre antes que los demas OnGUI por el DefaultExecutionOrder bajo.
+        private void OnGUI()
+        {
+            var e = Event.current;
+            if (e == null) return;
+            bool active = _activeHandle != null || Time.frameCount == _dragReleaseFrame;
+            if (active && (e.type == EventType.MouseDown ||
+                           e.type == EventType.MouseUp   ||
+                           e.type == EventType.MouseDrag))
+                e.Use();
         }
 
         // Centraliza el cambio de handle activo para que la opacidad de "presionado"
@@ -202,6 +226,9 @@ namespace Scanner
             }
             else if (released)
             {
+                // Si veniamos de un drag, marcamos este frame para que OnGUI consuma
+                // el evento de release y no dispare ningun boton debajo del dedo.
+                if (_activeHandle != null) _dragReleaseFrame = Time.frameCount;
                 SetActiveHandle(null);
             }
             else if (held && _activeHandle != null)

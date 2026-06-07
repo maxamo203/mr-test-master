@@ -43,12 +43,16 @@ namespace Scanner
 
             if (!_expanded)
             {
-                if (GUI.Button(new Rect(x + w - 130, y, 130, 45), "Guardar/Cargar"))
+                var collapsed = new Rect(x + w - 130, y, 130, 45);
+                UIBlocker.AddVirtualRect(collapsed);
+                if (GUI.Button(collapsed, "Guardar/Cargar"))
                     _expanded = true;
                 return;
             }
 
-            GUILayout.BeginArea(new Rect(x, y, w, 420), GUIContent.none, bgStyle);
+            var saveArea = new Rect(x, y, w, 420);
+            UIBlocker.AddVirtualRect(saveArea);
+            GUILayout.BeginArea(saveArea, GUIContent.none, bgStyle);
 
             var title = new GUIStyle { fontSize = 22, normal = { textColor = Color.white } };
             GUILayout.BeginHorizontal();

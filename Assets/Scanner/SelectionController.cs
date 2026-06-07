@@ -130,6 +130,14 @@ namespace Scanner
             if (_camera == null) _camera = Camera.main;
             if (fsm == null || _camera == null) { _lastPickResult = "fsm/cam null"; return; }
 
+            // El tap cayo sobre un panel/boton de la UI: no seleccionamos lo de atras.
+            if (UIBlocker.IsPointerOver(screenPoint)) { _lastPickResult = "ui-block"; return; }
+
+            // Hay un gizmo en drag (este tap es el release del arrastre): ignorar,
+            // asi soltar el gizmo no selecciona/deselecciona nada.
+            var gizmo = TransformGizmoController.Instance;
+            if (gizmo != null && gizmo.ActiveHandle != null) { _lastPickResult = "gizmo-drag"; return; }
+
             Physics.SyncTransforms();
 
             // ── 1) SCREEN-SPACE PICKING para handles (esferas) ───────────────

@@ -80,7 +80,9 @@ namespace Scanner
             }
 
             // ── Botonera de modo + Colocar ────────────────────────────────
-            GUILayout.BeginArea(new Rect(10, 10, 220, vh - 20));
+            var modeArea = new Rect(10, 10, 220, vh - 20);
+            UIBlocker.AddVirtualRect(modeArea);
+            GUILayout.BeginArea(modeArea);
             DrawModeButtons();
             GUILayout.EndArea();
 
@@ -88,14 +90,18 @@ namespace Scanner
             if (IsPlacingMode(_fsm.Current))
             {
                 float w = 220, h = 90;
-                if (GUI.Button(new Rect((vw - w) * 0.5f, vh - h - 30, w, h), "COLOCAR"))
+                var placeRect = new Rect((vw - w) * 0.5f, vh - h - 30, w, h);
+                UIBlocker.AddVirtualRect(placeRect);
+                if (GUI.Button(placeRect, "COLOCAR"))
                     OnPlace();
             }
 
             // ── Slider de fallback distance (esquina inf-izq, solo placing)
             if (IsPlacingMode(_fsm.Current) && RaycastResolver.Instance != null)
             {
-                GUILayout.BeginArea(new Rect(10, vh - 90, 320, 80), GUIContent.none);
+                var sliderArea = new Rect(10, vh - 90, 320, 80);
+                UIBlocker.AddVirtualRect(sliderArea);
+                GUILayout.BeginArea(sliderArea, GUIContent.none);
                 GUILayout.Label($"Distancia fallback: {RaycastResolver.Instance.FallbackDistance:F2}m");
                 RaycastResolver.Instance.FallbackDistance =
                     GUILayout.HorizontalSlider(RaycastResolver.Instance.FallbackDistance, 0.3f, 5f);

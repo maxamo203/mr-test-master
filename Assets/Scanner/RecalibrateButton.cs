@@ -61,6 +61,9 @@ namespace Scanner
                 };
 
             GetRects(out var upper, out var lower);
+            // Registramos las zonas para que un tap aca no seleccione lo de atras.
+            UIBlocker.AddVirtualRect(upper);
+            UIBlocker.AddVirtualRect(lower);
             // Solo visual (la acción se dispara en Update). Ignoramos el retorno.
             GUI.Button(upper, "Recalibrar anchor\n(escena queda fija)", _btnStyle);
             GUI.Button(lower, "Recalibrar + mover\nescena con anchor", _btnStyle);
@@ -69,6 +72,10 @@ namespace Scanner
         private void Update()
         {
             if (!TryGetTapRelease(out var tapScreenPos)) return;
+
+            // Soltar un gizmo sobre estos botones no debe dispararlos.
+            var gizmo = TransformGizmoController.Instance;
+            if (gizmo != null && gizmo.ActiveHandle != null) return;
 
             // Touch viene en píxeles con origen abajo-izquierda; los rects de GUI
             // (tras la escala de UIScale) están en píxeles con origen arriba-izq.
