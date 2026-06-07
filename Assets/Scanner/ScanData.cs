@@ -58,6 +58,10 @@ namespace Scanner
         public Vec3 posLocal;
         public Quat rotLocal;
         public Vec3 scaleLocal;
+        // Signo (±1 por eje) de la esquina marcada como "A". Define donde quedan las
+        // esferas de edicion (la diagonal real que marco el usuario). Si falta o es
+        // (0,0,0) — escaneos viejos — se usa la diagonal por defecto (1,1,1).
+        public Vec3 cornerSignA;
     }
 
     [Serializable]

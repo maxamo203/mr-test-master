@@ -25,6 +25,9 @@ namespace Scanner
         // Se usa para identificar a otras paredes que compartian el mismo vertice.
         private Vector3 _prevAnchorLocal;
         private const float ShareTolerance = 0.005f; // 5mm
+        // Largo horizontal de referencia (m) entre este corner y el otro. Se usa
+        // para la rotacion pura: arrastrar el eje normal (X) conserva este largo.
+        private float _refLen = 1f;
 
         public void Init(WallObject owner, int cornerIdx, float radius)
         {
@@ -64,7 +67,19 @@ namespace Scanner
             if (_mr != null && _matSelected != null) _mr.sharedMaterial = _matSelected;
             // Snapshot del estado actual para identificar paredes compartidas.
             _prevAnchorLocal = Owner != null ? Owner.GetCornerLocal(CornerIndex) : Vector3.zero;
-            TransformGizmoController.Instance?.Attach(transform, moveOnly: true);
+
+            // Orientamos el gizmo al frame de la pared: Z = a lo largo (alarga),
+            // X = normal/perpendicular (rotacion pura), Y = vertical mundo.
+            Quaternion? orient = null;
+            if (Owner != null)
+            {
+                Vector3 other = Owner.GetCornerWorld(1 - CornerIndex);
+                Vector3 dir   = transform.position - other; dir.y = 0f;
+                _refLen = Mathf.Max(0.05f, dir.magnitude);
+                if (dir.sqrMagnitude > 1e-6f)
+                    orient = Quaternion.LookRotation(dir.normalized, Vector3.up);
+            }
+            TransformGizmoController.Instance?.Attach(transform, moveOnly: true, orient);
         }
 
         public void OnDeselect()
@@ -83,36 +98,83 @@ namespace Scanner
         private void LateUpdate()
         {
             if (Owner == null) return;
-            if (_selected)
-            {
-                var wo = WorldOrigin.Instance;
-                if (wo == null) return;
-                var newLocal = wo.ToRelative(transform.position);
-                // Si el handle no cambio nada respecto al snapshot, nada que hacer.
-                if ((newLocal - _prevAnchorLocal).sqrMagnitude < (ShareTolerance * ShareTolerance) * 0.01f)
-                    return;
+            if (!_selected) { SnapToCorner(); return; }
 
-                // Propagar a TODAS las paredes que tenian un corner de piso coincidiendo
-                // con _prevAnchorLocal — esto incluye al propio Owner.
-                var registry = SceneRegistry.Instance;
-                if (registry != null)
+            var wo = WorldOrigin.Instance;
+            if (wo == null) return;
+
+            // 1) Restringir el arrastre segun el eje del gizmo (alineado al plano):
+            //    X (normal) => rotacion pura (conserva el largo); Z (a lo largo) y
+            //    Y (vertical) => traslacion (cambian largo / altura).
+            ConstrainToActiveAxis();
+
+            // 2) Re-orientar el gizmo al frame actual de la pared, para que siga
+            //    alineado al plano mientras rota.
+            UpdateGizmoOrientation();
+
+            var newLocal = wo.ToRelative(transform.position);
+            // Si el handle no cambio nada respecto al snapshot, nada que hacer.
+            if ((newLocal - _prevAnchorLocal).sqrMagnitude < (ShareTolerance * ShareTolerance) * 0.01f)
+                return;
+
+            // Propagar a TODAS las paredes que tenian un corner de piso coincidiendo
+            // con _prevAnchorLocal — esto incluye al propio Owner.
+            var registry = SceneRegistry.Instance;
+            if (registry != null)
+            {
+                float tol2 = ShareTolerance * ShareTolerance;
+                foreach (var w in registry.Walls)
                 {
-                    float tol2 = ShareTolerance * ShareTolerance;
-                    foreach (var w in registry.Walls)
-                    {
-                        if (w == null) continue;
-                        if ((w.ALocal - _prevAnchorLocal).sqrMagnitude < tol2)
-                            w.SetCornerLocal(0, newLocal);
-                        if ((w.BLocal - _prevAnchorLocal).sqrMagnitude < tol2)
-                            w.SetCornerLocal(1, newLocal);
-                    }
+                    if (w == null) continue;
+                    if ((w.ALocal - _prevAnchorLocal).sqrMagnitude < tol2)
+                        w.SetCornerLocal(0, newLocal);
+                    if ((w.BLocal - _prevAnchorLocal).sqrMagnitude < tol2)
+                        w.SetCornerLocal(1, newLocal);
                 }
-                _prevAnchorLocal = newLocal;
+            }
+            _prevAnchorLocal = newLocal;
+        }
+
+        // Aplica la restriccion del eje que se esta arrastrando. El otro extremo de
+        // la pared (Owner) queda fijo y es el centro de la rotacion.
+        private void ConstrainToActiveAxis()
+        {
+            var ctrl   = TransformGizmoController.Instance;
+            var active = ctrl != null ? ctrl.ActiveHandle : null;
+
+            Vector3 other = Owner.GetCornerWorld(1 - CornerIndex);
+            Vector3 pos   = transform.position;
+            Vector3 flat  = pos - other; flat.y = 0f;
+
+            bool rotating = active != null
+                         && active.Operation == GizmoOperation.Move
+                         && active.Axis == GizmoAxis.X;
+
+            if (rotating)
+            {
+                // Rotacion pura: proyectar al circulo de radio _refLen alrededor del
+                // otro extremo (en horizontal), conservando la altura del handle.
+                if (flat.sqrMagnitude > 1e-6f)
+                {
+                    flat = flat.normalized * _refLen;
+                    transform.position = new Vector3(other.x + flat.x, pos.y, other.z + flat.z);
+                }
             }
             else
             {
-                SnapToCorner();
+                // Z (largo) / Y (vertical) / sin arrastre: el largo horizontal vigente
+                // pasa a ser la referencia para la proxima rotacion.
+                _refLen = Mathf.Max(0.05f, flat.magnitude);
             }
+        }
+
+        private void UpdateGizmoOrientation()
+        {
+            Vector3 other = Owner.GetCornerWorld(1 - CornerIndex);
+            Vector3 dir   = transform.position - other; dir.y = 0f;
+            if (dir.sqrMagnitude > 1e-6f)
+                TransformGizmoController.Instance?.SetOrientation(
+                    Quaternion.LookRotation(dir.normalized, Vector3.up));
         }
 
         private void OnDestroy()

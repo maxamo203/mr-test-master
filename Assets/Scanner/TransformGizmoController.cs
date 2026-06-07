@@ -62,6 +62,14 @@ namespace Scanner
             _root.SetActive(false);
         }
 
+        // Handle actualmente en drag (null si no hay). Los handles-esfera lo
+        // consultan para saber sobre que eje (alineado al objeto) se esta arrastrando.
+        public GizmoHandle ActiveHandle => _activeHandle;
+
+        // Permite a un handle re-orientar el gizmo en vivo (p.ej. la esquina de
+        // pared lo realinea al plano mientras rota). Surte efecto el frame siguiente.
+        public void SetOrientation(Quaternion? orientation) => _orientation = orientation;
+
         public void Attach(Transform target, bool moveOnly = false, Quaternion? orientation = null)
         {
             _target      = target;

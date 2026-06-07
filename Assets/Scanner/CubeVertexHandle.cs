@@ -12,7 +12,7 @@ namespace Scanner
     public class CubeVertexHandle : MonoBehaviour, ISelectable
     {
         public CubeObject Owner;
-        public int Sign; // -1 = corner (-,-,-), +1 = corner (+,+,+)
+        public Vector3 CornerSign; // signo (±1 por eje) de la esquina que representa
 
         public SelectableKind Kind => SelectableKind.CubeVertex;
         public Transform Transform => transform;
@@ -22,10 +22,10 @@ namespace Scanner
         private Material     _matSelected;
         private bool         _selected;
 
-        public void Init(CubeObject owner, int sign, float radius)
+        public void Init(CubeObject owner, Vector3 cornerSign, float radius)
         {
-            Owner = owner;
-            Sign  = sign;
+            Owner      = owner;
+            CornerSign = cornerSign;
 
             transform.SetParent(WorldOrigin.Instance.transform, worldPositionStays: false);
             transform.localScale = Vector3.one * (radius * 2f);
@@ -75,14 +75,14 @@ namespace Scanner
         public void SnapToCorner()
         {
             if (Owner == null) return;
-            transform.position = Owner.GetDiagonalCornerWorld(Sign);
+            transform.position = Owner.GetDiagonalCornerWorld(CornerSign);
         }
 
         private void LateUpdate()
         {
             if (Owner == null) return;
             if (_selected)
-                Owner.SetDiagonalCornerFromHandle(Sign, transform.position);
+                Owner.SetDiagonalCornerFromHandle(CornerSign, transform.position);
             else
                 SnapToCorner();
         }
