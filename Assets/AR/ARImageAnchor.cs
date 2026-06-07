@@ -140,20 +140,35 @@ public class ARImageAnchor : MonoBehaviour
         catch (Exception e) { Debug.LogWarning($"[ARImageAnchor] SpawnVisual falló: {e.Message}"); }
     }
 
-    // Devuelve una rotación cuyo eje Y es SIEMPRE el up del mundo. Para el rumbo
-    // (yaw) usamos el eje de la imagen que más apunte en horizontal, proyectado
-    // al plano del piso: así funciona con la imagen en una pared (su normal es
-    // horizontal), apoyada en el piso (su +Y/+X es horizontal) o dada vuelta.
+    // Devuelve una rotación cuyo eje Y es SIEMPRE el up del mundo, con el rumbo
+    // (yaw) derivado de la pose REAL de la imagen + la gravedad — sin usar la
+    // cámara ni la posición desde donde se escaneó.
+    //
+    // Convención de ARFoundation en este proyecto: el PLANO de la imagen son los
+    // ejes +X (ancho) y +Y (alto); la NORMAL es +Z (forward). Lo confirma el caso
+    // "imagen apoyada en el piso": +X/+Y quedan horizontales (estan sobre la foto)
+    // y +Z apunta vertical.
+    //
+    // Para el rumbo usamos un eje del PLANO (NO la normal). Por qué evitamos la
+    // normal: el tracking la estima con más ruido (es la dirección fuera del plano)
+    // y, en una imagen VERTICAL, queda horizontal y "empata" con el ancho — el
+    // código viejo elegía "el más horizontal" y ese empate hacía saltar el yaw
+    // ~90° entre calibraciones (la calibración vertical inconsistente reportada).
+    // Tomando solo ejes del plano el empate desaparece y el rumbo es determinista.
     private static Quaternion UprightFromImage(Transform img)
     {
-        Vector3 best = Vector3.zero;
-        float bestMag = 0f;
-        foreach (var axis in new[] { img.forward, img.up, img.right })
-        {
-            var h = new Vector3(axis.x, 0f, axis.z);
-            if (h.sqrMagnitude > bestMag) { bestMag = h.sqrMagnitude; best = h; }
-        }
-        if (bestMag < 1e-6f) best = Vector3.forward;
+        // Proyecciones al plano horizontal de los dos ejes del plano de la imagen.
+        Vector3 altoH  = new Vector3(img.up.x,    0f, img.up.z);    // +Y (alto)
+        Vector3 anchoH = new Vector3(img.right.x, 0f, img.right.z); // +X (ancho)
+
+        // Preferimos el alto (+Y) — mantiene el rumbo que ya daba el caso horizontal,
+        // así los mapas con imagen horizontal no cambian de convención. Cambiamos al
+        // ancho (+X) solo si es claramente más horizontal (histéresis para no
+        // alternar en casos ambiguos ~45°). En una imagen vertical el alto queda
+        // vertical (≈0) y gana el ancho => rumbo estable.
+        Vector3 best = (anchoH.sqrMagnitude > altoH.sqrMagnitude + 0.05f) ? anchoH : altoH;
+
+        if (best.sqrMagnitude < 1e-6f) best = Vector3.forward;
         return Quaternion.LookRotation(best.normalized, Vector3.up);
     }
 
