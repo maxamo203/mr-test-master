@@ -43,10 +43,66 @@ public static class IOSBuildPostProcessor
         AddIfMissing(bonjour, $"_mrtgame._udp.");
         AddIfMissing(bonjour, $"_mrtgame._tcp.");
 
+        // 3) Tipo de documento .mscn: que la app aparezca en "Abrir con" y reciba
+        //    el archivo (lo maneja MscnNative.mm via application:openURL:).
+        RegisterMscnDocumentType(root);
+
         plist.WriteToFile(plistPath);
         UnityEngine.Debug.Log(
-            $"[IOSBuildPostProcessor] Info.plist actualizado: NSLocalNetworkUsageDescription + NSBonjourServices " +
-            $"(discovery udp:{DiscoveryPort}).");
+            $"[IOSBuildPostProcessor] Info.plist actualizado: red local + document type .mscn.");
+    }
+
+    // Declara el UTI exportado com.<bundleId>.mscn y el CFBundleDocumentType que lo
+    // maneja. Idempotente (no duplica en builds incrementales).
+    private static void RegisterMscnDocumentType(PlistElementDict root)
+    {
+        string bundleId = PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.iOS);
+        if (string.IsNullOrEmpty(bundleId)) bundleId = "com.company.app";
+        string uti = bundleId + ".mscn";
+
+        // UTExportedTypeDeclarations
+        var exported = GetOrCreateArray(root, "UTExportedTypeDeclarations");
+        if (!ArrayHasDictWithString(exported, "UTTypeIdentifier", uti))
+        {
+            var decl = exported.AddDict();
+            decl.SetString("UTTypeIdentifier", uti);
+            decl.SetString("UTTypeDescription", "Escaneo MR (.mscn)");
+            var conforms = decl.CreateArray("UTTypeConformsTo");
+            conforms.AddString("public.data");
+            var tagSpec = decl.CreateDict("UTTypeTagSpecification");
+            var exts = tagSpec.CreateArray("public.filename-extension");
+            exts.AddString("mscn");
+        }
+
+        // CFBundleDocumentTypes
+        var docTypes = GetOrCreateArray(root, "CFBundleDocumentTypes");
+        if (!ArrayHasDictWithString(docTypes, "CFBundleTypeName", "Escaneo MR"))
+        {
+            var doc = docTypes.AddDict();
+            doc.SetString("CFBundleTypeName", "Escaneo MR");
+            doc.SetString("LSHandlerRank", "Owner");
+            doc.SetString("CFBundleTypeRole", "Editor");
+            var content = doc.CreateArray("LSItemContentTypes");
+            content.AddString(uti);
+        }
+    }
+
+    private static PlistElementArray GetOrCreateArray(PlistElementDict dict, string key)
+    {
+        var existing = dict[key];
+        if (existing is PlistElementArray arr) return arr;
+        return dict.CreateArray(key);
+    }
+
+    // True si algun dict del array tiene [key] == value (string).
+    private static bool ArrayHasDictWithString(PlistElementArray arr, string key, string value)
+    {
+        foreach (var el in arr.values)
+        {
+            if (el is PlistElementDict d && d[key] is PlistElementString s && s.value == value)
+                return true;
+        }
+        return false;
     }
 
     private static void AddIfMissing(PlistElementArray arr, string value)

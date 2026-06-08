@@ -89,13 +89,13 @@ namespace Scanner
             foreach (var name in _saved)
             {
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button(name, GUILayout.Height(34))) DoLoad(name);
-                if (GUILayout.Button("X", GUILayout.Width(40), GUILayout.Height(34)))
-                {
-                    ScanSerializer.Delete(name);
-                    RefreshList();
-                }
+                bool load   = GUILayout.Button(name, GUILayout.Height(34));
+                bool share  = GUILayout.Button("Compartir", GUILayout.Width(110), GUILayout.Height(34));
+                bool delete = GUILayout.Button("X", GUILayout.Width(40), GUILayout.Height(34));
                 GUILayout.EndHorizontal();
+                if (load)  DoLoad(name);
+                if (share) DoShare(name);
+                if (delete) { ScanSerializer.Delete(name); RefreshList(); }
             }
             GUILayout.EndScrollView();
 
@@ -107,33 +107,20 @@ namespace Scanner
 
         private void DoLoad(string name)
         {
-            var data = ScanSerializer.Load(name);
-            if (data == null) return;
-
-            SceneRegistry.Instance.ClearAll();
-            foreach (var w in data.walls) WallObject.FromData(w);
-            foreach (var c in data.cubes) CubeObject.FromData(c);
-            if (data.hasFloor && data.floorLocal != null)
-                FloorPoint.Create(data.floorLocal.ToVector3());
+            if (!ScanLoader.Load(name, _imageAnchor)) return;
             _newName = name;
+            Flash(ScanSerializer.HasRefImage(name)
+                ? $"Cargado '{name}' — buscando la zona…"
+                : $"Cargado '{name}'");
+        }
 
-            // Si el escaneo tiene imagen de referencia, la re-registramos en la
-            // librería mutable y reiniciamos el tracking: al volver a enfocar la
-            // zona física, ARKit/ARCore la reconoce y reposiciona el anchor.
-            // keepVisualPosition: true → lo recién cargado se queda donde está y
-            // solo se recalcula su pose relativa al nuevo anchor cuando aparece.
-            var refTex = ScanSerializer.LoadRefImage(name);
-            if (refTex != null && _imageAnchor != null)
-            {
-                CapturedReference.Set(refTex, data.refImageWidthMeters);
-                _imageAnchor.AddReferenceImage(refTex, name, data.refImageWidthMeters, keepVisualPosition: true);
-                ScanStateMachine.Instance?.SetMode(ScannerMode.Calibrating);
-                Flash($"Cargado '{name}' — buscando la zona…");
-            }
-            else
-            {
-                Flash($"Cargado '{name}'");
-            }
+        // Exporta el escaneo a un .MSCN y abre la hoja de compartir del sistema.
+        private void DoShare(string name)
+        {
+            var path = ScanPackage.WriteTempFile(name);
+            if (string.IsNullOrEmpty(path)) { Flash("No se pudo exportar"); return; }
+            MscnShare.Share(path);
+            Flash($"Compartiendo '{name}'…");
         }
 
         private void Flash(string msg) { _flash = msg; _flashUntil = Time.time + 2.5f; }

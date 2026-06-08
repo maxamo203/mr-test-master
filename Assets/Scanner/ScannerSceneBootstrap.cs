@@ -36,6 +36,9 @@ namespace Scanner
                 Debug.Log("[ScannerSceneBootstrap] WorldOrigin creado en runtime.");
             }
 
+            // Receptor de archivos .MSCN ("abrir con"): importa y carga el escaneo.
+            MscnReceiver.Ensure();
+
             if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
             if (_imageAnchor == null)
             {

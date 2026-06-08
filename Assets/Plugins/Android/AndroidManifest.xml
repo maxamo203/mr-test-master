@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Manifest aditivo (Unity lo mergea con el generado). Agrega un intent-filter en
+  la GameActivity de Unity para abrir archivos .mscn ("abrir con"). Unity 6 usa
+  com.unity3d.player.UnityPlayerGameActivity (androidApplicationEntry = GameActivity);
+  tools:node="merge" agrega el filtro sin redefinir la activity.
+
+  El FileProvider (para compartir) y su recurso file_paths.xml viven en la Android
+  Library MscnProvider.androidlib (Unity 6 ya no permite res sueltos aca).
+
+  Nota: filtrar por extension en Android es imperfecto (content:// no se puede
+  filtrar por extension). El filtro es amplio a proposito y el codigo valida el
+  magic "MSCN" antes de importar.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
+    <application>
+
+        <activity
+            android:name="com.unity3d.player.UnityPlayerGameActivity"
+            android:theme="@style/BaseUnityGameActivityTheme"
+            tools:node="merge">
+            <!-- Launcher: lo incluimos explicitamente porque al proveer un manifest
+                 custom reemplazamos el que Unity genera con este filtro. Sin esto,
+                 el manifest final queda sin activity MAIN/LAUNCHER. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <!-- "Abrir con" por tipo MIME (caso comun: content:// con octet-stream). -->
+            <intent-filter android:label="Abrir escaneo (.mscn)">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+
+            <!-- "Abrir con" por extension .mscn (cuando viene el nombre en el path). -->
+            <intent-filter android:label="Abrir escaneo (.mscn)">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.mscn" />
+                <data android:pathPattern=".*\\..*\\.mscn" />
+                <data android:pathPattern=".*\\..*\\..*\\.mscn" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.mscn" />
+            </intent-filter>
+
+            <!-- Compartir un .mscn A la app (ACTION_SEND desde otra app). -->
+            <intent-filter android:label="Importar escaneo (.mscn)">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+        </activity>
+
+    </application>
+</manifest>
