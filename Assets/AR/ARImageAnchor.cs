@@ -141,35 +141,45 @@ public class ARImageAnchor : MonoBehaviour
     }
 
     // Devuelve una rotación cuyo eje Y es SIEMPRE el up del mundo, con el rumbo
-    // (yaw) derivado de la pose REAL de la imagen + la gravedad — sin usar la
-    // cámara ni la posición desde donde se escaneó.
+    // (yaw) derivado de la pose REAL de la imagen + la gravedad — sin usar la cámara
+    // ni la posición desde donde se escaneó.
     //
-    // Convención de ARFoundation en este proyecto: el PLANO de la imagen son los
-    // ejes +X (ancho) y +Y (alto); la NORMAL es +Z (forward). Lo confirma el caso
-    // "imagen apoyada en el piso": +X/+Y quedan horizontales (estan sobre la foto)
-    // y +Z apunta vertical.
+    // ASUNCIÓN: la imagen de referencia SIEMPRE se escanea HORIZONTAL (acostada en
+    // piso/mesa, su normal apuntando hacia arriba). Con eso identificamos la normal
+    // de forma puramente GEOMÉTRICA — es el eje más vertical (mayor |y|) — sin
+    // depender de la convención de ejes de ARFoundation (cuál de +X/+Y/+Z es la
+    // normal), que era el origen de la inconsistencia: cuando intentábamos adivinar
+    // la convención, a veces usábamos la normal (ruidosa) para el rumbo y el yaw
+    // saltaba ~90° entre calibraciones.
     //
-    // Para el rumbo usamos un eje del PLANO (NO la normal). Por qué evitamos la
-    // normal: el tracking la estima con más ruido (es la dirección fuera del plano)
-    // y, en una imagen VERTICAL, queda horizontal y "empata" con el ancho — el
-    // código viejo elegía "el más horizontal" y ese empate hacía saltar el yaw
-    // ~90° entre calibraciones (la calibración vertical inconsistente reportada).
-    // Tomando solo ejes del plano el empate desaparece y el rumbo es determinista.
+    // El rumbo sale de un eje del PLANO de la imagen (los otros dos), tomado en un
+    // orden fijo => determinista y estable entre calibraciones de la misma imagen.
     private static Quaternion UprightFromImage(Transform img)
     {
-        // Proyecciones al plano horizontal de los dos ejes del plano de la imagen.
-        Vector3 altoH  = new Vector3(img.up.x,    0f, img.up.z);    // +Y (alto)
-        Vector3 anchoH = new Vector3(img.right.x, 0f, img.right.z); // +X (ancho)
+        Vector3[] axes = { img.right, img.up, img.forward };
 
-        // Preferimos el alto (+Y) — mantiene el rumbo que ya daba el caso horizontal,
-        // así los mapas con imagen horizontal no cambian de convención. Cambiamos al
-        // ancho (+X) solo si es claramente más horizontal (histéresis para no
-        // alternar en casos ambiguos ~45°). En una imagen vertical el alto queda
-        // vertical (≈0) y gana el ancho => rumbo estable.
-        Vector3 best = (anchoH.sqrMagnitude > altoH.sqrMagnitude + 0.05f) ? anchoH : altoH;
+        // 1) La NORMAL es el eje más vertical (en una imagen horizontal apunta
+        //    arriba). Geométrico, no depende de la convención de ARFoundation.
+        int normalIdx = 0;
+        float maxAbsY = Mathf.Abs(axes[0].y);
+        for (int i = 1; i < axes.Length; i++)
+        {
+            float ay = Mathf.Abs(axes[i].y);
+            if (ay > maxAbsY) { maxAbsY = ay; normalIdx = i; }
+        }
 
-        if (best.sqrMagnitude < 1e-6f) best = Vector3.forward;
-        return Quaternion.LookRotation(best.normalized, Vector3.up);
+        // 2) El rumbo: el primero de los OTROS dos ejes (en el plano de la imagen),
+        //    proyectado al horizontal. Orden fijo => mismo eje siempre para la misma
+        //    imagen física.
+        Vector3 yawAxis = Vector3.forward;
+        for (int i = 0; i < axes.Length; i++)
+        {
+            if (i == normalIdx) continue;
+            var h = new Vector3(axes[i].x, 0f, axes[i].z);
+            if (h.sqrMagnitude > 1e-6f) { yawAxis = h.normalized; break; }
+        }
+
+        return Quaternion.LookRotation(yawAxis, Vector3.up);
     }
 
     // ── Imagen de referencia en runtime ───────────────────────────────────────
