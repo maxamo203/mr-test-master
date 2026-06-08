@@ -31,6 +31,30 @@ namespace Scanner
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+
+#if UNITY_IOS && !UNITY_EDITOR
+            // iOS "abrir con": Unity entrega la URL del archivo por deep link.
+            // absoluteURL trae la URL del cold-start; deepLinkActivated, las de warm.
+            Application.deepLinkActivated += OnDeepLink;
+            if (!string.IsNullOrEmpty(Application.absoluteURL)) OnDeepLink(Application.absoluteURL);
+#endif
+        }
+
+        private void OnDestroy()
+        {
+#if UNITY_IOS && !UNITY_EDITOR
+            Application.deepLinkActivated -= OnDeepLink;
+#endif
+        }
+
+        // Recibe una URL de archivo (file:///…/x.mscn) desde el deep link de iOS.
+        private void OnDeepLink(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return;
+            string path = url;
+            try { if (url.StartsWith("file://")) path = new System.Uri(url).LocalPath; }
+            catch { /* dejamos path como vino */ }
+            OnFileReceived(path);
         }
 
         private void Start()
@@ -62,26 +86,8 @@ namespace Scanner
             TryLoadPending();
         }
 
-#if UNITY_IOS && !UNITY_EDITOR
-        [System.Runtime.InteropServices.DllImport("__Internal")]
-        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPStr)]
-        private static extern string _MscnConsumePendingFile();
-        private float _iosPollTimer;
-#endif
-
         private void Update()
         {
-#if UNITY_IOS && !UNITY_EDITOR
-            // El plugin guarda el path del archivo abierto; lo consumimos por polling
-            // (cubre cold-start, donde UnitySendMessage podría perderse).
-            _iosPollTimer -= Time.unscaledDeltaTime;
-            if (_iosPollTimer <= 0f)
-            {
-                _iosPollTimer = 0.5f;
-                var p = _MscnConsumePendingFile();
-                if (!string.IsNullOrEmpty(p)) OnFileReceived(p);
-            }
-#endif
             if (_pendingLoadName != null) TryLoadPending();
         }
 

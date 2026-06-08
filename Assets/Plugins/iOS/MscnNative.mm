@@ -1,59 +1,30 @@
-// Plugin iOS para el archivo .MSCN:
-//   1) _MscnShareFile(path): abre la hoja de compartir (UIActivityViewController).
-//   2) Recibir "abrir con": una subclase de UnityAppController intercepta
-//      application:openURL: y guarda el path; el lado C# (MscnReceiver) lo consume
-//      por polling con _MscnConsumePendingFile(). Polling (en vez de UnitySendMessage)
-//      para cubrir el cold-start, donde el runtime de scripting todavia no esta listo.
+// Plugin iOS minimo: solo la hoja de compartir (UIActivityViewController).
 //
-// Los document types (que la app aparezca en "Abrir con") los inyecta el
-// IOSBuildPostProcessor en el Info.plist.
+// IMPORTANTE: NO subclaseamos UnityAppController. Hacerlo (IMPL_APP_CONTROLLER_SUBCLASS
+// + override de didFinishLaunchingWithOptions/openURL) rompia el arranque de Unity 6
+// (malloc: pointer being freed was not allocated, pantalla gris). La RECEPCION del
+// archivo .mscn ("abrir con") se maneja desde C# con Application.deepLinkActivated /
+// Application.absoluteURL, que Unity ya alimenta con la URL del archivo abierto.
 
 #import <UIKit/UIKit.h>
-#import "UnityAppController.h"
 
-static NSString* gPendingMscnPath = nil;
-
-static void MscnSetPending(NSURL* url)
-{
-    if (url == nil || ![url isFileURL]) return;
-
-    // Copiamos el archivo (suele venir de Documents/Inbox, de solo lectura) a un
-    // temporal con lectura/escritura estable.
-    NSString* src = [url path];
-    NSString* dst = [NSTemporaryDirectory() stringByAppendingPathComponent:[src lastPathComponent]];
-    NSFileManager* fm = [NSFileManager defaultManager];
-    [fm removeItemAtPath:dst error:nil];
-    NSError* err = nil;
-    [fm copyItemAtPath:src toPath:dst error:&err];
-
-    gPendingMscnPath = err ? src : dst;
-}
-
-extern "C" {
-
-// Devuelve el path pendiente (y lo limpia), o "" si no hay. Buffer estatico para
-// que el string siga valido tras limpiar gPendingMscnPath.
-const char* _MscnConsumePendingFile()
-{
-    if (gPendingMscnPath == nil) return "";
-    static char buf[2048];
-    const char* s = [gPendingMscnPath UTF8String];
-    strncpy(buf, s ? s : "", sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
-    gPendingMscnPath = nil;
-    return buf;
-}
-
-void _MscnShareFile(const char* cpath)
+extern "C" void _MscnShareFile(const char* cpath)
 {
     if (cpath == NULL) return;
     NSString* path = [NSString stringWithUTF8String:cpath];
     NSURL* url = [NSURL fileURLWithPath:path];
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        UIViewController* root = UnityGetGLViewController();
-        if (root == nil) root = [[[UIApplication sharedApplication] keyWindow] rootViewController];
+        // Root view controller actual (sin depender de headers de Unity).
+        UIWindow* keyWindow = nil;
+        for (UIWindow* w in [UIApplication sharedApplication].windows) {
+            if (w.isKeyWindow) { keyWindow = w; break; }
+        }
+        if (keyWindow == nil) keyWindow = [UIApplication sharedApplication].windows.firstObject;
+
+        UIViewController* root = keyWindow.rootViewController;
         if (root == nil) return;
+        while (root.presentedViewController != nil) root = root.presentedViewController;
 
         UIActivityViewController* vc =
             [[UIActivityViewController alloc] initWithActivityItems:@[url] applicationActivities:nil];
@@ -62,37 +33,9 @@ void _MscnShareFile(const char* cpath)
         if (vc.popoverPresentationController != nil) {
             vc.popoverPresentationController.sourceView = root.view;
             vc.popoverPresentationController.sourceRect =
-                CGRectMake(root.view.bounds.size.width * 0.5, root.view.bounds.size.height * 0.5, 1, 1);
+                CGRectMake(CGRectGetMidX(root.view.bounds), CGRectGetMidY(root.view.bounds), 1, 1);
             vc.popoverPresentationController.permittedArrowDirections = 0;
         }
         [root presentViewController:vc animated:YES completion:nil];
     });
 }
-
-} // extern "C"
-
-// Subclase de UnityAppController para interceptar la apertura de archivos.
-@interface MscnAppController : UnityAppController
-@end
-
-@implementation MscnAppController
-
-- (BOOL)application:(UIApplication*)application
-            openURL:(NSURL*)url
-            options:(NSDictionary<UIApplicationOpenURLOptionsKey, id>*)options
-{
-    MscnSetPending(url);
-    return [super application:application openURL:url options:options];
-}
-
-// Cold-start: el archivo puede venir en las launch options.
-- (BOOL)application:(UIApplication*)application didFinishLaunchingWithOptions:(NSDictionary*)launchOptions
-{
-    NSURL* url = launchOptions[UIApplicationLaunchOptionsURLKey];
-    if (url != nil) MscnSetPending(url);
-    return [super application:application didFinishLaunchingWithOptions:launchOptions];
-}
-
-@end
-
-IMPL_APP_CONTROLLER_SUBCLASS(MscnAppController)
