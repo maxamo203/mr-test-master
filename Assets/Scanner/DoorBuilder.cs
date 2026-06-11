@@ -10,6 +10,10 @@ namespace Scanner
         private Vector2? _uv1;
         private ScanStateMachine _fsm;
 
+        // Estado en-progreso, leido por PlacementPreview para el fantasma en vivo.
+        public WallObject Target => _target;
+        public Vector2?   Uv1    => _uv1;
+
         private void Awake() => _fsm = ScanStateMachine.Instance;
 
         public void StartDoor()

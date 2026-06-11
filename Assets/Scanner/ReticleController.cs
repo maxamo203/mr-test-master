@@ -22,6 +22,10 @@ namespace Scanner
             if (_wallBuilder == null) _wallBuilder = FindFirstObjectByType<WallBuilder>();
             if (_doorBuilder == null) _doorBuilder = FindFirstObjectByType<DoorBuilder>();
             if (_cubeBuilder == null) _cubeBuilder = FindFirstObjectByType<CubeBuilder>();
+
+            // Fantasma en vivo de lo que se va a colocar. Lo instanciamos acá para no
+            // tener que cablearlo en la escena (encuentra los builders por su cuenta).
+            if (GetComponent<PlacementPreview>() == null) gameObject.AddComponent<PlacementPreview>();
         }
 
         private void Update()
@@ -34,7 +38,7 @@ namespace Scanner
         private bool IsPlacingMode(ScannerMode m) =>
             m == ScannerMode.Wall_V1 || m == ScannerMode.Wall_Height || m == ScannerMode.Wall_Vn ||
             m == ScannerMode.Door_V1 || m == ScannerMode.Door_V2 ||
-            m == ScannerMode.Cube_V1 || m == ScannerMode.Cube_V2 ||
+            m == ScannerMode.Cube_V1 || m == ScannerMode.Cube_V2 || m == ScannerMode.Cube_V3 ||
             m == ScannerMode.Floor_Place || m == ScannerMode.EditMoveTarget;
 
         private static Texture2D _bgTex;
@@ -144,15 +148,24 @@ namespace Scanner
                     _wallBuilder.SetPolylineWidth(newW);
             }
 
-            // Hint del flujo de cubo (2 vertices de la diagonal).
-            if (_fsm.Current == ScannerMode.Cube_V1 || _fsm.Current == ScannerMode.Cube_V2)
+            // Hint del flujo de cubo (2 esquinas de la diagonal + 3er punto de rotacion).
+            if (_fsm.Current == ScannerMode.Cube_V1 || _fsm.Current == ScannerMode.Cube_V2
+             || _fsm.Current == ScannerMode.Cube_V3)
             {
                 GUI.enabled = true;
                 var cubeHint = new GUIStyle { fontSize = 18, normal = { textColor = Color.yellow } };
-                string hint = _fsm.Current == ScannerMode.Cube_V1
-                    ? "Apunta a la 1ra esquina del cubo y COLOCAR"
-                    : "Apunta a la esquina opuesta (diagonal) y COLOCAR";
+                string hint = _fsm.Current switch
+                {
+                    ScannerMode.Cube_V1 => "Apunta a la 1ra esquina del cubo y COLOCAR",
+                    ScannerMode.Cube_V2 => "Apunta a la esquina opuesta (diagonal) y COLOCAR",
+                    _                   => "Apunta a un 3er punto para fijar la rotacion y COLOCAR",
+                };
                 GUILayout.Label(hint, cubeHint);
+
+                // En el 3er paso, opcion de cerrar sin rotar (cubo axis-aligned).
+                if (_fsm.Current == ScannerMode.Cube_V3 &&
+                    GUILayout.Button("Confirmar sin rotar", GUILayout.Height(40)))
+                    _cubeBuilder?.ConfirmCubeAxisAligned();
             }
 
             // Hint del flujo de piso.
@@ -210,6 +223,7 @@ namespace Scanner
                     break;
                 case ScannerMode.Cube_V1:
                 case ScannerMode.Cube_V2:
+                case ScannerMode.Cube_V3:
                     _cubeBuilder?.PlaceCubeVertexAtCurrentReticle();
                     break;
                 case ScannerMode.Floor_Place:

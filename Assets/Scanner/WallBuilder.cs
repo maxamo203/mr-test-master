@@ -51,6 +51,36 @@ namespace Scanner
         public float CurrentPolylineHeight => _polylineHeight;
         public float CurrentPolylineWidth  => _polylineWidth;
 
+        // Primer punto de piso de la polilinea (para el preview de altura).
+        public Vector3? FirstFloor => _firstFloorLocal;
+
+        // Devuelve los datos de la pared que se crearia AHORA si se colocara el
+        // proximo vertice en endLocal (mismo calculo que PlaceVertex/Wall_Vn). Lo
+        // usa PlacementPreview para el fantasma en vivo del segmento. Devuelve false
+        // si no estamos en Wall_Vn o no hay vertice de arranque.
+        public bool TryGetWallPreview(Vector3 endLocal, out Vector3 aLocal, out Vector3 bLocal,
+                                      out float height, out float width, out Vector3 normal)
+        {
+            aLocal = bLocal = Vector3.zero;
+            height = width = 0f;
+            normal = Vector3.forward;
+            if (_fsm.Current != ScannerMode.Wall_Vn || !_lastFloorLocal.HasValue) return false;
+
+            aLocal = _lastWall != null ? _lastWall.BLocal : _lastFloorLocal.Value;
+            bLocal = endLocal;
+            var baseVec = bLocal - aLocal;
+            if (baseVec.sqrMagnitude < 1e-6f) return false;
+
+            height = _polylineHeight;
+            width  = _polylineWidth;
+            int side = _polylineSide ?? DecideSide(aLocal, bLocal);
+            var baseHat = baseVec.normalized;
+            var n = Vector3.Cross(Vector3.up, baseHat);
+            if (n.sqrMagnitude < 1e-6f) n = Vector3.right;
+            normal = (side >= 0 ? 1 : -1) * n.normalized;
+            return true;
+        }
+
         private void Awake()
         {
             _fsm = ScanStateMachine.Instance;

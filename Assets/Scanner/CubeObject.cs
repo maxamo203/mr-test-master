@@ -75,6 +75,53 @@ namespace Scanner
             return Create(center, Quaternion.identity, size, id, signA);
         }
 
+        // Crea un cubo definido por dos esquinas opuestas (p1,p2) mas un tercer
+        // punto p3 que SOLO fija la rotacion horizontal (yaw): el cubo se alinea de
+        // modo que un eje horizontal apunte de p1 hacia p3 (proyectado a XZ). El
+        // centro y la altura salen de p1/p2 (la Y de p3 se ignora). Asi un mueble
+        // rotado respecto a los ejes del anchor queda bien definido sin depender de
+        // adivinar "a que diagonal" se referia el usuario.
+        public static CubeObject CreateFromThreePoints(Vector3 p1, Vector3 p2, Vector3 p3, string id = null)
+        {
+            ComputeYawBox(p1, p2, p3, out var center, out var rot, out var scale, out var signA);
+            return Create(center, rot, scale, id, signA);
+        }
+
+        // Geometria pura del cubo "diagonal + yaw" (compartida por la creacion y el
+        // preview en vivo). center/rot/scale en anchor space; signA = signo (±1 por
+        // eje, en el frame rotado) de la esquina p1, para que su handle caiga ahi.
+        public static void ComputeYawBox(Vector3 p1, Vector3 p2, Vector3 p3,
+                                         out Vector3 center, out Quaternion rot,
+                                         out Vector3 scale, out Vector3 signA)
+        {
+            center = (p1 + p2) * 0.5f;
+
+            // Direccion horizontal de referencia (yaw): de p1 hacia p3, aplanada al
+            // plano XZ. Si p3 es degenerado, caemos a la direccion de la diagonal.
+            var e = new Vector3(p3.x - p1.x, 0f, p3.z - p1.z);
+            if (e.sqrMagnitude < 1e-6f) e = new Vector3(p2.x - p1.x, 0f, p2.z - p1.z);
+            if (e.sqrMagnitude < 1e-6f) e = Vector3.forward;
+            e.Normalize();
+
+            rot = Quaternion.LookRotation(e, Vector3.up); // +Z local = e
+            var f = Vector3.Cross(Vector3.up, e);          // +X local = perpendicular horizontal
+
+            var d = p2 - p1;
+            float sizeZ = Mathf.Abs(Vector3.Dot(d, e));
+            float sizeX = Mathf.Abs(Vector3.Dot(d, f));
+            float sizeY = Mathf.Abs(d.y);
+            scale = new Vector3(
+                Mathf.Max(MinSize, sizeX),
+                Mathf.Max(MinSize, sizeY),
+                Mathf.Max(MinSize, sizeZ));
+
+            var localA = Quaternion.Inverse(rot) * (p1 - center);
+            signA = new Vector3(
+                localA.x >= 0f ? 1f : -1f,
+                localA.y >= 0f ? 1f : -1f,
+                localA.z >= 0f ? 1f : -1f);
+        }
+
         public static CubeObject FromData(CubeData d)
         {
             // Escaneos viejos no tienen cornerSignA (null o (0,0,0)) => default (1,1,1).
