@@ -15,6 +15,10 @@ namespace Scanner
         private ResolvedHit _lastHit;
         private Camera _camera;
 
+        // Si al terminar la polilinea se cierra el bucle (ultimo vertice -> primero).
+        // En memoria: se mantiene entre polilineas, no persiste entre sesiones.
+        private bool _closePolyline = true;
+
         private void Awake()
         {
             _fsm = ScanStateMachine.Instance;
@@ -126,10 +130,15 @@ namespace Scanner
             string pisoLabel = FloorPoint.Instance != null ? "Piso (reubicar)" : "Piso";
             if (GUILayout.Button(pisoLabel,           GUILayout.Height(50))) _fsm.SetMode(ScannerMode.Floor_Place);
 
-            GUI.enabled = _fsm.Current == ScannerMode.Wall_V1
+            bool inWall = _fsm.Current == ScannerMode.Wall_V1
                        || _fsm.Current == ScannerMode.Wall_Height
                        || _fsm.Current == ScannerMode.Wall_Vn;
-            if (GUILayout.Button("Terminar polilinea", GUILayout.Height(40))) _wallBuilder?.EndPolyline();
+            GUI.enabled = inWall;
+            if (GUILayout.Button("Terminar polilinea", GUILayout.Height(40)))
+                _wallBuilder?.EndPolyline(_closePolyline);
+            // Check de cierre automatico (en memoria, se mantiene entre ediciones).
+            if (inWall)
+                _closePolyline = GUILayout.Toggle(_closePolyline, " Cerrar (unir al inicio)");
 
             // Si estamos en polilinea, mostrar la altura calibrada.
             if ((_fsm.Current == ScannerMode.Wall_Vn || _fsm.Current == ScannerMode.Wall_Height) && _wallBuilder != null)

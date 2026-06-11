@@ -114,8 +114,11 @@ namespace Scanner
                     w.SetWidth(_polylineWidth);
         }
 
-        public void EndPolyline()
+        // closeLoop = true => antes de terminar, conecta el ultimo vertice con el
+        // primero (cierra la pared en bucle) usando los mismos H/grosor/lado/id.
+        public void EndPolyline(bool closeLoop = false)
         {
+            if (closeLoop) TryCloseLoop();
             _firstFloorLocal = null;
             _lastFloorLocal  = null;
             _lastWall        = null;
@@ -124,6 +127,34 @@ namespace Scanner
              || _fsm.Current == ScannerMode.Wall_Height
              || _fsm.Current == ScannerMode.Wall_Vn)
                 _fsm.SetMode(ScannerMode.Idle);
+        }
+
+        // Crea el segmento de cierre (ultimo vertice -> primer vertice). Solo si la
+        // polilinea ya tiene al menos 2 segmentos (con 1 solo, cerrar duplicaria la
+        // misma pared) y el punto de cierre no coincide con el de arranque.
+        private void TryCloseLoop()
+        {
+            if (!_firstFloorLocal.HasValue) return;
+            if (CountPolylineWalls() < 2) return;
+
+            Vector3 start = _lastWall != null ? _lastWall.BLocal
+                          : (_lastFloorLocal ?? _firstFloorLocal.Value);
+            Vector3 end   = _firstFloorLocal.Value;
+            if ((end - start).sqrMagnitude < 1e-4f) return; // ya cierra solo
+
+            if (!_polylineSide.HasValue) _polylineSide = DecideSide(start, end);
+            var w = WallObject.Create(start, end, _polylineHeight, _polylineWidth, _polylineSide.Value);
+            w.PolylineId = _currentPolylineId;
+        }
+
+        private int CountPolylineWalls()
+        {
+            var registry = SceneRegistry.Instance;
+            if (registry == null) return 0;
+            int count = 0;
+            foreach (var w in registry.Walls)
+                if (w != null && w.PolylineId == _currentPolylineId) count++;
+            return count;
         }
 
         private GameObject SpawnPreviewSphere(Vector3 anchorLocal, Color color, PolylinePreviewHandle.PreviewKind kind)
