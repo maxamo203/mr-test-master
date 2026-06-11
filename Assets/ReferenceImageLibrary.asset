@@ -16,14 +16,4 @@ MonoBehaviour:
   m_GuidHigh: 14552436849847951026
   m_DataStore:
     m_Storage: []
-  m_Images:
-  - m_SerializedGuid:
-      m_GuidLow: 5138500392696675499
-      m_GuidHigh: 11655263743494667709
-    m_SerializedTextureGuid:
-      m_GuidLow: 1253382759778588647
-      m_GuidHigh: 11042516818041432058
-    m_Size: {x: 0.113, y: 0.113}
-    m_SpecifySize: 1
-    m_Name: 8b040279cc8e97c59de64e167da2e4bf
-    m_Texture: {fileID: 0}
+  m_Images: []
