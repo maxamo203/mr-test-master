@@ -49,7 +49,7 @@ namespace Scanner
 
         private void EnsureMaterials()
         {
-            var sh = Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
+            var sh = Shader.Find("Custom/LitMarker") ?? Shader.Find("Unlit/Color");
             _matNormal = new Material(sh) { name = "VertexHandleMat (runtime)" };
             var col = new Color(0.2f, 1f, 0.4f, 1f); // piso = verde
             if (_matNormal.HasProperty("_Color"))     _matNormal.color = col;

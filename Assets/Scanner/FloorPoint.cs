@@ -65,7 +65,7 @@ namespace Scanner
 
         private void EnsureMaterials()
         {
-            var sh = Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
+            var sh = Shader.Find("Custom/LitMarker") ?? Shader.Find("Unlit/Color");
             _matNormal = new Material(sh) { name = "FloorPointMat (runtime)" };
             var col = new Color(0.2f, 0.6f, 1f, 1f); // azul = piso
             if (_matNormal.HasProperty("_Color"))     _matNormal.color = col;

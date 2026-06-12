@@ -316,10 +316,15 @@ public class ARImageAnchor : MonoBehaviour
         go.AddComponent<MeshFilter>().sharedMesh = _sphereMesh;
         var mr = go.AddComponent<MeshRenderer>();
 
-        var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+        // Custom/LitMarker (lit, committeado y en Always Included Shaders): la esfera
+        // queda iluminada (no plana) y NO sale magenta en el celular. Antes usaba
+        // URP/Lit→Standard: el proyecto es Built-in y 'Standard' no esta incluido en
+        // el build => se stripeaba => magenta. LitMarker es de una sola variante, por
+        // eso es seguro en device. Ver [[builtin-pipeline-shader-stripping]].
+        var shader = Shader.Find("Custom/LitMarker") ?? Shader.Find("Unlit/Color");
         var mat = new Material(shader);
-        mat.color = color;
-        mat.SetColor("_BaseColor", color); // URP
+        if (mat.HasProperty("_Color"))     mat.color = color;
+        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
         mr.material = mat;
         return go;
     }

@@ -402,6 +402,9 @@ namespace Scanner
                                    : new Color(0.85f, 0.85f, 0.95f, 0.85f);
                 if (_matNormal.HasProperty("_Color"))     _matNormal.color = col;
                 if (_matNormal.HasProperty("_BaseColor")) _matNormal.SetColor("_BaseColor", col);
+                // Pared: grid desde las coords (u,v,w) horneadas en el mesh (sigue la
+                // inclinacion); sin aristas de caja (tiene huecos de puerta).
+                if (edgeGrid && _matNormal.HasProperty("_GridFromUV")) _matNormal.SetFloat("_GridFromUV", 1f);
                 _matNormal.renderQueue = 3000;
             }
             if (_matSelected == null)

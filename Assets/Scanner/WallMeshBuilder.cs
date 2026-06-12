@@ -61,12 +61,24 @@ namespace Scanner
             var verts = new List<Vector3>();
             var uvs   = new List<Vector2>();
             var tris  = new List<int>();
+            // Coordenada metrica (u,v,w) y normal en ese frame, por vertice. El shader
+            // EdgeGrid (con _GridFromUV=1) las usa para que el grid siga la geometria
+            // de la pared (u a lo largo de la base, v en altura) en vez de un grid
+            // world-aligned: asi una pared inclinada refleja su inclinacion.
+            var metrics = new List<Vector3>();
+            var gnorms  = new List<Vector3>();
 
             float lInv = 1f / length;
             float hInv = height > 0.0001f ? 1f / height : 0f;
 
             // Punto en espacio anchor.
             Vector3 P(float u, float v, float w) => aLocal + u * baseHat + v * up + w * n;
+            // Coordenada metrica del grid (misma terna u,v,w que P).
+            Vector3 G(float u, float v, float w) => new Vector3(u, v, w);
+            // Normales en el frame del grid: cara de grosor (w), de base (u), de altura (v).
+            var gnW = new Vector3(0f, 0f, 1f);
+            var gnU = new Vector3(1f, 0f, 0f);
+            var gnV = new Vector3(0f, 1f, 0f);
 
             // Determina si la celda (i,j) es solida (dentro de rango y no dentro de
             // ningun hueco de puerta).
@@ -87,11 +99,14 @@ namespace Scanner
             // 'outward' (asi RecalculateNormals da normales hacia afuera sin
             // depender de que yo acierte el winding a mano).
             void Quad(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, Vector3 outward,
-                      Vector2 t0, Vector2 t1, Vector2 t2, Vector2 t3)
+                      Vector2 t0, Vector2 t1, Vector2 t2, Vector2 t3,
+                      Vector3 g0, Vector3 g1, Vector3 g2, Vector3 g3, Vector3 gn)
             {
                 int b = verts.Count;
                 verts.Add(p0); verts.Add(p1); verts.Add(p2); verts.Add(p3);
                 uvs.Add(t0); uvs.Add(t1); uvs.Add(t2); uvs.Add(t3);
+                metrics.Add(g0); metrics.Add(g1); metrics.Add(g2); metrics.Add(g3);
+                gnorms.Add(gn); gnorms.Add(gn); gnorms.Add(gn); gnorms.Add(gn);
                 var geo = Vector3.Cross(p1 - p0, p2 - p0);
                 if (Vector3.Dot(geo, outward) >= 0f)
                 {
@@ -126,33 +141,39 @@ namespace Scanner
 
                     // ── Cara cercana (w=0), mira hacia -n ──
                     Quad(P(u0, v0, 0f), P(u1, v0, 0f), P(u1, v1, 0f), P(u0, v1, 0f), -n,
-                         uv00, uv10, uv11, uv01);
+                         uv00, uv10, uv11, uv01,
+                         G(u0, v0, 0f), G(u1, v0, 0f), G(u1, v1, 0f), G(u0, v1, 0f), gnW);
 
                     // ── Cara lejana (w=width), mira hacia +n ──
                     Quad(P(u0, v0, width), P(u1, v0, width), P(u1, v1, width), P(u0, v1, width), n,
-                         uv00, uv10, uv11, uv01);
+                         uv00, uv10, uv11, uv01,
+                         G(u0, v0, width), G(u1, v0, width), G(u1, v1, width), G(u0, v1, width), gnW);
 
                     // ── Quads laterales hacia vecinos vacios (caps + jambas de puerta) ──
                     // El frente mira "hacia afuera" de la celda solida (away del vecino).
                     // Izquierda (u=u0): vecino i-1 vacio. Mira -baseHat.
                     if (!IsSolid(i - 1, j))
                         Quad(P(u0, v0, 0f), P(u0, v1, 0f), P(u0, v1, width), P(u0, v0, width), -baseHat,
-                             new Vector2(v0, 0f), new Vector2(v1, 0f), new Vector2(v1, 1f), new Vector2(v0, 1f));
+                             new Vector2(v0, 0f), new Vector2(v1, 0f), new Vector2(v1, 1f), new Vector2(v0, 1f),
+                             G(u0, v0, 0f), G(u0, v1, 0f), G(u0, v1, width), G(u0, v0, width), gnU);
 
                     // Derecha (u=u1): vecino i+1 vacio. Mira +baseHat.
                     if (!IsSolid(i + 1, j))
                         Quad(P(u1, v0, 0f), P(u1, v0, width), P(u1, v1, width), P(u1, v1, 0f), baseHat,
-                             new Vector2(v0, 0f), new Vector2(v0, 1f), new Vector2(v1, 1f), new Vector2(v1, 0f));
+                             new Vector2(v0, 0f), new Vector2(v0, 1f), new Vector2(v1, 1f), new Vector2(v1, 0f),
+                             G(u1, v0, 0f), G(u1, v0, width), G(u1, v1, width), G(u1, v1, 0f), gnU);
 
                     // Abajo (v=v0): vecino j-1 vacio. Mira -up (tapa inferior / umbral).
                     if (!IsSolid(i, j - 1))
                         Quad(P(u0, v0, 0f), P(u0, v0, width), P(u1, v0, width), P(u1, v0, 0f), -up,
-                             new Vector2(u0, 0f), new Vector2(u0, 1f), new Vector2(u1, 1f), new Vector2(u1, 0f));
+                             new Vector2(u0, 0f), new Vector2(u0, 1f), new Vector2(u1, 1f), new Vector2(u1, 0f),
+                             G(u0, v0, 0f), G(u0, v0, width), G(u1, v0, width), G(u1, v0, 0f), gnV);
 
                     // Arriba (v=v1): vecino j+1 vacio. Mira +up (tapa superior / dintel).
                     if (!IsSolid(i, j + 1))
                         Quad(P(u0, v1, 0f), P(u1, v1, 0f), P(u1, v1, width), P(u0, v1, width), up,
-                             new Vector2(u0, 0f), new Vector2(u1, 0f), new Vector2(u1, 1f), new Vector2(u0, 1f));
+                             new Vector2(u0, 0f), new Vector2(u1, 0f), new Vector2(u1, 1f), new Vector2(u0, 1f),
+                             G(u0, v1, 0f), G(u1, v1, 0f), G(u1, v1, width), G(u0, v1, width), gnV);
                 }
             }
 
@@ -161,6 +182,8 @@ namespace Scanner
             var mesh = new Mesh { name = "WallMesh" };
             mesh.SetVertices(verts);
             mesh.SetUVs(0, uvs);
+            mesh.SetUVs(1, metrics); // (u,v,w) metrico para el grid del shader
+            mesh.SetUVs(2, gnorms);  // normal en el frame del grid
             mesh.SetTriangles(tris, 0);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();

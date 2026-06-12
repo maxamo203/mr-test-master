@@ -30,8 +30,9 @@ namespace Scanner
         private GameObject _marker;   // esfera para previews de un solo punto
         private GameObject _box;      // primitiva cubo (cubo / pilar de altura / mover-cubo)
         private GameObject _meshGo;   // MeshFilter+Renderer para pared/puerta (mesh por frame)
-        private Material   _ghostMat;   // translucido (caja + mallas)
-        private Material   _markerMat;  // solido brillante (marcadores de punto)
+        private Material   _ghostBoxMat;   // translucido para la caja (aristas de cubo)
+        private Material   _ghostMeshMat;  // translucido para mallas de pared (grid sigue la pared)
+        private Material   _markerMat;     // lit, para los marcadores de punto (esferas)
 
         private void Awake()
         {
@@ -198,6 +199,14 @@ namespace Scanner
             var mesh = new Mesh { name = "GhostDoorQuad" };
             // Doble cara para que se vea desde ambos lados.
             mesh.SetVertices(new[] { p00, p10, p11, p01 });
+            // Coords (u,v,w) + normal de frame (cara de grosor) para el grid del shader.
+            mesh.SetUVs(1, new[]
+            {
+                new Vector3(uMin, vMin, 0f), new Vector3(uMax, vMin, 0f),
+                new Vector3(uMax, vMax, 0f), new Vector3(uMin, vMax, 0f),
+            });
+            var gn = new Vector3(0f, 0f, 1f);
+            mesh.SetUVs(2, new[] { gn, gn, gn, gn });
             mesh.SetTriangles(new[] { 0, 1, 2, 0, 2, 3, 0, 2, 1, 0, 3, 2 }, 0);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
@@ -253,7 +262,7 @@ namespace Scanner
                 _marker.name = "GhostMarker";
                 StripCollider(_marker);
                 _marker.transform.SetParent(WorldOrigin.Instance.transform, worldPositionStays: false);
-                _markerMat = new Material(Shader.Find("Unlit/Color") ?? Shader.Find("Standard"))
+                _markerMat = new Material(Shader.Find("Custom/LitMarker") ?? Shader.Find("Unlit/Color"))
                     { name = "GhostMarkerMat (runtime)" };
                 _marker.GetComponent<MeshRenderer>().sharedMaterial = _markerMat;
             }
@@ -268,7 +277,7 @@ namespace Scanner
                 _box.name = "GhostBox";
                 StripCollider(_box);
                 _box.transform.SetParent(WorldOrigin.Instance.transform, worldPositionStays: false);
-                _box.GetComponent<MeshRenderer>().sharedMaterial = GhostMat();
+                _box.GetComponent<MeshRenderer>().sharedMaterial = GhostBoxMat();
             }
             return _box;
         }
@@ -280,7 +289,7 @@ namespace Scanner
                 _meshGo = new GameObject("GhostMesh");
                 _meshGo.transform.SetParent(WorldOrigin.Instance.transform, worldPositionStays: false);
                 _meshGo.AddComponent<MeshFilter>();
-                _meshGo.AddComponent<MeshRenderer>().sharedMaterial = GhostMat();
+                _meshGo.AddComponent<MeshRenderer>().sharedMaterial = GhostMeshMat();
             }
             return _meshGo;
         }
@@ -291,17 +300,34 @@ namespace Scanner
             if (col != null) Destroy(col);
         }
 
-        // Material translucido para caja/mallas. Preferimos el shader translucido
-        // del proyecto (Custom/EdgeGrid) para el look "fantasma"; si no esta, caemos
-        // a Unlit/Color (queda opaco pero igual sirve de guia).
-        private Material GhostMat()
+        // Material translucido del fantasma. Custom/EdgeGrid para el look "fantasma";
+        // si no esta, Unlit/Color (opaco, igual sirve de guia).
+        // Caja (cubo): aristas de caja geometricas.
+        private Material GhostBoxMat()
         {
-            if (_ghostMat != null) return _ghostMat;
+            if (_ghostBoxMat != null) return _ghostBoxMat;
+            _ghostBoxMat = NewGhostMat("PlacementGhostBoxMat (runtime)");
+            if (_ghostBoxMat.HasProperty("_BoxEdges")) _ghostBoxMat.SetFloat("_BoxEdges", 1f);
+            return _ghostBoxMat;
+        }
+
+        // Malla (pared): grid desde las coords (u,v,w) horneadas, asi el preview en
+        // vivo sigue la inclinacion de la pared en vez de quedar world-horizontal.
+        private Material GhostMeshMat()
+        {
+            if (_ghostMeshMat != null) return _ghostMeshMat;
+            _ghostMeshMat = NewGhostMat("PlacementGhostMeshMat (runtime)");
+            if (_ghostMeshMat.HasProperty("_GridFromUV")) _ghostMeshMat.SetFloat("_GridFromUV", 1f);
+            return _ghostMeshMat;
+        }
+
+        private static Material NewGhostMat(string name)
+        {
             var sh = Shader.Find("Custom/EdgeGrid") ?? Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
-            _ghostMat = new Material(sh) { name = "PlacementGhostMat (runtime)" };
-            SetColor(_ghostMat, new Color(0.3f, 0.9f, 1f, 0.35f));
-            _ghostMat.renderQueue = 3000;
-            return _ghostMat;
+            var m = new Material(sh) { name = name };
+            SetColor(m, new Color(0.3f, 0.9f, 1f, 0.35f));
+            m.renderQueue = 3000;
+            return m;
         }
 
         private static void SetColor(Material m, Color c)
@@ -321,8 +347,9 @@ namespace Scanner
             if (_marker != null) Destroy(_marker);
             if (_box    != null) Destroy(_box);
             if (_meshGo != null) Destroy(_meshGo);
-            if (_ghostMat  != null) Destroy(_ghostMat);
-            if (_markerMat != null) Destroy(_markerMat);
+            if (_ghostBoxMat  != null) Destroy(_ghostBoxMat);
+            if (_ghostMeshMat != null) Destroy(_ghostMeshMat);
+            if (_markerMat    != null) Destroy(_markerMat);
         }
     }
 }

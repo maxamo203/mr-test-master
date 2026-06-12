@@ -18,7 +18,7 @@ namespace Scanner
         [SerializeField] private Camera _camera;
         [SerializeField] private DoorBuilder _doorBuilder;
         [Tooltip("Mostrar HUD de diagnostico (input state) en pantalla.")]
-        [SerializeField] private bool _showDebugHud = true;
+        [SerializeField] private bool _showDebugHud = false;
 
         private int _placedLayerMask;
         private int _gizmoLayerMask;

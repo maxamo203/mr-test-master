@@ -128,7 +128,7 @@ namespace Scanner
             go.transform.localPosition = anchorLocal;
             go.transform.localScale    = Vector3.one * 0.06f;
 
-            var sh = Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
+            var sh = Shader.Find("Custom/LitMarker") ?? Shader.Find("Unlit/Color");
             var mat = new Material(sh) { name = "CubePreviewMat (runtime)" };
             var col = new Color(1f, 0.55f, 0.1f, 1f);
             if (mat.HasProperty("_Color"))     mat.color = col;

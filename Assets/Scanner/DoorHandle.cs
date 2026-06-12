@@ -59,7 +59,7 @@ namespace Scanner
 
         private void EnsureMaterials()
         {
-            var sh = Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
+            var sh = Shader.Find("Custom/LitMarker") ?? Shader.Find("Unlit/Color");
             _matNormal = new Material(sh) { name = "DoorHandleMat (runtime)" };
             // Floor = celeste (piso); Free = naranja (libre).
             var col = Type == Corner.Floor ? new Color(0.3f, 0.8f, 1f, 1f) : new Color(1f, 0.6f, 0.2f, 1f);

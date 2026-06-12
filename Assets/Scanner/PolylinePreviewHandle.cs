@@ -39,7 +39,7 @@ namespace Scanner
 
             _mr = GetComponent<MeshRenderer>();
 
-            var sh = Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
+            var sh = Shader.Find("Custom/LitMarker") ?? Shader.Find("Unlit/Color");
             _matNormal = new Material(sh) { name = "PreviewMat (runtime)" };
             if (_matNormal.HasProperty("_Color"))     _matNormal.color = color;
             if (_matNormal.HasProperty("_BaseColor")) _matNormal.SetColor("_BaseColor", color);

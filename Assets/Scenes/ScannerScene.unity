@@ -497,24 +497,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 71365eccf14922e4f87c1c4847b8f4f2, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Scanner.RecalibrateButton
   _imageAnchor: {fileID: 0}
---- !u!114 &1689158700
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1689158636}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 867683d83099434191986705688a4ab6, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::Scanner.ReferenceCaptureUI
-  _imageAnchor: {fileID: 0}
-  _arCamera: {fileID: 0}
-  _fallbackDistance: 1.5
 --- !u!114 &1689158638
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -527,6 +512,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 41cabd2208b2d8f4bb3d2d75555f1cc7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Scanner.SaveLoadUI
+  _imageAnchor: {fileID: 0}
 --- !u!114 &1689158639
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -568,6 +554,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Scanner.SelectionController
   _camera: {fileID: 0}
   _doorBuilder: {fileID: 0}
+  _showDebugHud: 0
+  _handleTapPixelRadius: 70
 --- !u!114 &1689158642
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -607,6 +595,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Scanner.WallBuilder
   _defaultHeight: 2.5
+  _defaultWidth: 0.15
   _wallMaterial: {fileID: 2100000, guid: 1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f, type: 2}
   _wallSelectedMaterial: {fileID: 0}
   _previewSphereRadius: 0.025
@@ -694,6 +683,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1689158700
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1689158636}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 867683d83099434191986705688a4ab6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Scanner.ReferenceCaptureUI
+  _imageAnchor: {fileID: 0}
+  _arCamera: {fileID: 0}
+  _fallbackDistance: 1.5
 --- !u!1001 &5837897237761931600
 PrefabInstance:
   m_ObjectHideFlags: 0

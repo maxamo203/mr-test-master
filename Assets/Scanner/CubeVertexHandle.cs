@@ -42,7 +42,7 @@ namespace Scanner
 
         private void EnsureMaterials()
         {
-            var sh = Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
+            var sh = Shader.Find("Custom/LitMarker") ?? Shader.Find("Unlit/Color");
             _matNormal = new Material(sh) { name = "CubeVertexMat (runtime)" };
             var col = new Color(1f, 0.55f, 0.1f, 1f); // naranja, para distinguir de los de pared (verdes)
             if (_matNormal.HasProperty("_Color"))     _matNormal.color = col;

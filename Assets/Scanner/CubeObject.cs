@@ -207,6 +207,9 @@ namespace Scanner
                 var col = edgeGrid ? new Color(0.6f, 0.8f, 1f, 0.13f) : new Color(0.6f, 0.8f, 1f, 0.8f);
                 if (_matNormal.HasProperty("_Color"))     _matNormal.color = col;
                 if (_matNormal.HasProperty("_BaseColor")) _matNormal.SetColor("_BaseColor", col);
+                // Cubo: aristas de caja geometricas (siempre sobre los 12 bordes
+                // reales) y grid object-space (rota con el cubo).
+                if (edgeGrid && _matNormal.HasProperty("_BoxEdges")) _matNormal.SetFloat("_BoxEdges", 1f);
                 _matNormal.renderQueue = 3000;
             }
             if (_matSelected == null)
