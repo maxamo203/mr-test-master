@@ -119,7 +119,9 @@ namespace Scanner
             w.Side   = side >= 0 ? 1 : -1;
 
             w.Rebuild();
-            w.SpawnVertexHandles();
+            // En carga display-only (gameplay multijugador) el mapa es solo visual: sin
+            // handles de edición ni dependencia de Physics.autoSyncTransforms.
+            if (!ScanLoader.DisplayOnly) w.SpawnVertexHandles();
             SceneRegistry.Instance?.Register(w);
             return w;
         }

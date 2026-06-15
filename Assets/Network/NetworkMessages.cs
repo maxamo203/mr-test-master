@@ -182,4 +182,29 @@ public class AnchorIdMsg
     }
 }
 
+// Lleva el .mscn completo del mapa (json + PNG de referencia) empaquetado por
+// ScanPackage.Pack. El transporte enmarca el largo con int, así que entra como un
+// solo frame aunque pese cientos de KB. server → client al conectarse.
+public class MapDataMsg
+{
+    public byte[] Bytes;
+
+    public byte[] Serialize()
+    {
+        var data = Bytes ?? System.Array.Empty<byte>();
+        using var ms = new MemoryStream(4 + data.Length);
+        using var w  = new BinaryWriter(ms);
+        w.Write(data.Length);
+        w.Write(data);
+        return ms.ToArray();
+    }
+
+    public static MapDataMsg Deserialize(byte[] d)
+    {
+        using var r   = new BinaryReader(new MemoryStream(d));
+        int       len = r.ReadInt32();
+        return new() { Bytes = len > 0 ? r.ReadBytes(len) : System.Array.Empty<byte>() };
+    }
+}
+
 // AnchorResolved y StartGame no llevan payload — body vacío es suficiente

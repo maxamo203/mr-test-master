@@ -13,6 +13,10 @@ public class NetworkManager : MonoBehaviour
     public float TickInterval  => 1f / _ticksPerSecond;
     public bool  GameStarted   { get; private set; }
 
+    // True una vez que se arrancó como host o cliente. Mientras sea false no estamos
+    // en una partida (se permite navegar entre escenas — ver SceneNavUI).
+    public bool  InSession     { get; private set; }
+
     [SerializeField] private int _ticksPerSecond = 20;
     [SerializeField] public NetworkedPrefabRegistry PrefabRegistry;
 
@@ -21,6 +25,11 @@ public class NetworkManager : MonoBehaviour
 
     private uint   _nextNetId     = 1;
     private string _cloudAnchorId = null;  // null = anchor no listo todavía
+    private byte[] _mapBytes      = null;  // server: .mscn del mapa elegido, se envía al conectarse cada cliente
+
+    // Sin avatares por ahora: el jugador ES su cámara AR, no se instancia prefab de
+    // jugador. Solo se spawnean/sincronizan los Sorkens. Dejar en false.
+    [SerializeField] private bool _spawnPlayers = false;
 
     private readonly Dictionary<uint, uint> _clientToPlayer    = new();
     private readonly HashSet<uint>          _connectedClients  = new();
@@ -35,21 +44,42 @@ public class NetworkManager : MonoBehaviour
     public event Action<uint>   OnClientResolved;      // server: cliente resolvió anchor
     public event Action<string> OnAnchorIdReceived;    // client: recibió anchor ID
     public event Action         OnGameStarted;         // todos: partida arrancó
+    public event Action<byte[]> OnMapReceived;         // client: recibió el .mscn del mapa
 
     // ── Public API ────────────────────────────────────────────────────────
 
     public void StartServer(int port)
     {
-        IsServer = true;
-        _srv     = new TcpTransportServer();
+        IsServer  = true;
+        InSession = true;
+        _srv      = new TcpTransportServer();
         _srv.Start(port);
     }
 
     public void StartClient(string host, int port)
     {
         if (_srv == null) IsServer = false;  // no sobreescribir si ya es servidor (host)
+        InSession = true;
         _cli = new TcpTransportClient();
         _cli.Connect(host, port);
+    }
+
+    // Server: guardar el .mscn del mapa elegido por el host. Se envía a cada cliente
+    // apenas se conecta (ver HandleClientConnected) y a los ya conectados ahora.
+    public void ServerSetMap(byte[] mapBytes)
+    {
+        _mapBytes = mapBytes;
+        if (mapBytes == null || mapBytes.Length == 0)
+        {
+            Debug.LogWarning("[Server] ServerSetMap recibió bytes vacíos.");
+            return;
+        }
+        if (_srv != null)
+        {
+            var msg = MsgHelper.Frame(MessageType.MapData, new MapDataMsg { Bytes = mapBytes }.Serialize());
+            _srv.Broadcast(msg);
+        }
+        Debug.Log($"[Server] Mapa fijado ({mapBytes.Length} bytes).");
     }
 
     // Server: guardar anchor ID y enviarlo a todos los clientes conectados
@@ -68,16 +98,20 @@ public class NetworkManager : MonoBehaviour
         Debug.Log("[Client] AnchorResolved enviado al servidor");
     }
 
-    // Server: spawnear jugadores para todos los clientes y arrancar el juego
+    // Server: spawnear los Sorkens y arrancar el juego para todos.
     public void ServerStartGame(int sorkerCount = 2)
     {
-        // Spawnear jugador para cada cliente — posiciones relativas al anchor
-        foreach (var clientId in _connectedClients)
+        // Sin avatares: el jugador es su cámara AR. Solo spawneamos jugador-entidad si
+        // _spawnPlayers está habilitado (queda para cuando se diseñe el avatar).
+        if (_spawnPlayers)
         {
-            if (_clientToPlayer.ContainsKey(clientId)) continue;
-            var rel      = new Vector3(Random.Range(-0.3f, 0.3f), 0f, Random.Range(-0.2f, 0.2f));
-            uint playerId = ServerSpawn(EntityTypeIds.Player, WorldOrigin.Instance.ToWorld(rel), clientId);
-            _clientToPlayer[clientId] = playerId;
+            foreach (var clientId in _connectedClients)
+            {
+                if (_clientToPlayer.ContainsKey(clientId)) continue;
+                var rel      = new Vector3(Random.Range(-0.3f, 0.3f), 0f, Random.Range(-0.2f, 0.2f));
+                uint playerId = ServerSpawn(EntityTypeIds.Player, WorldOrigin.Instance.ToWorld(rel), clientId);
+                _clientToPlayer[clientId] = playerId;
+            }
         }
 
         // Spawnear Sorkers cerca del anchor
@@ -165,6 +199,13 @@ public class NetworkManager : MonoBehaviour
     {
         Debug.Log($"[Server] Cliente {clientId} conectado");
         _connectedClients.Add(clientId);
+
+        // Enviar el mapa PRIMERO: el cliente necesita el .mscn (mapa + imagen de
+        // referencia) para reconstruir el entorno y calibrar su anchor contra la misma
+        // imagen física que el host. Sin esto los Sorkens no caen en el mismo lugar.
+        if (_mapBytes != null && _mapBytes.Length > 0)
+            _srv.Send(clientId, MsgHelper.Frame(MessageType.MapData,
+                new MapDataMsg { Bytes = _mapBytes }.Serialize()));
 
         // Enviar catch-up de entidades ya existentes (en espacio anchor-relativo)
         foreach (var entity in EntityRegistry.Instance.All)
@@ -304,6 +345,13 @@ public class NetworkManager : MonoBehaviour
                 GameStarted = true;
                 OnGameStarted?.Invoke();
                 Debug.Log("[Client] Partida arrancada");
+                break;
+            }
+            case MessageType.MapData:
+            {
+                var m = MapDataMsg.Deserialize(msg.Body);
+                Debug.Log($"[Client] Mapa recibido ({m.Bytes?.Length ?? 0} bytes)");
+                OnMapReceived?.Invoke(m.Bytes);
                 break;
             }
         }

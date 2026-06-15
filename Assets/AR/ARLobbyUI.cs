@@ -17,7 +17,8 @@ public class ARLobbyUI : MonoBehaviour
         if (_lobby.State == ARLobbyManager.LobbyState.Idle) return;
         if (_lobby.State == ARLobbyManager.LobbyState.GameStarted) return;
 
-        GUILayout.BeginArea(new Rect(10, 10, 340, 300));
+        // Debajo del panel de GameBootstrapper (IP del host / estado de conexion).
+        GUILayout.BeginArea(new Rect(10, 200, 360, 300));
         GUILayout.Label($"=== LOBBY ({(_net.IsServer ? "HOST" : "CLIENTE")}) ===");
         GUILayout.Label($"Estado: {_lobby.State}");
         GUILayout.Space(8);

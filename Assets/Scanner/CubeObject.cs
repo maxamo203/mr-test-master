@@ -49,7 +49,9 @@ namespace Scanner
             c.EnsureMaterials();
             c._mr.sharedMaterial = c._matNormal;
 
-            c.SpawnVertexHandles();
+            // En carga display-only (gameplay multijugador) el cubo es solo visual: sin
+            // handles de edición de esquinas.
+            if (!ScanLoader.DisplayOnly) c.SpawnVertexHandles();
             SceneRegistry.Instance?.Register(c);
             return c;
         }
