@@ -373,6 +373,15 @@ public class NetworkManager : MonoBehaviour
         net.Initialize(msg.NetworkId, isOwned, msg.OwnerClientId);
         EntityRegistry.Instance.Register(net);
 
+        // iOS/Metal: los SkinnedMeshRenderer importados a veces traen bounds en bind-pose
+        // mal calculados y el frustum culling los descarta (invisibles en device, OK en
+        // editor/Android). Recalcular bounds cada frame evita el culling erróneo.
+        foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+        {
+            smr.updateWhenOffscreen = true;
+            smr.enabled = true;
+        }
+
         if (!IsServer)
         {
             var ai = go.GetComponent<SorkerAI>();
