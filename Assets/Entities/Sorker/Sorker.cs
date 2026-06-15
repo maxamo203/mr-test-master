@@ -8,15 +8,22 @@ public class Sorker : MonoBehaviour
     public bool    IsDead   => Health <= 0;
 
     [SerializeField] public float Speed = 3f;
+    // Velocidad de giro en grados/seg. Mas chico = giro mas suave/lento.
+    [SerializeField] public float TurnSpeed = 180f;
 
     public void MoveTo(Vector3 target, float deltaTime)
     {
         if (IsDead) return;
         var dir = (target - transform.position);
-        if (dir.sqrMagnitude < 0.01f) return;
-        dir.y = 0f; // mantener upright
-        transform.position += dir.normalized * Speed * deltaTime;
-        transform.rotation  = Quaternion.LookRotation(dir.normalized, Vector3.up);
+        dir.y = 0f; // mantener upright (giro solo en horizontal)
+        if (dir.sqrMagnitude < 0.0001f) return;
+        dir.Normalize();
+
+        transform.position += dir * Speed * deltaTime;
+
+        // Giro suave hacia la direccion de movimiento (en vez de snap instantaneo).
+        var targetRot = Quaternion.LookRotation(dir, Vector3.up);
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRot, TurnSpeed * deltaTime);
     }
 
     public void SetRotationDirectly(Quaternion rot) => transform.rotation = rot;

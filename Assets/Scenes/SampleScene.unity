@@ -1188,7 +1188,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARLobbyManager
   _imageAnchor: {fileID: 223974248}
-  _sorkerCount: 2
+  _sorkerCount: 1
 --- !u!4 &1828601339
 Transform:
   m_ObjectHideFlags: 0

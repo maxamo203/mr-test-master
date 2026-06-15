@@ -75,15 +75,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 827075974287967996, guid: 2eca4c039cd7a5f4bae1d62aa3552c78, type: 3}
       insertIndex: -1
       addedObject: {fileID: 4460991009014900172}
-    - targetCorrespondingSourceObject: {fileID: 827075974287967996, guid: 2eca4c039cd7a5f4bae1d62aa3552c78, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 2912514297655407534}
-    - targetCorrespondingSourceObject: {fileID: 827075974287967996, guid: 2eca4c039cd7a5f4bae1d62aa3552c78, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 7715743381461892626}
-    - targetCorrespondingSourceObject: {fileID: 827075974287967996, guid: 2eca4c039cd7a5f4bae1d62aa3552c78, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 3756120043510385710}
   m_SourcePrefab: {fileID: 100100000, guid: 2eca4c039cd7a5f4bae1d62aa3552c78, type: 3}
 --- !u!1 &3028573507642908826 stripped
 GameObject:
@@ -102,7 +93,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 805bad44d3a8df24782eae6a76911f54, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Sorker
-  Speed: 3
+  Speed: 0.25
+  TurnSpeed: 180
 --- !u!114 &-395012683178888178
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -118,6 +110,9 @@ MonoBehaviour:
   _attackRange: 1.5
   _attackDamage: 10
   _attackCooldown: 1
+  _repathInterval: 0.3
+  _waypointTolerance: 0.2
+  _targetMovedThresh: 0.35
 --- !u!114 &1018666527041248803
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -181,43 +176,3 @@ CapsuleCollider:
   m_Height: 1
   m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &2912514297655407534
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3295671109571713847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 805bad44d3a8df24782eae6a76911f54, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Sorker
-  Speed: 3
---- !u!114 &7715743381461892626
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3295671109571713847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 585f1e5abaeef784695c8578b17e2529, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SorkerNetwork
---- !u!114 &3756120043510385710
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3295671109571713847}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 10681108f23764a44a3c96509a36b4ca, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SorkerAI
-  _attackRange: 1.5
-  _attackDamage: 10
-  _attackCooldown: 1

@@ -20,7 +20,7 @@ public class ARLobbyManager : MonoBehaviour
     public int ResolvedCount       { get; private set; }
 
     [SerializeField] private ARImageAnchor _imageAnchor;
-    [SerializeField] private int           _sorkerCount = 2;
+    [SerializeField] private int           _sorkerCount = 1;
 
     private readonly HashSet<uint> _connectedClients = new();
     private readonly HashSet<uint> _resolvedClients  = new();

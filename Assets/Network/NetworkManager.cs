@@ -99,7 +99,7 @@ public class NetworkManager : MonoBehaviour
     }
 
     // Server: spawnear los Sorkens y arrancar el juego para todos.
-    public void ServerStartGame(int sorkerCount = 2)
+    public void ServerStartGame(int sorkerCount = 1)
     {
         // Sin avatares: el jugador es su cámara AR. Solo spawneamos jugador-entidad si
         // _spawnPlayers está habilitado (queda para cuando se diseñe el avatar).
