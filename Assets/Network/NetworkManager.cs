@@ -114,10 +114,13 @@ public class NetworkManager : MonoBehaviour
             }
         }
 
-        // Spawnear Sorkers cerca del anchor
+        // Spawnear Sorkers cerca del anchor, al nivel del piso. El FloorPoint da la
+        // Y del piso en anchor-space; el pivote del FBX del Sorken esta en los pies,
+        // asi que queda parado sobre el piso. Si el mapa no tiene FloorPoint, y=0.
+        float floorY = Scanner.FloorPoint.Instance != null ? Scanner.FloorPoint.Instance.LocalY : 0f;
         for (int i = 0; i < sorkerCount; i++)
         {
-            var rel = new Vector3(Random.Range(-0.5f, 0.5f), 0f, Random.Range(-0.4f, 0.4f));
+            var rel = new Vector3(Random.Range(-0.5f, 0.5f), floorY, Random.Range(-0.4f, 0.4f));
             ServerSpawn(EntityTypeIds.Sorker, WorldOrigin.Instance.ToWorld(rel), ownerClientId: 0);
         }
 
