@@ -36,6 +36,13 @@ namespace Scanner
                 Debug.Log("[ScannerSceneBootstrap] WorldOrigin creado en runtime.");
             }
 
+            if (TrackingGuard.Instance == null)
+            {
+                var go = new GameObject("TrackingGuard");
+                go.AddComponent<TrackingGuard>();
+                Debug.Log("[ScannerSceneBootstrap] TrackingGuard creado en runtime.");
+            }
+
             // Receptor de archivos .MSCN ("abrir con"): importa y carga el escaneo.
             MscnReceiver.Ensure();
 

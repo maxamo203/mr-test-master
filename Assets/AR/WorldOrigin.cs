@@ -76,4 +76,26 @@ public class WorldOrigin : MonoBehaviour
 
     public Quaternion ToRelativeRot(Quaternion worldRot)  => Quaternion.Inverse(transform.rotation) * worldRot;
     public Quaternion ToWorldRot(Quaternion relativeRot)  => transform.rotation * relativeRot;
+
+    // ── Freeze / Unfreeze (usado por TrackingGuard) ───────────────────────────
+    // Cuando SLAM pierde features, desparentamos WorldOrigin del anchor para que
+    // no se mueva con una pose derivada. Al recuperar, TrackingGuard hace el lerp
+    // y llama a Unfreeze para re-parentar.
+    public bool IsFrozen { get; private set; }
+
+    public void Freeze()
+    {
+        if (!IsReady || IsFrozen) return;
+        transform.SetParent(null, worldPositionStays: true);
+        IsFrozen = true;
+        Debug.Log("[WorldOrigin] Frozen — tracking degradado.");
+    }
+
+    public void Unfreeze(Transform anchorTransform)
+    {
+        if (!IsFrozen) return;
+        transform.SetParent(anchorTransform, worldPositionStays: true);
+        IsFrozen = false;
+        Debug.Log("[WorldOrigin] Unfrozen — tracking recuperado.");
+    }
 }

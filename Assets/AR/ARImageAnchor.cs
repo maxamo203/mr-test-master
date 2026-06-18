@@ -130,6 +130,7 @@ public class ARImageAnchor : MonoBehaviour
         // vuelta). Solo conservamos el rumbo horizontal — ver UprightFromImage.
         anchorGO.transform.SetPositionAndRotation(imageTransform.position, UprightFromImage(imageTransform));
         _anchor = anchorGO.AddComponent<ARAnchor>();
+        TrackingGuard.Instance?.SetAnchor(_anchor);
 
         if (_planeManager != null) _planeManager.enabled = true;
 
