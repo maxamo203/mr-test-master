@@ -30,9 +30,9 @@ public class CardboardCalibrationUI : MonoBehaviour
     {
         _controller = GetComponent<MRCardboardController>();
 
-        _scale   = PlayerPrefs.GetFloat(K_SCALE,    0.70f);
-        _offsetL = PlayerPrefs.GetFloat(K_OFFSET_L, 0.122f);
-        _offsetR = PlayerPrefs.GetFloat(K_OFFSET_R, 0.268f);
+        _scale   = PlayerPrefs.GetFloat(K_SCALE,    0.77f);
+        _offsetL = PlayerPrefs.GetFloat(K_OFFSET_L, 0.043f);
+        _offsetR = PlayerPrefs.GetFloat(K_OFFSET_R, 0.159f);
 
         ApplyAll();
     }
@@ -56,54 +56,57 @@ public class CardboardCalibrationUI : MonoBehaviour
     {
         if (!IsCardboardActive()) return;
 
-        var btnRect = new Rect(10, 10, 80, 50);
-        if (GUI.Button(btnRect, _visible ? "Cerrar" : "Config"))
+        // Tamaños proporcionales a la resolución real (sin GUI.matrix).
+        // En 1080p landscape: fs≈34, bh≈86, slh≈65.
+        int   fs  = Mathf.RoundToInt(Screen.height * 0.032f);
+        float bh  = Screen.height * 0.08f;
+        float slh = Screen.height * 0.06f;
+
+        var lblStyle = new GUIStyle(GUI.skin.label)  { fontSize = fs };
+        var btnStyle = new GUIStyle(GUI.skin.button) { fontSize = fs };
+
+        // Debajo de "Unirse a partida" del GameBootstrapper (~y=155px)
+        var btnRect = new Rect(10, 170, 220, bh);
+        if (GUI.Button(btnRect, _visible ? "Cerrar" : "Config", btnStyle))
             _visible = !_visible;
 
         if (!_visible) return;
 
-        float w = Screen.width  * 0.45f;
-        float h = Screen.height * 0.72f;
-        float x = (Screen.width  - w) * 0.5f;
-        float y = (Screen.height - h) * 0.5f;
+        float pw = Screen.width  * 0.75f;
+        float ph = Screen.height * 0.85f;
+        float px = (Screen.width  - pw) * 0.5f;
+        float py = (Screen.height - ph) * 0.5f;
 
-        GUI.Box(new Rect(x - 8, y - 8, w + 16, h + 16), "");
+        GUI.Box(new Rect(px - 8, py - 8, pw + 16, ph + 16), "");
+        GUILayout.BeginArea(new Rect(px, py, pw, ph));
 
-        GUILayout.BeginArea(new Rect(x, y, w, h));
-        GUILayout.Label("Calibración Cardboard");
+        GUILayout.Label("Calibración Cardboard", lblStyle);
         GUILayout.Space(10);
 
-        _scale   = Slider("Zoom feed (subporción)", _scale,   0.3f, 1f,        "F2");
+        _scale   = Slider("Zoom feed",      _scale,   0.3f, 1f,        "F2", fs, slh);
         float maxOffset = 1f - _scale;
-        _offsetL = Slider("Offset ojo izq",         _offsetL, 0f,   maxOffset, "F3");
-        _offsetR = Slider("Offset ojo der",         _offsetR, 0f,   maxOffset, "F3");
+        _offsetL = Slider("Offset ojo izq", _offsetL, 0f,   maxOffset, "F3", fs, slh);
+        _offsetR = Slider("Offset ojo der", _offsetR, 0f,   maxOffset, "F3", fs, slh);
         _offsetL = Mathf.Clamp(_offsetL, 0f, maxOffset);
         _offsetR = Mathf.Clamp(_offsetR, 0f, maxOffset);
 
-        GUILayout.Space(10);
+        GUILayout.Space(14);
+        if (GUILayout.Button("Resetear defaults", btnStyle, GUILayout.Height(bh)))
+            { _scale = 0.77f; _offsetL = 0.043f; _offsetR = 0.159f; }
 
-        if (GUILayout.Button("Resetear defaults"))
-        {
-            _scale = 0.70f; _offsetL = 0.122f; _offsetR = 0.268f;
-        }
-
-        GUILayout.Space(6);
-        if (GUILayout.Button("Guardar y cerrar"))
-        {
-            Save();
-            _visible = false;
-        }
+        GUILayout.Space(8);
+        if (GUILayout.Button("Guardar y cerrar", btnStyle, GUILayout.Height(bh)))
+            { Save(); _visible = false; }
 
         GUILayout.EndArea();
-
         ApplyAll();
     }
 
-    private float Slider(string label, float value, float min, float max, string fmt)
+    private float Slider(string label, float value, float min, float max, string fmt, int fs, float slh)
     {
-        GUILayout.Label($"{label}: {value.ToString(fmt)}");
-        float v = GUILayout.HorizontalSlider(value, min, max);
-        GUILayout.Space(4);
+        GUILayout.Label($"{label}: {value.ToString(fmt)}", new GUIStyle(GUI.skin.label) { fontSize = fs });
+        float v = GUILayout.HorizontalSlider(value, min, max, GUILayout.Height(slh));
+        GUILayout.Space(6);
         return v;
     }
 
