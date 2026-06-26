@@ -162,6 +162,7 @@ GameObject:
   m_Component:
   - component: {fileID: 56462986}
   - component: {fileID: 56462985}
+  - component: {fileID: 56462987}
   m_Layer: 0
   m_Name: MRCardBoardController
   m_TagString: Untagged
@@ -183,6 +184,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MRCardboardController
   arCamera: {fileID: 0}
   _ipd: 0.064
+  _cropLeft: {fileID: 2100000, guid: 3f212dad20874ad692177c79d929666b, type: 2}
+  _cropRight: {fileID: 2100000, guid: c77acf90d735413d916c0a8e5d9057ac, type: 2}
 --- !u!4 &56462986
 Transform:
   m_ObjectHideFlags: 0
@@ -198,6 +201,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &56462987
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 56462984}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a58469bd2b5ce3139bd811688e4c007, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CardboardCalibrationUI
+  _cropLeft: {fileID: 2100000, guid: 3f212dad20874ad692177c79d929666b, type: 2}
+  _cropRight: {fileID: 2100000, guid: c77acf90d735413d916c0a8e5d9057ac, type: 2}
 --- !u!1 &65284393
 GameObject:
   m_ObjectHideFlags: 0
