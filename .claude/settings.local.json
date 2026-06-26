@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /s /b)",
+      "Bash(powershell *)",
+      "Bash(grep -o 'guid: [a-f0-9]*' __TRACKED_VAR__.meta)",
+      "Bash(echo '__TRACKED_VAR__: __CMDSUB_OUTPUT__')",
+      "Bash(grep -oE \"m_Script: \\\\{fileID: 11500000, guid: [a-f0-9]+\" SampleScene.unity)",
+      "Bash(awk '{print $4}')",
+      "Bash(grep -oE \"m_Script: \\\\{fileID: 11500000, guid: [a-f0-9]+\" ScannerScene.unity)",
+      "Bash(git log *)",
+      "Bash(git lfs *)",
+      "Bash(echo \"total LFS files: $\\(git lfs ls-files)",
+      "Bash(echo \"[exit $?]\")"
+    ]
+  }
+}

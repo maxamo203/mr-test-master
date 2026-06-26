@@ -4,86 +4,95 @@ using UnityEngine.Rendering;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 
-[RequireComponent(typeof(ARPlaneManager))]
+// Oclusión por planos cross-platform con persistencia y suavizado.
+//
+// Diseño:
+//   - Para cada ARPlane detectado, creamos un Quad nativo de Unity como hijo
+//     de ESTE componente (NO del plano). Esto garantiza que el quad sobrevive
+//     aunque ARFoundation destruya el GameObject del plano (cuando ARKit/ARCore
+//     deciden mergear planos vecinos, por ejemplo).
+//   - Cuando un plano se actualiza (added/updated), guardamos su pose+size como
+//     "target" y suavizamos hacia él en Update() con Lerp/Slerp.
+//   - Cuando un plano se "removes" según ARFoundation, IGNORAMOS el evento. El
+//     quad queda en su última pose conocida — el usuario lo quiere así para
+//     mantener todo lo escaneado.
 public class ARPlaneOccluder : MonoBehaviour
 {
-    [Header("Configuración")]
-    [Tooltip("Si se activa, los planos detectados se vuelven invisibles pero siguen ocluyendo objetos virtuales")]
-    public bool occludeAllPlanes = true;
+    [Header("Materiales (auto-creados si null)")]
+    [SerializeField] private Material _occluderMaterial;
+    [SerializeField] private Material _debugMaterial;
 
-    [Tooltip("Tipos de planos a usar como oclusores (paredes = Vertical)")]
+    [Header("Comportamiento")]
+    [SerializeField] private bool _occludePlanes = true;
+    [SerializeField] private bool _showDebug = false;
+    [SerializeField] private bool _showHUD = true;
+
+    [Header("Suavizado")]
+    [Tooltip("Velocidad de catchup hacia la pose/tamaño objetivo. Mayor = más rápido pero más brusco.")]
+    [Range(1f, 20f)]
+    [SerializeField] private float _smoothSpeed = 6f;
+
+    [Tooltip("Tamaño mínimo de plano (m) para crear su quad. Más chico = más planos persistidos.")]
+    [SerializeField] private float _minPlaneSize = 0.02f;
+
+    [Header("Filtro de alineación")]
     public PlaneAlignmentFilter alignmentFilter = PlaneAlignmentFilter.All;
-
-    [Tooltip("Mostrar visualmente los planos detectados (debug)")]
-    public bool showPlanesForDebug = false;
-
-    [Tooltip("Color/material a usar cuando showPlanesForDebug está activo. Si es null, se usa un material azul translúcido")]
-    public Material debugMaterial;
-
-    [Tooltip("Mostrar HUD en pantalla con info de tracking y planos detectados")]
-    public bool showDebugHUD = true;
+    public enum PlaneAlignmentFilter { All, HorizontalOnly, VerticalOnly }
 
     private ARPlaneManager _planeManager;
-    private ARSession _session;
     private AROcclusionManager _occlusionManager;
-    private Material _occluderMat;
-    private Material _debugMatRuntime;
-    private int _addedCount = 0;
-    private int _updatedCount = 0;
+    private readonly Dictionary<TrackableId, PlaneState> _planes = new();
+    private int _addedCount, _updatedCount, _removedCount, _persistedCount;
 
-    public enum PlaneAlignmentFilter { All, HorizontalOnly, VerticalOnly }
+    private class PlaneState
+    {
+        public GameObject quad;
+        public Transform  quadTr;     // cache
+        public MeshRenderer renderer;
+        public Vector3    targetPos;
+        public Quaternion targetRot;
+        public Vector2    targetSize;
+        public bool       initialized; // primer update: snap sin lerp
+        public bool       sourceAlive; // ARFoundation todavía trackea el plano
+    }
 
     void Awake()
     {
-        _planeManager = GetComponent<ARPlaneManager>();
-        _session = FindFirstObjectByType<ARSession>();
+        _planeManager     = GetComponent<ARPlaneManager>() ?? FindFirstObjectByType<ARPlaneManager>();
         _occlusionManager = FindFirstObjectByType<AROcclusionManager>();
 
-        var shader = Resources.Load<Shader>("AROccluder");
-        if (shader == null) shader = Shader.Find("AR/Occluder");
-        if (shader == null)
+        if (_planeManager == null)
         {
-            Debug.LogError("ARPlaneOccluder: shader 'AR/Occluder' no encontrado. Verificá que AROccluder.shader esté en Assets/Resources/.");
+            Debug.LogError("[ARPlaneOccluder] No hay ARPlaneManager en la escena.");
             return;
         }
-        _occluderMat = new Material(shader) { name = "AROccluderMat" };
-        Debug.Log("ARPlaneOccluder: shader cargado OK -> " + shader.name);
 
-        if (_planeManager.planePrefab == null)
-        {
-            _planeManager.planePrefab = CreateRuntimePlanePrefab();
-            Debug.Log("ARPlaneOccluder: planePrefab no asignado, se creó uno automáticamente.");
-        }
+        _planeManager.planePrefab = null;
+        EnsureMaterials();
     }
 
-    GameObject CreateRuntimePlanePrefab()
+    void EnsureMaterials()
     {
-        var go = new GameObject("AROccluderPlane");
-        go.SetActive(false);
-        go.AddComponent<MeshFilter>();
-        var mr = go.AddComponent<MeshRenderer>();
-        mr.sharedMaterial = _occluderMat;
-        mr.shadowCastingMode = ShadowCastingMode.Off;
-        mr.receiveShadows = false;
-        mr.lightProbeUsage = LightProbeUsage.Off;
-        mr.reflectionProbeUsage = ReflectionProbeUsage.Off;
-        go.AddComponent<MeshCollider>();
-        go.AddComponent<ARPlaneMeshVisualizer>();
-        go.AddComponent<ARPlane>();
-        return go;
-    }
-
-    Material GetDebugMaterial()
-    {
-        if (debugMaterial != null) return debugMaterial;
-        if (_debugMatRuntime == null)
+        if (_occluderMaterial == null)
         {
-            var sh = Shader.Find("Unlit/Color");
-            if (sh == null) sh = Shader.Find("Standard");
-            _debugMatRuntime = new Material(sh);
-            _debugMatRuntime.color = new Color(0.2f, 0.6f, 1f, 0.5f);
+            var sh = Resources.Load<Shader>("AROccluder");
+            if (sh == null) sh = Shader.Find("AR/Occluder");
+            if (sh != null) _occluderMaterial = new Material(sh) { name = "AROccluderMat (runtime)" };
+            else Debug.LogError("[ARPlaneOccluder] Shader AR/Occluder no encontrado.");
         }
-        return _debugMatRuntime;
+
+        if (_debugMaterial == null)
+        {
+            var sh = Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
+            if (sh != null)
+            {
+                _debugMaterial = new Material(sh) { name = "ARDebugMat (runtime)" };
+                var col = new Color(0.2f, 0.6f, 1f, 0.7f);
+                if (_debugMaterial.HasProperty("_Color"))     _debugMaterial.color = col;
+                if (_debugMaterial.HasProperty("_BaseColor")) _debugMaterial.SetColor("_BaseColor", col);
+                _debugMaterial.renderQueue = 4000;
+            }
+        }
     }
 
     void OnEnable()
@@ -100,87 +109,20 @@ public class ARPlaneOccluder : MonoBehaviour
 
     void OnPlanesChanged(ARTrackablesChangedEventArgs<ARPlane> args)
     {
-        foreach (var plane in args.added) { _addedCount++; ApplyMaterial(plane); }
-        foreach (var plane in args.updated) { _updatedCount++; ApplyMaterial(plane); }
-    }
+        foreach (var plane in args.added)   { _addedCount++;   RegisterOrUpdate(plane); }
+        foreach (var plane in args.updated) { _updatedCount++; RegisterOrUpdate(plane); }
 
-    static Texture2D _hudBgTex;
-    static Texture2D GetHudBg()
-    {
-        if (_hudBgTex == null)
+        // No procesamos args.removed: queremos que los quads persistan en su última
+        // pose conocida aunque ARFoundation/ARKit decidan dejar de trackear el plano.
+        foreach (var kvp in args.removed)
         {
-            _hudBgTex = new Texture2D(1, 1);
-            _hudBgTex.SetPixel(0, 0, new Color(0f, 0f, 0f, 0.85f));
-            _hudBgTex.Apply();
-        }
-        return _hudBgTex;
-    }
-
-    void OnGUI()
-    {
-        if (!showDebugHUD) return;
-
-        string txt = "HUD INICIANDO...";
-        try
-        {
-            string sessionState = ARSession.state.ToString();
-            string notTracking = ARSession.notTrackingReason.ToString();
-            bool pmEnabled = _planeManager != null && _planeManager.enabled;
-            string detMode = _planeManager != null ? _planeManager.requestedDetectionMode.ToString() : "n/a";
-            int currentPlanes = 0, verticalPlanes = 0, horizontalPlanes = 0;
-            if (_planeManager != null && _planeManager.trackables != null)
+            _removedCount++;
+            if (_planes.TryGetValue(kvp.Key, out var st))
             {
-                foreach (var p in _planeManager.trackables)
-                {
-                    currentPlanes++;
-                    if (p.alignment == PlaneAlignment.Vertical) verticalPlanes++;
-                    else horizontalPlanes++;
-                }
+                st.sourceAlive = false;
+                _persistedCount++;
             }
-
-            string occlusionInfo = "AROcclusionManager: NO";
-            if (_occlusionManager != null)
-            {
-                string envMode = "?", occPref = "?", supported = "?";
-                try { envMode = _occlusionManager.requestedEnvironmentDepthMode.ToString(); } catch { }
-                try { occPref = _occlusionManager.requestedOcclusionPreferenceMode.ToString(); } catch { }
-                try
-                {
-                    var desc = _occlusionManager.descriptor;
-                    supported = desc == null ? "no-desc" : desc.environmentDepthImageSupported.ToString();
-                }
-                catch (System.Exception e) { supported = "ERR:" + e.GetType().Name; }
-                occlusionInfo =
-                    $"OcclMgr: SI ena={_occlusionManager.enabled}\n" +
-                    $"  EnvDepthMode: {envMode}\n" +
-                    $"  EnvDepth sup: {supported}\n" +
-                    $"  OcclusionPref: {occPref}";
-            }
-
-            txt =
-                $"AR Session: {sessionState}\n" +
-                $"NotTracking: {notTracking}\n" +
-                $"Shader: {(_occluderMat != null && _occluderMat.shader != null ? _occluderMat.shader.name : "NULL")}\n" +
-                $"PlaneMgr: ena={pmEnabled} mode={detMode}\n" +
-                $"PlanePrefab: {(_planeManager != null && _planeManager.planePrefab != null ? _planeManager.planePrefab.name : "NULL")}\n" +
-                $"Planos: {currentPlanes} (H:{horizontalPlanes} V:{verticalPlanes})\n" +
-                $"Eventos a/u: {_addedCount}/{_updatedCount}\n" +
-                occlusionInfo;
         }
-        catch (System.Exception e)
-        {
-            txt = "HUD ERROR: " + e.GetType().Name + " - " + e.Message;
-        }
-
-        var style = new GUIStyle();
-        style.fontSize = 30;
-        style.normal.textColor = Color.yellow;
-        style.normal.background = GetHudBg();
-        style.padding = new RectOffset(12, 12, 12, 12);
-        style.alignment = TextAnchor.UpperLeft;
-        style.wordWrap = true;
-
-        GUI.Label(new Rect(10, 10, Screen.width - 20, 600), txt, style);
     }
 
     bool MatchesFilter(ARPlane plane)
@@ -196,31 +138,155 @@ public class ARPlaneOccluder : MonoBehaviour
         }
     }
 
-    void ApplyMaterial(ARPlane plane)
+    void RegisterOrUpdate(ARPlane plane)
     {
-        if (!occludeAllPlanes) return;
+        if (!MatchesFilter(plane)) return;
 
-        var renderer = plane.GetComponent<MeshRenderer>();
-        if (renderer == null) return;
+        var size = plane.size;
+        if (size.x < _minPlaneSize || size.y < _minPlaneSize) return;
 
-        if (!MatchesFilter(plane))
+        if (!_planes.TryGetValue(plane.trackableId, out var st) || st == null || st.quad == null)
         {
-            renderer.enabled = false;
-            return;
+            st = new PlaneState();
+            st.quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            st.quad.name = $"PlaneQuad_{plane.trackableId}";
+            Destroy(st.quad.GetComponent<Collider>());
+
+            // Parent a NOSOTROS, no al plano. Sobrevive aunque el ARPlane sea destruido.
+            st.quadTr = st.quad.transform;
+            st.quadTr.SetParent(transform, worldPositionStays: false);
+            // Quad nativo está en XY (normal +Z). ARPlane está en XZ (normal +Y).
+            // Para alinearlos vamos a aplicar la rotación del plano y luego rotar 90° en X
+            // mediante la rotación interna del mesh. Más simple: dejamos la rotación final
+            // en quad.transform.rotation directamente, computada como plane.rotation * Euler(90,0,0).
+
+            st.renderer = st.quad.GetComponent<MeshRenderer>();
+            st.renderer.shadowCastingMode    = ShadowCastingMode.Off;
+            st.renderer.receiveShadows       = false;
+            st.renderer.lightProbeUsage      = LightProbeUsage.Off;
+            st.renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+
+            _planes[plane.trackableId] = st;
         }
 
-        renderer.enabled = true;
-        Material targetMat = showPlanesForDebug ? GetDebugMaterial() : _occluderMat;
-        if (renderer.sharedMaterial != targetMat)
-            renderer.sharedMaterial = targetMat;
+        // Actualizamos targets — el snap/lerp pasa en Update().
+        st.targetPos  = plane.transform.position;
+        st.targetRot  = plane.transform.rotation * Quaternion.Euler(90f, 0f, 0f);
+        st.targetSize = size;
+        st.sourceAlive = true;
 
-        var lineRenderer = plane.GetComponent<LineRenderer>();
-        if (lineRenderer != null) lineRenderer.enabled = showPlanesForDebug;
+        // Aplicar material según el toggle actual.
+        Material target = _showDebug ? _debugMaterial : _occluderMaterial;
+        if (target != null && st.renderer.sharedMaterial != target)
+            st.renderer.sharedMaterial = target;
+
+        st.quad.SetActive(_occludePlanes || _showDebug);
+
+        // Primer update: snap directo para evitar que el quad arranque desde origen.
+        if (!st.initialized)
+        {
+            st.quadTr.SetPositionAndRotation(st.targetPos, st.targetRot);
+            st.quadTr.localScale = new Vector3(st.targetSize.x, st.targetSize.y, 1f);
+            st.initialized = true;
+        }
+    }
+
+    void Update()
+    {
+        float t = 1f - Mathf.Exp(-_smoothSpeed * Time.deltaTime); // exponencial estable a cualquier FPS
+
+        foreach (var st in _planes.Values)
+        {
+            if (st.quad == null || !st.initialized) continue;
+
+            // Lerp pose
+            st.quadTr.position = Vector3.Lerp(st.quadTr.position, st.targetPos, t);
+            st.quadTr.rotation = Quaternion.Slerp(st.quadTr.rotation, st.targetRot, t);
+
+            // Lerp scale (en 2D porque Z siempre es 1)
+            var cur = st.quadTr.localScale;
+            float sx = Mathf.Lerp(cur.x, st.targetSize.x, t);
+            float sy = Mathf.Lerp(cur.y, st.targetSize.y, t);
+            st.quadTr.localScale = new Vector3(sx, sy, 1f);
+        }
     }
 
     void OnDestroy()
     {
-        if (_occluderMat != null) Destroy(_occluderMat);
-        if (_debugMatRuntime != null) Destroy(_debugMatRuntime);
+        foreach (var st in _planes.Values)
+            if (st != null && st.quad != null) Destroy(st.quad);
+        _planes.Clear();
+
+        if (_occluderMaterial != null && _occluderMaterial.name.Contains("(runtime)")) Destroy(_occluderMaterial);
+        if (_debugMaterial    != null && _debugMaterial.name.Contains("(runtime)"))    Destroy(_debugMaterial);
+    }
+
+    // ── HUD ───────────────────────────────────────────────────────────────
+
+    static Texture2D _hudBgTex;
+    static Texture2D GetHudBg()
+    {
+        if (_hudBgTex == null)
+        {
+            _hudBgTex = new Texture2D(1, 1);
+            _hudBgTex.SetPixel(0, 0, new Color(0f, 0f, 0f, 0.85f));
+            _hudBgTex.Apply();
+        }
+        return _hudBgTex;
+    }
+
+    void OnGUI()
+    {
+        if (!_showHUD) return;
+
+        int activeTracked = 0, vert = 0, horiz = 0;
+        if (_planeManager != null && _planeManager.trackables != null)
+        {
+            foreach (var p in _planeManager.trackables)
+            {
+                activeTracked++;
+                if (p.alignment == PlaneAlignment.Vertical) vert++;
+                else horiz++;
+            }
+        }
+
+        int persisted = 0;
+        foreach (var st in _planes.Values) if (!st.sourceAlive) persisted++;
+
+        string occInfo = "OccMgr: NO";
+        if (_occlusionManager != null)
+        {
+            string sup = "?";
+            try
+            {
+                var desc = _occlusionManager.descriptor;
+                sup = desc == null ? "no-desc" : desc.environmentDepthImageSupported.ToString();
+            }
+            catch { sup = "ERR"; }
+            occInfo = $"OccMgr EnvDepth: {_occlusionManager.requestedEnvironmentDepthMode} sup={sup}";
+        }
+
+        string txt =
+            $"AR Session: {ARSession.state}\n" +
+            $"PlaneMgr ena={(_planeManager != null && _planeManager.enabled)} mode={(_planeManager != null ? _planeManager.requestedDetectionMode.ToString() : "n/a")}\n" +
+            $"Trackeados ahora: {activeTracked} (H:{horiz} V:{vert})\n" +
+            $"Quads totales: {_planes.Count}  (persistidos: {persisted})\n" +
+            $"Eventos a/u/r: {_addedCount}/{_updatedCount}/{_removedCount}\n" +
+            $"occludePlanes={_occludePlanes}  showDebug={_showDebug}  smooth={_smoothSpeed:F1}\n" +
+            $"Occluder: {(_occluderMaterial != null ? _occluderMaterial.shader.name : "NULL")}\n" +
+            $"Debug:    {(_debugMaterial != null ? _debugMaterial.shader.name : "NULL")}\n" +
+            occInfo;
+
+        var style = new GUIStyle
+        {
+            fontSize = 28,
+            alignment = TextAnchor.UpperLeft,
+            wordWrap = true,
+            padding = new RectOffset(12, 12, 12, 12)
+        };
+        style.normal.textColor = Color.yellow;
+        style.normal.background = GetHudBg();
+
+        GUI.Label(new Rect(10, 10, Screen.width - 20, 750), txt, style);
     }
 }

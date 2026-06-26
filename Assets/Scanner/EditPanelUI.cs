@@ -1,0 +1,151 @@
+using UnityEngine;
+
+namespace Scanner
+{
+    // Panel lateral derecho que aparece cuando hay un objeto seleccionado.
+    // Botones: Borrar, Mover, Altura (slider solo para paredes), Deseleccionar.
+    public class EditPanelUI : MonoBehaviour
+    {
+        private ScanStateMachine _fsm;
+
+        private void Awake()
+        {
+            _fsm = ScanStateMachine.Instance;
+            _fsm.OnSelectionChanged += OnSelectionChanged;
+        }
+
+        private void OnDestroy()
+        {
+            if (_fsm != null) _fsm.OnSelectionChanged -= OnSelectionChanged;
+        }
+
+        private void OnSelectionChanged(ISelectable sel)
+        {
+            if (sel is CubeObject cube && TransformGizmoController.Instance != null)
+                TransformGizmoController.Instance.Attach(cube.transform, moveOnly: false);
+            // Para los handles-esfera (WallVertex/CubeVertex/Door/Floor) y para Wall
+            // el gizmo lo maneja el propio objeto en su OnSelect (Wall crea el
+            // PolylineMoveHandle). Solo detachamos cuando no hay nada seleccionado.
+            else if (sel == null)
+                TransformGizmoController.Instance?.Detach();
+        }
+
+        private static Texture2D _bgTex;
+        private static Texture2D BG()
+        {
+            if (_bgTex == null) { _bgTex = new Texture2D(1,1); _bgTex.SetPixel(0,0, new Color(0,0,0,0.8f)); _bgTex.Apply(); }
+            return _bgTex;
+        }
+
+        private void OnGUI()
+        {
+            if (_fsm == null || _fsm.CurrentSelection == null) return;
+            var sel = _fsm.CurrentSelection;
+
+            UIScale.Begin();
+
+            float w = 280;
+            var bgStyle = new GUIStyle(GUI.skin.box) { normal = { background = BG() } };
+
+            var panelRect = new Rect(UIScale.VirtualWidth - w - 10, 10, w, 470);
+            UIBlocker.AddVirtualRect(panelRect);
+            GUILayout.BeginArea(panelRect, GUIContent.none, bgStyle);
+
+            var title = new GUIStyle { fontSize = 22, normal = { textColor = Color.white } };
+            GUILayout.Label($"Sel: {sel.Kind}", title);
+            GUILayout.Space(8);
+
+            // Vertice de pared: panel minimal. La edicion es por gizmo MoveOnly.
+            if (sel is WallVertexHandle vh)
+            {
+                GUILayout.Label("Arrastra el gizmo para mover el vertice.");
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Listo", GUILayout.Height(50))) _fsm.ClearSelection();
+                GUILayout.EndArea();
+                return;
+            }
+
+            // Vertice (esquina diagonal) de cubo: idem, arrastrar reforma el cubo.
+            if (sel is CubeVertexHandle)
+            {
+                GUILayout.Label("Arrastra el gizmo para reformar el cubo\n(la esquina opuesta queda fija).");
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Listo", GUILayout.Height(50))) _fsm.ClearSelection();
+                GUILayout.EndArea();
+                return;
+            }
+
+            // Esquina de puerta: arrastrar reforma el hueco. La esquina de piso se
+            // desliza sobre la base; la libre define el borde opuesto y la altura.
+            if (sel is DoorHandle)
+            {
+                GUILayout.Label("Arrastra el gizmo para mover\nla esquina de la puerta.");
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Listo", GUILayout.Height(50))) _fsm.ClearSelection();
+                GUILayout.EndArea();
+                return;
+            }
+
+            // Punto de piso: se arrastra para ubicarlo sobre el piso real.
+            if (sel is FloorPoint floor)
+            {
+                GUILayout.Label("Arrastra el gizmo para ubicar\nel punto sobre el piso real.");
+                GUILayout.FlexibleSpace();
+                bool delFloor = GUILayout.Button("Borrar piso", GUILayout.Height(50));
+                bool doneFloor = GUILayout.Button("Listo", GUILayout.Height(50));
+                GUILayout.EndArea();
+                if (delFloor)       floor.Delete();
+                else if (doneFloor) _fsm.ClearSelection();
+                return;
+            }
+
+            // Para Wall y Cube, opciones generales.
+            if (GUILayout.Button("Mover", GUILayout.Height(50)))
+                _fsm.SetMode(ScannerMode.EditMoveTarget);
+
+            if (sel is WallObject wall)
+            {
+                bool inPolyline = !string.IsNullOrEmpty(wall.PolylineId);
+                string altLabel = inPolyline
+                    ? $"Altura (polilinea): {wall.Height:F2} m"
+                    : $"Altura: {wall.Height:F2} m";
+                GUILayout.Label(altLabel);
+                var newH = GUILayout.HorizontalSlider(wall.Height, 0.5f, 5f);
+                if (Mathf.Abs(newH - wall.Height) > 0.001f)
+                    wall.SetHeightForPolyline(newH); // propaga a toda la polilinea
+
+                string anchoLabel = inPolyline
+                    ? $"Ancho (polilinea): {wall.Width:F2} m"
+                    : $"Ancho: {wall.Width:F2} m";
+                GUILayout.Label(anchoLabel);
+                var newW = GUILayout.HorizontalSlider(wall.Width, 0.05f, 0.5f);
+                if (Mathf.Abs(newW - wall.Width) > 0.001f)
+                    wall.SetWidthForPolyline(newW); // propaga a toda la polilinea
+
+                // Mover al piso: alinea en Y las esquinas (toda la polilinea) al
+                // nivel del punto de piso. Requiere que exista un piso colocado.
+                GUI.enabled = FloorPoint.Instance != null;
+                if (GUILayout.Button("Mover al piso", GUILayout.Height(40)))
+                    wall.MoveToFloorForPolyline(FloorPoint.Instance.LocalY);
+                GUI.enabled = true;
+
+                if (GUILayout.Button("Quitar todas las puertas", GUILayout.Height(40)))
+                    wall.ClearDoors();
+            }
+
+            GUILayout.FlexibleSpace();
+
+            if (GUILayout.Button("Borrar", GUILayout.Height(50)))
+            {
+                if (sel is WallObject w2) w2.Delete();
+                else if (sel is CubeObject c2) c2.Delete();
+                _fsm.ClearSelection();
+            }
+
+            if (GUILayout.Button("Deseleccionar", GUILayout.Height(40)))
+                _fsm.ClearSelection();
+
+            GUILayout.EndArea();
+        }
+    }
+}

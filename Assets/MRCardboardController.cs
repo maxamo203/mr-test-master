@@ -1,203 +1,138 @@
-using System.Collections;
 using UnityEngine;
-using UnityEngine.XR;
 using UnityEngine.XR.ARFoundation;
-using UnityEngine.Android;
-using UnityEngine.InputSystem.XR;
 
-
+// Modo Cardboard ESTÉREO sobre AR Foundation. A diferencia de la versión anterior
+// (que apagaba AR y usaba WebCamTexture + giroscopio, lo que rompía el tracking de
+// imagen / multijugador y daba la vista rotada), acá AR queda PRENDIDO:
+//   - El ojo izquierdo es la cámara AR existente, recortada a la mitad izquierda.
+//   - El ojo derecho es una cámara hija con offset de IPD que cubre la mitad derecha;
+//     ambas muestran el passthrough de AR (cada una con su ARCameraBackground) y se
+//     mueven con la pose de AR (TrackedPoseDriver del padre).
+// Así se conserva el tracking 6DoF + imagen + la sincronización del multijugador, y la
+// orientación la maneja AR Foundation (no hay conversión de giroscopio que se desalinee
+// en landscape). Cardboard se usa en landscape, así que al entrar bloqueamos esa
+// orientación.
 public class MRCardboardController : MonoBehaviour
 {
-    public GyroscopeTracking gyroTracking;
+    [Header("Referencias (se autocompletan si quedan vacías)")]
+    [SerializeField] private Camera arCamera;
 
-    [Header("Referencias")]
-    public Camera arCamera;
-    public ARCameraBackground arCameraBackground;
-    public ARCameraManager arCameraManager;
+    [Header("Estéreo")]
+    [Tooltip("Distancia interpupilar en metros (~64 mm).")]
+    [SerializeField] private float _ipd = 0.064f;
 
-    [Header("Webcam Settings")]
-    public int camWidth = 1280;
-    public int camHeight = 720;
+    [Header("Recorte lateral de cámara")]
+    [Tooltip("Material con _CropOffsetX = 0 (ojo izquierdo ve la mitad izquierda del feed).")]
+    [SerializeField] private Material _cropLeft;
+    [Tooltip("Material con _CropOffsetX = 0.5 (ojo derecho ve la mitad derecha del feed).")]
+    [SerializeField] private Material _cropRight;
 
-    private WebCamTexture _webcamTex;
-    private GameObject _bgQuad;
-    private Material _bgMat;
-    private bool _cardboardMode = false;
+    public bool CardboardActive { get; private set; }
 
-    void Start()
+    private Camera            _rightEye;
+    private ARCameraBackground _leftBg;
+    private ScreenOrientation  _prevOrientation;
+    private bool               _prevAutorotate;
+
+    public void ToggleCardboardMode() => SetCardboard(!CardboardActive);
+
+    // Permite ajustar el IPD en vivo desde CardboardCalibrationUI.
+    public void SetIPD(float meters)
     {
-        RequestCameraPermission();
+        _ipd = meters;
+        if (_rightEye != null)
+            _rightEye.transform.localPosition = new Vector3(_ipd, 0f, 0f);
     }
 
-    void RequestCameraPermission()
+    public void SetCardboard(bool on)
     {
-#if UNITY_ANDROID
-        if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
+        if (on == CardboardActive) return;
+        if (!ResolveArCamera())
         {
-            var callbacks = new PermissionCallbacks();
-            callbacks.PermissionGranted += (perm) => InitWebcam();
-            callbacks.PermissionDenied += (perm) =>
-                Debug.LogWarning("Permiso de cámara denegado");
-            Permission.RequestUserPermission(Permission.Camera, callbacks);
-        }
-        else
-        {
-            InitWebcam();
-        }
-#endif
-    }
-
-    void InitWebcam()
-    {
-        Debug.Log("Dispositivos de cámara disponibles: " + WebCamTexture.devices.Length);
-        string backCam = "";
-        foreach (var dev in WebCamTexture.devices)
-        {
-            Debug.Log("Cámara: " + dev.name + " frontal: " + dev.isFrontFacing);
-            if (!dev.isFrontFacing) { backCam = dev.name; break; }
-        }
-        
-        if (string.IsNullOrEmpty(backCam))
-        {
-            Debug.LogError("No se encontró cámara trasera");
+            Debug.LogError("[MRCardboard] No encontré la cámara AR; no puedo entrar a modo Cardboard.");
             return;
         }
-        
-        _webcamTex = new WebCamTexture(backCam, camWidth, camHeight, 30);
-        Debug.Log("WebcamTexture creada: " + backCam);
+
+        if (on) EnterCardboard();
+        else    ExitCardboard();
     }
 
-    public void ToggleCardboardMode()
+    private void EnterCardboard()
     {
-        if (_webcamTex == null)
-        {
-            Debug.LogError("WebcamTexture es null - reintentando init");
-            InitWebcam();
-            if (_webcamTex == null)
-            {
-                Debug.LogError("No se pudo inicializar la webcam");
-                return;
-            }
-        }
-        
-        _cardboardMode = !_cardboardMode;
-        if (_cardboardMode)
-            StartCoroutine(EnterCardboardMode());
-        else
-            ExitCardboardMode();
-    }
+        // Cardboard se sostiene horizontal: fijamos landscape para que las dos mitades
+        // queden lado a lado correctamente.
+        _prevOrientation = Screen.orientation;
+        _prevAutorotate  = Screen.autorotateToLandscapeLeft;
+        Screen.orientation = ScreenOrientation.LandscapeLeft;
 
-    IEnumerator EnterCardboardMode()
-    {
-        // Detener la sesión AR completamente antes de tocar la cámara
-        var arSession = FindFirstObjectByType<ARSession>();
-        if (arSession != null)
-        {
-            arSession.Reset();
-            arSession.enabled = false;
-        }
-
-        arCameraBackground.enabled = false;
-        arCameraManager.enabled = false;
-        
-        var trackedPoseDriver = arCamera.GetComponent<TrackedPoseDriver>();
-        if (trackedPoseDriver != null) trackedPoseDriver.enabled = false;
-
-        // Esperar más tiempo para que ARCore libere sus recursos
-        yield return new WaitForSeconds(0.8f);
-
-        if (_webcamTex != null && !_webcamTex.isPlaying)
-            _webcamTex.Play();
-
-        CreateBackgroundQuad();
-        SetupStereoCamera();
-
-        if (gyroTracking != null) gyroTracking.StartTracking();
-
-        Debug.Log("Modo Cardboard ON");
-    }
-
-    private Camera _rightEyeCamera;
-
-    void SetupStereoCamera()
-    {
-        // Ojo izquierdo — la cámara existente cubre mitad izquierda
+        // Ojo izquierdo = cámara AR, mitad izquierda.
         arCamera.rect = new Rect(0f, 0f, 0.5f, 1f);
 
-        // Ojo derecho — nueva cámara que cubre mitad derecha
-        GameObject rightEyeObj = new GameObject("RightEyeCamera");
-        rightEyeObj.transform.SetParent(arCamera.transform);
-        rightEyeObj.transform.localPosition = new Vector3(0.064f, 0f, 0f); // IPD ~64mm
-        rightEyeObj.transform.localRotation = Quaternion.identity;
+        // Ojo derecho = cámara hija con offset de IPD, mitad derecha. Hija de la cámara
+        // AR ⇒ hereda la pose del TrackedPoseDriver; el offset en X local separa los ojos.
+        var rightObj = new GameObject("RightEyeCamera");
+        rightObj.transform.SetParent(arCamera.transform, worldPositionStays: false);
+        rightObj.transform.localPosition = new Vector3(_ipd, 0f, 0f);
+        rightObj.transform.localRotation = Quaternion.identity;
 
-        _rightEyeCamera = rightEyeObj.AddComponent<Camera>();
-        _rightEyeCamera.CopyFrom(arCamera);
-        _rightEyeCamera.rect = new Rect(0.5f, 0f, 0.5f, 1f);
-        _rightEyeCamera.depth = arCamera.depth + 1;
+        _rightEye = rightObj.AddComponent<Camera>();
+        _rightEye.CopyFrom(arCamera);          // mismo FOV / clip / clearFlags / cullingMask
+        _rightEye.rect  = new Rect(0.5f, 0f, 0.5f, 1f);
+        _rightEye.depth = arCamera.depth + 1;
 
-        // Duplicar el quad de fondo para el ojo derecho
-        if (_bgQuad != null)
+        // Passthrough de AR en el ojo derecho.
+        var rightBg = rightObj.AddComponent<ARCameraBackground>();
+
+        // Recorte lateral: cada ojo recibe su mitad del feed de cámara para
+        // evitar la doble imagen idéntica que marea con el headset.
+        if (_cropLeft != null && _cropRight != null)
         {
-            GameObject bgRight = Instantiate(_bgQuad);
-            bgRight.name = "CardboardBackgroundRight";
-            bgRight.transform.SetParent(rightEyeObj.transform);
-            bgRight.transform.localPosition = _bgQuad.transform.localPosition;
-            bgRight.transform.localScale = _bgQuad.transform.localScale;
-            bgRight.transform.localRotation = Quaternion.identity;
-            bgRight.GetComponent<Renderer>().material = _bgMat;
-        }
-    }
-
-    void ExitCardboardMode()
-    {
-        if (gyroTracking != null) gyroTracking.StopTracking();
-
-        arCamera.rect = new Rect(0f, 0f, 1f, 1f);
-
-        if (_rightEyeCamera != null)
-        {
-            Destroy(_rightEyeCamera.gameObject);
-            _rightEyeCamera = null;
+            _leftBg = arCamera.GetComponent<ARCameraBackground>();
+            if (_leftBg != null)
+            {
+                _leftBg.useCustomMaterial = true;
+                _leftBg.customMaterial    = _cropLeft;
+            }
+            rightBg.useCustomMaterial = true;
+            rightBg.customMaterial    = _cropRight;
         }
 
-        if (_webcamTex != null && _webcamTex.isPlaying)
-            _webcamTex.Stop();
-        if (_bgQuad != null) { Destroy(_bgQuad); _bgQuad = null; }
-        if (_bgMat != null) { Destroy(_bgMat); _bgMat = null; }
-
-        var trackedPoseDriver = arCamera.GetComponent<TrackedPoseDriver>();
-        if (trackedPoseDriver != null) trackedPoseDriver.enabled = true;
-
-        arCameraManager.enabled = true;
-        arCameraBackground.enabled = true;
-
-        var arSession = FindFirstObjectByType<ARSession>();
-        if (arSession != null) arSession.enabled = true;
-
-        Debug.Log("Modo AR normal ON");
+        CardboardActive = true;
+        Debug.Log("[MRCardboard] Estéreo ON (AR sigue activo).");
     }
 
-    void CreateBackgroundQuad()
+    private void ExitCardboard()
     {
-        _bgQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        _bgQuad.name = "CardboardBackground";
-        Destroy(_bgQuad.GetComponent<Collider>());
-        _bgQuad.transform.SetParent(arCamera.transform);
-        float dist = arCamera.farClipPlane * 0.9f;
-        float h = 2f * dist * Mathf.Tan(arCamera.fieldOfView * 0.5f * Mathf.Deg2Rad);
-        float w = h * arCamera.aspect;
-        _bgQuad.transform.localPosition = new Vector3(0, 0, dist);
-        _bgQuad.transform.localScale = new Vector3(w, h, 1f);
-        _bgQuad.transform.localRotation = Quaternion.identity;
-        _bgMat = new Material(Shader.Find("Unlit/Texture"));
-        _bgMat.mainTexture = _webcamTex;
-        _bgQuad.GetComponent<Renderer>().material = _bgMat;
-        _bgQuad.GetComponent<Renderer>().sortingOrder = -100;
+        if (_rightEye != null) { Destroy(_rightEye.gameObject); _rightEye = null; }
+
+        // Restaura el material por defecto del ojo izquierdo.
+        if (_leftBg != null)
+        {
+            _leftBg.useCustomMaterial = false;
+            _leftBg.customMaterial    = null;
+            _leftBg = null;
+        }
+
+        if (arCamera != null) arCamera.rect = new Rect(0f, 0f, 1f, 1f);
+
+        Screen.orientation = _prevAutorotate ? ScreenOrientation.AutoRotation : _prevOrientation;
+
+        CardboardActive = false;
+        Debug.Log("[MRCardboard] Estéreo OFF (AR mono).");
     }
 
-    void OnDestroy()
+    // Busca la cámara AR (la que tiene ARCameraManager) si no fue asignada en el Inspector.
+    private bool ResolveArCamera()
     {
-        if (_webcamTex != null && _webcamTex.isPlaying) _webcamTex.Stop();
-        if (_bgMat != null) Destroy(_bgMat);
+        if (arCamera != null) return true;
+        var mgr = FindFirstObjectByType<ARCameraManager>();
+        if (mgr != null) arCamera = mgr.GetComponent<Camera>();
+        if (arCamera == null) arCamera = Camera.main;
+        return arCamera != null;
+    }
+
+    private void OnDisable()
+    {
+        if (CardboardActive) ExitCardboard();
     }
 }

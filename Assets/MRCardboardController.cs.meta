@@ -1,2 +1,14 @@
 fileFormatVersion: 2
 guid: cf12af516cdb229db8a3147ee5576f59
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - arCamera: {instanceID: 0}
+  - _cropLeft: {fileID: 2100000, guid: 3f212dad20874ad692177c79d929666b, type: 2}
+  - _cropRight: {fileID: 2100000, guid: c77acf90d735413d916c0a8e5d9057ac, type: 2}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

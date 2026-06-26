@@ -1,0 +1,18 @@
+// Android Library minima (Unity 6 ya no permite recursos sueltos en
+// Assets/Plugins/Android/res). Solo aporta el FileProvider y su recurso
+// res/xml/file_paths.xml para compartir el .mscn exportado.
+//
+// NO declaramos dependencia de androidx.core: Unity 6 (GameActivity) ya la trae,
+// y agregarla arrastra un kotlin-stdlib mas nuevo que choca con el de Unity
+// (duplicate class kotlin.* / kotlin-stdlib-jdk8). FileProvider se resuelve igual
+// desde la androidx.core que ya esta en el build.
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.mrtgame.mscnprovider"
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 29
+    }
+}
