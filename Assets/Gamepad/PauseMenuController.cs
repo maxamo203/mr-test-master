@@ -38,7 +38,7 @@ namespace Gamepad
 
         // Estilos / texturas IMGUI.
         private static Texture2D _tex;
-        private GUIStyle _btn, _btnFocus, _icon, _title, _status;
+        private GUIStyle _btn, _btnFocus, _icon, _title, _status, _battTxt;
 
         private void Awake()
         {
@@ -91,7 +91,15 @@ namespace Gamepad
                 string status = (gm != null && gm.IsConnected)
                     ? $"Joystick: {gm.DisplayName}\nTipo: {gm.Brand}   -   Estado: Conectado"
                     : "Joystick: ninguno\nConectá un mando por Bluetooth desde el sistema.";
-                GUI.Label(new Rect(x, y, w, 80f), status, _status); y += 90f;
+                GUI.Label(new Rect(x, y, w, 72f), status, _status); y += 78f;
+
+                // Batería del mando (barrita con forma de batería + porcentaje).
+                if (gm != null && gm.IsConnected)
+                {
+                    bool present = gm.TryGetBattery(out float lvl);
+                    DrawBattery(new Rect(x, y, w, 38f), lvl, present);
+                    y += 52f;
+                }
 
                 // Gamepad virtual (refleja las pulsaciones en vivo).
                 float gh = w * 0.62f;           // proporción ~landscape
@@ -256,6 +264,44 @@ namespace Gamepad
 
             _status = new GUIStyle { fontSize = 20, alignment = TextAnchor.UpperLeft, wordWrap = true };
             _status.normal.textColor = new Color(0.85f, 0.85f, 0.9f);
+
+            _battTxt = new GUIStyle { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
+            _battTxt.normal.textColor = Color.white;
+        }
+
+        // Dibuja una batería (cuerpo + terminal) con relleno proporcional y el
+        // porcentaje numérico al lado. Si el mando no reporta batería, muestra "N/D".
+        private void DrawBattery(Rect area, float level01, bool present)
+        {
+            float h = area.height;
+            float bodyW = h * 1.9f;
+            var body = new Rect(area.x, area.y, bodyW, h);
+            var tip  = new Rect(body.xMax, area.y + h * 0.30f, h * 0.16f, h * 0.40f);
+
+            // Marco + terminal + fondo interno.
+            DrawRect(body, new Color(0.55f, 0.55f, 0.60f));
+            DrawRect(tip,  new Color(0.55f, 0.55f, 0.60f));
+            float b = Mathf.Max(2f, h * 0.10f);   // grosor del marco
+            var inner = new Rect(body.x + b, body.y + b, body.width - 2 * b, body.height - 2 * b);
+            DrawRect(inner, new Color(0.12f, 0.12f, 0.14f));
+
+            string label;
+            if (present)
+            {
+                float lvl = Mathf.Clamp01(level01);
+                Color fill = lvl > 0.5f ? new Color(0.30f, 0.80f, 0.35f)
+                           : lvl > 0.2f ? new Color(0.95f, 0.80f, 0.20f)
+                                        : new Color(0.90f, 0.30f, 0.30f);
+                DrawRect(new Rect(inner.x, inner.y, inner.width * lvl, inner.height), fill);
+                label = Mathf.RoundToInt(lvl * 100f) + "%";
+            }
+            else
+            {
+                label = "N/D";   // el mando no reporta batería (USB / no soportado)
+            }
+
+            GUI.color = Color.white;
+            GUI.Label(new Rect(tip.xMax + h * 0.4f, area.y, area.width - bodyW, h), label, _battTxt);
         }
 
         private static Texture2D SolidTex(Color c)

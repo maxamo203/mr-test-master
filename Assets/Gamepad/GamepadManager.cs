@@ -44,6 +44,12 @@ namespace Gamepad
         public event Action OnConnected;
         public event Action OnDisconnected;
 
+        // Batería del mando (0..1). Se consulta cada pocos segundos porque la lectura
+        // nativa es cara. _batteryPresent indica si el mando la reporta.
+        private float _batteryLevel;
+        private bool  _batteryPresent;
+        private float _batteryTimer;
+
         // Crea el sistema de gamepad + menú de pausa en cualquier escena, sin
         // necesidad de arrastrar nada en el Editor. Idempotente.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -77,12 +83,20 @@ namespace Gamepad
 
         private void Update()
         {
-            // Si el usuario tiene varios mandos, el Input System actualiza
-            // Gamepad.current con la actividad. Adoptamos ese cambio sin esperar a
-            // un evento de dispositivo.
-            var cur = UnityEngine.InputSystem.Gamepad.current;
-            if (cur != null && cur.added && cur != Current)
-                Adopt(cur);
+            // Poll de respaldo: NO dependemos solo de onDeviceChange. En Android, al
+            // conectar un mando por Bluetooth con el juego ya abierto, ese evento a
+            // veces no dispara (antes había que reiniciar la app para verlo). Releer
+            // el estado cada frame desde la lista de dispositivos lo detecta enseguida.
+            // Es barato e idempotente (Refresh solo (des)adopta si realmente cambió).
+            Refresh();
+
+            // Batería: refresco periódico (la consulta nativa por JNI es costosa).
+            _batteryTimer -= Time.unscaledDeltaTime;
+            if (_batteryTimer <= 0f)
+            {
+                _batteryTimer = 5f;
+                RefreshBattery();
+            }
         }
 
         private void OnDeviceChange(InputDevice device, InputDeviceChange change)
@@ -131,6 +145,7 @@ namespace Gamepad
             if (!wasConnected)
             {
                 Debug.Log($"[GamepadManager] Conectado: {DisplayName} ({Brand})");
+                RefreshBattery();                 // primera lectura sin esperar al timer
                 OnConnected?.Invoke();
             }
         }
@@ -141,8 +156,41 @@ namespace Gamepad
             Current = null;
             Brand = GamepadBrand.None;
             DisplayName = "";
+            _batteryPresent = false;
+            _batteryLevel = 0f;
             Debug.Log($"[GamepadManager] Desconectado: {prev}");
             OnDisconnected?.Invoke();
+        }
+
+        // Nivel de batería del mando, 0..1. Devuelve false si el mando no la reporta
+        // (muchos gamepads vía USB/algunos por BT no exponen batería).
+        public bool TryGetBattery(out float level01)
+        {
+            level01 = _batteryLevel;
+            return _batteryPresent && IsConnected;
+        }
+
+        // Lee la batería: primero por el Input System (usage BatteryStrength, raro en
+        // gamepads), y si no, por la API nativa de Android (InputDevice.getBatteryState).
+        private void RefreshBattery()
+        {
+            _batteryPresent = false;
+            _batteryLevel = 0f;
+            if (!IsConnected) return;
+
+            var bat = Current.TryGetChildControl<UnityEngine.InputSystem.Controls.AxisControl>("batteryLevel");
+            if (bat != null)
+            {
+                _batteryLevel = Mathf.Clamp01(bat.ReadValue());
+                _batteryPresent = true;
+                return;
+            }
+
+            if (AndroidControllerBattery.TryGet(out float lvl))
+            {
+                _batteryLevel = lvl;
+                _batteryPresent = true;
+            }
         }
 
         // Clasifica la marca según el tipo de layout y la descripción del device.
