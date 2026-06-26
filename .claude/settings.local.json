@@ -11,7 +11,8 @@
       "Bash(git log *)",
       "Bash(git lfs *)",
       "Bash(echo \"total LFS files: $\\(git lfs ls-files)",
-      "Bash(echo \"[exit $?]\")"
+      "Bash(echo \"[exit $?]\")",
+      "Read(//c/Users/maxam/Downloads/**)"
     ]
   }
 }
