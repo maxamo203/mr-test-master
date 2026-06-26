@@ -31,8 +31,8 @@ public class CardboardCalibrationUI : MonoBehaviour
         _controller = GetComponent<MRCardboardController>();
 
         _scale   = PlayerPrefs.GetFloat(K_SCALE,    0.77f);
-        _offsetL = PlayerPrefs.GetFloat(K_OFFSET_L, 0.043f);
-        _offsetR = PlayerPrefs.GetFloat(K_OFFSET_R, 0.159f);
+        _offsetL = PlayerPrefs.GetFloat(K_OFFSET_L, 0.064f);
+        _offsetR = PlayerPrefs.GetFloat(K_OFFSET_R, 0.183f);
 
         ApplyAll();
     }
@@ -92,7 +92,7 @@ public class CardboardCalibrationUI : MonoBehaviour
 
         GUILayout.Space(14);
         if (GUILayout.Button("Resetear defaults", btnStyle, GUILayout.Height(bh)))
-            { _scale = 0.77f; _offsetL = 0.043f; _offsetR = 0.159f; }
+            { _scale = 0.77f; _offsetL = 0.064f; _offsetR = 0.183f; }
 
         GUILayout.Space(8);
         if (GUILayout.Button("Guardar y cerrar", btnStyle, GUILayout.Height(bh)))
