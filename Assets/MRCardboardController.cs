@@ -21,13 +21,28 @@ public class MRCardboardController : MonoBehaviour
     [Tooltip("Distancia interpupilar en metros (~64 mm).")]
     [SerializeField] private float _ipd = 0.064f;
 
+    [Header("Recorte lateral de cámara")]
+    [Tooltip("Material con _CropOffsetX = 0 (ojo izquierdo ve la mitad izquierda del feed).")]
+    [SerializeField] private Material _cropLeft;
+    [Tooltip("Material con _CropOffsetX = 0.5 (ojo derecho ve la mitad derecha del feed).")]
+    [SerializeField] private Material _cropRight;
+
     public bool CardboardActive { get; private set; }
 
-    private Camera           _rightEye;
-    private ScreenOrientation _prevOrientation;
-    private bool             _prevAutorotate;
+    private Camera            _rightEye;
+    private ARCameraBackground _leftBg;
+    private ScreenOrientation  _prevOrientation;
+    private bool               _prevAutorotate;
 
     public void ToggleCardboardMode() => SetCardboard(!CardboardActive);
+
+    // Permite ajustar el IPD en vivo desde CardboardCalibrationUI.
+    public void SetIPD(float meters)
+    {
+        _ipd = meters;
+        if (_rightEye != null)
+            _rightEye.transform.localPosition = new Vector3(_ipd, 0f, 0f);
+    }
 
     public void SetCardboard(bool on)
     {
@@ -65,9 +80,22 @@ public class MRCardboardController : MonoBehaviour
         _rightEye.rect  = new Rect(0.5f, 0f, 0.5f, 1f);
         _rightEye.depth = arCamera.depth + 1;
 
-        // Passthrough de AR también en el ojo derecho. ARCameraBackground encuentra el
-        // ARCameraManager de la escena y hace el blit del feed en su viewport.
-        rightObj.AddComponent<ARCameraBackground>();
+        // Passthrough de AR en el ojo derecho.
+        var rightBg = rightObj.AddComponent<ARCameraBackground>();
+
+        // Recorte lateral: cada ojo recibe su mitad del feed de cámara para
+        // evitar la doble imagen idéntica que marea con el headset.
+        if (_cropLeft != null && _cropRight != null)
+        {
+            _leftBg = arCamera.GetComponent<ARCameraBackground>();
+            if (_leftBg != null)
+            {
+                _leftBg.useCustomMaterial = true;
+                _leftBg.customMaterial    = _cropLeft;
+            }
+            rightBg.useCustomMaterial = true;
+            rightBg.customMaterial    = _cropRight;
+        }
 
         CardboardActive = true;
         Debug.Log("[MRCardboard] Estéreo ON (AR sigue activo).");
@@ -76,6 +104,14 @@ public class MRCardboardController : MonoBehaviour
     private void ExitCardboard()
     {
         if (_rightEye != null) { Destroy(_rightEye.gameObject); _rightEye = null; }
+
+        // Restaura el material por defecto del ojo izquierdo.
+        if (_leftBg != null)
+        {
+            _leftBg.useCustomMaterial = false;
+            _leftBg.customMaterial    = null;
+            _leftBg = null;
+        }
 
         if (arCamera != null) arCamera.rect = new Rect(0f, 0f, 1f, 1f);
 
