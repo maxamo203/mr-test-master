@@ -36,8 +36,17 @@ namespace Scanner
             SceneRegistry.Instance.ClearAll();
             if (data.walls != null) foreach (var w in data.walls) WallObject.FromData(w);
             if (data.cubes != null) foreach (var c in data.cubes) CubeObject.FromData(c);
+            if (data.spawns != null) foreach (var s in data.spawns) SorkenSpawnObject.FromData(s);
             if (data.hasFloor && data.floorLocal != null)
                 FloorPoint.Create(data.floorLocal.ToVector3());
+
+            // Nube de puntos LiDAR (si el escaneo tiene una asociada).
+            if (data.pointCount > 0 && LidarPointCloud.Instance != null)
+            {
+                var points = ScanSerializer.LoadPoints(name);
+                if (points != null)
+                    LidarPointCloud.Instance.SetPoints(points, data.pointMinDistance);
+            }
 
             // Re-registrar la imagen de referencia y volver a calibrar: al enfocar la
             // zona fisica, ARKit/ARCore reposiciona el anchor. keepVisualPosition:true

@@ -573,29 +573,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARTrackingBenchmark
   _sessionDuration: 30
---- !u!114 &223974265
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 223974226}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2370659ad43285540a30aa8f24f86f0c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::LiDARScanner
-  _xrOrigin: {fileID: 0}
-  _meshManager: {fileID: 0}
-  _planeManager: {fileID: 0}
-  _planeOccluder: {fileID: 0}
-  _occlusionManager: {fileID: 0}
-  _meshDensity: 1
-  _disablePlanes: 1
-  _enableClassification: 1
-  _mode: 0
-  _showHUD: 1
-  _tapToToggle: 1
 --- !u!1 &568505056
 GameObject:
   m_ObjectHideFlags: 0
@@ -1234,9 +1211,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 8631959139027139366, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
       insertIndex: -1
       addedObject: {fileID: 223974257}
-    - targetCorrespondingSourceObject: {fileID: 8631959139027139366, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 223974265}
     - targetCorrespondingSourceObject: {fileID: 6704683610357316520, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
       insertIndex: -1
       addedObject: {fileID: 40919629}

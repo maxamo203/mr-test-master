@@ -5,7 +5,7 @@ using UnityEngine.XR.ARSubsystems;
 
 namespace Scanner
 {
-    public enum RaycastSource { None, LidarMesh, ArPlane, ArDepth, ArFeaturePoint, Fallback }
+    public enum RaycastSource { None, Lidar, ArPlane, ArDepth, ArFeaturePoint, Fallback }
 
     public struct ResolvedHit
     {
@@ -18,9 +18,10 @@ namespace Scanner
 
     // Cascada de raycast cross-platform. Devuelve el primer hit valido.
     // Orden:
-    //   1) Physics contra layer LiDARMesh (iOS Pro con LiDAR — MeshColliders en chunks).
+    //   1) LiDAR nativo (ARKit directo via NativeLidar, iPhone/iPad Pro):
+    //      raycast depth-aware contra la geometria fisica real.
     //   2) ARRaycastManager con PlaneWithinPolygon | Depth | FeaturePoint
-    //      (ARCore Depth API + ARKit planos).
+    //      (ARCore Depth API + planos; tambien iPhone sin LiDAR).
     //   3) Fallback: punto sobre el rayo de la camara a una distancia configurable.
     public class RaycastResolver : MonoBehaviour
     {
@@ -31,8 +32,6 @@ namespace Scanner
         [Tooltip("Distancia en metros para el fallback cuando no hay otro hit.")]
         [Range(0.3f, 5f)]
         [SerializeField] private float _fallbackDistance = 2f;
-        [Tooltip("Distancia maxima del raycast contra MeshColliders LiDAR.")]
-        [SerializeField] private float _lidarMaxDistance = 10f;
 
         public float FallbackDistance
         {
@@ -40,7 +39,6 @@ namespace Scanner
             set => _fallbackDistance = Mathf.Clamp(value, 0.3f, 5f);
         }
 
-        private int _lidarLayerMask;
         private static readonly List<ARRaycastHit> _arHits = new();
 
         private void Awake()
@@ -50,9 +48,6 @@ namespace Scanner
 
             if (_arCamera == null) _arCamera = Camera.main;
             if (_arRaycast == null) _arRaycast = FindFirstObjectByType<ARRaycastManager>();
-
-            int layer = LayerMask.NameToLayer(LiDARScanner.LiDARMeshLayerName);
-            _lidarLayerMask = layer >= 0 ? (1 << layer) : 0;
         }
 
         // Resuelve el punto del centro de la pantalla.
@@ -67,15 +62,15 @@ namespace Scanner
             if (_arCamera == null) return ResolvedHit.Miss;
             var ray = _arCamera.ScreenPointToRay(screenPoint);
 
-            // 1) Physics contra mesh LiDAR.
-            if (_lidarLayerMask != 0 && Physics.Raycast(ray, out var phHit, _lidarMaxDistance, _lidarLayerMask))
+            // 1) LiDAR nativo (ARKit directo). Snapea a la superficie fisica real.
+            if (NativeLidar.TryRaycast(screenPoint, out var lidarPos, out var lidarNormal))
             {
                 return new ResolvedHit
                 {
                     Hit      = true,
-                    Position = phHit.point,
-                    Normal   = phHit.normal,
-                    Source   = RaycastSource.LidarMesh,
+                    Position = lidarPos,
+                    Normal   = lidarNormal,
+                    Source   = RaycastSource.Lidar,
                 };
             }
 

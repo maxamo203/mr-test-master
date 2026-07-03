@@ -23,13 +23,15 @@ namespace Scanner
         private static readonly Color DoorColor    = new Color(0.3f, 1f, 0.4f, 1f);
         private static readonly Color CeilingColor = new Color(1f, 0.6f, 0.2f, 1f);
 
-        private WallBuilder _wall;
-        private DoorBuilder _door;
-        private CubeBuilder _cube;
+        private WallBuilder  _wall;
+        private DoorBuilder  _door;
+        private CubeBuilder  _cube;
+        private SpawnBuilder _spawn;
 
         private GameObject _marker;   // esfera para previews de un solo punto
         private GameObject _box;      // primitiva cubo (cubo / pilar de altura / mover-cubo)
         private GameObject _meshGo;   // MeshFilter+Renderer para pared/puerta (mesh por frame)
+        private GameObject _pyramid;  // piramide del Sorken Spawn
         private Material   _ghostBoxMat;   // translucido para la caja (aristas de cubo)
         private Material   _ghostMeshMat;  // translucido para mallas de pared (grid sigue la pared)
         private Material   _markerMat;     // lit, para los marcadores de punto (esferas)
@@ -39,6 +41,7 @@ namespace Scanner
             _wall = FindFirstObjectByType<WallBuilder>();
             _door = FindFirstObjectByType<DoorBuilder>();
             _cube = FindFirstObjectByType<CubeBuilder>();
+            _spawn = FindFirstObjectByType<SpawnBuilder>();
         }
 
         private void Update()
@@ -95,6 +98,12 @@ namespace Scanner
                     ShowMarker(local, 0.12f, FloorColor);
                     break;
 
+                case ScannerMode.Spawn_Place:
+                    if (_spawn == null) _spawn = FindFirstObjectByType<SpawnBuilder>();
+                    if (_spawn != null && _spawn.TryGetSpawnPose(hit, out var sp, out var sr))
+                        ShowPyramid(sp, sr);
+                    break;
+
                 case ScannerMode.Door_V1:
                     ShowDoorMarker(hit.Position, local);
                     break;
@@ -113,7 +122,8 @@ namespace Scanner
             m == ScannerMode.Wall_V1 || m == ScannerMode.Wall_Height || m == ScannerMode.Wall_Vn ||
             m == ScannerMode.Cube_V1 || m == ScannerMode.Cube_V2 || m == ScannerMode.Cube_V3 ||
             m == ScannerMode.Door_V1 || m == ScannerMode.Door_V2 ||
-            m == ScannerMode.Floor_Place || m == ScannerMode.EditMoveTarget;
+            m == ScannerMode.Floor_Place || m == ScannerMode.Spawn_Place ||
+            m == ScannerMode.EditMoveTarget;
 
         // ── Helpers de cada preview ────────────────────────────────────────────
 
@@ -185,6 +195,9 @@ namespace Scanner
                 case FloorPoint _:
                     ShowMarker(local, 0.12f, FloorColor);
                     break;
+                case SorkenSpawnObject spawnObj:
+                    ShowPyramid(local, spawnObj.transform.localRotation);
+                    break;
             }
         }
 
@@ -247,11 +260,21 @@ namespace Scanner
             mf.sharedMesh = m;
         }
 
+        private void ShowPyramid(Vector3 posLocal, Quaternion rotLocal)
+        {
+            var go = PyramidGO();
+            go.SetActive(true);
+            go.transform.localPosition = posLocal;
+            go.transform.localRotation = rotLocal;
+            go.transform.localScale    = Vector3.one;
+        }
+
         private void HideAll()
         {
-            if (_marker != null) _marker.SetActive(false);
-            if (_box    != null) _box.SetActive(false);
-            if (_meshGo != null) _meshGo.SetActive(false);
+            if (_marker  != null) _marker.SetActive(false);
+            if (_box     != null) _box.SetActive(false);
+            if (_meshGo  != null) _meshGo.SetActive(false);
+            if (_pyramid != null) _pyramid.SetActive(false);
         }
 
         private GameObject MarkerGO()
@@ -292,6 +315,19 @@ namespace Scanner
                 _meshGo.AddComponent<MeshRenderer>().sharedMaterial = GhostMeshMat();
             }
             return _meshGo;
+        }
+
+        private GameObject PyramidGO()
+        {
+            if (_pyramid == null)
+            {
+                _pyramid = new GameObject("GhostSpawnPyramid");
+                _pyramid.transform.SetParent(WorldOrigin.Instance.transform, worldPositionStays: false);
+                _pyramid.AddComponent<MeshFilter>().sharedMesh = SorkenSpawnObject.PyramidMesh();
+                // Mesh mat (sin _BoxEdges): las aristas de caja asumen un cubo unitario.
+                _pyramid.AddComponent<MeshRenderer>().sharedMaterial = GhostMeshMat();
+            }
+            return _pyramid;
         }
 
         private static void StripCollider(GameObject go)
@@ -344,9 +380,10 @@ namespace Scanner
                 var mf = _meshGo.GetComponent<MeshFilter>();
                 if (mf != null && mf.sharedMesh != null) Destroy(mf.sharedMesh);
             }
-            if (_marker != null) Destroy(_marker);
-            if (_box    != null) Destroy(_box);
-            if (_meshGo != null) Destroy(_meshGo);
+            if (_marker  != null) Destroy(_marker);
+            if (_box     != null) Destroy(_box);
+            if (_meshGo  != null) Destroy(_meshGo);
+            if (_pyramid != null) Destroy(_pyramid); // el mesh es compartido (SorkenSpawnObject), no se destruye
             if (_ghostBoxMat  != null) Destroy(_ghostBoxMat);
             if (_ghostMeshMat != null) Destroy(_ghostMeshMat);
             if (_markerMat    != null) Destroy(_markerMat);

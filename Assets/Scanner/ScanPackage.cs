@@ -13,10 +13,13 @@ namespace Scanner
     //   [jsonLen]  ScanData en JSON (UTF-8) — ya trae name, refImageWidthMeters, etc.
     //   [4 int32]  pngLen (0 si no hay imagen de referencia)
     //   [pngLen]   bytes del PNG de referencia
+    //   -- desde version 2 (opcional; lectores v1 lo ignoran) --
+    //   [4 int32]  ptsLen (0 si no hay nube de puntos LiDAR)
+    //   [ptsLen]   bytes del binario .pts (nube de puntos anchor-relativa)
     public static class ScanPackage
     {
         public const string Extension = "mscn";
-        private const int Version = 1;
+        private const int Version = 2;
         private static readonly byte[] Magic = { (byte)'M', (byte)'S', (byte)'C', (byte)'N' };
 
         // Arma el contenedor a partir de un escaneo ya guardado en disco.
@@ -34,6 +37,10 @@ namespace Scanner
             var pngPath = ScanSerializer.RefImagePathFor(name);
             if (File.Exists(pngPath)) png = File.ReadAllBytes(pngPath);
 
+            byte[] pts = System.Array.Empty<byte>();
+            var ptsPath = ScanSerializer.PointsPathFor(name);
+            if (File.Exists(ptsPath)) pts = File.ReadAllBytes(ptsPath);
+
             using var ms = new MemoryStream();
             using (var w = new BinaryWriter(ms))
             {
@@ -43,6 +50,8 @@ namespace Scanner
                 w.Write(json);
                 w.Write(png.Length);
                 w.Write(png);
+                w.Write(pts.Length);
+                w.Write(pts);
             }
             return ms.ToArray();
         }
@@ -92,6 +101,15 @@ namespace Scanner
                 int pngLen = r.ReadInt32();
                 byte[] pngBytes = pngLen > 0 ? r.ReadBytes(pngLen) : System.Array.Empty<byte>();
 
+                // Nube de puntos (solo paquetes v2+; en v1 el stream termina aca).
+                byte[] ptsBytes = System.Array.Empty<byte>();
+                if (ms.Position + 4 <= ms.Length)
+                {
+                    int ptsLen = r.ReadInt32();
+                    if (ptsLen > 0 && ms.Position + ptsLen <= ms.Length)
+                        ptsBytes = r.ReadBytes(ptsLen);
+                }
+
                 var json = System.Text.Encoding.UTF8.GetString(jsonBytes);
                 var scan = JsonUtility.FromJson<ScanData>(json);
                 if (scan == null) { Debug.LogWarning("[ScanPackage] JSON inválido."); return null; }
@@ -101,9 +119,12 @@ namespace Scanner
                 ScanSerializer.Save(name, scan);
                 if (pngBytes.Length > 0)
                     File.WriteAllBytes(ScanSerializer.RefImagePathFor(name), pngBytes);
+                if (ptsBytes.Length > 0)
+                    File.WriteAllBytes(ScanSerializer.PointsPathFor(name), ptsBytes);
 
                 Debug.Log($"[ScanPackage] Importado '{name}' ({scan.walls?.Count ?? 0} walls, " +
-                          $"{scan.cubes?.Count ?? 0} cubes, img={pngBytes.Length} bytes)");
+                          $"{scan.cubes?.Count ?? 0} cubes, {scan.spawns?.Count ?? 0} spawns, " +
+                          $"img={pngBytes.Length} bytes, pts={ptsBytes.Length} bytes)");
                 return name;
             }
             catch (System.Exception e)

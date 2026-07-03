@@ -52,6 +52,14 @@ namespace Scanner
     }
 
     [Serializable]
+    public class SpawnPointData
+    {
+        public string id;
+        public Vec3 posLocal;   // posicion anchor-relativa del punto de spawn
+        public Quat rotLocal;   // +Z local = direccion de la punta (normal de la pared)
+    }
+
+    [Serializable]
     public class CubeData
     {
         public string id;
@@ -67,11 +75,18 @@ namespace Scanner
     [Serializable]
     public class ScanData
     {
-        public const string CurrentVersion = "1";
+        public const string CurrentVersion = "2";
         public string version = CurrentVersion;
         public string name;
         public List<WallData> walls = new List<WallData>();
         public List<CubeData> cubes = new List<CubeData>();
+        public List<SpawnPointData> spawns = new List<SpawnPointData>();
+
+        // Nube de puntos LiDAR (mapeo del entorno). Los puntos en si se guardan
+        // en un binario hermano (<name>.pts, anchor-relativos); aca solo va la
+        // metadata. pointCount > 0 indica que hay nube asociada.
+        public int   pointCount;
+        public float pointMinDistance;
 
         // Punto de piso (un solo punto, anchor-relativo). hasFloor indica si existe;
         // su Y sirve para "Mover al piso" (alinear las esquinas de las paredes).

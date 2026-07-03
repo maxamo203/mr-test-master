@@ -74,6 +74,9 @@ namespace Scanner
                 data.refImageWidthMeters = CapturedReference.WidthMeters;
                 if (CapturedReference.HasImage)
                     ScanSerializer.SaveRefImage(_newName, CapturedReference.Texture);
+                // Nube de puntos LiDAR como binario hermano (.pts).
+                ScanSerializer.SavePoints(_newName, LidarPointCloud.Instance != null
+                    ? LidarPointCloud.Instance.Points : null);
                 ScanSerializer.Save(_newName, data);
                 Flash($"Guardado '{_newName}'");
                 RefreshList();

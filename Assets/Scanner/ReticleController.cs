@@ -10,6 +10,7 @@ namespace Scanner
         [SerializeField] private WallBuilder _wallBuilder;
         [SerializeField] private DoorBuilder _doorBuilder;
         [SerializeField] private CubeBuilder _cubeBuilder;
+        [SerializeField] private SpawnBuilder _spawnBuilder;
 
         private ScanStateMachine _fsm;
         private ResolvedHit _lastHit;
@@ -26,6 +27,7 @@ namespace Scanner
             if (_wallBuilder == null) _wallBuilder = FindFirstObjectByType<WallBuilder>();
             if (_doorBuilder == null) _doorBuilder = FindFirstObjectByType<DoorBuilder>();
             if (_cubeBuilder == null) _cubeBuilder = FindFirstObjectByType<CubeBuilder>();
+            if (_spawnBuilder == null) _spawnBuilder = FindFirstObjectByType<SpawnBuilder>();
 
             // Fantasma en vivo de lo que se va a colocar. Lo instanciamos acá para no
             // tener que cablearlo en la escena (encuentra los builders por su cuenta).
@@ -43,7 +45,8 @@ namespace Scanner
             m == ScannerMode.Wall_V1 || m == ScannerMode.Wall_Height || m == ScannerMode.Wall_Vn ||
             m == ScannerMode.Door_V1 || m == ScannerMode.Door_V2 ||
             m == ScannerMode.Cube_V1 || m == ScannerMode.Cube_V2 || m == ScannerMode.Cube_V3 ||
-            m == ScannerMode.Floor_Place || m == ScannerMode.EditMoveTarget;
+            m == ScannerMode.Floor_Place || m == ScannerMode.Spawn_Place ||
+            m == ScannerMode.EditMoveTarget;
 
         private static Texture2D _bgTex;
         private static Texture2D BG()
@@ -55,6 +58,9 @@ namespace Scanner
         private void OnGUI()
         {
             if (_fsm == null) return;
+            // El SpawnBuilder puede crearse en runtime (bootstrap) despues de
+            // nuestro Awake: re-buscar hasta encontrarlo.
+            if (_spawnBuilder == null) _spawnBuilder = FindFirstObjectByType<SpawnBuilder>();
 
             UIScale.Begin();
             float vw = UIScale.VirtualWidth;
@@ -68,7 +74,7 @@ namespace Scanner
                 float s  = 18f;
                 var ringColor = _lastHit.Source switch
                 {
-                    RaycastSource.LidarMesh      => Color.green,
+                    RaycastSource.Lidar          => Color.green,
                     RaycastSource.ArDepth        => new Color(0.5f, 1f, 0.5f),
                     RaycastSource.ArPlane        => new Color(0.7f, 1f, 1f),
                     RaycastSource.ArFeaturePoint => Color.yellow,
@@ -129,6 +135,13 @@ namespace Scanner
             if (GUILayout.Button("Cubo",              GUILayout.Height(50))) _cubeBuilder?.StartCube();
             string pisoLabel = FloorPoint.Instance != null ? "Piso (reubicar)" : "Piso";
             if (GUILayout.Button(pisoLabel,           GUILayout.Height(50))) _fsm.SetMode(ScannerMode.Floor_Place);
+            if (GUILayout.Button("Sorken Spawn (pared)",      GUILayout.Height(50))) _spawnBuilder?.StartOnWall();
+            if (GUILayout.Button("Sorken Spawn (superficie)", GUILayout.Height(50))) _spawnBuilder?.StartFree();
+
+            // Mapeo del entorno con LiDAR (nube de puntos). Solo si hay soporte.
+            GUI.enabled = _fsm.Current == ScannerMode.Idle && LidarMapController.IsSupported;
+            if (GUILayout.Button("Mapear entorno (LiDAR)", GUILayout.Height(50)))
+                _fsm.SetMode(ScannerMode.LidarMap);
 
             bool inWall = _fsm.Current == ScannerMode.Wall_V1
                        || _fsm.Current == ScannerMode.Wall_Height
@@ -185,6 +198,46 @@ namespace Scanner
                 GUILayout.Label("Apunta al piso real y COLOCAR\n(podes reubicarlo despues arrastrandolo)", floorHint);
             }
 
+            // Hints del flujo de Sorken Spawn.
+            if (_fsm.Current == ScannerMode.SpawnPickWall)
+            {
+                GUI.enabled = true;
+                var spawnHint = new GUIStyle { fontSize = 18, normal = { textColor = Color.yellow } };
+                GUILayout.Label("Toca una pared para tomar su normal", spawnHint);
+            }
+            if (_fsm.Current == ScannerMode.Spawn_Place)
+            {
+                GUI.enabled = true;
+                var spawnHint = new GUIStyle { fontSize = 18, normal = { textColor = Color.yellow } };
+                string src = _spawnBuilder != null && _spawnBuilder.TargetWall != null
+                    ? "la pared elegida" : "la superficie apuntada";
+                GUILayout.Label($"Apunta donde va el spawn y COLOCAR\n(la punta sigue la normal de {src})", spawnHint);
+            }
+
+            // Panel del mapeo LiDAR: conteo, slider de distancia minima y acciones.
+            if (_fsm.Current == ScannerMode.LidarMap)
+            {
+                GUI.enabled = true;
+                var mapHint = new GUIStyle { fontSize = 18, normal = { textColor = Color.yellow } };
+                var cloud = LidarPointCloud.Instance;
+                int count = cloud != null ? cloud.Count : 0;
+                GUILayout.Label($"Mapeando entorno (LiDAR)\nPuntos: {count}", mapHint);
+
+                if (cloud != null)
+                {
+                    GUILayout.Label($"Dist. min entre puntos: {cloud.MinDistance * 100f:F0} cm", mapHint);
+                    cloud.MinDistance = GUILayout.HorizontalSlider(
+                        cloud.MinDistance, LidarPointCloud.MinDistanceFloor, LidarPointCloud.MinDistanceCeiling);
+                }
+
+                if (GUILayout.Button("Sorken Spawn (superficie)", GUILayout.Height(40)))
+                    _spawnBuilder?.StartFree();
+                if (GUILayout.Button("Borrar nube", GUILayout.Height(40)))
+                    cloud?.Clear();
+                if (GUILayout.Button("Terminar mapeo", GUILayout.Height(40)))
+                    _fsm.SetMode(ScannerMode.Idle);
+            }
+
             GUI.enabled = _fsm.Current != ScannerMode.Idle && _fsm.Current != ScannerMode.Selected;
             if (GUILayout.Button("Cancelar", GUILayout.Height(40))) _fsm.SetMode(ScannerMode.Idle);
 
@@ -238,6 +291,9 @@ namespace Scanner
                 case ScannerMode.Floor_Place:
                     PlaceFloorAtCurrentReticle();
                     break;
+                case ScannerMode.Spawn_Place:
+                    _spawnBuilder?.PlaceAtCurrentReticle();
+                    break;
                 case ScannerMode.EditMoveTarget:
                     MoveTargetToCurrentReticle();
                     break;
@@ -264,6 +320,10 @@ namespace Scanner
             if (sel is CubeObject cube)
             {
                 cube.transform.localPosition = local;
+            }
+            else if (sel is SorkenSpawnObject spawn)
+            {
+                spawn.transform.localPosition = local;
             }
             else if (sel is WallObject wall)
             {

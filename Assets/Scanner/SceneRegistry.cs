@@ -12,9 +12,11 @@ namespace Scanner
 
         private readonly List<WallObject> _walls = new();
         private readonly List<CubeObject> _cubes = new();
+        private readonly List<SorkenSpawnObject> _spawns = new();
 
         public IReadOnlyList<WallObject> Walls => _walls;
         public IReadOnlyList<CubeObject> Cubes => _cubes;
+        public IReadOnlyList<SorkenSpawnObject> Spawns => _spawns;
 
         private void Awake()
         {
@@ -24,17 +26,22 @@ namespace Scanner
 
         public void Register(WallObject w) { if (!_walls.Contains(w)) _walls.Add(w); }
         public void Register(CubeObject c) { if (!_cubes.Contains(c)) _cubes.Add(c); }
+        public void Register(SorkenSpawnObject s) { if (!_spawns.Contains(s)) _spawns.Add(s); }
 
         public void Unregister(WallObject w) => _walls.Remove(w);
         public void Unregister(CubeObject c) => _cubes.Remove(c);
+        public void Unregister(SorkenSpawnObject s) => _spawns.Remove(s);
 
         public void ClearAll()
         {
             foreach (var w in _walls) if (w != null) Destroy(w.gameObject);
             foreach (var c in _cubes) if (c != null) Destroy(c.gameObject);
+            foreach (var s in _spawns) if (s != null) Destroy(s.gameObject);
             _walls.Clear();
             _cubes.Clear();
+            _spawns.Clear();
             if (FloorPoint.Instance != null) FloorPoint.Instance.Delete();
+            LidarPointCloud.Instance?.Clear();
         }
 
         public ScanData Capture(string name)
@@ -42,10 +49,17 @@ namespace Scanner
             var data = new ScanData { name = name };
             foreach (var w in _walls) if (w != null) data.walls.Add(w.ToData());
             foreach (var c in _cubes) if (c != null) data.cubes.Add(c.ToData());
+            foreach (var s in _spawns) if (s != null) data.spawns.Add(s.ToData());
             if (FloorPoint.Instance != null)
             {
                 data.hasFloor   = true;
                 data.floorLocal = new Vec3(FloorPoint.Instance.LocalPosition);
+            }
+            var cloud = LidarPointCloud.Instance;
+            if (cloud != null && cloud.Count > 0)
+            {
+                data.pointCount       = cloud.Count;
+                data.pointMinDistance = cloud.MinDistance;
             }
             return data;
         }

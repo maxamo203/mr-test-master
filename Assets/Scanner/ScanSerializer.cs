@@ -30,6 +30,63 @@ namespace Scanner
 
         public static bool HasRefImage(string name) => File.Exists(RefImagePathFor(name));
 
+        // Binario hermano con la nube de puntos LiDAR (anchor-relativa).
+        // Formato: magic "MPTS" + int32 version + int32 count + count*3 float32.
+        public static string PointsPathFor(string name) =>
+            Path.Combine(ScansDir, SanitizeName(name) + ".pts");
+
+        public static bool HasPoints(string name) => File.Exists(PointsPathFor(name));
+
+        private static readonly byte[] PointsMagic = { (byte)'M', (byte)'P', (byte)'T', (byte)'S' };
+        private const int PointsVersion = 1;
+
+        public static void SavePoints(string name, IReadOnlyList<Vector3> points)
+        {
+            var path = PointsPathFor(name);
+            if (points == null || points.Count == 0)
+            {
+                if (File.Exists(path)) File.Delete(path);
+                return;
+            }
+            using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
+            using var w  = new BinaryWriter(fs);
+            w.Write(PointsMagic);
+            w.Write(PointsVersion);
+            w.Write(points.Count);
+            foreach (var p in points) { w.Write(p.x); w.Write(p.y); w.Write(p.z); }
+            Debug.Log($"[ScanSerializer] Nube de puntos guardada ({points.Count} pts) en {path}");
+        }
+
+        public static List<Vector3> LoadPoints(string name)
+        {
+            var path = PointsPathFor(name);
+            if (!File.Exists(path)) return null;
+            try
+            {
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read);
+                using var r  = new BinaryReader(fs);
+                var magic = r.ReadBytes(4);
+                for (int i = 0; i < 4; i++)
+                    if (magic.Length < 4 || magic[i] != PointsMagic[i])
+                    {
+                        Debug.LogWarning($"[ScanSerializer] '{path}' no es un archivo de puntos valido.");
+                        return null;
+                    }
+                r.ReadInt32(); // version (por ahora solo 1)
+                int count = r.ReadInt32();
+                if (count < 0 || count > 10_000_000) return null;
+                var list = new List<Vector3>(count);
+                for (int i = 0; i < count; i++)
+                    list.Add(new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
+                return list;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[ScanSerializer] Error leyendo nube de puntos '{path}': {e.Message}");
+                return null;
+            }
+        }
+
         // Guarda la imagen de referencia como PNG junto al json.
         public static void SaveRefImage(string name, Texture2D tex)
         {
@@ -97,6 +154,8 @@ namespace Scanner
             File.Delete(path);
             var png = RefImagePathFor(name);
             if (File.Exists(png)) File.Delete(png);
+            var pts = PointsPathFor(name);
+            if (File.Exists(pts)) File.Delete(pts);
             return true;
         }
 

@@ -76,4 +76,8 @@ public class WorldOrigin : MonoBehaviour
 
     public Quaternion ToRelativeRot(Quaternion worldRot)  => Quaternion.Inverse(transform.rotation) * worldRot;
     public Quaternion ToWorldRot(Quaternion relativeRot)  => transform.rotation * relativeRot;
+
+    // Direcciones (vectores sin traslacion): mundo <-> espacio del anchor.
+    public Vector3 ToRelativeDir(Vector3 worldDir) => Quaternion.Inverse(transform.rotation) * worldDir;
+    public Vector3 ToWorldDir(Vector3 relativeDir) => transform.rotation * relativeDir;
 }

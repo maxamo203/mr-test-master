@@ -19,6 +19,9 @@ namespace Scanner
         Cube_V2,          // esperando segundo vertice de la diagonal del cubo (esquina opuesta)
         Cube_V3,          // esperando tercer punto de referencia para la rotacion (yaw) del cubo
         Floor_Place,      // esperando colocar (o reubicar) el punto de piso
+        SpawnPickWall,    // esperando tap sobre pared para tomar su normal (Sorken Spawn)
+        Spawn_Place,      // esperando colocar el punto de spawn de Sorken
+        LidarMap,         // mapeando el entorno con la nube de puntos LiDAR
         Selected,         // hay un objeto seleccionado (panel de edicion visible)
         EditMoveTarget,   // moviendo un objeto/vertice ya colocado
     }

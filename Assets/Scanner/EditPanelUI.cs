@@ -86,6 +86,22 @@ namespace Scanner
                 return;
             }
 
+            // Punto de spawn de Sorken: mover/rotar con el gizmo (la punta de la
+            // piramide indica hacia donde mira el spawn).
+            if (sel is SorkenSpawnObject spawnSel)
+            {
+                GUILayout.Label("Arrastra el gizmo para mover el spawn.\nEl anillo rota la punta (normal).");
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Mover", GUILayout.Height(50)))
+                    _fsm.SetMode(ScannerMode.EditMoveTarget);
+                bool delSpawn  = GUILayout.Button("Borrar", GUILayout.Height(50));
+                bool doneSpawn = GUILayout.Button("Listo", GUILayout.Height(40));
+                GUILayout.EndArea();
+                if (delSpawn) { spawnSel.Delete(); _fsm.ClearSelection(); }
+                else if (doneSpawn) _fsm.ClearSelection();
+                return;
+            }
+
             // Punto de piso: se arrastra para ubicarlo sobre el piso real.
             if (sel is FloorPoint floor)
             {

@@ -48,8 +48,17 @@ public static class IOSBuildPostProcessor
         RegisterMscnDocumentType(root);
 
         plist.WriteToFile(plistPath);
+
+        // 4) Link explicito de ARKit.framework para el plugin nativo de LiDAR
+        //    (Assets/Plugins/iOS/LidarNative.mm). Idempotente.
+        var projPath = PBXProject.GetPBXProjectPath(pathToBuiltProject);
+        var proj = new PBXProject();
+        proj.ReadFromFile(projPath);
+        proj.AddFrameworkToProject(proj.GetUnityFrameworkTargetGuid(), "ARKit.framework", false);
+        proj.WriteToFile(projPath);
+
         UnityEngine.Debug.Log(
-            $"[IOSBuildPostProcessor] Info.plist actualizado: red local + document type .mscn.");
+            $"[IOSBuildPostProcessor] Info.plist actualizado (red local + .mscn) y ARKit.framework linkeado.");
     }
 
     // Declara el UTI exportado com.<bundleId>.mscn y el CFBundleDocumentType que lo

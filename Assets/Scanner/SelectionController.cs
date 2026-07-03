@@ -17,6 +17,7 @@ namespace Scanner
     {
         [SerializeField] private Camera _camera;
         [SerializeField] private DoorBuilder _doorBuilder;
+        [SerializeField] private SpawnBuilder _spawnBuilder;
         [Tooltip("Mostrar HUD de diagnostico (input state) en pantalla.")]
         [SerializeField] private bool _showDebugHud = false;
 
@@ -34,6 +35,7 @@ namespace Scanner
         {
             if (_camera == null) _camera = Camera.main;
             if (_doorBuilder == null) _doorBuilder = FindFirstObjectByType<DoorBuilder>();
+            if (_spawnBuilder == null) _spawnBuilder = FindFirstObjectByType<SpawnBuilder>();
 
             int placedLayer = LayerMask.NameToLayer("Placed");
             _placedLayerMask = placedLayer >= 0 ? (1 << placedLayer) : 0;
@@ -238,6 +240,15 @@ namespace Scanner
             {
                 _doorBuilder?.OnWallPicked(wall);
                 _lastPickResult = "door pickwall";
+                return;
+            }
+
+            if (fsm.Current == ScannerMode.SpawnPickWall && picked is WallObject spawnWall)
+            {
+                // Aca el spawnBuilder puede ser lazy (lo crea el bootstrap en runtime).
+                if (_spawnBuilder == null) _spawnBuilder = FindFirstObjectByType<SpawnBuilder>();
+                _spawnBuilder?.OnWallPicked(spawnWall);
+                _lastPickResult = "spawn pickwall";
                 return;
             }
 

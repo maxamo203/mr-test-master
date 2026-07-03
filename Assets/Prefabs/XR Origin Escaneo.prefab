@@ -16,7 +16,6 @@ GameObject:
   - component: {fileID: 4199065581170255481}
   - component: {fileID: 1675595109838748374}
   - component: {fileID: 7422527818997445646}
-  - component: {fileID: 3664301276776099167}
   m_Layer: 0
   m_Name: XR Origin Escaneo
   m_TagString: Untagged
@@ -150,29 +149,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARTrackingBenchmark
   _sessionDuration: 30
---- !u!114 &3664301276776099167
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2575636562785234308}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2370659ad43285540a30aa8f24f86f0c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::LiDARScanner
-  _xrOrigin: {fileID: 0}
-  _meshManager: {fileID: 0}
-  _planeManager: {fileID: 0}
-  _planeOccluder: {fileID: 0}
-  _occlusionManager: {fileID: 0}
-  _meshDensity: 1
-  _disablePlanes: 1
-  _enableClassification: 1
-  _mode: 0
-  _showHUD: 1
-  _tapToToggle: 1
 --- !u!1 &2857478113490170250
 GameObject:
   m_ObjectHideFlags: 0

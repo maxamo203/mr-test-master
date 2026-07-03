@@ -13,6 +13,8 @@ namespace Scanner
     //   ScanStateMachine, SceneRegistry, RaycastResolver, TransformGizmoController,
     //   WallBuilder, DoorBuilder, CubeBuilder, ReticleController, EditPanelUI,
     //   SaveLoadUI, RecalibrateButton, SelectionController.
+    // Los componentes nuevos del soporte LiDAR/spawn (SpawnBuilder, LidarPointCloud,
+    //   LidarMapController, NativeLidarDriver) se auto-crean aca si faltan.
     [DefaultExecutionOrder(-100)]
     public class ScannerSceneBootstrap : MonoBehaviour
     {
@@ -20,6 +22,13 @@ namespace Scanner
 
         private void Start()
         {
+            // Componentes del soporte LiDAR nativo + Sorken Spawn. Se agregan en
+            // runtime para no depender del cableado de la escena.
+            if (FindFirstObjectByType<SpawnBuilder>()       == null) gameObject.AddComponent<SpawnBuilder>();
+            if (FindFirstObjectByType<LidarPointCloud>()    == null) gameObject.AddComponent<LidarPointCloud>();
+            if (FindFirstObjectByType<LidarMapController>() == null) gameObject.AddComponent<LidarMapController>();
+            if (FindFirstObjectByType<NativeLidarDriver>()  == null) gameObject.AddComponent<NativeLidarDriver>();
+
             // El proyecto tiene Physics.autoSyncTransforms = false en
             // DynamicsManager.asset. Para que los SphereColliders de las
             // esferas-handle se ubiquen donde el transform los puso (sin esperar
