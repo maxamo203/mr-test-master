@@ -146,9 +146,12 @@ extern "C" int _LidarRaycast(float vx, float vy, float vpW, float vpH, float* ou
 
     // ── 1) Muestreo directo del depth map: el punto FISICO real, sin plane
     //       fitting. La normal sale del gradiente de depth alrededor del pixel.
+    //       Se prefiere el depth CRUDO: smoothedSceneDepth promedia frames
+    //       anteriores y viene "atrasado" respecto a la pose del frame — con la
+    //       camara en movimiento eso desplaza los puntos del mundo fisico.
     if (@available(iOS 14.0, *))
     {
-        ARDepthData* depth = frame.smoothedSceneDepth ?: frame.sceneDepth;
+        ARDepthData* depth = frame.sceneDepth ?: frame.smoothedSceneDepth;
         if (depth != nil && depth.depthMap != NULL)
         {
             CVPixelBufferRef depthMap = depth.depthMap;
@@ -224,8 +227,9 @@ extern "C" int _LidarRaycast(float vx, float vy, float vpW, float vpH, float* ou
     return 2;
 }
 
-// Muestrea el depthMap (smoothedSceneDepth si esta, sino sceneDepth) cada
-// `step` pixeles y unproyecta con las intrinsics de la camara. Escribe hasta
+// Muestrea el depthMap CRUDO (sceneDepth; smoothed solo como fallback — el
+// suavizado temporal corre los puntos cuando la camara se mueve) cada `step`
+// pixeles y unproyecta con las intrinsics de la camara. Escribe hasta
 // maxPoints triples (x,y,z en SESSION space de Unity) en outBuffer.
 //   minConfidence: 0=low 1=medium 2=high (ARConfidenceLevel).
 //   maxDepth: descarta muestras mas lejos que esto (metros).
@@ -243,7 +247,11 @@ extern "C" int _LidarCapturePoints(float* outBuffer, int maxPoints, int step,
         ARFrame* frame = session.currentFrame;
         if (frame == nil) return 0;
 
-        ARDepthData* depth = frame.smoothedSceneDepth ?: frame.sceneDepth;
+        // Con tracking degradado (relocalizando, poca luz, movimiento brusco) la
+        // pose de la camara no es confiable: capturar ahora mete capas corridas.
+        if (frame.camera.trackingState != ARTrackingStateNormal) return 0;
+
+        ARDepthData* depth = frame.sceneDepth ?: frame.smoothedSceneDepth;
         if (depth == nil || depth.depthMap == NULL) return 0;
 
         CVPixelBufferRef depthMap = depth.depthMap;
@@ -315,7 +323,7 @@ extern "C" void _LidarGetStatus(int* out, int n)
         }
         out[5] = frame.sceneDepth != nil ? 1 : 0;
         out[6] = frame.smoothedSceneDepth != nil ? 1 : 0;
-        ARDepthData* depth = frame.smoothedSceneDepth ?: frame.sceneDepth;
+        ARDepthData* depth = frame.sceneDepth ?: frame.smoothedSceneDepth;
         if (depth != nil && depth.depthMap != NULL)
             out[7] = (int)CVPixelBufferGetWidth(depth.depthMap);
     }

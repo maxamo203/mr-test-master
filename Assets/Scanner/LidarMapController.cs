@@ -22,6 +22,10 @@ namespace Scanner
         [SerializeField] private int _sampleStep = 4;
         [Tooltip("Profundidad maxima aceptada (m).")]
         [SerializeField] private float _maxDepth = 5f;
+        [Tooltip("Velocidad angular maxima de la camara (grados/s) para capturar. Mas rapido = pose y depth desincronizados = puntos corridos.")]
+        [SerializeField] private float _maxAngularSpeed = 60f;
+        [Tooltip("Velocidad lineal maxima de la camara (m/s) para capturar.")]
+        [SerializeField] private float _maxLinearSpeed = 0.5f;
 
         // Buffer reusable para la captura nativa (triples xyz).
         private const int MaxPointsPerCapture = 8192;
@@ -29,6 +33,16 @@ namespace Scanner
 
         private ScanStateMachine _fsm;
         private float _nextCapture;
+
+        // Seguimiento de velocidad de la camara para el gate de movimiento.
+        private Camera _camera;
+        private Vector3 _lastCamPos;
+        private Quaternion _lastCamRot;
+        private bool _hasLastPose;
+
+        // true mientras la captura esta pausada porque el telefono se mueve
+        // demasiado rapido (lo muestra la UI del mapeo).
+        public bool MotionGated { get; private set; }
 
         // Hay hardware capaz de mapear (LiDAR real, o el fake del editor).
         public static bool IsSupported
@@ -47,10 +61,20 @@ namespace Scanner
 
         private void Update()
         {
-            if (_fsm == null || _fsm.Current != ScannerMode.LidarMap) return;
+            if (_fsm == null || _fsm.Current != ScannerMode.LidarMap)
+            {
+                _hasLastPose = false;
+                MotionGated  = false;
+                return;
+            }
             var wo = WorldOrigin.Instance;
             var cloud = LidarPointCloud.Instance;
             if (wo == null || !wo.IsReady || cloud == null) return;
+
+            // Gate de movimiento: con la camara girando/trasladandose rapido, la
+            // pose y el depth quedan levemente desincronizados y los puntos caen
+            // corridos del mundo fisico. Pausamos la captura hasta que afloje.
+            if (!UpdateMotionGate()) return;
 
             if (Time.unscaledTime < _nextCapture) return;
             _nextCapture = Time.unscaledTime + _captureInterval;
@@ -67,6 +91,33 @@ namespace Scanner
                 var world = new Vector3(_buffer[i * 3], _buffer[i * 3 + 1], _buffer[i * 3 + 2]);
                 cloud.AddFiltered(wo.ToRelative(world));
             }
+        }
+
+        // Devuelve true si la camara esta lo suficientemente quieta para capturar.
+        private bool UpdateMotionGate()
+        {
+            if (_camera == null) _camera = Camera.main;
+            if (_camera == null) return false;
+
+            var pos = _camera.transform.position;
+            var rot = _camera.transform.rotation;
+            if (!_hasLastPose)
+            {
+                _lastCamPos = pos;
+                _lastCamRot = rot;
+                _hasLastPose = true;
+                MotionGated = true; // primer frame: sin velocidad conocida
+                return false;
+            }
+
+            float dt = Mathf.Max(Time.unscaledDeltaTime, 1e-4f);
+            float linSpeed = (pos - _lastCamPos).magnitude / dt;
+            float angSpeed = Quaternion.Angle(_lastCamRot, rot) / dt;
+            _lastCamPos = pos;
+            _lastCamRot = rot;
+
+            MotionGated = linSpeed > _maxLinearSpeed || angSpeed > _maxAngularSpeed;
+            return !MotionGated;
         }
 
 #if UNITY_EDITOR

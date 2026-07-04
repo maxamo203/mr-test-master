@@ -104,6 +104,13 @@ namespace Scanner
                         ShowPyramid(sp, sr);
                     break;
 
+                case ScannerMode.LidarMap:
+                    // Probe visual del mapeo: esfera pegada a donde mide el LiDAR.
+                    // Si flota separada de la superficie real, el depth y la pose
+                    // estan desalineados (diagnostico de campo).
+                    ShowMarker(local, 0.04f, new Color(0.2f, 1f, 0.4f, 1f));
+                    break;
+
                 case ScannerMode.Door_V1:
                     ShowDoorMarker(hit.Position, local);
                     break;
@@ -123,7 +130,7 @@ namespace Scanner
             m == ScannerMode.Cube_V1 || m == ScannerMode.Cube_V2 || m == ScannerMode.Cube_V3 ||
             m == ScannerMode.Door_V1 || m == ScannerMode.Door_V2 ||
             m == ScannerMode.Floor_Place || m == ScannerMode.Spawn_Place ||
-            m == ScannerMode.EditMoveTarget;
+            m == ScannerMode.LidarMap || m == ScannerMode.EditMoveTarget;
 
         // ── Helpers de cada preview ────────────────────────────────────────────
 

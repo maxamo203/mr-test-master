@@ -11,6 +11,7 @@ namespace Scanner
         [SerializeField] private DoorBuilder _doorBuilder;
         [SerializeField] private CubeBuilder _cubeBuilder;
         [SerializeField] private SpawnBuilder _spawnBuilder;
+        private LidarMapController _mapController;
 
         private ScanStateMachine _fsm;
         private ResolvedHit _lastHit;
@@ -37,7 +38,9 @@ namespace Scanner
         private void Update()
         {
             if (_fsm == null || RaycastResolver.Instance == null) return;
-            if (!IsPlacingMode(_fsm.Current)) return;
+            // En LidarMap tambien resolvemos: la reticula sirve de probe para ver
+            // donde esta midiendo el LiDAR (el marcador lo dibuja PlacementPreview).
+            if (!IsPlacingMode(_fsm.Current) && _fsm.Current != ScannerMode.LidarMap) return;
             _lastHit = RaycastResolver.Instance.ResolveFromScreenCenter();
         }
 
@@ -67,7 +70,7 @@ namespace Scanner
             float vh = UIScale.VirtualHeight;
 
             // ── Reticula central ──────────────────────────────────────────
-            if (IsPlacingMode(_fsm.Current))
+            if (IsPlacingMode(_fsm.Current) || _fsm.Current == ScannerMode.LidarMap)
             {
                 float cx = vw * 0.5f;
                 float cy = vh * 0.5f;
@@ -226,6 +229,16 @@ namespace Scanner
                 // Diagnostico del pipeline nativo (sesion / config / depth).
                 var statusStyle = new GUIStyle { fontSize = 15, normal = { textColor = Color.cyan }, wordWrap = true };
                 GUILayout.Label(NativeLidar.StatusSummary(), statusStyle);
+
+                // Pausa por movimiento: capturar con el telefono girando rapido
+                // mete puntos corridos, asi que se corta hasta que afloje.
+                if (_mapController == null) _mapController = FindFirstObjectByType<LidarMapController>();
+                if (_mapController != null && _mapController.MotionGated)
+                {
+                    var gateStyle = new GUIStyle { fontSize = 16, normal = { textColor = new Color(1f, 0.5f, 0.3f) }, wordWrap = true };
+                    GUILayout.Label("Pausado: move el telefono mas despacio", gateStyle);
+                }
+                GUILayout.Label("La esfera verde marca lo que mide el LiDAR:\ndebe quedar pegada a la superficie.", statusStyle);
 
                 if (cloud != null)
                 {
