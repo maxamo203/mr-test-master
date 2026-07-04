@@ -58,7 +58,9 @@ namespace Scanner
 #if UNITY_EDITOR
             int n = FakeCapture();
 #else
-            int n = NativeLidar.CapturePoints(_buffer, _sampleStep, minConfidence: 2, maxDepth: _maxDepth);
+            // Confianza media o alta: solo-alta deja demasiados frames sin puntos
+            // en superficies oscuras/reflectivas.
+            int n = NativeLidar.CapturePoints(_buffer, _sampleStep, minConfidence: 1, maxDepth: _maxDepth);
 #endif
             for (int i = 0; i < n; i++)
             {

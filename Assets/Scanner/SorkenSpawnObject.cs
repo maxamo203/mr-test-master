@@ -14,10 +14,15 @@ namespace Scanner
         public SelectableKind Kind => SelectableKind.SorkenSpawn;
         public Transform Transform => transform;
 
-        // Dimensiones de la piramide (m): base cuadrada en el plano XY local,
-        // punta en +Z. Aplanada: mucho mas ancha que alta.
-        public const float BaseHalf = 0.14f;
-        public const float TipLength = 0.10f;
+        // Dimensiones de la piramide (m). Aplanada: la base es un RECTANGULO
+        // paralelo al piso (plano XZ local, con +Y = arriba del mundo) y la
+        // punta sale hacia +Z (la normal de la pared), apenas elevada — tipo
+        // punta de flecha chata apoyada en horizontal.
+        public const float BaseHalfX  = 0.12f;  // mitad del ancho de la base
+        public const float BaseBackZ  = -0.12f; // borde trasero de la base (contra la pared)
+        public const float BaseFrontZ = 0.02f;  // borde delantero de la base
+        public const float TipZ       = 0.18f;  // punta a lo largo de la normal
+        public const float TipY       = 0.06f;  // altura de la punta (aplanada)
 
         private MeshRenderer _mr;
         private Material     _matNormal;
@@ -65,31 +70,31 @@ namespace Scanner
             };
         }
 
-        // Piramide aplanada compartida: base cuadrada en z=0, apex en +Z.
+        // Piramide aplanada compartida: base rectangular horizontal (plano XZ,
+        // y=0) y apex adelantado hacia +Z (la normal) y apenas levantado.
         private static Mesh _pyramid;
         public static Mesh PyramidMesh()
         {
             if (_pyramid != null) return _pyramid;
 
-            float s = BaseHalf, h = TipLength;
             var verts = new[]
             {
-                new Vector3(-s, -s, 0f),  // 0 base
-                new Vector3( s, -s, 0f),  // 1
-                new Vector3( s,  s, 0f),  // 2
-                new Vector3(-s,  s, 0f),  // 3
-                new Vector3( 0f, 0f, h),  // 4 apex (punta = normal de la pared)
+                new Vector3(-BaseHalfX, 0f, BaseBackZ),   // 0 atras-izquierda
+                new Vector3( BaseHalfX, 0f, BaseBackZ),   // 1 atras-derecha
+                new Vector3( BaseHalfX, 0f, BaseFrontZ),  // 2 adelante-derecha
+                new Vector3(-BaseHalfX, 0f, BaseFrontZ),  // 3 adelante-izquierda
+                new Vector3( 0f,        TipY, TipZ),      // 4 apex (punta = normal)
             };
             var tris = new[]
             {
-                // caras laterales (winding hacia afuera)
-                0, 1, 4,
-                1, 2, 4,
-                2, 3, 4,
-                3, 0, 4,
-                // tapa de la base (mirando -Z, hacia la pared)
-                0, 2, 1,
-                0, 3, 2,
+                // base (mirando hacia abajo, paralela al piso)
+                0, 1, 2,
+                0, 2, 3,
+                // caras al apex (winding hacia afuera)
+                1, 0, 4,   // trasera (mira a la pared / arriba)
+                2, 1, 4,   // derecha
+                3, 2, 4,   // delantera (rampa inferior de la punta)
+                0, 3, 4,   // izquierda
             };
             _pyramid = new Mesh { name = "SorkenSpawnPyramid" };
             _pyramid.SetVertices(verts);

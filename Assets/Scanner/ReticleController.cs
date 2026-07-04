@@ -223,6 +223,10 @@ namespace Scanner
                 int count = cloud != null ? cloud.Count : 0;
                 GUILayout.Label($"Mapeando entorno (LiDAR)\nPuntos: {count}", mapHint);
 
+                // Diagnostico del pipeline nativo (sesion / config / depth).
+                var statusStyle = new GUIStyle { fontSize = 15, normal = { textColor = Color.cyan }, wordWrap = true };
+                GUILayout.Label(NativeLidar.StatusSummary(), statusStyle);
+
                 if (cloud != null)
                 {
                     GUILayout.Label($"Dist. min entre puntos: {cloud.MinDistance * 100f:F0} cm", mapHint);
