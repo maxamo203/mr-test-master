@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -36,8 +38,15 @@ public class FlashlightMeshLighting : MonoBehaviour
         }
     }
 
-    [Tooltip("Densidad de la malla (0..1). LiDAR rinde bien en 1.")]
+    [Header("Calidad")]
+    [Tooltip("Densidad/detalle de la malla (0..1). 1 = máximo. Triángulos más chicos, más " +
+             "detalle (y más CPU/GPU). NO cambia la cobertura: los huecos son de zonas no " +
+             "escaneadas / fuera de rango / superficies difíciles (vidrio, espejos, negro).")]
     [Range(0.1f, 1f)] [SerializeField] private float meshDensity = 1f;
+
+    [Tooltip("Clasificación ARKit de la malla (pared/piso/etc). Mejora un poco el cierre y " +
+             "la calidad de la malla. Solo iPhone con LiDAR.")]
+    [SerializeField] private bool enableClassification = true;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -123,7 +132,23 @@ public class FlashlightMeshLighting : MonoBehaviour
 
         EnsureMaterial();
         EnsurePrefab();
+        TrySetClassificationEnabled(enableClassification);
         return true;
+    }
+
+    // Activa la clasificación de la malla en ARKit por reflexión (para no referenciar el
+    // assembly Unity.XR.ARKit en compilación; el subsystem real es ARKitMeshSubsystem).
+    private void TrySetClassificationEnabled(bool on)
+    {
+        if (_mesh == null || _mesh.subsystem == null) return;
+        var subsystem = _mesh.subsystem;
+        if (subsystem.GetType().Name != "ARKitMeshSubsystem") return;
+
+        var method = subsystem.GetType().GetMethod("SetClassificationEnabled",
+            BindingFlags.Public | BindingFlags.Instance);
+        if (method == null) return;
+        try { method.Invoke(subsystem, new object[] { on }); }
+        catch (Exception e) { Debug.LogWarning($"[MeshLight] classification: {e.Message}"); }
     }
 
     private void EnsureMaterial()

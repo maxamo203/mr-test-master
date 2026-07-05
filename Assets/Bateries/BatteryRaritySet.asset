@@ -30,4 +30,4 @@ MonoBehaviour:
     charge: 70
     spawnChance: 20
     prefab: {fileID: 1830482375011854933, guid: f203adf0e803d8946b5d0f03d2882880, type: 3}
-    tint: {r: 1, g: 0.7951088, b: 0, a: 0}
+    tint: {r: 1, g: 0.6227779, b: 0, a: 0}
