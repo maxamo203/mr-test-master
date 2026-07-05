@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Bateries
@@ -11,6 +12,10 @@ namespace Bateries
     // PrefabRegistry para ese prefab (BatteryBase + rarityIndex).
     public class BatteryEntity : NetworkEntity
     {
+        // Registro estatico de pilas vivas: evita que el controlador de pickup tenga que
+        // escanear todas las entidades con GetComponent cada frame.
+        public static readonly List<BatteryEntity> Active = new();
+
         [Tooltip("0/1/2. Debe coincidir con la rareza y con el TypeId del PrefabRegistry.")]
         [Range(0, 2)] public byte rarityIndex = 0;
 
@@ -25,6 +30,9 @@ namespace Bateries
         {
             EntityTypeId = (byte)(EntityTypeIds.BatteryBase + rarityIndex);
         }
+
+        private void OnEnable()  { if (!Active.Contains(this)) Active.Add(this); }
+        private void OnDisable() { Active.Remove(this); }
 
         // Estatica: sin estado que sincronizar por tick.
         public override byte[] SerializeState(uint tick) => System.Array.Empty<byte>();
@@ -42,9 +50,13 @@ namespace Bateries
         private void Update()
         {
             // Re-anclar a WorldOrigin: si el AR corrige la pose del anchor, la pila
-            // sigue pegada a su posicion relativa en vez de driftar.
-            if (_hasRel && WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady)
-                transform.position = WorldOrigin.Instance.ToWorld(_relPos);
+            // sigue pegada a su posicion relativa. Solo tocamos el transform si de verdad
+            // cambió (evita ensuciar el transform de un objeto estatico cada frame).
+            if (!_hasRel || WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady) return;
+
+            Vector3 target = WorldOrigin.Instance.ToWorld(_relPos);
+            if ((transform.position - target).sqrMagnitude > 1e-8f)
+                transform.position = target;
         }
     }
 }

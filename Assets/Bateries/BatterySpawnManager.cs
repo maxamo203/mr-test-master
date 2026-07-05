@@ -55,8 +55,10 @@ namespace Bateries
         [SerializeField] private int   maxSpawnPoints = 12;
 
         [Header("Debug")]
-        [Tooltip("Muestra un panel en pantalla (solo host) con el estado del sistema de pilas.")]
-        [SerializeField] private bool _showDebugHud = true;
+        [Tooltip("Muestra un panel en pantalla con el estado del sistema de pilas. " +
+                 "Dejalo apagado en device: el OnGUI tiene costo. Solo para diagnosticar.")]
+        [SerializeField] private bool _showDebugHud = false;
+        private GUIStyle _hudStyle; // cacheado: crear GUIStyle en cada OnGUI genera GC.
 
         // Ultimo estado legible para el HUD de diagnostico.
         private string _status = "esperando arranque de partida…";
@@ -397,14 +399,17 @@ namespace Bateries
                 $"RaritySet: {(rarities != null ? "OK" : "FALTA")}   Puntos: {_points.Count}   Activas: {_byNetId.Count}\n" +
                 $"Estado: {_status}";
 
-            var style = new GUIStyle(GUI.skin.box)
+            if (_hudStyle == null)
             {
-                fontSize  = 20,
-                alignment = TextAnchor.UpperLeft,
-                wordWrap  = true,
-            };
-            style.normal.textColor = Color.white;
-            GUI.Box(new Rect(10, 120, 620, 150), txt, style);
+                _hudStyle = new GUIStyle(GUI.skin.box)
+                {
+                    fontSize  = 20,
+                    alignment = TextAnchor.UpperLeft,
+                    wordWrap  = true,
+                };
+                _hudStyle.normal.textColor = Color.white;
+            }
+            GUI.Box(new Rect(10, 120, 620, 150), txt, _hudStyle);
         }
     }
 }

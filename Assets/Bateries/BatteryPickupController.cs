@@ -21,13 +21,21 @@ namespace Bateries
         [SerializeField] private float aimMaxDistance = 2.5f;
         [Tooltip("Semiangulo (grados) del cono de apuntado desde el centro de la camara.")]
         [SerializeField] private float aimAngle = 12f;
+        [Tooltip("Cada cuanto (s) recalcular la pila apuntada. No hace falta cada frame.")]
+        [SerializeField] private float aimCheckInterval = 0.1f;
 
         [Header("HUD")]
         [SerializeField] private bool showChargeBar = true;
 
         private BatteryEntity _target;
         private Flashlight    _flashlight;
+        private Camera        _cam;
         private bool          _prevSouth;
+        private float         _aimTimer;
+
+        // Estilos IMGUI cacheados: crearlos en cada OnGUI genera basura (GC) cada frame.
+        private GUIStyle _btnStyle, _barLabelStyle;
+        private bool     _stylesReady;
 
         // Suscribir en Start para garantizar que NetworkManager.Instance ya exista.
         private void Start()
@@ -44,7 +52,13 @@ namespace Bateries
 
         private void Update()
         {
-            _target = FindAimedBattery();
+            // Recalcular el apuntado a intervalos, no cada frame.
+            _aimTimer -= Time.deltaTime;
+            if (_aimTimer <= 0f)
+            {
+                _aimTimer = aimCheckInterval;
+                _target = FindAimedBattery();
+            }
             HandleButtonInput();
         }
 
@@ -52,21 +66,25 @@ namespace Bateries
 
         private BatteryEntity FindAimedBattery()
         {
-            var cam = Camera.main;
-            if (cam == null || EntityRegistry.Instance == null) return null;
+            if (_cam == null) _cam = Camera.main;
+            if (_cam == null) return null;
+
+            var list = BatteryEntity.Active;
+            if (list.Count == 0) return null;
 
             BatteryEntity best = null;
             float bestAngle = aimAngle;
-            Vector3 camPos = cam.transform.position;
-            Vector3 camFwd = cam.transform.forward;
+            float maxD2     = aimMaxDistance * aimMaxDistance;
+            Vector3 camPos  = _cam.transform.position;
+            Vector3 camFwd  = _cam.transform.forward;
 
-            foreach (var e in EntityRegistry.Instance.All)
+            for (int i = 0; i < list.Count; i++)
             {
-                var be = e.GetComponent<BatteryEntity>();
+                var be = list[i];
                 if (be == null) continue;
 
                 Vector3 to = be.transform.position - camPos;
-                if (to.sqrMagnitude > aimMaxDistance * aimMaxDistance) continue;
+                if (to.sqrMagnitude > maxD2) continue;
 
                 float ang = Vector3.Angle(camFwd, to);
                 if (ang < bestAngle) { bestAngle = ang; best = be; }
@@ -100,7 +118,7 @@ namespace Bateries
             else
                 net.ClientSendBatteryPickup(_target.NetworkId);
 
-            _target = null; // evitar reenvios hasta el proximo frame de deteccion
+            _target = null; // evitar reenvios hasta el proximo chequeo de apuntado
         }
 
         // ── Cliente: llegó la carga acreditada por el server ──────────────────
@@ -118,8 +136,18 @@ namespace Bateries
 
         // ── HUD (boton de recoger + barra de carga) ───────────────────────────
 
+        private void EnsureStyles()
+        {
+            if (_stylesReady) return;
+            _btnStyle = new GUIStyle(GUI.skin.button) { fontSize = 20 };
+            _barLabelStyle = new GUIStyle(GUI.skin.label);
+            _stylesReady = true;
+        }
+
         private void OnGUI()
         {
+            EnsureStyles();
+
             if (showChargeBar)
             {
                 EnsureFlashlight();
@@ -136,7 +164,7 @@ namespace Bateries
                     GUI.DrawTexture(fill, Texture2D.whiteTexture);
                     GUI.color = prev;
                     GUI.Label(new Rect(barRect.x + 6, barRect.y, barRect.width, barRect.height),
-                              $"Linterna {Mathf.RoundToInt(pct * 100f)}%");
+                              $"Linterna {Mathf.RoundToInt(pct * 100f)}%", _barLabelStyle);
                 }
             }
 
@@ -145,8 +173,7 @@ namespace Bateries
                 string hint = GamepadManager.Instance != null && GamepadManager.Instance.IsConnected
                     ? "Recoger (A)" : "Recoger";
                 var btn = new Rect(Screen.width * 0.5f - 90, Screen.height * 0.62f, 180, 54);
-                var style = new GUIStyle(GUI.skin.button) { fontSize = 20 };
-                if (GUI.Button(btn, hint, style)) TryPickup();
+                if (GUI.Button(btn, hint, _btnStyle)) TryPickup();
             }
         }
     }
