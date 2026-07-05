@@ -345,25 +345,31 @@ namespace Bateries
         public void ServerHandlePickup(uint clientId, uint batteryNetId)
         {
             if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return;
-            if (!_byNetId.TryGetValue(batteryNetId, out var point)) return; // ya recogida / desconocida
-            if (!EntityRegistry.Instance.TryGet(batteryNetId, out var entity)) return;
-
-            Vector3 batteryWorld = entity.transform.position;
-
-            // Validar cercania del solicitante. Host (0) = Camera.main; cliente = su pose.
-            Vector3 playerWorld;
-            if (clientId == 0)
+            if (!_byNetId.TryGetValue(batteryNetId, out var point))
             {
-                if (Camera.main == null) return;
-                playerWorld = Camera.main.transform.position;
+                Debug.Log($"[Bateries] Pickup ignorado: pila {batteryNetId} no registrada (¿ya recogida?).");
+                return;
             }
-            else if (!NetworkManager.Instance.TryGetClientWorldPosition(clientId, out playerWorld))
+            if (!EntityRegistry.Instance.TryGet(batteryNetId, out var entity))
             {
-                return; // aun no reportó pose
+                Debug.Log($"[Bateries] Pickup ignorado: pila {batteryNetId} no está en EntityRegistry.");
+                return;
             }
 
-            if ((playerWorld - batteryWorld).sqrMagnitude > pickupMaxDistance * pickupMaxDistance)
-                return; // demasiado lejos: rechazar
+            // Validar cercania SOLO para clientes (anti-cheat). El host ya validó con su
+            // propio apuntado; NO re-chequeamos para no rechazar por diferencias de cámara.
+            // Para clientes usamos su pose reportada con un margen sobre el apuntado; si aún
+            // no reportó pose, confiamos en el apuntado del cliente.
+            if (clientId != 0 &&
+                NetworkManager.Instance.TryGetClientWorldPosition(clientId, out var playerWorld))
+            {
+                float maxDist = pickupMaxDistance + 0.75f; // margen sobre el apuntado
+                if ((playerWorld - entity.transform.position).sqrMagnitude > maxDist * maxDist)
+                {
+                    Debug.Log($"[Bateries] Pickup rechazado: cliente {clientId} demasiado lejos de la pila {batteryNetId}.");
+                    return;
+                }
+            }
 
             byte rarityIndex = point.rarityIndex;
             var  rarity      = rarities != null ? rarities.ByIndex(rarityIndex) : null;

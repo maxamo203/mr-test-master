@@ -28,13 +28,17 @@ clientes en coordenadas anchor-relativas (idénticas en todos los dispositivos).
 | `BatteryRaritySet.asset` | **El archivo de configuración** editable en el Inspector. |
 | `BatteryEntity.cs` | La pila como `NetworkEntity` estática (se re-ancla a `WorldOrigin`). |
 | `BatterySpawnManager.cs` | Gestor server-only: deriva puntos, spawnea, respawn, valida pickup. |
-| `BatteryPickupController.cs` | Cliente: apuntado + botón + barra de carga (corre en todos). |
+| `IContextAction.cs` | Interfaz de una acción del botón primario (A). |
+| `ContextActionController.cs` | Hub del botón A: elige la acción por contexto (corre en todos). |
+| `BatteryPickupAction.cs` | Acción: recoger la pila apuntada (prioridad alta). |
+| `FlashlightToggleAction.cs` | Acción: prender/apagar la linterna (prioridad baja, fallback). |
 | `BatteryMessages.cs` | Mensajes de red `BatteryPickup` / `BatteryCollected`. |
 | `prefabs/` | Un prefab por rareza (con `BatteryEntity`). |
 
 Cambios fuera de esta carpeta: `MessageType.cs`, `NetworkEntity.cs`
 (`EntityTypeIds.BatteryBase = 10`), `NetworkManager.cs` (pose de jugadores + ruteo de
-pickup), `NetworkMessages.cs` (`PlayerPoseMsg`) y `Assets/Flashlight.cs` (consumo de carga).
+pickup), `NetworkMessages.cs` (`PlayerPoseMsg`), `Assets/Flashlight.cs` (consumo de carga +
+`Toggle()`) y `Assets/FlashlightHUD.cs` (barra de carga, va en el GameObject de la linterna).
 
 ---
 
@@ -117,14 +121,32 @@ En **`BatterySpawnManager`**:
 | `Initial Spawn Delay` | 2 | Demora del primer llenado de todos los puntos al arrancar. |
 | `Pickup Max Distance` | 2.5 | Distancia máx. a la que el server acepta un pickup. |
 
-En **`BatteryPickupController`**:
+En **`BatteryPickupAction`** (componente auto-agregado junto al `ContextActionController`):
 
 | Parámetro | Default | Qué hace |
 |---|---|---|
+| `Priority` | 100 | Prioridad de la acción (gana a la linterna). |
 | `Aim Max Distance` | 2.5 | Distancia máx. para apuntar/recoger. |
 | `Aim Angle` | 12 | Semiángulo (°) del cono de apuntado desde el centro. |
 | `Aim Check Interval` | 0.1 | Cada cuánto recalcula la pila apuntada (perf). |
-| `Show Charge Bar` | true | Muestra la barra de carga de la linterna. |
+
+En **`ContextActionController`**: `Show Action Button` (botón contextual en pantalla).
+La **barra de carga** de la linterna la dibuja **`FlashlightHUD`** (componente aparte, en el
+GameObject de la linterna) con su propio toggle `Show Charge Bar`.
+
+### Botón primario (A) y acciones contextuales
+
+El **botón A** del joystick (o el botón en pantalla, o `E` en editor) ejecuta la acción
+disponible de **mayor prioridad** según el contexto:
+
+- Si estás **apuntando una pila** → la **recoge** (`BatteryPickupAction`, prioridad 100).
+- Si no → **prende/apaga la linterna** (`FlashlightToggleAction`, prioridad 0).
+
+Para **sumar una acción** (abrir puerta, interruptor, etc.): creá un `MonoBehaviour` que
+implemente **`IContextAction`** (`Priority`, `TryResolve(out label)`, `Execute()`) y ponelo
+en el **mismo GameObject** que el `ContextActionController` (se auto-descubre), o registralo
+por código con `ContextActionController.Instance.Register(...)`. La de mayor `Priority`
+disponible gana el botón y su `label` se muestra en el HUD.
 
 ### 5. Glow de las pilas
 
@@ -185,8 +207,14 @@ Al llegar a 0 se apaga sola y no se puede encender hasta recoger una pila.
 2. Un prefab por rareza con `BatteryEntity` (rarityIndex 0/1/2), registrados en
    `PrefabRegistry.asset` con TypeId 10/11/12.
 3. En **SampleScene**: un GameObject con **`BatterySpawnManager`** (asignarle el
-   `BatteryRaritySet`) y otro con **`BatteryPickupController`**.
-4. La linterna (`Flashlight`) ya está en la escena.
+   `BatteryRaritySet`) y otro con **`ContextActionController`** (auto-agrega
+   `BatteryPickupAction` + `FlashlightToggleAction`; no requiere config extra).
+4. La linterna (`Flashlight`) ya está en la escena. Agregale el componente
+   **`FlashlightHUD`** para ver la barra de carga.
+
+> Si venías del `BatteryPickupController` anterior: se renombró a `ContextActionController`
+> conservando su GUID, así que el componente en la escena sigue apuntando al script nuevo sin
+> re-agregar nada (Unity solo recompila).
 
 ## Debug
 

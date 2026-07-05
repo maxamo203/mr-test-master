@@ -46,6 +46,14 @@ public class Flashlight : MonoBehaviour
         currentCharge = Mathf.Clamp(currentCharge + amount, 0f, maxCharge);
     }
 
+    // Prende/apaga la linterna. No enciende si no hay carga. Punto único de toggle
+    // (lo usan el gesto de 2 dedos y la acción del botón A / ContextActionController).
+    public void Toggle()
+    {
+        if (!isOn && IsEmpty) return;
+        isOn = !isOn;
+    }
+
     static readonly int ID_POS       = Shader.PropertyToID("_FlashlightPos");
     static readonly int ID_DIR       = Shader.PropertyToID("_FlashlightDir");
     static readonly int ID_RANGE     = Shader.PropertyToID("_FlashlightRange");
@@ -123,9 +131,7 @@ public class Flashlight : MonoBehaviour
         }
         if (fingers >= 2)
         {
-            // No permitir encender si no hay carga.
-            if (!isOn && IsEmpty) return;
-            isOn = !isOn;
+            Toggle();
             _lastToggleTime = Time.time;
         }
     }
