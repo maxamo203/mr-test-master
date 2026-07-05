@@ -35,6 +35,10 @@ public class NetworkManager : MonoBehaviour
     private readonly HashSet<uint>          _connectedClients  = new();
     private readonly HashSet<uint>          _resolvedClients   = new();
 
+    // Server: ultima pose anchor-relativa reportada por cada cliente (por PlayerPose).
+    // El host se conoce por Camera.main aparte. Lo usa el sistema de pilas.
+    private readonly Dictionary<uint, Vector3> _clientRelPos   = new();
+
     private float _tickTimer;
 
     // ── Eventos ───────────────────────────────────────────────────────────
@@ -45,6 +49,7 @@ public class NetworkManager : MonoBehaviour
     public event Action<string> OnAnchorIdReceived;    // client: recibió anchor ID
     public event Action         OnGameStarted;         // todos: partida arrancó
     public event Action<byte[]> OnMapReceived;         // client: recibió el .mscn del mapa
+    public event Action<byte, float> OnBatteryCollected; // client: recogió pila (rarityIndex, charge)
 
     // ── Public API ────────────────────────────────────────────────────────
 
@@ -96,6 +101,14 @@ public class NetworkManager : MonoBehaviour
     {
         _cli.Send(MsgHelper.Frame(MessageType.AnchorResolved, Array.Empty<byte>()));
         Debug.Log("[Client] AnchorResolved enviado al servidor");
+    }
+
+    // Client: pedir al servidor recoger una pila apuntada (el server valida cercanía).
+    public void ClientSendBatteryPickup(uint batteryNetId)
+    {
+        if (_cli == null) return;
+        var body = new Bateries.BatteryPickupMsg { NetworkId = batteryNetId }.Serialize();
+        _cli.Send(MsgHelper.Frame(MessageType.BatteryPickup, body));
     }
 
     // Server: spawnear los Sorkens y arrancar el juego para todos.
@@ -150,6 +163,49 @@ public class NetworkManager : MonoBehaviour
         var msg = new DespawnEntityMsg { NetworkId = networkId };
         _srv.Broadcast(MsgHelper.Frame(MessageType.DespawnEntity, msg.Serialize()));
         DespawnLocally(networkId);
+    }
+
+    // ── Server: posiciones de jugadores y notificacion de pickup (pilas) ──────
+
+    // Posiciones world de todos los jugadores conocidos por el server: la camara del
+    // host (Camera.main) mas cada cliente (su pose relativa convertida a world con el
+    // WorldOrigin actual). Lo usa el BatterySpawnManager.
+    private readonly List<Vector3> _playerPosScratch = new();
+    public IReadOnlyList<Vector3> ServerPlayerWorldPositions()
+    {
+        _playerPosScratch.Clear();
+        if (!IsServer) return _playerPosScratch;
+
+        if (Camera.main != null)
+            _playerPosScratch.Add(Camera.main.transform.position);
+
+        if (WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady)
+            foreach (var rel in _clientRelPos.Values)
+                _playerPosScratch.Add(WorldOrigin.Instance.ToWorld(rel));
+
+        return _playerPosScratch;
+    }
+
+    // Posicion world de un cliente puntual (para validar el pickup en el server).
+    // Devuelve false si el cliente es el host (0) o si aun no reportó pose.
+    public bool TryGetClientWorldPosition(uint clientId, out Vector3 world)
+    {
+        world = Vector3.zero;
+        if (_clientRelPos.TryGetValue(clientId, out var rel) &&
+            WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady)
+        {
+            world = WorldOrigin.Instance.ToWorld(rel);
+            return true;
+        }
+        return false;
+    }
+
+    // Server → cliente puntual: avisa que recogió una pila y cuánta carga sumar.
+    public void ServerSendBatteryCollected(uint clientId, byte rarityIndex, float charge)
+    {
+        if (_srv == null) return;
+        var body = new Bateries.BatteryCollectedMsg { RarityIndex = rarityIndex, Charge = charge }.Serialize();
+        _srv.Send(clientId, MsgHelper.Frame(MessageType.BatteryCollected, body));
     }
 
     // ── Tick ──────────────────────────────────────────────────────────────
@@ -239,6 +295,7 @@ public class NetworkManager : MonoBehaviour
         Debug.Log($"[Server] Cliente {clientId} desconectado");
         _connectedClients.Remove(clientId);
         _resolvedClients.Remove(clientId);
+        _clientRelPos.Remove(clientId);
 
         if (_clientToPlayer.TryGetValue(clientId, out var playerId))
         {
@@ -269,6 +326,19 @@ public class NetworkManager : MonoBehaviour
                 Debug.Log($"[Server] Cliente {incoming.ClientId} resolvió el anchor ({_resolvedClients.Count}/{_connectedClients.Count})");
                 break;
             }
+            case MessageType.PlayerPose:
+            {
+                var pose = PlayerPoseMsg.Deserialize(incoming.Body);
+                _clientRelPos[incoming.ClientId] = pose.RelPos;
+                break;
+            }
+            case MessageType.BatteryPickup:
+            {
+                if (!GameStarted) return;
+                var pick = Bateries.BatteryPickupMsg.Deserialize(incoming.Body);
+                Bateries.BatterySpawnManager.Instance?.ServerHandlePickup(incoming.ClientId, pick.NetworkId);
+                break;
+            }
         }
     }
 
@@ -297,6 +367,14 @@ public class NetworkManager : MonoBehaviour
             HandleClientMessage(msg);
 
         if (!GameStarted) return;
+
+        // Reportar la pose de la camara AR al servidor (aunque no haya PlayerEntity):
+        // el server necesita saber donde esta cada cliente para el sistema de pilas.
+        if (Camera.main != null && WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady)
+        {
+            var relPos = WorldOrigin.Instance.ToRelative(Camera.main.transform.position);
+            _cli.Send(MsgHelper.Frame(MessageType.PlayerPose, new PlayerPoseMsg { RelPos = relPos }.Serialize()));
+        }
 
         foreach (var entity in EntityRegistry.Instance.All)
         {
@@ -355,6 +433,12 @@ public class NetworkManager : MonoBehaviour
                 var m = MapDataMsg.Deserialize(msg.Body);
                 Debug.Log($"[Client] Mapa recibido ({m.Bytes?.Length ?? 0} bytes)");
                 OnMapReceived?.Invoke(m.Bytes);
+                break;
+            }
+            case MessageType.BatteryCollected:
+            {
+                var m = Bateries.BatteryCollectedMsg.Deserialize(msg.Body);
+                OnBatteryCollected?.Invoke(m.RarityIndex, m.Charge);
                 break;
             }
         }

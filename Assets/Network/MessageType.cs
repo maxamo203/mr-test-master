@@ -9,4 +9,7 @@ public enum MessageType : ushort
     AnchorResolved  = 7,   // client → server: el cliente resolvió el anchor
     StartGame       = 8,   // server → all: arranca la partida
     MapData         = 9,   // server → client: el .mscn del mapa elegido por el host
+    PlayerPose      = 10,  // client → server: pose anchor-relativa de la camara AR (por tick)
+    BatteryPickup   = 11,  // client → server: pedido de recoger una pila apuntada
+    BatteryCollected = 12, // server → client: la pila se recogio, sumar carga a la linterna
 }
