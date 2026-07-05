@@ -7,8 +7,12 @@ namespace Bateries
     public class FlashlightToggleAction : MonoBehaviour, IContextAction
     {
         [SerializeField] private int priority = 0;
+        [Tooltip("Mostrar el botón en pantalla para esta acción. Por defecto no: la " +
+                 "linterna se prende/apaga directo con A, sin botón.")]
+        [SerializeField] private bool showActionButton = false;
 
-        public int Priority => priority;
+        public int  Priority         => priority;
+        public bool ShowActionButton => showActionButton;
 
         private Flashlight _fl;
 

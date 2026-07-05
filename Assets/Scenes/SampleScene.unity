@@ -970,6 +970,8 @@ GameObject:
   m_Component:
   - component: {fileID: 1202678327}
   - component: {fileID: 1202678326}
+  - component: {fileID: 1202678329}
+  - component: {fileID: 1202678328}
   m_Layer: 0
   m_Name: BatteryPickupManager
   m_TagString: Untagged
@@ -989,9 +991,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 359f44c543fbc9f48bd98d603a496242, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Bateries.BatteryPickupController
-  aimMaxDistance: 2.5
-  aimAngle: 12
-  showChargeBar: 1
+  showActionButton: 0
 --- !u!4 &1202678327
 Transform:
   m_ObjectHideFlags: 0
@@ -1007,6 +1007,37 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1202678328
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1202678325}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7672b45eb4b678428993dfb494c029a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Bateries.FlashlightToggleAction
+  priority: 0
+  showActionButton: 0
+--- !u!114 &1202678329
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1202678325}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 436c132eaa3630742838125af3d85881, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Bateries.BatteryPickupAction
+  priority: 100
+  showActionButton: 1
+  aimMaxDistance: 2.5
+  aimAngle: 12
+  aimCheckInterval: 0.1
 --- !u!1 &1619642574
 GameObject:
   m_ObjectHideFlags: 0
@@ -1084,7 +1115,7 @@ MonoBehaviour:
   respawnSeconds: 60
   playerBlockRadius: 1.5
   initialSpawnDelay: 2
-  pickupMaxDistance: 2.5
+  pickupMaxDistance: 1.5
   useFurnitureTops: 1
   minFurnitureTopArea: 0.05
   surfaceOffset: 0.06
@@ -1093,7 +1124,7 @@ MonoBehaviour:
   floorSpacing: 1.5
   floorRadius: 3
   maxSpawnPoints: 12
-  _showDebugHud: 1
+  _showDebugHud: 0
 --- !u!4 &1802830352
 Transform:
   m_ObjectHideFlags: 0
@@ -1181,6 +1212,24 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1893593836 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4736471317304938572, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+  m_PrefabInstance: {fileID: 7197833617756894217}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1893593839
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1893593836}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f41cd8ee0d8070d418a3bca258e627a6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FlashlightHUD
+  showChargeBar: 1
 --- !u!1001 &7197833617756894217
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1257,9 +1306,13 @@ PrefabInstance:
       propertyPath: showPlanesForDebug
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 3685867358680086797, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      propertyPath: isOn
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4736471317304938572, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5406418022123170029, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
       propertyPath: m_Enabled
@@ -1345,6 +1398,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 6704683610357316520, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
       insertIndex: -1
       addedObject: {fileID: 40919629}
+    - targetCorrespondingSourceObject: {fileID: 4736471317304938572, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1893593839}
   m_SourcePrefab: {fileID: 100100000, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

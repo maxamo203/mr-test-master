@@ -16,13 +16,13 @@ MonoBehaviour:
   - displayName: Bateria basica
     rarityIndex: 0
     charge: 20
-    spawnChance: 20
+    spawnChance: 50
     prefab: {fileID: 1830482375011854933, guid: 8cc64fb6f7f505049aac1a8a114e85b3, type: 3}
     tint: {r: 1, g: 0.18508676, b: 0.07058823, a: 0}
   - displayName: Bateria normal
     rarityIndex: 1
     charge: 50
-    spawnChance: 20
+    spawnChance: 30
     prefab: {fileID: 1830482375011854933, guid: f586c82932ebe724393b635a5d9cacc0, type: 3}
     tint: {r: 1, g: 0.7595173, b: 0, a: 0}
   - displayName: Duracell

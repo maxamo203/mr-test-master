@@ -130,7 +130,11 @@ En **`BatteryPickupAction`** (componente auto-agregado junto al `ContextActionCo
 | `Aim Angle` | 12 | Semiángulo (°) del cono de apuntado desde el centro. |
 | `Aim Check Interval` | 0.1 | Cada cuánto recalcula la pila apuntada (perf). |
 
-En **`ContextActionController`**: `Show Action Button` (botón contextual en pantalla).
+En **`ContextActionController`**: `Show Action Button` (toggle **maestro** del botón en
+pantalla). Además, **cada acción** decide si muestra el botón vía su propio `Show Action
+Button`: por defecto la de **recoger pila = sí** y la de **linterna = no** (se prende/apaga
+directo con A). El botón aparece solo si el maestro está activo **y** la acción activa lo pide.
+
 La **barra de carga** de la linterna la dibuja **`FlashlightHUD`** (componente aparte, en el
 GameObject de la linterna) con su propio toggle `Show Charge Bar`.
 
@@ -143,10 +147,11 @@ disponible de **mayor prioridad** según el contexto:
 - Si no → **prende/apaga la linterna** (`FlashlightToggleAction`, prioridad 0).
 
 Para **sumar una acción** (abrir puerta, interruptor, etc.): creá un `MonoBehaviour` que
-implemente **`IContextAction`** (`Priority`, `TryResolve(out label)`, `Execute()`) y ponelo
-en el **mismo GameObject** que el `ContextActionController` (se auto-descubre), o registralo
-por código con `ContextActionController.Instance.Register(...)`. La de mayor `Priority`
-disponible gana el botón y su `label` se muestra en el HUD.
+implemente **`IContextAction`** (`Priority`, `ShowActionButton`, `TryResolve(out label)`,
+`Execute()`) y ponelo en el **mismo GameObject** que el `ContextActionController` (se
+auto-descubre), o registralo por código con `ContextActionController.Instance.Register(...)`.
+La de mayor `Priority` disponible gana el botón A; `ShowActionButton` controla si además se
+dibuja el botón en pantalla para esa acción.
 
 ### 5. Glow de las pilas
 

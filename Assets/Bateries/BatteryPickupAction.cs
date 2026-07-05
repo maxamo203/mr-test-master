@@ -11,6 +11,8 @@ namespace Bateries
     {
         [Header("Prioridad")]
         [SerializeField] private int priority = 100;
+        [Tooltip("Mostrar el botón en pantalla cuando podés recoger una pila.")]
+        [SerializeField] private bool showActionButton = true;
 
         [Header("Apuntado")]
         [Tooltip("Distancia máxima (m) a la que se puede apuntar/recoger una pila.")]
@@ -20,7 +22,8 @@ namespace Bateries
         [Tooltip("Cada cuánto (s) recalcular la pila apuntada. No hace falta cada frame.")]
         [SerializeField] private float aimCheckInterval = 0.1f;
 
-        public int Priority => priority;
+        public int  Priority         => priority;
+        public bool ShowActionButton => showActionButton;
 
         private Camera        _cam;
         private BatteryEntity _aimed;

@@ -14,6 +14,10 @@ namespace Bateries
         // Mayor gana el contexto cuando varias acciones están disponibles a la vez.
         int Priority { get; }
 
+        // ¿Mostrar el botón en pantalla cuando esta acción es la activa? (Ej.: recoger
+        // pila = sí; prender/apagar linterna = no, se hace directo con A.)
+        bool ShowActionButton { get; }
+
         // ¿Está disponible ahora? Si sí, devolvé true y el texto para el HUD.
         bool TryResolve(out string label);
 

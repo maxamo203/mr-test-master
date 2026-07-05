@@ -127,7 +127,8 @@ namespace Bateries
 
         private void OnGUI()
         {
-            if (!showActionButton || _current == null || string.IsNullOrEmpty(_currentLabel)) return;
+            if (!showActionButton || _current == null || !_current.ShowActionButton ||
+                string.IsNullOrEmpty(_currentLabel)) return;
 
             EnsureStyles();
             bool pad = GamepadManager.Instance != null && GamepadManager.Instance.IsConnected;
