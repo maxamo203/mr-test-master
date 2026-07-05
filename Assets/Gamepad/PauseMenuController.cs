@@ -68,7 +68,7 @@ namespace Gamepad
 
             // Panel centrado.
             float pw = Mathf.Min(vw - 40f, 560f);
-            float ph = Mathf.Min(vh - 120f, _page == Page.Options ? 760f : 360f);
+            float ph = Mathf.Min(vh - 120f, _page == Page.Options ? 820f : 360f);
             var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
             DrawRect(panel, new Color(0.10f, 0.10f, 0.12f, 0.98f));
 
@@ -86,12 +86,17 @@ namespace Gamepad
             {
                 GUI.Label(new Rect(x, y, w, 50f), "Opciones", _title); y += 60f;
 
-                // Toggle: iluminación del entorno en tiempo real (linterna sobre el espacio
-                // físico; en iPhone con LiDAR usa la malla del ambiente).
-                AddToggle("envlight", new Rect(x, y, w, 56f),
+                // Toggle: efecto de oscurecido/linterna (DarknessOverlay) — para probar.
+                AddToggle("envlight", new Rect(x, y, w, 52f),
                           "Iluminación del entorno (tiempo real)",
                           EnvironmentLightingController.Enabled);
-                y += 70f;
+                y += 62f;
+
+                // Toggle: malla dinámica del entorno (AR/LiDAR) iluminada por la linterna.
+                AddToggle("meshlight", new Rect(x, y, w, 52f),
+                          "Iluminar malla del entorno (LiDAR/AR)",
+                          FlashlightMeshLighting.Enabled);
+                y += 66f;
 
                 // Estado del joystick.
                 var gm = GamepadManager.Instance;
@@ -227,7 +232,8 @@ namespace Gamepad
                 case "opciones": _page = Page.Options; _focus = 0; break;
                 case "reanudar": _open = false; break;
                 case "volver":   _page = Page.Main;  _focus = 0; break;
-                case "envlight": EnvironmentLightingController.Enabled = !EnvironmentLightingController.Enabled; break;
+                case "envlight":  EnvironmentLightingController.Enabled = !EnvironmentLightingController.Enabled; break;
+                case "meshlight": FlashlightMeshLighting.Enabled       = !FlashlightMeshLighting.Enabled;       break;
             }
         }
 
