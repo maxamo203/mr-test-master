@@ -77,4 +77,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 61b55055ed0cd494e8e26437928253bd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Bateries.BatteryEntity
-  rarityIndex: 0
+  rarityIndex: 2
+  addGlow: 1
+  glowRange: 1.6
+  glowIntensity: 2.2
+  pulse: 1
+  pulseSpeed: 2
+  pulseAmount: 0.35

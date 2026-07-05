@@ -82,6 +82,10 @@ namespace Bateries
         {
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
+
+            // Publicar el set de rarezas para que las pilas (incluso en clientes, que no
+            // corren la logica del manager) puedan leer el color/tint de su rareza.
+            if (rarities != null) BatteryRaritySet.Current = rarities;
         }
 
         // Suscribir en Start (no OnEnable) para garantizar que NetworkManager.Instance

@@ -10,24 +10,29 @@ namespace Bateries
     [CreateAssetMenu(fileName = "BatteryRaritySet", menuName = "Bateries/RaritySet")]
     public class BatteryRaritySet : ScriptableObject
     {
+        // Referencia activa para que cualquiera (incluidas las pilas en clientes) pueda
+        // leer los colores/rarezas sin cablear el asset en cada objeto. La setea el
+        // BatterySpawnManager en Awake (existe en la escena en todos los dispositivos).
+        public static BatteryRaritySet Current { get; set; }
+
         [SerializeField] private BatteryRarity[] rarities;
 
         public BatteryRarity[] Rarities => rarities;
 
-        // Elige una rareza al azar ponderada por weight. Devuelve null si no hay
-        // rarezas configuradas o todos los pesos son 0.
+        // Elige una rareza al azar segun spawnChance (probabilidad relativa, se normaliza
+        // sola con la suma). Devuelve null si no hay rarezas o todas tienen chance 0.
         public BatteryRarity WeightedPick()
         {
             if (rarities == null || rarities.Length == 0) return null;
 
             float total = 0f;
-            foreach (var r in rarities) total += Mathf.Max(0f, r.weight);
+            foreach (var r in rarities) total += Mathf.Max(0f, r.spawnChance);
             if (total <= 0f) return rarities[0];
 
             float pick = Random.value * total;
             foreach (var r in rarities)
             {
-                pick -= Mathf.Max(0f, r.weight);
+                pick -= Mathf.Max(0f, r.spawnChance);
                 if (pick <= 0f) return r;
             }
             return rarities[rarities.Length - 1];
@@ -41,6 +46,13 @@ namespace Bateries
             foreach (var r in rarities)
                 if (r.rarityIndex == rarityIndex) return r;
             return null;
+        }
+
+        // Color (tint) de una rareza por indice; blanco si no la encuentra.
+        public Color TintFor(byte rarityIndex)
+        {
+            var r = ByIndex(rarityIndex);
+            return r != null ? r.tint : Color.white;
         }
     }
 }
