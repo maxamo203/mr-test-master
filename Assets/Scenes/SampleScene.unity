@@ -991,7 +991,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 359f44c543fbc9f48bd98d603a496242, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Bateries.BatteryPickupController
-  showActionButton: 0
+  showActionButton: 1
 --- !u!4 &1202678327
 Transform:
   m_ObjectHideFlags: 0

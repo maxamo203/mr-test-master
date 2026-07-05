@@ -38,7 +38,7 @@ namespace Gamepad
 
         // Estilos / texturas IMGUI.
         private static Texture2D _tex;
-        private GUIStyle _btn, _btnFocus, _icon, _title, _status, _battTxt;
+        private GUIStyle _btn, _btnFocus, _icon, _title, _status, _battTxt, _toggleLbl;
 
         private void Awake()
         {
@@ -86,6 +86,13 @@ namespace Gamepad
             {
                 GUI.Label(new Rect(x, y, w, 50f), "Opciones", _title); y += 60f;
 
+                // Toggle: iluminación del entorno en tiempo real (linterna sobre el espacio
+                // físico; en iPhone con LiDAR usa la malla del ambiente).
+                AddToggle("envlight", new Rect(x, y, w, 56f),
+                          "Iluminación del entorno (tiempo real)",
+                          EnvironmentLightingController.Enabled);
+                y += 70f;
+
                 // Estado del joystick.
                 var gm = GamepadManager.Instance;
                 string status = (gm != null && gm.IsConnected)
@@ -121,6 +128,26 @@ namespace Gamepad
         {
             bool focused = _items.Count == _focus;
             GUI.Label(rect, label, focused ? _btnFocus : _btn);
+            UIBlocker.AddVirtualRect(rect);
+            _items.Add(new Item { id = id, rect = rect });
+        }
+
+        // Dibuja una fila con label a la izquierda y un checkbox a la derecha. Se registra
+        // como ítem (tap / South la togglean, igual que un botón).
+        private void AddToggle(string id, Rect rect, string label, bool value)
+        {
+            bool focused = _items.Count == _focus;
+            DrawRect(rect, focused ? new Color(0.95f, 0.85f, 0.20f, 0.30f)
+                                   : new Color(1f, 1f, 1f, 0.07f));
+            GUI.Label(new Rect(rect.x + 14f, rect.y, rect.width - 80f, rect.height), label, _toggleLbl);
+
+            float bs = rect.height * 0.5f;
+            var box = new Rect(rect.xMax - bs - 16f, rect.y + (rect.height - bs) * 0.5f, bs, bs);
+            DrawRect(box, new Color(0.75f, 0.75f, 0.8f));                         // marco
+            float b = Mathf.Max(2f, bs * 0.14f);
+            DrawRect(new Rect(box.x + b, box.y + b, box.width - 2f * b, box.height - 2f * b),
+                     value ? new Color(0.30f, 0.80f, 0.35f) : new Color(0.12f, 0.12f, 0.14f));
+
             UIBlocker.AddVirtualRect(rect);
             _items.Add(new Item { id = id, rect = rect });
         }
@@ -200,6 +227,7 @@ namespace Gamepad
                 case "opciones": _page = Page.Options; _focus = 0; break;
                 case "reanudar": _open = false; break;
                 case "volver":   _page = Page.Main;  _focus = 0; break;
+                case "envlight": EnvironmentLightingController.Enabled = !EnvironmentLightingController.Enabled; break;
             }
         }
 
@@ -267,6 +295,9 @@ namespace Gamepad
 
             _battTxt = new GUIStyle { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
             _battTxt.normal.textColor = Color.white;
+
+            _toggleLbl = new GUIStyle { fontSize = 22, alignment = TextAnchor.MiddleLeft, wordWrap = true };
+            _toggleLbl.normal.textColor = Color.white;
         }
 
         // Dibuja una batería (cuerpo + terminal) con relleno proporcional y el

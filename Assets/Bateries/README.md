@@ -129,6 +129,7 @@ En **`BatteryPickupAction`** (componente auto-agregado junto al `ContextActionCo
 | `Aim Max Distance` | 2.5 | Distancia máx. para apuntar/recoger. |
 | `Aim Angle` | 12 | Semiángulo (°) del cono de apuntado desde el centro. |
 | `Aim Check Interval` | 0.1 | Cada cuánto recalcula la pila apuntada (perf). |
+| `Block Through Walls` | true | No permite apuntar/recoger a través de paredes/muebles (linecast contra layer `Placed`). |
 
 En **`ContextActionController`**: `Show Action Button` (toggle **maestro** del botón en
 pantalla). Además, **cada acción** decide si muestra el botón vía su propio `Show Action
