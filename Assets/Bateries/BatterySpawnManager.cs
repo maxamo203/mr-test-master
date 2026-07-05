@@ -44,12 +44,22 @@ namespace Bateries
         [SerializeField] private float surfaceOffset = 0.06f;
         [Tooltip("Ademas de los muebles, esparcir puntos por el piso en una grilla.")]
         [SerializeField] private bool  scatterOnFloor = false;
+        [Tooltip("Solo poner pilas en piso DESPEJADO: descarta los puntos que tengan un " +
+                 "mueble (cubo) directamente encima.")]
+        [SerializeField] private bool  floorOnlyIfClearAbove = true;
         [Tooltip("Separacion (m) de la grilla del piso.")]
         [SerializeField] private float floorSpacing = 1.5f;
         [Tooltip("Radio (m) alrededor del punto de piso para la grilla.")]
         [SerializeField] private float floorRadius = 3f;
         [Tooltip("Tope de puntos de spawn.")]
         [SerializeField] private int   maxSpawnPoints = 12;
+
+        [Header("Debug")]
+        [Tooltip("Muestra un panel en pantalla (solo host) con el estado del sistema de pilas.")]
+        [SerializeField] private bool _showDebugHud = true;
+
+        // Ultimo estado legible para el HUD de diagnostico.
+        private string _status = "esperando arranque de partida…";
 
         // Estado de un punto de spawn (todo en espacio anchor-relativo).
         private class SpawnPoint
@@ -88,12 +98,17 @@ namespace Bateries
 
         private void HandleGameStarted()
         {
-            if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return;
+            if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer)
+            {
+                _status = "no soy servidor: el sistema de pilas solo corre en el host.";
+                return;
+            }
 
             // Validar el wiring ANTES de arrancar: si falta un prefab o el componente
             // BatteryEntity, no arrancamos (evita el loop infinito de spawns fallidos).
             if (!ValidateSetup())
             {
+                _status = "SETUP INVÁLIDO — ver Console. " + _status;
                 Debug.LogError("[Bateries] Setup inválido: sistema de pilas deshabilitado. " +
                                "Corregí el wiring y volvé a arrancar la partida.");
                 return;
@@ -101,6 +116,7 @@ namespace Bateries
 
             BuildSpawnPoints();
             _started = true;
+            _status  = $"{_points.Count} puntos derivados del escaneo.";
             Debug.Log($"[Bateries] {_points.Count} puntos de spawn derivados del escaneo.");
         }
 
@@ -111,6 +127,7 @@ namespace Bateries
         {
             if (rarities == null || rarities.Rarities == null || rarities.Rarities.Length == 0)
             {
+                _status = "falta el BatteryRaritySet (o no tiene rarezas).";
                 Debug.LogError("[Bateries] Falta asignar un BatteryRaritySet con rarezas en el BatterySpawnManager.");
                 return false;
             }
@@ -118,6 +135,7 @@ namespace Bateries
             var reg = NetworkManager.Instance.PrefabRegistry;
             if (reg == null)
             {
+                _status = "el NetworkManager no tiene PrefabRegistry.";
                 Debug.LogError("[Bateries] El NetworkManager no tiene PrefabRegistry asignado.");
                 return false;
             }
@@ -130,6 +148,7 @@ namespace Bateries
 
                 if (prefab == null)
                 {
+                    _status = $"falta prefab en PrefabRegistry para TypeId {typeId} (rareza '{r.displayName}').";
                     Debug.LogError($"[Bateries] No hay prefab registrado en el PrefabRegistry para " +
                                    $"TypeId {typeId} (rareza '{r.displayName}', rarityIndex {r.rarityIndex}). " +
                                    $"Registrá el prefab de la pila con ese TypeId.");
@@ -137,6 +156,7 @@ namespace Bateries
                 }
                 if (prefab.GetComponent<NetworkEntity>() == null)
                 {
+                    _status = $"el prefab '{prefab.name}' (TypeId {typeId}) no tiene BatteryEntity.";
                     Debug.LogError($"[Bateries] El prefab '{prefab.name}' (TypeId {typeId}) no tiene el " +
                                    $"componente BatteryEntity. Agregáselo al prefab.");
                     return false;
@@ -196,14 +216,42 @@ namespace Bateries
 
         private void ScatterFloorGrid()
         {
+            if (WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady) return;
+
             Vector3 c = FloorPoint.Instance.LocalPosition;
             for (float dx = -floorRadius; dx <= floorRadius; dx += floorSpacing)
             for (float dz = -floorRadius; dz <= floorRadius; dz += floorSpacing)
             {
                 if (_points.Count >= maxSpawnPoints) return;
                 if (dx * dx + dz * dz > floorRadius * floorRadius) continue;
-                AddPointRel(new Vector3(c.x + dx, c.y + surfaceOffset, c.z + dz));
+
+                var rel = new Vector3(c.x + dx, c.y + surfaceOffset, c.z + dz);
+
+                // Requisito: pilas en piso SOLO donde no haya un mueble encima.
+                if (floorOnlyIfClearAbove &&
+                    HasFurnitureAbove(WorldOrigin.Instance.ToWorld(rel)))
+                    continue;
+
+                AddPointRel(rel);
             }
+        }
+
+        // ¿Hay un mueble (cubo escaneado) directamente encima de este punto? Chequeo
+        // geometrico: si el punto cae dentro de la huella XZ de algun cubo, tiene algo
+        // arriba. Usa el espacio local del cubo (InverseTransformPoint contempla la
+        // rotacion/escala), asi no depende de colliders ni de Physics.autoSyncTransforms.
+        private bool HasFurnitureAbove(Vector3 worldPoint)
+        {
+            if (SceneRegistry.Instance == null) return false;
+            foreach (var cube in SceneRegistry.Instance.Cubes)
+            {
+                if (cube == null) continue;
+                Vector3 local = cube.transform.InverseTransformPoint(worldPoint);
+                // El cubo primitivo mide 1 unidad => media-extension 0.5 en cada eje local.
+                if (Mathf.Abs(local.x) <= 0.5f && Mathf.Abs(local.z) <= 0.5f)
+                    return true;
+            }
+            return false;
         }
 
         private void AddPoint(Vector3 worldPos)
@@ -329,6 +377,34 @@ namespace Bateries
                 NetworkManager.Instance.ServerSendBatteryCollected(clientId, rarityIndex, charge);
 
             Debug.Log($"[Bateries] Pila {batteryNetId} (rareza {rarityIndex}) recogida por cliente {clientId}, +{charge} carga.");
+        }
+
+        // ── HUD de diagnostico ────────────────────────────────────────────────
+
+        private void OnGUI()
+        {
+            if (!_showDebugHud) return;
+
+            var net       = NetworkManager.Instance;
+            bool isServer = net != null && net.IsServer;
+            bool started  = net != null && net.GameStarted;
+            bool woReady  = WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady;
+
+            string txt =
+                $"[Bateries]\n" +
+                $"NetworkManager: {(net != null ? "OK" : "NULL")}   Server: {isServer}   GameStarted: {started}\n" +
+                $"WorldOrigin ready: {woReady}   Camera.main: {(Camera.main != null)}\n" +
+                $"RaritySet: {(rarities != null ? "OK" : "FALTA")}   Puntos: {_points.Count}   Activas: {_byNetId.Count}\n" +
+                $"Estado: {_status}";
+
+            var style = new GUIStyle(GUI.skin.box)
+            {
+                fontSize  = 20,
+                alignment = TextAnchor.UpperLeft,
+                wordWrap  = true,
+            };
+            style.normal.textColor = Color.white;
+            GUI.Box(new Rect(10, 120, 620, 150), txt, style);
         }
     }
 }
