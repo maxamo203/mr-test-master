@@ -40,16 +40,19 @@ public class ARImageAnchor : MonoBehaviour
 
     // Al detectar la imagen, ARKit/ARCore sigue refinando su pose unos frames: anclar con
     // UN solo frame da un rumbo (yaw) ligeramente distinto cada vez y la escena queda
-    // rotada respecto al escaneo original. Promediamos la pose de la imagen durante una
-    // ventana corta (mientras esté Tracking) para que el rumbo/centro sean consistentes.
-    [Tooltip("Segundos que se promedia la pose de la imagen antes de anclar (consistencia del rumbo).")]
-    [SerializeField] private float _stabilizeSeconds = 0.4f;
-    [Tooltip("Muestras mínimas antes de anclar (además de la ventana de tiempo).")]
+    // rotada respecto al escaneo original. Promediamos varias muestras de la pose antes de
+    // anclar. NO hace falta que los frames Tracking sean seguidos: si la imagen se ve a
+    // ratos, igual vamos acumulando; así funciona con fragmentos que trackean intermitente.
+    [Tooltip("Muestras (frames en Tracking, NO necesariamente seguidos) a promediar antes de anclar.")]
     [SerializeField] private int   _minSamples = 5;
-    private bool    _sampling;
-    private float   _sampleStart;
+    [Tooltip("Fallback: si la imagen se ve solo a ratos, anclar igual pasado este tiempo " +
+             "(s) desde la 1ª muestra, con lo que se haya juntado.")]
+    [SerializeField] private float _maxSampleWait = 2.5f;
     private int     _sampleCount;
+    private float   _sampleStart;
     private Vector3 _accumYaw, _accumPos;
+
+    private void ResetSampling() { _sampleCount = 0; _accumYaw = Vector3.zero; _accumPos = Vector3.zero; }
 
     private void Awake()
     {
@@ -66,6 +69,7 @@ public class ARImageAnchor : MonoBehaviour
     public void StartTracking()
     {
         _searchSince = Time.time;
+        ResetSampling();
 #if UNITY_EDITOR
         StartCoroutine(EditorStub());
 #else
@@ -97,6 +101,7 @@ public class ARImageAnchor : MonoBehaviour
         _anchor = null;
 
         _searchSince = Time.time;
+        ResetSampling();
 #if UNITY_EDITOR
         StartCoroutine(EditorStub());
 #else
@@ -116,33 +121,36 @@ public class ARImageAnchor : MonoBehaviour
         // Calibrating y ARKit/ARCore actualiza la pose de la imagen antes de anclar.
         if (Time.time - _searchSince < _reacquireDelay) return;
 
-        // Buscar la imagen en estado Tracking.
+        // Buscar la imagen en estado Tracking (si hay una este frame).
         Transform tracked = null;
         foreach (var img in _imageManager.trackables)
             if (img.trackingState == TrackingState.Tracking) { tracked = img.transform; break; }
 
-        if (tracked == null) { _sampling = false; return; } // sin tracking estable: seguir buscando
-
-        // Acumular la pose durante _stabilizeSeconds para promediar el ruido de la detección.
-        if (!_sampling)
+        // Si la imagen se ve este frame, acumular una muestra. NO reseteamos cuando NO se
+        // ve: seguimos juntando entre frames aunque el tracking sea intermitente.
+        if (tracked != null)
         {
-            _sampling = true; _sampleStart = Time.time; _sampleCount = 0;
-            _accumYaw = Vector3.zero; _accumPos = Vector3.zero;
+            if (_sampleCount == 0) _sampleStart = Time.time; // primera muestra
+
+            Vector3 yawAxis = HorizontalYawAxis(tracked);
+            // Evitar que un flip de 180° del eje entre frames cancele el promedio.
+            if (_sampleCount > 0 && Vector3.Dot(yawAxis, _accumYaw) < 0f) yawAxis = -yawAxis;
+            _accumYaw += yawAxis;
+            _accumPos += tracked.position;
+            _sampleCount++;
         }
 
-        Vector3 yawAxis = HorizontalYawAxis(tracked);
-        // Evitar que un flip de 180° del eje entre frames cancele el promedio.
-        if (_sampleCount > 0 && Vector3.Dot(yawAxis, _accumYaw) < 0f) yawAxis = -yawAxis;
-        _accumYaw += yawAxis;
-        _accumPos += tracked.position;
-        _sampleCount++;
+        if (_sampleCount == 0) return; // todavía no se vio la imagen ni una vez
 
-        if (Time.time - _sampleStart < _stabilizeSeconds || _sampleCount < _minSamples) return;
+        // Anclar cuando junte suficientes muestras (aunque no hayan sido seguidas), o como
+        // fallback pasado _maxSampleWait desde la primera (para imágenes que trackean poco).
+        bool enough   = _sampleCount >= _minSamples;
+        bool timedOut = (Time.time - _sampleStart) >= _maxSampleWait;
+        if (!enough && !timedOut) return;
 
         // Anclar con la pose promediada (más estable/consistente que un solo frame).
         PlaceAnchorAndSpawn(_accumPos / _sampleCount, UprightFromYaw(_accumYaw));
         IsFound = true;
-        _sampling = false;
 
         if (!_foundEverFired)
         {
