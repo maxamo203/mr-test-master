@@ -21,22 +21,31 @@ namespace Bateries
 
         // Elige una rareza al azar segun spawnChance (probabilidad relativa, se normaliza
         // sola con la suma). Devuelve null si no hay rarezas o todas tienen chance 0.
-        public BatteryRarity WeightedPick()
+        public BatteryRarity WeightedPick() => WeightedPick(null);
+
+        // Igual que WeightedPick pero escalando la probabilidad base de cada rareza por
+        // chanceScale(rarityIndex) — asi cada noche modifica la distribucion base sin
+        // redefinirla (ver Gameplay.NightConfig.BatteryChanceScale). null => sin escala.
+        public BatteryRarity WeightedPick(System.Func<byte, float> chanceScale)
         {
             if (rarities == null || rarities.Length == 0) return null;
 
             float total = 0f;
-            foreach (var r in rarities) total += Mathf.Max(0f, r.spawnChance);
+            foreach (var r in rarities)
+                total += Mathf.Max(0f, r.spawnChance) * Scale(chanceScale, r.rarityIndex);
             if (total <= 0f) return rarities[0];
 
             float pick = Random.value * total;
             foreach (var r in rarities)
             {
-                pick -= Mathf.Max(0f, r.spawnChance);
+                pick -= Mathf.Max(0f, r.spawnChance) * Scale(chanceScale, r.rarityIndex);
                 if (pick <= 0f) return r;
             }
             return rarities[rarities.Length - 1];
         }
+
+        private static float Scale(System.Func<byte, float> chanceScale, byte idx)
+            => chanceScale != null ? Mathf.Max(0f, chanceScale(idx)) : 1f;
 
         // Busca la rareza por su indice (para acreditar la carga al recoger, ya que
         // el mensaje de red solo lleva el rarityIndex).

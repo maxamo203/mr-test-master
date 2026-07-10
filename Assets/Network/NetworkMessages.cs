@@ -170,19 +170,46 @@ public class PlayerInputMsg
 public class PlayerPoseMsg
 {
     public Vector3 RelPos;
+    // Estado de la linterna del jugador (para que el server, autoritativo, drene la
+    // cordura de cada jugador cuando su linterna esta apagada).
+    public bool FlashlightOn;
 
     public byte[] Serialize()
     {
-        using var ms = new MemoryStream(12);
+        using var ms = new MemoryStream(13);
         using var w  = new BinaryWriter(ms);
         MsgHelper.WriteV3(w, RelPos);
+        w.Write(FlashlightOn);
         return ms.ToArray();
     }
 
     public static PlayerPoseMsg Deserialize(byte[] d)
     {
         using var r = new BinaryReader(new MemoryStream(d));
-        return new() { RelPos = MsgHelper.ReadV3(r) };
+        return new() { RelPos = MsgHelper.ReadV3(r), FlashlightOn = r.ReadBoolean() };
+    }
+}
+
+// server → client: la cordura autoritativa del jugador de ese cliente. El server la
+// calcula (drena si su linterna esta apagada mas de lo permitido) y la envia; el
+// cliente solo la muestra (barra + distorsion). No es recuperable.
+public class PlayerSanityMsg
+{
+    public float Sanity;
+    public float Max;
+
+    public byte[] Serialize()
+    {
+        using var ms = new MemoryStream(8);
+        using var w  = new BinaryWriter(ms);
+        w.Write(Sanity); w.Write(Max);
+        return ms.ToArray();
+    }
+
+    public static PlayerSanityMsg Deserialize(byte[] d)
+    {
+        using var r = new BinaryReader(new MemoryStream(d));
+        return new() { Sanity = r.ReadSingle(), Max = r.ReadSingle() };
     }
 }
 

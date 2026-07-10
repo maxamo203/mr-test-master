@@ -12,4 +12,5 @@ public enum MessageType : ushort
     PlayerPose      = 10,  // client → server: pose anchor-relativa de la camara AR (por tick)
     BatteryPickup   = 11,  // client → server: pedido de recoger una pila apuntada
     BatteryCollected = 12, // server → client: la pila se recogio, sumar carga a la linterna
+    PlayerSanity    = 13,  // server → client: cordura autoritativa del jugador (por dispositivo)
 }

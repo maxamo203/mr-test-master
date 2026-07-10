@@ -18,6 +18,8 @@ public class FlashlightHUD : MonoBehaviour
     private void OnGUI()
     {
         if (!showChargeBar || _fl == null) return;
+        // Fuera de partida la linterna no opera: tampoco mostramos su barra.
+        if (!_fl.Operational) return;
 
         // Estilo cacheado (crear GUIStyle en cada OnGUI genera GC).
         if (!_styleReady) { _labelStyle = new GUIStyle(GUI.skin.label); _styleReady = true; }

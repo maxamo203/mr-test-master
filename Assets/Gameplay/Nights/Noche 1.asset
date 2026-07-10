@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
+  m_Name: Noche 1
+  m_EditorClassIdentifier:
+  displayName: Noche 1
+  attemptIntervalMin: 22
+  attemptIntervalMax: 38
+  entryRepelSeconds: 3
+  entryGraceSeconds: 6
+  entryTriggerDistance: 3
+  chaseRepelSeconds: 5
+  sorkenChaseSpeed: 2.2
+  grabRange: 1.2
+  flashlightMaxCharge: 120
+  flashlightDrainPerSecond: 1.8
+  sanityMax: 100
+  flashlightOffThreshold: 6
+  sanityDrainPerSecond: 3
+  flickerAimAngle: 20
+  flickerDistance: 6
+  batterySpawnRateMultiplier: 1.2
+  batteryChanceMods: []

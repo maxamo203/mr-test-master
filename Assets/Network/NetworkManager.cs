@@ -38,6 +38,11 @@ public class NetworkManager : MonoBehaviour
     // Server: ultima pose anchor-relativa reportada por cada cliente (por PlayerPose).
     // El host se conoce por Camera.main aparte. Lo usa el sistema de pilas.
     private readonly Dictionary<uint, Vector3> _clientRelPos   = new();
+    // Server: ultimo estado de linterna (on/off) reportado por cada cliente. Lo usa el
+    // SanitySystem para drenar la cordura del jugador cuando su linterna esta apagada.
+    private readonly Dictionary<uint, bool>    _clientFlashOn  = new();
+    // Cache de la linterna local (para adjuntar su estado al PlayerPose que enviamos).
+    private Flashlight _localFlashlight;
 
     private float _tickTimer;
 
@@ -50,6 +55,30 @@ public class NetworkManager : MonoBehaviour
     public event Action         OnGameStarted;         // todos: partida arrancó
     public event Action<byte[]> OnMapReceived;         // client: recibió el .mscn del mapa
     public event Action<byte, float> OnBatteryCollected; // client: recogió pila (rarityIndex, charge)
+    public event Action<float, float> OnSanityUpdated;    // client: cordura autoritativa (valor, max)
+
+    // Server: clientes remotos conectados (no incluye al host, que es clientId 0).
+    public IReadOnlyCollection<uint> ConnectedClients => _connectedClients;
+
+    // Server: ultimo estado de linterna reportado por un cliente. false si nunca reportó
+    // (el llamador decide el default; el SanitySystem asume "encendida" = no drena).
+    public bool TryGetClientFlashlightOn(uint clientId, out bool on) =>
+        _clientFlashOn.TryGetValue(clientId, out on);
+
+    // Server → cliente puntual: su cordura autoritativa (la calcula el SanitySystem).
+    public void ServerSendSanity(uint clientId, float sanity, float max)
+    {
+        if (_srv == null) return;
+        var body = new PlayerSanityMsg { Sanity = sanity, Max = max }.Serialize();
+        _srv.Send(clientId, MsgHelper.Frame(MessageType.PlayerSanity, body));
+    }
+
+    // Estado de la linterna local de este dispositivo (para reportarla al server).
+    public bool LocalFlashlightOn()
+    {
+        if (_localFlashlight == null) _localFlashlight = FindFirstObjectByType<Flashlight>();
+        return _localFlashlight != null && _localFlashlight.isOn;
+    }
 
     // ── Public API ────────────────────────────────────────────────────────
 
@@ -296,6 +325,7 @@ public class NetworkManager : MonoBehaviour
         _connectedClients.Remove(clientId);
         _resolvedClients.Remove(clientId);
         _clientRelPos.Remove(clientId);
+        _clientFlashOn.Remove(clientId);
 
         if (_clientToPlayer.TryGetValue(clientId, out var playerId))
         {
@@ -329,7 +359,8 @@ public class NetworkManager : MonoBehaviour
             case MessageType.PlayerPose:
             {
                 var pose = PlayerPoseMsg.Deserialize(incoming.Body);
-                _clientRelPos[incoming.ClientId] = pose.RelPos;
+                _clientRelPos[incoming.ClientId]  = pose.RelPos;
+                _clientFlashOn[incoming.ClientId] = pose.FlashlightOn;
                 break;
             }
             case MessageType.BatteryPickup:
@@ -373,7 +404,8 @@ public class NetworkManager : MonoBehaviour
         if (Camera.main != null && WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady)
         {
             var relPos = WorldOrigin.Instance.ToRelative(Camera.main.transform.position);
-            _cli.Send(MsgHelper.Frame(MessageType.PlayerPose, new PlayerPoseMsg { RelPos = relPos }.Serialize()));
+            _cli.Send(MsgHelper.Frame(MessageType.PlayerPose,
+                new PlayerPoseMsg { RelPos = relPos, FlashlightOn = LocalFlashlightOn() }.Serialize()));
         }
 
         foreach (var entity in EntityRegistry.Instance.All)
@@ -439,6 +471,12 @@ public class NetworkManager : MonoBehaviour
             {
                 var m = Bateries.BatteryCollectedMsg.Deserialize(msg.Body);
                 OnBatteryCollected?.Invoke(m.RarityIndex, m.Charge);
+                break;
+            }
+            case MessageType.PlayerSanity:
+            {
+                var m = PlayerSanityMsg.Deserialize(msg.Body);
+                OnSanityUpdated?.Invoke(m.Sanity, m.Max);
                 break;
             }
         }

@@ -35,6 +35,17 @@ public class Flashlight : MonoBehaviour
     public bool isOn = true;
     [Tooltip("Toggle con touch (toca con 2 dedos para alternar)")]
     public bool toggleWithTwoFingers = true;
+    [Tooltip("La linterna solo funciona con la partida arrancada (NetworkManager.GameStarted). " +
+             "Fuera de partida (menu/lobby) queda apagada e ignora el toggle.")]
+    public bool requireMatchToOperate = true;
+
+    // True si la linterna puede operar ahora (en partida, o si no se exige partida).
+    private bool CanOperate =>
+        !requireMatchToOperate ||
+        (NetworkManager.Instance != null && NetworkManager.Instance.GameStarted);
+
+    // Publico para la UI (FlashlightHUD): no mostrar nada fuera de partida.
+    public bool Operational => CanOperate;
 
     // Fraccion de carga restante (0..1), para HUD.
     public float Charge01 => maxCharge > 0f ? Mathf.Clamp01(currentCharge / maxCharge) : 0f;
@@ -50,6 +61,7 @@ public class Flashlight : MonoBehaviour
     // (lo usan el gesto de 2 dedos y la acción del botón A / ContextActionController).
     public void Toggle()
     {
+        if (!CanOperate) return;      // fuera de partida no se prende
         if (!isOn && IsEmpty) return;
         isOn = !isOn;
     }
@@ -82,6 +94,17 @@ public class Flashlight : MonoBehaviour
 
     void Update()
     {
+        // Fuera de partida la linterna no funciona: suprimir su salida (sin tocar isOn,
+        // asi al arrancar la partida queda encendida por defecto). El toggle esta
+        // bloqueado por CanOperate, y no se drena bateria aca.
+        if (!CanOperate)
+        {
+            Shader.SetGlobalFloat(ID_INTENSITY, 0f);
+            Shader.SetGlobalFloat(ID_DARKNESS, 1f);
+            if (_light != null) _light.enabled = false;
+            return;
+        }
+
         HandleToggle();
 
         // Drenar la batería mientras está encendida; apagar al agotarse.
