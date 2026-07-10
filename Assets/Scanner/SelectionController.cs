@@ -194,6 +194,16 @@ namespace Scanner
                     if (d < bestHandleDist) { bestHandleDist = d; handleHit = FloorPoint.Instance; }
                 }
             }
+            // Marcadores (esferas sobre paredes): mismo picking screen-space que los handles.
+            foreach (var mk in FindObjectsByType<MarkerObject>(FindObjectsSortMode.None))
+            {
+                if (mk == null) continue;
+                handlesChecked++;
+                var sp = _camera.WorldToScreenPoint(mk.transform.position);
+                if (sp.z <= 0f) continue;
+                var d = Vector2.Distance(new Vector2(sp.x, sp.y), screenPoint);
+                if (d < bestHandleDist) { bestHandleDist = d; handleHit = mk; }
+            }
 
             var ray = _camera.ScreenPointToRay(screenPoint);
 

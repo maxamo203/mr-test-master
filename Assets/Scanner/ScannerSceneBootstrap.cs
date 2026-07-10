@@ -11,8 +11,8 @@ namespace Scanner
     //
     // Pegalo en un GameObject "ScannerRoot" en la escena junto con:
     //   ScanStateMachine, SceneRegistry, RaycastResolver, TransformGizmoController,
-    //   WallBuilder, DoorBuilder, CubeBuilder, ReticleController, EditPanelUI,
-    //   SaveLoadUI, RecalibrateButton, SelectionController.
+    //   WallBuilder, DoorBuilder, CubeBuilder, MarkerBuilder, ReticleController,
+    //   EditPanelUI, SaveLoadUI, RecalibrateButton, SelectionController.
     [DefaultExecutionOrder(-100)]
     public class ScannerSceneBootstrap : MonoBehaviour
     {

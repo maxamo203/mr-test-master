@@ -10,10 +10,17 @@ namespace Scanner
         [SerializeField] private WallBuilder _wallBuilder;
         [SerializeField] private DoorBuilder _doorBuilder;
         [SerializeField] private CubeBuilder _cubeBuilder;
+        [SerializeField] private MarkerBuilder _markerBuilder;
 
         private ScanStateMachine _fsm;
         private ResolvedHit _lastHit;
         private Camera _camera;
+
+        // Submenu de "Identificar" (marcadores) abierto en el panel de modos.
+        private bool _markerSubmenuOpen;
+        // Rect (local al area de modos) del boton "Identificar", para colgar el
+        // submenu a su derecha y centrado en el.
+        private Rect _identBtnLocalRect;
 
         // Si al terminar la polilinea se cierra el bucle (ultimo vertice -> primero).
         // En memoria: se mantiene entre polilineas, no persiste entre sesiones.
@@ -26,6 +33,7 @@ namespace Scanner
             if (_wallBuilder == null) _wallBuilder = FindFirstObjectByType<WallBuilder>();
             if (_doorBuilder == null) _doorBuilder = FindFirstObjectByType<DoorBuilder>();
             if (_cubeBuilder == null) _cubeBuilder = FindFirstObjectByType<CubeBuilder>();
+            if (_markerBuilder == null) _markerBuilder = FindFirstObjectByType<MarkerBuilder>();
 
             // Fantasma en vivo de lo que se va a colocar. Lo instanciamos acá para no
             // tener que cablearlo en la escena (encuentra los builders por su cuenta).
@@ -43,7 +51,7 @@ namespace Scanner
             m == ScannerMode.Wall_V1 || m == ScannerMode.Wall_Height || m == ScannerMode.Wall_Vn ||
             m == ScannerMode.Door_V1 || m == ScannerMode.Door_V2 ||
             m == ScannerMode.Cube_V1 || m == ScannerMode.Cube_V2 || m == ScannerMode.Cube_V3 ||
-            m == ScannerMode.Floor_Place || m == ScannerMode.EditMoveTarget;
+            m == ScannerMode.Floor_Place || m == ScannerMode.Marker_Place || m == ScannerMode.EditMoveTarget;
 
         private static Texture2D _bgTex;
         private static Texture2D BG()
@@ -94,6 +102,10 @@ namespace Scanner
             DrawModeButtons();
             GUILayout.EndArea();
 
+            // Submenu de "Identificar": colgado a la DERECHA del boton, centrado en el.
+            if (_markerSubmenuOpen && _fsm.Current == ScannerMode.Idle && _markerBuilder != null)
+                DrawMarkerSubmenu(modeArea);
+
             // ── Boton Colocar (centro inferior, grande, solo en modos placing)
             if (IsPlacingMode(_fsm.Current))
             {
@@ -129,6 +141,16 @@ namespace Scanner
             if (GUILayout.Button("Cubo",              GUILayout.Height(50))) _cubeBuilder?.StartCube();
             string pisoLabel = FloorPoint.Instance != null ? "Piso (reubicar)" : "Piso";
             if (GUILayout.Button(pisoLabel,           GUILayout.Height(50))) _fsm.SetMode(ScannerMode.Floor_Place);
+
+            // "Identificar": un unico boton que despliega un submenu con los tipos de
+            // marcador (puerta/ventana/...), en vez de un boton por tipo. Las opciones
+            // salen a la DERECHA del boton (no debajo) — se dibujan en DrawMarkerSubmenu
+            // fuera de este area. El submenu se arma solo desde el MarkerCatalog.
+            if (GUILayout.Button(_markerSubmenuOpen ? "Identificar (-)" : "Identificar (+)",
+                                 GUILayout.Height(50)))
+                _markerSubmenuOpen = !_markerSubmenuOpen;
+            if (Event.current.type == EventType.Repaint)
+                _identBtnLocalRect = GUILayoutUtility.GetLastRect();
 
             bool inWall = _fsm.Current == ScannerMode.Wall_V1
                        || _fsm.Current == ScannerMode.Wall_Height
@@ -185,6 +207,16 @@ namespace Scanner
                 GUILayout.Label("Apunta al piso real y COLOCAR\n(podes reubicarlo despues arrastrandolo)", floorHint);
             }
 
+            // Hint del flujo de marcador (identificar puerta/ventana sobre una pared).
+            if (_fsm.Current == ScannerMode.Marker_Place)
+            {
+                GUI.enabled = true;
+                var mkHint = new GUIStyle { fontSize = 18, normal = { textColor = Color.yellow } };
+                string tipo = _markerBuilder != null && _markerBuilder.PendingType != null
+                    ? _markerBuilder.PendingType.DisplayName : "";
+                GUILayout.Label($"Apunta a la PARED donde hay {tipo} y COLOCAR", mkHint);
+            }
+
             GUI.enabled = _fsm.Current != ScannerMode.Idle && _fsm.Current != ScannerMode.Selected;
             if (GUILayout.Button("Cancelar", GUILayout.Height(40))) _fsm.SetMode(ScannerMode.Idle);
 
@@ -192,6 +224,47 @@ namespace Scanner
 
             // Ubicacion virtual del jugador, en coordenadas relativas al anchor.
             DrawPlayerLocation();
+        }
+
+        // Panel flotante con los tipos de marcador, a la derecha del boton
+        // "Identificar" y centrado verticalmente en el. _identBtnLocalRect esta en
+        // coords locales al area de modos; le sumamos la posicion del area.
+        private void DrawMarkerSubmenu(Rect modeArea)
+        {
+            var catalog = _markerBuilder != null ? _markerBuilder.Catalog : null;
+            var types = catalog != null ? catalog.Types : null;
+            int n = types != null ? types.Count : 0;
+            const float bw = 180f, bh = 46f, gap = 6f;
+
+            float btnCenterY = modeArea.y + _identBtnLocalRect.y + _identBtnLocalRect.height * 0.5f;
+            float x = modeArea.xMax + 8f;
+
+            if (n == 0)
+            {
+                var r = new Rect(x, btnCenterY - 24f, bw + 40f, 48f);
+                UIBlocker.AddVirtualRect(r);
+                GUI.Box(r, "Catalogo vacio", new GUIStyle(GUI.skin.box) { normal = { textColor = Color.white, background = BG() } });
+                return;
+            }
+
+            float totalH = n * bh + (n - 1) * gap;
+            float y = btnCenterY - totalH * 0.5f;
+
+            var panel = new Rect(x - 4f, y - 4f, bw + 8f, totalH + 8f);
+            UIBlocker.AddVirtualRect(panel);
+            GUI.Box(panel, GUIContent.none, new GUIStyle(GUI.skin.box) { normal = { background = BG() } });
+
+            float cy = y;
+            foreach (var t in types)
+            {
+                if (t == null) { cy += bh + gap; continue; }
+                if (GUI.Button(new Rect(x, cy, bw, bh), t.DisplayName))
+                {
+                    _markerBuilder.StartMarker(t);
+                    _markerSubmenuOpen = false;
+                }
+                cy += bh + gap;
+            }
         }
 
         private void DrawPlayerLocation()
@@ -238,6 +311,9 @@ namespace Scanner
                 case ScannerMode.Floor_Place:
                     PlaceFloorAtCurrentReticle();
                     break;
+                case ScannerMode.Marker_Place:
+                    _markerBuilder?.PlaceAtCurrentReticle();
+                    break;
                 case ScannerMode.EditMoveTarget:
                     MoveTargetToCurrentReticle();
                     break;
@@ -259,6 +335,19 @@ namespace Scanner
             if (sel == null) { _fsm.SetMode(ScannerMode.Idle); return; }
             var hit = RaycastResolver.Instance.ResolveFromScreenCenter();
             if (!hit.Hit) return;
+
+            // El marcador se mueve relativo a SU pared: usamos el mismo raycast fisico
+            // contra la pared que la colocacion (NO el hit AR, que no cae sobre la
+            // pared y dejaba el marcador corrido). No salta a otra pared ni cambia de cara.
+            if (sel is MarkerObject marker)
+            {
+                var mwall = marker.Wall;
+                if (mwall != null && _markerBuilder != null &&
+                    _markerBuilder.TryResolveOnSpecificWall(mwall, out var mu, out var mv))
+                    marker.SetUV(mu, mv);
+                _fsm.SetMode(ScannerMode.Selected);
+                return;
+            }
 
             var local = WorldOrigin.Instance.ToRelative(hit.Position);
             if (sel is CubeObject cube)

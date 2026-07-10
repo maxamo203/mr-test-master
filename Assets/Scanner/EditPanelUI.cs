@@ -25,8 +25,9 @@ namespace Scanner
                 TransformGizmoController.Instance.Attach(cube.transform, moveOnly: false);
             // Para los handles-esfera (WallVertex/CubeVertex/Door/Floor) y para Wall
             // el gizmo lo maneja el propio objeto en su OnSelect (Wall crea el
-            // PolylineMoveHandle). Solo detachamos cuando no hay nada seleccionado.
-            else if (sel == null)
+            // PolylineMoveHandle). El marcador no usa gizmo (se mueve con la reticula),
+            // asi que detachamos cualquier gizmo colgado de una seleccion previa.
+            else if (sel == null || sel is MarkerObject)
                 TransformGizmoController.Instance?.Detach();
         }
 
@@ -96,6 +97,31 @@ namespace Scanner
                 GUILayout.EndArea();
                 if (delFloor)       floor.Delete();
                 else if (doneFloor) _fsm.ClearSelection();
+                return;
+            }
+
+            // Marcador (puerta/ventana/...): cambiar tipo, mover sobre su pared, borrar.
+            if (sel is MarkerObject marker)
+            {
+                GUILayout.Label($"Tipo: {(marker.Type != null ? marker.Type.DisplayName : "?")}");
+                var catalog = MarkerCatalog.Active;
+                if (catalog != null)
+                    foreach (var t in catalog.Types)
+                    {
+                        if (t == null || t == marker.Type) continue;
+                        if (GUILayout.Button($"Cambiar a {t.DisplayName}", GUILayout.Height(42)))
+                            marker.SetType(t);
+                    }
+                GUILayout.Space(6);
+                GUILayout.Label("Se mueve sobre la pared\n(no puede salir de ella).");
+                if (GUILayout.Button("Mover", GUILayout.Height(50)))
+                    _fsm.SetMode(ScannerMode.EditMoveTarget);
+                GUILayout.FlexibleSpace();
+                bool delMarker  = GUILayout.Button("Borrar", GUILayout.Height(50));
+                bool doneMarker = GUILayout.Button("Deseleccionar", GUILayout.Height(40));
+                GUILayout.EndArea();
+                if (delMarker)       marker.Delete();
+                else if (doneMarker) _fsm.ClearSelection();
                 return;
             }
 

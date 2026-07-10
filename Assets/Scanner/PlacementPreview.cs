@@ -26,6 +26,7 @@ namespace Scanner
         private WallBuilder _wall;
         private DoorBuilder _door;
         private CubeBuilder _cube;
+        private MarkerBuilder _markerBuilder;
 
         private GameObject _marker;   // esfera para previews de un solo punto
         private GameObject _box;      // primitiva cubo (cubo / pilar de altura / mover-cubo)
@@ -39,6 +40,7 @@ namespace Scanner
             _wall = FindFirstObjectByType<WallBuilder>();
             _door = FindFirstObjectByType<DoorBuilder>();
             _cube = FindFirstObjectByType<CubeBuilder>();
+            _markerBuilder = FindFirstObjectByType<MarkerBuilder>();
         }
 
         private void Update()
@@ -95,6 +97,17 @@ namespace Scanner
                     ShowMarker(local, 0.12f, FloorColor);
                     break;
 
+                case ScannerMode.Marker_Place:
+                    // Fantasma sobre la cara de la pared que estas mirando, con el color del tipo.
+                    if (_markerBuilder != null &&
+                        _markerBuilder.TryResolveOnWall(out var mw, out var mu, out var mv, out var mSign))
+                    {
+                        var lp = MarkerObject.FacePosition(mw, mu, mv, mSign);
+                        var col = _markerBuilder.PendingType != null ? _markerBuilder.PendingType.Color : Color.white;
+                        ShowMarker(lp, 0.10f, col);
+                    }
+                    break;
+
                 case ScannerMode.Door_V1:
                     ShowDoorMarker(hit.Position, local);
                     break;
@@ -113,7 +126,7 @@ namespace Scanner
             m == ScannerMode.Wall_V1 || m == ScannerMode.Wall_Height || m == ScannerMode.Wall_Vn ||
             m == ScannerMode.Cube_V1 || m == ScannerMode.Cube_V2 || m == ScannerMode.Cube_V3 ||
             m == ScannerMode.Door_V1 || m == ScannerMode.Door_V2 ||
-            m == ScannerMode.Floor_Place || m == ScannerMode.EditMoveTarget;
+            m == ScannerMode.Floor_Place || m == ScannerMode.Marker_Place || m == ScannerMode.EditMoveTarget;
 
         // ── Helpers de cada preview ────────────────────────────────────────────
 
@@ -184,6 +197,14 @@ namespace Scanner
                 }
                 case FloorPoint _:
                     ShowMarker(local, 0.12f, FloorColor);
+                    break;
+                case MarkerObject marker:
+                    // Mismo raycast sobre la pared que el move real (no el hit AR),
+                    // asi el fantasma cae donde va a quedar el marcador.
+                    if (_markerBuilder != null && marker.Wall != null &&
+                        _markerBuilder.TryResolveOnSpecificWall(marker.Wall, out var mu, out var mv))
+                        ShowMarker(MarkerObject.FacePosition(marker.Wall, mu, mv, marker.FaceSign),
+                                   0.10f, marker.Type != null ? marker.Type.Color : Color.white);
                     break;
             }
         }

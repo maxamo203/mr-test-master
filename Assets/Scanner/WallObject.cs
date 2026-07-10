@@ -50,6 +50,9 @@ namespace Scanner
         private readonly List<DoorData> _doors = new();
         // Handles de esquina de las puertas (2 por puerta: piso + libre).
         private readonly List<DoorHandle> _doorHandles = new();
+        // Marcadores (puntos de interes) asociados a esta pared. Se re-sincronizan
+        // en cada Rebuild() para que sigan a la pared, y se borran con ella.
+        private readonly List<MarkerObject> _markers = new();
         private MeshFilter   _mf;
         private MeshRenderer _mr;
         private MeshCollider _mc;
@@ -287,6 +290,24 @@ namespace Scanner
             Rebuild();
         }
 
+        // ── Marcadores (puntos de interes) ────────────────────────────────────
+        public void AddMarker(MarkerObject m)    { if (m != null && !_markers.Contains(m)) _markers.Add(m); }
+        public void RemoveMarker(MarkerObject m) { _markers.Remove(m); }
+
+        private void SyncMarkers()
+        {
+            for (int i = 0; i < _markers.Count; i++)
+                if (_markers[i] != null) _markers[i].SyncToWall();
+        }
+
+        private void DeleteMarkers()
+        {
+            // Copia: Delete() modifica _markers via RemoveMarker.
+            var copy = _markers.ToArray();
+            foreach (var m in copy) if (m != null) m.Delete();
+            _markers.Clear();
+        }
+
         // ── Puertas: handles de esquina ───────────────────────────────────────
         public DoorData GetDoor(string id)
         {
@@ -375,6 +396,10 @@ namespace Scanner
                 // vacios — al separar los vertices se rebuild y reaparece.
                 _mf.sharedMesh = null;
             }
+
+            // Los marcadores viven relativos a la pared: re-sincronizarlos aca hace
+            // que sigan cualquier edicion (mover vertice/altura/ancho/polilinea).
+            SyncMarkers();
         }
 
         private void EnsureMaterials()
@@ -439,6 +464,7 @@ namespace Scanner
         public void Delete()
         {
             SceneRegistry.Instance?.Unregister(this);
+            DeleteMarkers();
             for (int i = 0; i < _handles.Length; i++)
                 if (_handles[i] != null) Destroy(_handles[i].gameObject);
             DestroyDoorHandles();

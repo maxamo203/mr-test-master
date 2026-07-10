@@ -52,6 +52,19 @@ namespace Scanner
     }
 
     [Serializable]
+    public class MarkerData
+    {
+        public string id;
+        public string kind;    // Id del MarkerType (asset). Ej: "Door", "Window".
+        public string wallId;  // pared duena: el marcador es relativo a ella.
+        public float u, v;     // offset sobre la cara de la pared (0..Length, 0..Height).
+        // Cara de la pared donde vive: +1 = lado +Normal, -1 = lado -Normal. Se
+        // decide por el lado desde el que lo mirabas al colocarlo. Cada lado es un
+        // marcador distinto.
+        public int side = -1;
+    }
+
+    [Serializable]
     public class CubeData
     {
         public string id;
@@ -72,6 +85,9 @@ namespace Scanner
         public string name;
         public List<WallData> walls = new List<WallData>();
         public List<CubeData> cubes = new List<CubeData>();
+        // Marcadores (puntos de interes) sobre paredes: puerta/ventana/etc. Campo
+        // aditivo — los escaneos viejos cargan con lista vacia sin migracion.
+        public List<MarkerData> markers = new List<MarkerData>();
 
         // Punto de piso (un solo punto, anchor-relativo). hasFloor indica si existe;
         // su Y sirve para "Mover al piso" (alinear las esquinas de las paredes).
