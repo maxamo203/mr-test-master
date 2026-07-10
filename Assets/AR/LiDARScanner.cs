@@ -341,8 +341,11 @@ public class LiDARScanner : MonoBehaviour
         if (ts != null && ts.primaryTouch.press.wasPressedThisFrame)
         {
             var p = ts.primaryTouch.position.ReadValue();
-            // Ignorar taps sobre el HUD (esquina inferior-derecha).
-            if (!(p.x > Screen.width - 540 && p.y < 180)) ToggleMode();
+            // Ignorar taps sobre el HUD (esquina inferior-derecha) o sobre la UI del
+            // scanner (paneles/botones IMGUI, ej. el submenu "Identificar"). Sin esto,
+            // tocar un boton de la UI tambien alternaba la malla LiDAR.
+            bool onHud = p.x > Screen.width - 540 && p.y < 180;
+            if (!onHud && !Scanner.UIBlocker.IsPointerOver(p)) ToggleMode();
         }
 
         var kb = UnityEngine.InputSystem.Keyboard.current;

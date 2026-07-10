@@ -537,6 +537,7 @@ GameObject:
   - component: {fileID: 1689158638}
   - component: {fileID: 1689158637}
   - component: {fileID: 1689158700}
+  - component: {fileID: 1689158701}
   m_Layer: 0
   m_Name: ScannerRoot
   m_TagString: Untagged
@@ -597,6 +598,7 @@ MonoBehaviour:
   _wallBuilder: {fileID: 0}
   _doorBuilder: {fileID: 0}
   _cubeBuilder: {fileID: 0}
+  _markerBuilder: {fileID: 0}
 --- !u!114 &1689158641
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -755,6 +757,19 @@ MonoBehaviour:
   _imageAnchor: {fileID: 0}
   _arCamera: {fileID: 0}
   _fallbackDistance: 1.5
+--- !u!114 &1689158701
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1689158636}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5c3e9fb6d2f46b2cc3040506f7182933, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Scanner.MarkerBuilder
+  _catalog: {fileID: 11400000, guid: c0d1e2f304152637485960718293a4b5, type: 2}
 --- !u!1001 &5837897237761931600
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -766,6 +781,10 @@ PrefabInstance:
     - target: {fileID: 2575636562785234308, guid: 352e1347382030c4eb374584a2d110d3, type: 3}
       propertyPath: m_Name
       value: XR Origin Escaneo
+      objectReference: {fileID: 0}
+    - target: {fileID: 3664301276776099167, guid: 352e1347382030c4eb374584a2d110d3, type: 3}
+      propertyPath: m_Enabled
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5269425753922150528, guid: 352e1347382030c4eb374584a2d110d3, type: 3}
       propertyPath: m_LocalPosition.x
