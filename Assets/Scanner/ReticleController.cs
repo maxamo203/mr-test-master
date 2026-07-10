@@ -149,7 +149,8 @@ namespace Scanner
             if (GUILayout.Button(_markerSubmenuOpen ? "Identificar (-)" : "Identificar (+)",
                                  GUILayout.Height(50)))
                 _markerSubmenuOpen = !_markerSubmenuOpen;
-            if (Event.current.type == EventType.Repaint)
+            // GetLastRect da valores validos en todos los eventos salvo Layout.
+            if (Event.current.type != EventType.Layout)
                 _identBtnLocalRect = GUILayoutUtility.GetLastRect();
 
             bool inWall = _fsm.Current == ScannerMode.Wall_V1
@@ -235,20 +236,26 @@ namespace Scanner
             var types = catalog != null ? catalog.Types : null;
             int n = types != null ? types.Count : 0;
             const float bw = 180f, bh = 46f, gap = 6f;
+            float vh = UIScale.VirtualHeight;
 
-            float btnCenterY = modeArea.y + _identBtnLocalRect.y + _identBtnLocalRect.height * 0.5f;
             float x = modeArea.xMax + 8f;
+            // Centro vertical del boton "Identificar". Si aun no capturamos su rect
+            // (height 0), estimamos ~55% del panel de modos para no quedar arriba de todo.
+            float btnCenterY = _identBtnLocalRect.height > 1f
+                ? modeArea.y + _identBtnLocalRect.y + _identBtnLocalRect.height * 0.5f
+                : modeArea.y + modeArea.height * 0.55f;
 
             if (n == 0)
             {
-                var r = new Rect(x, btnCenterY - 24f, bw + 40f, 48f);
+                var r = new Rect(x, Mathf.Clamp(btnCenterY - 24f, 4f, vh - 52f), bw + 40f, 48f);
                 UIBlocker.AddVirtualRect(r);
                 GUI.Box(r, "Catalogo vacio", new GUIStyle(GUI.skin.box) { normal = { textColor = Color.white, background = BG() } });
                 return;
             }
 
             float totalH = n * bh + (n - 1) * gap;
-            float y = btnCenterY - totalH * 0.5f;
+            // Clamp para que el panel nunca quede fuera de pantalla (arriba o abajo).
+            float y = Mathf.Clamp(btnCenterY - totalH * 0.5f, 4f, Mathf.Max(4f, vh - totalH - 4f));
 
             var panel = new Rect(x - 4f, y - 4f, bw + 8f, totalH + 8f);
             UIBlocker.AddVirtualRect(panel);

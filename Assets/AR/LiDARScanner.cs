@@ -334,14 +334,19 @@ public class LiDARScanner : MonoBehaviour
     {
         if (!_tapToToggle || !_lidarActive) return;
 
-        if (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began)
+        // Input System nuevo: el proyecto tiene Active Input Handling = "Input System
+        // Package", donde la API vieja UnityEngine.Input lanza InvalidOperationException
+        // en device (bucle infinito en consola en iOS).
+        var ts = UnityEngine.InputSystem.Touchscreen.current;
+        if (ts != null && ts.primaryTouch.press.wasPressedThisFrame)
         {
+            var p = ts.primaryTouch.position.ReadValue();
             // Ignorar taps sobre el HUD (esquina inferior-derecha).
-            var p = Input.GetTouch(0).position;
-            if (p.x > Screen.width - 540 && p.y < 180) return;
-            ToggleMode();
+            if (!(p.x > Screen.width - 540 && p.y < 180)) ToggleMode();
         }
-        if (Input.GetKeyDown(KeyCode.M)) ToggleMode();
+
+        var kb = UnityEngine.InputSystem.Keyboard.current;
+        if (kb != null && kb.mKey.wasPressedThisFrame) ToggleMode();
     }
 
     // ── HUD ───────────────────────────────────────────────────────────────
