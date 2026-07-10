@@ -35,4 +35,9 @@ public static class EntityTypeIds
 {
     public const byte Player = 1;
     public const byte Sorker = 2;
+
+    // Pilas: una rareza por typeId a partir de esta base. rarityIndex 0/1/2 =>
+    // typeId 10/11/12. El typeId encodea la rareza para que el cliente instancie el
+    // prefab correcto (SpawnEntityMsg solo lleva typeId, sin payload extra).
+    public const byte BatteryBase = 10;
 }

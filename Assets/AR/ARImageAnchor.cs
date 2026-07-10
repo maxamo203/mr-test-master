@@ -38,6 +38,22 @@ public class ARImageAnchor : MonoBehaviour
     [SerializeField] private float _reacquireDelay = 1.0f;
     private float _searchSince;
 
+    // Al detectar la imagen, ARKit/ARCore sigue refinando su pose unos frames: anclar con
+    // UN solo frame da un rumbo (yaw) ligeramente distinto cada vez y la escena queda
+    // rotada respecto al escaneo original. Promediamos varias muestras de la pose antes de
+    // anclar. NO hace falta que los frames Tracking sean seguidos: si la imagen se ve a
+    // ratos, igual vamos acumulando; así funciona con fragmentos que trackean intermitente.
+    [Tooltip("Muestras (frames en Tracking, NO necesariamente seguidos) a promediar antes de anclar.")]
+    [SerializeField] private int   _minSamples = 5;
+    [Tooltip("Fallback: si la imagen se ve solo a ratos, anclar igual pasado este tiempo " +
+             "(s) desde la 1ª muestra, con lo que se haya juntado.")]
+    [SerializeField] private float _maxSampleWait = 2.5f;
+    private int     _sampleCount;
+    private float   _sampleStart;
+    private Vector3 _accumYaw, _accumPos;
+
+    private void ResetSampling() { _sampleCount = 0; _accumYaw = Vector3.zero; _accumPos = Vector3.zero; }
+
     private void Awake()
     {
         _imageManager         = GetComponent<ARTrackedImageManager>();
@@ -53,6 +69,7 @@ public class ARImageAnchor : MonoBehaviour
     public void StartTracking()
     {
         _searchSince = Time.time;
+        ResetSampling();
 #if UNITY_EDITOR
         StartCoroutine(EditorStub());
 #else
@@ -84,6 +101,7 @@ public class ARImageAnchor : MonoBehaviour
         _anchor = null;
 
         _searchSince = Time.time;
+        ResetSampling();
 #if UNITY_EDITOR
         StartCoroutine(EditorStub());
 #else
@@ -103,32 +121,53 @@ public class ARImageAnchor : MonoBehaviour
         // Calibrating y ARKit/ARCore actualiza la pose de la imagen antes de anclar.
         if (Time.time - _searchSince < _reacquireDelay) return;
 
+        // Buscar la imagen en estado Tracking (si hay una este frame).
+        Transform tracked = null;
         foreach (var img in _imageManager.trackables)
+            if (img.trackingState == TrackingState.Tracking) { tracked = img.transform; break; }
+
+        // Si la imagen se ve este frame, acumular una muestra. NO reseteamos cuando NO se
+        // ve: seguimos juntando entre frames aunque el tracking sea intermitente.
+        if (tracked != null)
         {
-            if (img.trackingState != TrackingState.Tracking) continue;
+            if (_sampleCount == 0) _sampleStart = Time.time; // primera muestra
 
-            PlaceAnchorAndSpawn(img.transform);
-            IsFound = true;
-
-            if (!_foundEverFired)
-            {
-                _foundEverFired = true;
-                OnImageFound?.Invoke();
-            }
-            OnImageReacquired?.Invoke();
-
-            _imageManager.enabled = false;
-            return;
+            Vector3 yawAxis = HorizontalYawAxis(tracked);
+            // Evitar que un flip de 180° del eje entre frames cancele el promedio.
+            if (_sampleCount > 0 && Vector3.Dot(yawAxis, _accumYaw) < 0f) yawAxis = -yawAxis;
+            _accumYaw += yawAxis;
+            _accumPos += tracked.position;
+            _sampleCount++;
         }
+
+        if (_sampleCount == 0) return; // todavía no se vio la imagen ni una vez
+
+        // Anclar cuando junte suficientes muestras (aunque no hayan sido seguidas), o como
+        // fallback pasado _maxSampleWait desde la primera (para imágenes que trackean poco).
+        bool enough   = _sampleCount >= _minSamples;
+        bool timedOut = (Time.time - _sampleStart) >= _maxSampleWait;
+        if (!enough && !timedOut) return;
+
+        // Anclar con la pose promediada (más estable/consistente que un solo frame).
+        PlaceAnchorAndSpawn(_accumPos / _sampleCount, UprightFromYaw(_accumYaw));
+        IsFound = true;
+
+        if (!_foundEverFired)
+        {
+            _foundEverFired = true;
+            OnImageFound?.Invoke();
+        }
+        OnImageReacquired?.Invoke();
+
+        _imageManager.enabled = false;
     }
 
-    private void PlaceAnchorAndSpawn(Transform imageTransform)
+    private void PlaceAnchorAndSpawn(Vector3 position, Quaternion rotation)
     {
         var anchorGO = new GameObject("ImageAnchor");
-        // El eje Y del anchor SIEMPRE apunta hacia arriba en el mundo, sin
-        // importar la rotación física de la imagen (vertical, horizontal o dada
-        // vuelta). Solo conservamos el rumbo horizontal — ver UprightFromImage.
-        anchorGO.transform.SetPositionAndRotation(imageTransform.position, UprightFromImage(imageTransform));
+        // El eje Y del anchor SIEMPRE apunta hacia arriba en el mundo; solo conservamos
+        // el rumbo horizontal (ya viene promediado desde Update — ver UprightFromYaw).
+        anchorGO.transform.SetPositionAndRotation(position, rotation);
         _anchor = anchorGO.AddComponent<ARAnchor>();
 
         if (_planeManager != null) _planeManager.enabled = true;
@@ -154,12 +193,15 @@ public class ARImageAnchor : MonoBehaviour
     //
     // El rumbo sale de un eje del PLANO de la imagen (los otros dos), tomado en un
     // orden fijo => determinista y estable entre calibraciones de la misma imagen.
-    private static Quaternion UprightFromImage(Transform img)
+    // Eje de RUMBO horizontal (yaw) de la imagen, en un orden fijo => determinista y
+    // estable entre calibraciones de la misma imagen. Devuelve un vector horizontal
+    // unitario (o forward si degenerado). Update lo acumula por varios frames y promedia.
+    private static Vector3 HorizontalYawAxis(Transform img)
     {
         Vector3[] axes = { img.right, img.up, img.forward };
 
-        // 1) La NORMAL es el eje más vertical (en una imagen horizontal apunta
-        //    arriba). Geométrico, no depende de la convención de ARFoundation.
+        // 1) La NORMAL es el eje más vertical (en una imagen horizontal apunta arriba).
+        //    Geométrico, no depende de la convención de ejes de ARFoundation.
         int normalIdx = 0;
         float maxAbsY = Mathf.Abs(axes[0].y);
         for (int i = 1; i < axes.Length; i++)
@@ -169,17 +211,23 @@ public class ARImageAnchor : MonoBehaviour
         }
 
         // 2) El rumbo: el primero de los OTROS dos ejes (en el plano de la imagen),
-        //    proyectado al horizontal. Orden fijo => mismo eje siempre para la misma
-        //    imagen física.
-        Vector3 yawAxis = Vector3.forward;
+        //    proyectado al horizontal. Orden fijo => mismo eje siempre.
         for (int i = 0; i < axes.Length; i++)
         {
             if (i == normalIdx) continue;
             var h = new Vector3(axes[i].x, 0f, axes[i].z);
-            if (h.sqrMagnitude > 1e-6f) { yawAxis = h.normalized; break; }
+            if (h.sqrMagnitude > 1e-6f) return h.normalized;
         }
+        return Vector3.forward;
+    }
 
-        return Quaternion.LookRotation(yawAxis, Vector3.up);
+    // Rotación upright (Y = up del mundo) desde un eje de rumbo horizontal (posiblemente
+    // acumulado/promediado: se aplana a horizontal y se normaliza).
+    private static Quaternion UprightFromYaw(Vector3 horizYawAxis)
+    {
+        horizYawAxis.y = 0f;
+        if (horizYawAxis.sqrMagnitude < 1e-6f) horizYawAxis = Vector3.forward;
+        return Quaternion.LookRotation(horizYawAxis.normalized, Vector3.up);
     }
 
     // ── Imagen de referencia en runtime ───────────────────────────────────────

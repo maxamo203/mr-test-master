@@ -23,10 +23,36 @@ public class Flashlight : MonoBehaviour
     public bool createRealLight = true;
     [Range(0f, 10f)] public float realLightIntensityMultiplier = 1f;
 
+    [Header("Batería")]
+    [Tooltip("Carga máxima de la linterna.")]
+    public float maxCharge = 100f;
+    [Tooltip("Carga actual. Se drena mientras la linterna está encendida.")]
+    public float currentCharge = 100f;
+    [Tooltip("Carga consumida por segundo mientras isOn.")]
+    public float drainPerSecond = 2f;
+
     [Header("Control")]
     public bool isOn = true;
     [Tooltip("Toggle con touch (toca con 2 dedos para alternar)")]
     public bool toggleWithTwoFingers = true;
+
+    // Fraccion de carga restante (0..1), para HUD.
+    public float Charge01 => maxCharge > 0f ? Mathf.Clamp01(currentCharge / maxCharge) : 0f;
+    public bool  IsEmpty  => currentCharge <= 0f;
+
+    // Suma carga (al recoger una pila). Vuelve a permitir encender si estaba agotada.
+    public void AddCharge(float amount)
+    {
+        currentCharge = Mathf.Clamp(currentCharge + amount, 0f, maxCharge);
+    }
+
+    // Prende/apaga la linterna. No enciende si no hay carga. Punto único de toggle
+    // (lo usan el gesto de 2 dedos y la acción del botón A / ContextActionController).
+    public void Toggle()
+    {
+        if (!isOn && IsEmpty) return;
+        isOn = !isOn;
+    }
 
     static readonly int ID_POS       = Shader.PropertyToID("_FlashlightPos");
     static readonly int ID_DIR       = Shader.PropertyToID("_FlashlightDir");
@@ -57,6 +83,15 @@ public class Flashlight : MonoBehaviour
     void Update()
     {
         HandleToggle();
+
+        // Drenar la batería mientras está encendida; apagar al agotarse.
+        if (isOn)
+        {
+            if (currentCharge > 0f)
+                currentCharge = Mathf.Max(0f, currentCharge - drainPerSecond * Time.deltaTime);
+            if (currentCharge <= 0f)
+                isOn = false;
+        }
 
         if (innerAngleDeg > outerAngleDeg - 1f)
             innerAngleDeg = Mathf.Max(0f, outerAngleDeg - 1f);
@@ -96,7 +131,7 @@ public class Flashlight : MonoBehaviour
         }
         if (fingers >= 2)
         {
-            isOn = !isOn;
+            Toggle();
             _lastToggleTime = Time.time;
         }
     }

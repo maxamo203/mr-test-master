@@ -17,3 +17,9 @@ MonoBehaviour:
     Prefab: {fileID: 8631959139027139366, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
   - TypeId: 2
     Prefab: {fileID: 3028573507642908826, guid: 704f167c9db821b42978aa3a585317d7, type: 3}
+  - TypeId: 10
+    Prefab: {fileID: 1830482375011854933, guid: 8cc64fb6f7f505049aac1a8a114e85b3, type: 3}
+  - TypeId: 11
+    Prefab: {fileID: 1830482375011854933, guid: f586c82932ebe724393b635a5d9cacc0, type: 3}
+  - TypeId: 12
+    Prefab: {fileID: 1830482375011854933, guid: f203adf0e803d8946b5d0f03d2882880, type: 3}

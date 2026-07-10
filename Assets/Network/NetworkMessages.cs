@@ -163,6 +163,29 @@ public class PlayerInputMsg
     }
 }
 
+// Cliente → servidor cada tick: la posicion de la camara AR del jugador, en espacio
+// anchor-relativo (para que el server la interprete en su propio AR local). El server
+// la usa para saber donde estan todos los jugadores (spawns de pilas, validar pickup).
+// Sin esto el server solo conoce su propia camara (host) — no la de los clientes.
+public class PlayerPoseMsg
+{
+    public Vector3 RelPos;
+
+    public byte[] Serialize()
+    {
+        using var ms = new MemoryStream(12);
+        using var w  = new BinaryWriter(ms);
+        MsgHelper.WriteV3(w, RelPos);
+        return ms.ToArray();
+    }
+
+    public static PlayerPoseMsg Deserialize(byte[] d)
+    {
+        using var r = new BinaryReader(new MemoryStream(d));
+        return new() { RelPos = MsgHelper.ReadV3(r) };
+    }
+}
+
 public class AnchorIdMsg
 {
     public string Id;
