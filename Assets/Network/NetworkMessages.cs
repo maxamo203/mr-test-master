@@ -171,22 +171,31 @@ public class PlayerPoseMsg
 {
     public Vector3 RelPos;
     // Estado de la linterna del jugador (para que el server, autoritativo, drene la
-    // cordura de cada jugador cuando su linterna esta apagada).
+    // cordura y compute el repel cuando la linterna ilumina un objetivo).
     public bool FlashlightOn;
+    // Direccion de apuntado (forward de la camara) en espacio anchor-relativo, para el
+    // test de cono del repel en el server.
+    public Vector3 Forward;
 
     public byte[] Serialize()
     {
-        using var ms = new MemoryStream(13);
+        using var ms = new MemoryStream(25);
         using var w  = new BinaryWriter(ms);
         MsgHelper.WriteV3(w, RelPos);
         w.Write(FlashlightOn);
+        MsgHelper.WriteV3(w, Forward);
         return ms.ToArray();
     }
 
     public static PlayerPoseMsg Deserialize(byte[] d)
     {
         using var r = new BinaryReader(new MemoryStream(d));
-        return new() { RelPos = MsgHelper.ReadV3(r), FlashlightOn = r.ReadBoolean() };
+        return new()
+        {
+            RelPos       = MsgHelper.ReadV3(r),
+            FlashlightOn = r.ReadBoolean(),
+            Forward      = MsgHelper.ReadV3(r),
+        };
     }
 }
 

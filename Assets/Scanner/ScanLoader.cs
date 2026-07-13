@@ -36,10 +36,10 @@ namespace Scanner
             SceneRegistry.Instance.ClearAll();
             if (data.walls != null) foreach (var w in data.walls) WallObject.FromData(w);
             if (data.cubes != null) foreach (var c in data.cubes) CubeObject.FromData(c);
-            // Marcadores despues de las paredes (resuelven su pared por wallId). No se
-            // reconstruyen en carga display-only (gameplay multijugador): son solo del
-            // scanner.
-            if (!DisplayOnly && data.markers != null)
+            // Marcadores despues de las paredes (resuelven su pared por wallId). En
+            // display-only (gameplay multijugador) igual se cargan, pero INVISIBLES
+            // (ver MarkerObject.Create): sirven como puntos de spawn del Sorken.
+            if (data.markers != null)
                 foreach (var m in data.markers) MarkerObject.FromData(m);
             if (data.hasFloor && data.floorLocal != null)
                 FloorPoint.Create(data.floorLocal.ToVector3());

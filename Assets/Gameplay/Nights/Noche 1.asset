@@ -11,21 +11,28 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
   m_Name: Noche 1
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   displayName: Noche 1
-  attemptIntervalMin: 22
-  attemptIntervalMax: 38
+  attemptIntervalMin: 1
+  attemptIntervalMax: 5
   entryRepelSeconds: 3
   entryGraceSeconds: 6
   entryTriggerDistance: 3
   chaseRepelSeconds: 5
   sorkenChaseSpeed: 2.2
+  sorkenRetreatSpeed: 3.5
   grabRange: 1.2
   flashlightMaxCharge: 120
   flashlightDrainPerSecond: 1.8
   sanityMax: 100
   flashlightOffThreshold: 6
   sanityDrainPerSecond: 3
+  flashlightConeAngleDeg: 30
+  flashlightRange: 8
+  initialAttemptDelay: 4
+  emergeTimeoutSeconds: 15
+  retreatSeconds: 1.5
+  grabHoldSeconds: 1.5
   flickerAimAngle: 20
   flickerDistance: 6
   batterySpawnRateMultiplier: 1.2

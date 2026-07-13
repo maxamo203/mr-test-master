@@ -41,6 +41,9 @@ public class NetworkManager : MonoBehaviour
     // Server: ultimo estado de linterna (on/off) reportado por cada cliente. Lo usa el
     // SanitySystem para drenar la cordura del jugador cuando su linterna esta apagada.
     private readonly Dictionary<uint, bool>    _clientFlashOn  = new();
+    // Server: ultimo forward (aim) anchor-relativo reportado por cada cliente. Lo usa el
+    // GameDirector para el test de cono del repel.
+    private readonly Dictionary<uint, Vector3> _clientForward  = new();
     // Cache de la linterna local (para adjuntar su estado al PlayerPose que enviamos).
     private Flashlight _localFlashlight;
 
@@ -56,6 +59,7 @@ public class NetworkManager : MonoBehaviour
     public event Action<byte[]> OnMapReceived;         // client: recibió el .mscn del mapa
     public event Action<byte, float> OnBatteryCollected; // client: recogió pila (rarityIndex, charge)
     public event Action<float, float> OnSanityUpdated;    // client: cordura autoritativa (valor, max)
+    public event Action               OnPlayerDied;        // client: fui atrapado (pantalla de muerte)
 
     // Server: clientes remotos conectados (no incluye al host, que es clientId 0).
     public IReadOnlyCollection<uint> ConnectedClients => _connectedClients;
@@ -64,6 +68,26 @@ public class NetworkManager : MonoBehaviour
     // (el llamador decide el default; el SanitySystem asume "encendida" = no drena).
     public bool TryGetClientFlashlightOn(uint clientId, out bool on) =>
         _clientFlashOn.TryGetValue(clientId, out on);
+
+    // Server: forward (aim) world de un cliente (convertido con el WorldOrigin actual).
+    public bool TryGetClientForward(uint clientId, out Vector3 worldForward)
+    {
+        worldForward = Vector3.forward;
+        if (_clientForward.TryGetValue(clientId, out var rel) &&
+            WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady)
+        {
+            worldForward = WorldOrigin.Instance.ToWorldDir(rel);
+            return true;
+        }
+        return false;
+    }
+
+    // Server → cliente puntual: fue atrapado (muestra pantalla de muerte).
+    public void ServerSendPlayerDied(uint clientId)
+    {
+        if (_srv == null) return;
+        _srv.Send(clientId, MsgHelper.Frame(MessageType.PlayerDied, Array.Empty<byte>()));
+    }
 
     // Server → cliente puntual: su cordura autoritativa (la calcula el SanitySystem).
     public void ServerSendSanity(uint clientId, float sanity, float max)
@@ -141,7 +165,7 @@ public class NetworkManager : MonoBehaviour
     }
 
     // Server: spawnear los Sorkens y arrancar el juego para todos.
-    public void ServerStartGame(int sorkerCount = 1)
+    public void ServerStartGame(int sorkenCount = 1)
     {
         // Sin avatares: el jugador es su cámara AR. Solo spawneamos jugador-entidad si
         // _spawnPlayers está habilitado (queda para cuando se diseñe el avatar).
@@ -156,15 +180,8 @@ public class NetworkManager : MonoBehaviour
             }
         }
 
-        // Spawnear Sorkers cerca del anchor, al nivel del piso. El FloorPoint da la
-        // Y del piso en anchor-space; el pivote del FBX del Sorken esta en los pies,
-        // asi que queda parado sobre el piso. Si el mapa no tiene FloorPoint, y=0.
-        float floorY = Scanner.FloorPoint.Instance != null ? Scanner.FloorPoint.Instance.LocalY : 0f;
-        for (int i = 0; i < sorkerCount; i++)
-        {
-            var rel = new Vector3(Random.Range(-0.5f, 0.5f), floorY, Random.Range(-0.4f, 0.4f));
-            ServerSpawn(EntityTypeIds.Sorker, WorldOrigin.Instance.ToWorld(rel), ownerClientId: 0);
-        }
+        // El Sorken lo spawnea el GameDirector (Gameplay), en los marcadores, cuando
+        // corre un intento de entrada. Aca ya no se spawnea nada de enemigo.
 
         GameStarted = true;
         _srv.Broadcast(MsgHelper.Frame(MessageType.StartGame, Array.Empty<byte>()));
@@ -326,6 +343,7 @@ public class NetworkManager : MonoBehaviour
         _resolvedClients.Remove(clientId);
         _clientRelPos.Remove(clientId);
         _clientFlashOn.Remove(clientId);
+        _clientForward.Remove(clientId);
 
         if (_clientToPlayer.TryGetValue(clientId, out var playerId))
         {
@@ -361,6 +379,7 @@ public class NetworkManager : MonoBehaviour
                 var pose = PlayerPoseMsg.Deserialize(incoming.Body);
                 _clientRelPos[incoming.ClientId]  = pose.RelPos;
                 _clientFlashOn[incoming.ClientId] = pose.FlashlightOn;
+                _clientForward[incoming.ClientId] = pose.Forward;
                 break;
             }
             case MessageType.BatteryPickup:
@@ -403,9 +422,10 @@ public class NetworkManager : MonoBehaviour
         // el server necesita saber donde esta cada cliente para el sistema de pilas.
         if (Camera.main != null && WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady)
         {
-            var relPos = WorldOrigin.Instance.ToRelative(Camera.main.transform.position);
+            var relPos  = WorldOrigin.Instance.ToRelative(Camera.main.transform.position);
+            var relFwd  = WorldOrigin.Instance.ToRelativeDir(Camera.main.transform.forward);
             _cli.Send(MsgHelper.Frame(MessageType.PlayerPose,
-                new PlayerPoseMsg { RelPos = relPos, FlashlightOn = LocalFlashlightOn() }.Serialize()));
+                new PlayerPoseMsg { RelPos = relPos, FlashlightOn = LocalFlashlightOn(), Forward = relFwd }.Serialize()));
         }
 
         foreach (var entity in EntityRegistry.Instance.All)
@@ -477,6 +497,11 @@ public class NetworkManager : MonoBehaviour
             {
                 var m = PlayerSanityMsg.Deserialize(msg.Body);
                 OnSanityUpdated?.Invoke(m.Sanity, m.Max);
+                break;
+            }
+            case MessageType.PlayerDied:
+            {
+                OnPlayerDied?.Invoke();
                 break;
             }
         }

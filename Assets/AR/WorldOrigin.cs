@@ -76,4 +76,9 @@ public class WorldOrigin : MonoBehaviour
 
     public Quaternion ToRelativeRot(Quaternion worldRot)  => Quaternion.Inverse(transform.rotation) * worldRot;
     public Quaternion ToWorldRot(Quaternion relativeRot)  => transform.rotation * relativeRot;
+
+    // Direcciones (vectores) anchor-relativas: como ToRelative/ToWorld pero sin la
+    // traslacion. Para mandar el "forward" de la camara por red (aim de la linterna).
+    public Vector3 ToRelativeDir(Vector3 worldDir) => IsReady ? Quaternion.Inverse(transform.rotation) * worldDir : worldDir;
+    public Vector3 ToWorldDir(Vector3 relativeDir) => IsReady ? transform.rotation * relativeDir : relativeDir;
 }

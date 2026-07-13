@@ -30,6 +30,8 @@ namespace Gameplay
         [Tooltip("Segundos que hay que iluminar al Sorken para ahuyentarlo en el chase.")]
         public float chaseRepelSeconds = 5f;
         public float sorkenChaseSpeed = 2.5f;
+        [Tooltip("Velocidad al retirarse tras ser repelido (sale corriendo).")]
+        public float sorkenRetreatSpeed = 3.5f;
         [Tooltip("Distancia (m) a la que el Sorken atrapa al jugador (grab).")]
         public float grabRange = 1.2f;
 
@@ -42,6 +44,22 @@ namespace Gameplay
         [Tooltip("Segundos con la linterna apagada antes de que empiece a drenar cordura.")]
         public float flashlightOffThreshold = 5f;
         public float sanityDrainPerSecond = 4f;
+
+        [Header("Cono de linterna (repeler — server-authoritative)")]
+        [Tooltip("Semi-angulo del cono (grados) para contar que la linterna ilumina un objetivo.")]
+        public float flashlightConeAngleDeg = 30f;
+        [Tooltip("Alcance (m) de la linterna para el repel.")]
+        public float flashlightRange = 8f;
+
+        [Header("Director / tiempos")]
+        [Tooltip("Demora (s) del primer intento tras arrancar la partida.")]
+        public float initialAttemptDelay = 4f;
+        [Tooltip("Si nadie se acerca ni repele, el intento se cancela tras esto (s).")]
+        public float emergeTimeoutSeconds = 15f;
+        [Tooltip("Cuanto dura la retirada (s) antes de despawnear al Sorken.")]
+        public float retreatSeconds = 1.5f;
+        [Tooltip("Cuanto se queda el Sorken en 'grab' (s) tras atrapar, antes de irse.")]
+        public float grabHoldSeconds = 1.5f;
 
         [Header("Feedback de deteccion")]
         [Tooltip("Angulo (grados) dentro del cual apuntar al punto activa titileo/ruido.")]

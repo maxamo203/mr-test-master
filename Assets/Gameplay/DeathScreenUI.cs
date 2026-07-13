@@ -1,0 +1,55 @@
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+namespace Gameplay
+{
+    // Pantalla de muerte del jugador local. Se muestra cuando LocalDeath.IsDead.
+    // "Volver al menu" limpia los singletons cross-scene (como SceneNavUI) y carga el
+    // menu de noche.
+    public class DeathScreenUI : MonoBehaviour
+    {
+        [SerializeField] private string _menuScene = "NightMenuScene";
+
+        private GUIStyle _title, _btn;
+        private bool _ready;
+
+        private void Awake() => LocalDeath.Ensure();
+
+        private void EnsureStyles()
+        {
+            if (_ready) return;
+            _title = new GUIStyle(GUI.skin.label)  { fontSize = 54, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+            _title.normal.textColor = new Color(0.8f, 0.05f, 0.05f);
+            _btn = new GUIStyle(GUI.skin.button) { fontSize = 26 };
+            _ready = true;
+        }
+
+        private void OnGUI()
+        {
+            var ld = LocalDeath.Instance;
+            if (ld == null || !ld.IsDead) return;
+
+            EnsureStyles();
+
+            var prev = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.88f);
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = prev;
+
+            GUI.Label(new Rect(0, Screen.height * 0.30f, Screen.width, 80f), "MORISTE", _title);
+
+            float w = 300f, h = 74f;
+            var r = new Rect((Screen.width - w) * 0.5f, Screen.height * 0.55f, w, h);
+            if (GUI.Button(r, "Volver al menú", _btn)) ReturnToMenu();
+        }
+
+        private void ReturnToMenu()
+        {
+            // Teardown de la sesion (mismo criterio que SceneNavUI): salir de la partida.
+            if (NetworkManager.Instance != null) Destroy(NetworkManager.Instance.gameObject);
+            if (EntityRegistry.Instance != null) Destroy(EntityRegistry.Instance.gameObject);
+            if (WorldOrigin.Instance    != null) Destroy(WorldOrigin.Instance.gameObject);
+            SceneManager.LoadScene(_menuScene);
+        }
+    }
+}

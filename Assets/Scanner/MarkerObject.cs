@@ -47,7 +47,10 @@ namespace Scanner
                                           int faceSign, string id = null)
         {
             if (wall == null || WorldOrigin.Instance == null) return null;
-            if (type == null)
+            // Fuera de DisplayOnly (scanner) el tipo es obligatorio (define color/visual).
+            // En DisplayOnly (multijugador) el marcador es invisible y el tipo es
+            // indistinto (solo punto de spawn), asi que se admite type == null.
+            if (type == null && !ScanLoader.DisplayOnly)
             {
                 Debug.LogWarning("[MarkerObject] Sin MarkerType (catalogo no asignado?). Se descarta.");
                 return null;
@@ -66,10 +69,14 @@ namespace Scanner
             m._v = v;
             m._faceSign = faceSign >= 0 ? 1 : -1;
 
-            m.BuildVisual();
+            // En carga display-only (gameplay multijugador) el marcador es INVISIBLE:
+            // no se le crea la esfera/flecha ni materiales, pero SI existe como punto
+            // (transform + pared + pose) para que el server lo use como spawn del Sorken.
+            bool visible = !ScanLoader.DisplayOnly;
+            if (visible) m.BuildVisual();
             wall.AddMarker(m);
-            m.SyncToWall();
-            m.ApplyColor(false);
+            m.SyncToWall();               // posiciona el transform aunque no haya visual
+            if (visible) m.ApplyColor(false);
             SceneRegistry.Instance?.Register(m);
             return m;
         }
@@ -86,7 +93,10 @@ namespace Scanner
             // (catalogo cambiado), caemos al primer tipo para no perder el marcador.
             var catalog = MarkerCatalog.Active;
             var type = catalog?.GetById(d.kind) ?? catalog?.First;
-            if (type == null)
+            // En DisplayOnly (multijugador) NO hay MarkerBuilder que publique el catalogo,
+            // asi que type puede quedar null: igual creamos el marcador (invisible) como
+            // punto de spawn. En el scanner el tipo es obligatorio.
+            if (type == null && !ScanLoader.DisplayOnly)
             {
                 Debug.LogWarning($"[MarkerObject] Tipo '{d.kind}' no esta en el catalogo (marcador '{d.id}'). Se descarta.");
                 return null;

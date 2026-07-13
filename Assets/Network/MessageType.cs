@@ -13,4 +13,5 @@ public enum MessageType : ushort
     BatteryPickup   = 11,  // client → server: pedido de recoger una pila apuntada
     BatteryCollected = 12, // server → client: la pila se recogio, sumar carga a la linterna
     PlayerSanity    = 13,  // server → client: cordura autoritativa del jugador (por dispositivo)
+    PlayerDied      = 14,  // server → client: este jugador fue atrapado (pantalla de muerte)
 }
