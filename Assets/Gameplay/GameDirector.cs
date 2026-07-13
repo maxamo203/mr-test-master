@@ -120,9 +120,9 @@ namespace Gameplay
             _marker = markers[UnityEngine.Random.Range(0, markers.Count)];
             if (_marker == null) { _attemptTimer = 1f; return; }
 
-            // Spawn en el punto del marcador; lo reposicionamos segun EmergeDepth del
-            // modelo apenas tenemos la entidad.
-            _sorkenNetId = NetworkManager.Instance.ServerSpawn(EntityTypeIds.Sorken, _marker.transform.position, 0);
+            // Spawn ya a la altura del piso (EmergePosition con _sorken null usa depth 0);
+            // luego lo reposicionamos aplicando el EmergeDepth del modelo.
+            _sorkenNetId = NetworkManager.Instance.ServerSpawn(EntityTypeIds.Sorken, EmergePosition(), 0);
             _sorken = GetSorken(_sorkenNetId);
             if (_sorken == null) { _attemptTimer = 2f; return; }
 
@@ -154,6 +154,7 @@ namespace Gameplay
 
         private void EnterChase()
         {
+            DropToFloor();                       // baja de la altura de la ventana al piso
             _sorken.SetState(SorkenState.Chasing);
             _repel = 0f; _path.Clear(); _pathIndex = 0; _repathTimer = 0f;
             _phase = Phase.Chasing;
@@ -344,13 +345,25 @@ namespace Gameplay
             return null;
         }
 
-        // Posicion de emerge: el punto del marcador empujado hacia adentro de la pared
-        // (contra la normal) segun el EmergeDepth del modelo, para que se vea medio cuerpo
-        // y la pared tape el resto. marker.forward = normal hacia el ambiente => restamos.
+        // Posicion de emerge: el punto del marcador (a SU altura — ventana/puerta) empujado
+        // hacia adentro de la pared segun EmergeDepth (empuje horizontal, no toca la Y),
+        // para que se vea medio cuerpo. Al ENTRAR (chase) el Sorken baja al piso (DropToFloor).
         private Vector3 EmergePosition()
         {
             float depth = _sorken != null ? _sorken.EmergeDepth : 0f;
             return _marker.transform.position - _marker.transform.forward * depth;
+        }
+
+        // Baja al Sorken a la altura del piso (FloorPoint), manteniendo su XZ. Se llama al
+        // entrar en chase: deja de estar a la altura de la ventana y camina por el piso.
+        private void DropToFloor()
+        {
+            if (_sorken == null) return;
+            var wo = WorldOrigin.Instance;
+            var p  = _sorken.Position;
+            if (FloorPoint.Instance != null && wo != null)
+                p.y = wo.ToWorld(FloorPoint.Instance.LocalPosition).y;
+            _sorken.SetPositionDirectly(p);
         }
 
         private int CountAlivePlayers()
