@@ -17,11 +17,13 @@ namespace Scanner
         private struct Entry { public Rect rect; public int frame; }
         private static readonly List<Entry> _entries = new();
 
-        // Registra un rect en coordenadas VIRTUALES (las de UIScale, pre-escala).
+        // Registra un rect en coordenadas VIRTUALES (las de UIScale, pre-escala). Aplica
+        // el mismo mapeo que UIScale.Begin: escala por Factor y traslada al area segura.
         public static void AddVirtualRect(Rect virtualRect)
         {
-            float f = UIScale.Factor;
-            AddScreenRect(new Rect(virtualRect.x * f, virtualRect.y * f,
+            float f  = UIScale.Factor;
+            var   sg = SafeArea.GuiRect;
+            AddScreenRect(new Rect(sg.x + virtualRect.x * f, sg.y + virtualRect.y * f,
                                    virtualRect.width * f, virtualRect.height * f));
         }
 

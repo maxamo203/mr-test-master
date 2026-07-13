@@ -36,10 +36,11 @@ namespace Gameplay
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = prev;
 
-            GUI.Label(new Rect(0, Screen.height * 0.30f, Screen.width, 80f), "MORISTE", _title);
+            var sa = Scanner.SafeArea.GuiRect;
+            GUI.Label(new Rect(sa.x, sa.y + sa.height * 0.28f, sa.width, 80f), "MORISTE", _title);
 
             float w = 300f, h = 74f;
-            var r = new Rect((Screen.width - w) * 0.5f, Screen.height * 0.55f, w, h);
+            var r = new Rect(sa.x + (sa.width - w) * 0.5f, sa.y + sa.height * 0.52f, w, h);
             if (GUI.Button(r, "Volver al menú", _btn)) ReturnToMenu();
         }
 

@@ -408,7 +408,8 @@ public class LiDARScanner : MonoBehaviour
             $"Chunks: {chunks}   Verts: {verts}   Tris: {tris}\n" +
             $"PlaneMgr: {planeMgr}   QuadsResiduales: {planeQuads}";
 
-        GUI.Label(new Rect(Screen.width - 600, Screen.height - 200, 590, 190), txt, style);
+        var sa = Scanner.SafeArea.GuiRect;
+        GUI.Label(new Rect(sa.xMax - 600, sa.yMax - 200, 590, 190), txt, style);
     }
 
     private void OnDestroy()

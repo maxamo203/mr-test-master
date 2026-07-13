@@ -31,22 +31,30 @@ namespace Scanner
         private const float MinFactor = 0.5f;
         private const float MaxFactor = 4f;
 
+        // Todo se dibuja DENTRO del area segura (excluye notch / Dynamic Island / home
+        // indicator). El origen virtual (0,0) queda en la esquina sup-izq del area segura
+        // y el espacio virtual abarca solo el area segura.
+        public static Rect SafeGui => SafeArea.GuiRect;
+
         // Factor de escala uniforme. Tomamos el menor de los dos ratios para que la
         // UI entre completa sin importar el aspect ratio del dispositivo.
         public static float Factor =>
             Mathf.Clamp(
-                Mathf.Min(Screen.width / ReferenceWidth, Screen.height / ReferenceHeight),
+                Mathf.Min(SafeGui.width / ReferenceWidth, SafeGui.height / ReferenceHeight),
                 MinFactor, MaxFactor);
 
-        // Dimensiones "virtuales" (pre-escala) en las que hay que dibujar.
-        public static float VirtualWidth  => Screen.width  / Factor;
-        public static float VirtualHeight => Screen.height / Factor;
+        // Dimensiones "virtuales" (pre-escala) en las que hay que dibujar — abarcan el
+        // area segura, no toda la pantalla.
+        public static float VirtualWidth  => SafeGui.width  / Factor;
+        public static float VirtualHeight => SafeGui.height / Factor;
 
-        // Llamar al principio de cada OnGUI que quiera escalarse.
+        // Llamar al principio de cada OnGUI que quiera escalarse. Ademas del escalado,
+        // traslada el origen a la esquina del area segura.
         public static void Begin()
         {
-            float s = Factor;
-            GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(s, s, 1f));
+            var   sg = SafeGui;
+            float s  = Factor;
+            GUI.matrix = Matrix4x4.TRS(new Vector3(sg.x, sg.y, 0f), Quaternion.identity, new Vector3(s, s, 1f));
         }
     }
 }

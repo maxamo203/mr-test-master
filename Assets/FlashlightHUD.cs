@@ -25,7 +25,8 @@ public class FlashlightHUD : MonoBehaviour
         if (!_styleReady) { _labelStyle = new GUIStyle(GUI.skin.label); _styleReady = true; }
 
         float pct = _fl.Charge01;
-        var barRect = new Rect(20, Screen.height - 40, 220, 22);
+        var sa = Scanner.SafeArea.GuiRect;
+        var barRect = new Rect(sa.x + 20, sa.yMax - 40, 220, 22);
         GUI.Box(barRect, GUIContent.none);
         var fill = new Rect(barRect.x + 2, barRect.y + 2, (barRect.width - 4) * pct, barRect.height - 4);
         var prev = GUI.color;

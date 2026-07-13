@@ -36,7 +36,8 @@ public class SceneNavUI : MonoBehaviour
             label  = "Ir a Escanear (ScannerScene)";
         }
 
-        var area = new Rect(10, Screen.height - 70, 340, 60);
+        var sa = Scanner.SafeArea.GuiRect;
+        var area = new Rect(sa.x + 10, sa.yMax - 70, 340, 60);
         GUILayout.BeginArea(area);
         if (GUILayout.Button(label, GUILayout.Height(50)))
             GoTo(target);

@@ -44,9 +44,10 @@ namespace Gameplay
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = prev;
 
-            float w = Mathf.Min(560f, Screen.width - 40f);
-            float x = (Screen.width - w) * 0.5f;
-            float y = Screen.height * 0.12f;
+            var sa = Scanner.SafeArea.GuiRect;
+            float w = Mathf.Min(560f, sa.width - 40f);
+            float x = sa.x + (sa.width - w) * 0.5f;
+            float y = sa.y + sa.height * 0.10f;
 
             GUI.Label(new Rect(x, y, w, 60f), "Elegí la noche", _title);
             y += 90f;

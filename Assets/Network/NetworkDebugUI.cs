@@ -12,8 +12,9 @@ public class NetworkDebugUI : MonoBehaviour
 
         if (net == null) return;
 
-        // Panel derecho para no tapar la lobby UI
-        GUILayout.BeginArea(new Rect(Screen.width - 340, 10, 330, Screen.height - 20));
+        // Panel derecho para no tapar la lobby UI (dentro del area segura)
+        var sa = Scanner.SafeArea.GuiRect;
+        GUILayout.BeginArea(new Rect(sa.xMax - 340, sa.y + 10, 330, sa.height - 20));
 
         GUILayout.Label("=== DEBUG RED ===");
         GUILayout.Label($"Rol:        {(net.IsServer ? "HOST/SERVER" : "CLIENTE")}");

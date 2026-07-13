@@ -36,9 +36,10 @@ namespace Gameplay
             EnsureStyle();
             float pct = ls.Value01;
 
-            // ── Barra (arriba-centro) ─────────────────────────────────────────
+            // ── Barra (arriba-centro, dentro del area segura) ─────────────────
+            var sa = Scanner.SafeArea.GuiRect;
             float w = _barWidth, h = 16f;
-            var box  = new Rect((Screen.width - w) * 0.5f, 18f, w, h);
+            var box  = new Rect(sa.x + (sa.width - w) * 0.5f, sa.y + 12f, w, h);
             var prev = GUI.color;
 
             GUI.color = new Color(0f, 0f, 0f, 0.5f);

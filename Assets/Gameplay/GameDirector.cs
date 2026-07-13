@@ -409,7 +409,8 @@ namespace Gameplay
                 $"attemptTimer={_attemptTimer:F1}  repel={_repel:F1}  grace={_grace:F1}\n" +
                 $"sorken={(_sorken != null ? _sorken.State.ToString() : "null")}  netId={_sorkenNetId}\n" +
                 $"markers={markers}  alivePlayers={CountAlivePlayers()}  dead={_dead.Count}";
-            GUI.Box(new Rect(10, 300, 560, 110), txt, _hudStyle);
+            var sa = SafeArea.GuiRect;
+            GUI.Box(new Rect(sa.x + 10, sa.y + 300, 560, 110), txt, _hudStyle);
         }
     }
 }

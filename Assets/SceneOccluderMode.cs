@@ -151,7 +151,9 @@ public class SceneOccluderMode : MonoBehaviour
 
         var style = new GUIStyle(GUI.skin.button) { fontSize = 26, wordWrap = true };
         string label = _enabled ? "Paredes: OCULTAS (oclusor ON)" : "Paredes: visibles (oclusor OFF)";
-        if (GUI.Button(new Rect(10, Screen.height - 100, 460, 88), label, style))
+        // Dentro del area segura (arriba del home indicator del iPhone).
+        var sa = SafeArea.GuiRect;
+        if (GUI.Button(new Rect(sa.x + 10, sa.yMax - 100, 460, 88), label, style))
             Toggle();
     }
 }
