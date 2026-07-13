@@ -21,6 +21,10 @@ namespace Gameplay
                  "grab->respawn no se corta por la muerte del unico jugador.")]
         [SerializeField] private bool _practiceMode = false;
 
+        [Tooltip("Al entrar (chase), a que distancia (m) del marcador, del lado del ambiente, " +
+                 "reaparece el Sorken para no arrancar detras de la pared. ~medio metro.")]
+        [SerializeField] private float _enterClearance = 0.5f;
+
         private enum Phase { Idle, Entering, Chasing, Grabbed, Retreating }
 
         private NightConfig _night;
@@ -154,7 +158,10 @@ namespace Gameplay
 
         private void EnterChase()
         {
-            DropToFloor();                       // baja de la altura de la ventana al piso
+            // Reposicionar al lado del ambiente (donde esta el jugador) y a ras del piso.
+            // El emerge lo dejo empujado hacia adentro de la pared; si arrancara el chase
+            // desde ahi, quedaria del otro lado de la pared.
+            _sorken.SetPositionDirectly(ChaseEntryPosition());
             _sorken.SetState(SorkenState.Chasing);
             _repel = 0f; _path.Clear(); _pathIndex = 0; _repathTimer = 0f;
             _phase = Phase.Chasing;
@@ -347,23 +354,33 @@ namespace Gameplay
 
         // Posicion de emerge: el punto del marcador (a SU altura — ventana/puerta) empujado
         // hacia adentro de la pared segun EmergeDepth (empuje horizontal, no toca la Y),
-        // para que se vea medio cuerpo. Al ENTRAR (chase) el Sorken baja al piso (DropToFloor).
+        // para que se vea medio cuerpo. Al ENTRAR (chase) se reposiciona (ChaseEntryPosition).
         private Vector3 EmergePosition()
         {
             float depth = _sorken != null ? _sorken.EmergeDepth : 0f;
             return _marker.transform.position - _marker.transform.forward * depth;
         }
 
-        // Baja al Sorken a la altura del piso (FloorPoint), manteniendo su XZ. Se llama al
-        // entrar en chase: deja de estar a la altura de la ventana y camina por el piso.
-        private void DropToFloor()
+        // Posicion donde reaparece el Sorken al ENTRAR (chase): la XZ del marcador
+        // empujada hacia el AMBIENTE (+normal, donde esta el jugador) por _enterClearance,
+        // a ras del piso. Evita arrancar detras de la pared (el emerge lo empuja adentro).
+        private Vector3 ChaseEntryPosition()
         {
-            if (_sorken == null) return;
+            var mp  = _marker.transform.position;
+            var fwd = _marker.transform.forward; fwd.y = 0f;
+            if (fwd.sqrMagnitude > 1e-6f) fwd.Normalize();
+            var pos = mp + fwd * _enterClearance;
+            pos.y = FloorWorldY();
+            return pos;
+        }
+
+        // Y del piso en world (FloorPoint). Si no hay piso, la Y actual del Sorken.
+        private float FloorWorldY()
+        {
             var wo = WorldOrigin.Instance;
-            var p  = _sorken.Position;
             if (FloorPoint.Instance != null && wo != null)
-                p.y = wo.ToWorld(FloorPoint.Instance.LocalPosition).y;
-            _sorken.SetPositionDirectly(p);
+                return wo.ToWorld(FloorPoint.Instance.LocalPosition).y;
+            return _sorken != null ? _sorken.Position.y : 0f;
         }
 
         private int CountAlivePlayers()
