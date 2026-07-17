@@ -335,8 +335,15 @@ namespace Gamepad
             // Tap (dedos/mouse): botón de pausa siempre; ítems si está abierto.
             if (TryGetTapRelease(out var tapPx))
             {
-                float f = UIScale.Factor;
-                var pv = new Vector2(tapPx.x / f, (Screen.height - tapPx.y) / f); // a virtual
+                // Tap (px, origen abajo-izq) -> coords VIRTUALES: hay que invertir la matriz
+                // de UIScale.Begin, que además de escalar traslada el origen al área segura.
+                // Sin restar (sg.x, sg.y) el hit-test queda corrido en iPhone (notch/Dynamic
+                // Island) y el botón de pausa —pegado al borde superior— cae dentro del notch,
+                // volviéndose intocable.
+                float f  = UIScale.Factor;
+                var   sg = UIScale.SafeGui;
+                var pv = new Vector2((tapPx.x - sg.x) / f,
+                                     (Screen.height - tapPx.y - sg.y) / f); // a virtual
 
                 if (_pauseBtnRect.Contains(pv))
                 {

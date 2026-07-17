@@ -79,16 +79,20 @@ namespace Scanner
 
             // Touch viene en píxeles con origen abajo-izquierda; los rects de GUI
             // (tras la escala de UIScale) están en píxeles con origen arriba-izq.
-            float f = UIScale.Factor;
+            float f  = UIScale.Factor;
+            var   sg = UIScale.SafeGui;
             var p = new Vector2(tapScreenPos.x, Screen.height - tapScreenPos.y);
 
             GetRects(out var upper, out var lower);
-            if (ScaleRect(upper, f).Contains(p))      Recalibrate(keepVisualPosition: true);
-            else if (ScaleRect(lower, f).Contains(p)) Recalibrate(keepVisualPosition: false);
+            if (ScaleRect(upper, f, sg).Contains(p))      Recalibrate(keepVisualPosition: true);
+            else if (ScaleRect(lower, f, sg).Contains(p)) Recalibrate(keepVisualPosition: false);
         }
 
-        private static Rect ScaleRect(Rect r, float f) =>
-            new Rect(r.x * f, r.y * f, r.width * f, r.height * f);
+        // Virtual -> px reales con el MISMO mapeo que UIScale.Begin: escala por Factor y
+        // traslada al origen del área segura (sg). Sin sumar sg el hit-test queda corrido
+        // en iPhone (notch/Dynamic Island) respecto de dónde se dibujó el botón.
+        private static Rect ScaleRect(Rect r, float f, Rect sg) =>
+            new Rect(sg.x + r.x * f, sg.y + r.y * f, r.width * f, r.height * f);
 
         // Devuelve la posición (en píxeles, origen abajo-izq) del último tap que se
         // soltó este frame, vía EnhancedTouch (device) o Mouse (editor).

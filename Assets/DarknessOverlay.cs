@@ -65,7 +65,10 @@ public class DarknessOverlay : MonoBehaviour
         _quad.transform.localScale = new Vector3(w, h, 1f);
 
         float effectiveDark;
-        if (flashlight != null && !flashlight.isOn)
+        if (flashlight != null && !flashlight.Operational)
+            effectiveDark = 0f;   // fuera de partida (menú/lobby) no oscurecer: el overlay
+                                  // de la linterna solo aparece cuando arranca la partida
+        else if (flashlight != null && !flashlight.isOn)
             effectiveDark = darkWhenFlashlightOff ? darknessWhenOff : 0f;
         else
             effectiveDark = darkness;

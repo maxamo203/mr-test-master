@@ -12,7 +12,10 @@
       "Bash(git lfs *)",
       "Bash(echo \"total LFS files: $\\(git lfs ls-files)",
       "Bash(echo \"[exit $?]\")",
-      "Read(//c/Users/maxam/Downloads/**)"
+      "Read(//c/Users/maxam/Downloads/**)",
+      "Bash(grep -rli \"pause\\\\|pausa\" Assets/Scenes/*.unity Assets/Prefabs/*.prefab)",
+      "Bash(ls Assets/**/*ause*)",
+      "Bash(find Assets -iname \"*pause*\")"
     ]
   }
 }
