@@ -16,6 +16,10 @@ Shader "Custom/ARCameraLateralCrop"
         _textureCbCr    ("TextureCbCr",  2D)    = "black" {}
         _CropOffsetX    ("Crop X Offset", Float) = 0.0
         _CropScaleX     ("Crop X Scale",  Float) = 0.5
+        // Recorte vertical: letterbox para preservar el aspecto nativo del feed (barras
+        // negras arriba/abajo). Default 1/0 = sin recorte vertical (compatibilidad).
+        _CropScaleY     ("Crop Y Scale",  Float) = 1.0
+        _CropOffsetY    ("Crop Y Offset", Float) = 0.0
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -42,6 +46,8 @@ Shader "Custom/ARCameraLateralCrop"
             uniform mat4  _UnityDisplayTransform;
             uniform float _CropOffsetX;
             uniform float _CropScaleX;
+            uniform float _CropScaleY;
+            uniform float _CropOffsetY;
 
 #ifdef VERTEX
             varying vec2 textureCoord;
@@ -80,8 +86,9 @@ Shader "Custom/ARCameraLateralCrop"
             {
 #ifdef SHADER_API_GLES3
                 float cx = textureCoord.x * _CropScaleX + _CropOffsetX;
-                if (cx < 0.0 || cx > 1.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); gl_FragDepth = 1.0; return; }
-                vec2 tc = vec2(cx, textureCoord.y);
+                float cy = textureCoord.y * _CropScaleY + _CropOffsetY;
+                if (cx < 0.0 || cx > 1.0 || cy < 0.0 || cy > 1.0) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); gl_FragDepth = 1.0; return; }
+                vec2 tc = vec2(cx, cy);
                 vec3 result = texture(_MainTex, tc).xyz;
 #ifndef UNITY_COLORSPACE_GAMMA
                 result = GammaToLinearSpace(result);
@@ -117,6 +124,8 @@ Shader "Custom/ARCameraLateralCrop"
             float4x4 _UnityDisplayTransform;
             float    _CropOffsetX;
             float    _CropScaleX;
+            float    _CropScaleY;
+            float    _CropOffsetY;
 
             struct appdata { float4 vertex : POSITION; float3 uv : TEXCOORD0; };
             struct v2f     { float4 position : SV_POSITION; float2 texcoord : TEXCOORD0; };
@@ -154,8 +163,9 @@ Shader "Custom/ARCameraLateralCrop"
             {
                 fragOutput o;
                 float cx = i.texcoord.x * _CropScaleX + _CropOffsetX;
-                if (cx < 0.0 || cx > 1.0) { o.color = float4(0,0,0,1); o.depth = 1.0; return o; }
-                float2 tc = float2(cx, i.texcoord.y);
+                float cy = i.texcoord.y * _CropScaleY + _CropOffsetY;
+                if (cx < 0.0 || cx > 1.0 || cy < 0.0 || cy > 1.0) { o.color = float4(0,0,0,1); o.depth = 1.0; return o; }
+                float2 tc = float2(cx, cy);
                 float3 result = tex2D(_MainTex, tc).xyz;
 #ifndef UNITY_COLORSPACE_GAMMA
                 result = GammaToLinearSpace(result);
@@ -201,6 +211,8 @@ Shader "Custom/ARCameraLateralCrop"
 
             float _CropOffsetX;
             float _CropScaleX;
+            float _CropScaleY;
+            float _CropOffsetY;
 
             struct appdata { float3 position : POSITION; float2 texcoord : TEXCOORD0; };
             struct v2f     { float4 position : SV_POSITION; float2 texcoord : TEXCOORD0; };
@@ -238,8 +250,9 @@ Shader "Custom/ARCameraLateralCrop"
             {
                 fragment_output o;
                 float cx = i.texcoord.x * _CropScaleX + _CropOffsetX;
-                if (cx < 0.0 || cx > 1.0) { o.color = real4(0,0,0,1); o.depth = 1.0; return o; }
-                float2 tc = float2(cx, i.texcoord.y);
+                float cy = i.texcoord.y * _CropScaleY + _CropOffsetY;
+                if (cx < 0.0 || cx > 1.0 || cy < 0.0 || cy > 1.0) { o.color = real4(0,0,0,1); o.depth = 1.0; return o; }
+                float2 tc = float2(cx, cy);
 
                 real4 ycbcr = real4(
                     ARKIT_SAMPLE_TEXTURE2D(_textureY,    sampler_textureY,    tc).r,

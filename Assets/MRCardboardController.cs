@@ -31,8 +31,10 @@ public class MRCardboardController : MonoBehaviour
 
     private Camera            _rightEye;
     private ARCameraBackground _leftBg;
+
+    // Estado de orientación previo a entrar a Cardboard, para restaurarlo tal cual al salir.
     private ScreenOrientation  _prevOrientation;
-    private bool               _prevAutorotate;
+    private bool _prevAutoPortrait, _prevAutoPortraitUpsideDown, _prevAutoLandscapeLeft, _prevAutoLandscapeRight;
 
     public void ToggleCardboardMode() => SetCardboard(!CardboardActive);
 
@@ -60,9 +62,13 @@ public class MRCardboardController : MonoBehaviour
     private void EnterCardboard()
     {
         // Cardboard se sostiene horizontal: fijamos landscape para que las dos mitades
-        // queden lado a lado correctamente.
-        _prevOrientation = Screen.orientation;
-        _prevAutorotate  = Screen.autorotateToLandscapeLeft;
+        // queden lado a lado correctamente. Guardamos TODOS los flags de autorotación
+        // (no solo uno) para poder devolver la orientación exacta al salir.
+        _prevOrientation            = Screen.orientation;
+        _prevAutoPortrait           = Screen.autorotateToPortrait;
+        _prevAutoPortraitUpsideDown = Screen.autorotateToPortraitUpsideDown;
+        _prevAutoLandscapeLeft      = Screen.autorotateToLandscapeLeft;
+        _prevAutoLandscapeRight     = Screen.autorotateToLandscapeRight;
         Screen.orientation = ScreenOrientation.LandscapeLeft;
 
         // Ojo izquierdo = cámara AR, mitad izquierda.
@@ -103,22 +109,50 @@ public class MRCardboardController : MonoBehaviour
 
     private void ExitCardboard()
     {
+        // 1) Fuera el ojo derecho (y su ARCameraBackground) antes de tocar el izquierdo.
         if (_rightEye != null) { Destroy(_rightEye.gameObject); _rightEye = null; }
 
-        // Restaura el material por defecto del ojo izquierdo.
-        if (_leftBg != null)
-        {
-            _leftBg.useCustomMaterial = false;
-            _leftBg.customMaterial    = null;
-            _leftBg = null;
-        }
-
+        // 2) Viewport completo de nuevo para el ojo izquierdo.
         if (arCamera != null) arCamera.rect = new Rect(0f, 0f, 1f, 1f);
 
-        Screen.orientation = _prevAutorotate ? ScreenOrientation.AutoRotation : _prevOrientation;
+        // 3) Restaura el material por defecto del ojo izquierdo y FUERZA a ARCameraBackground a
+        //    reconstruir su command buffer. Síntoma sin esto: al salir, la sesión sigue
+        //    trackeando (los objetos virtuales se mueven) pero el passthrough queda CONGELADO,
+        //    porque el blit del fondo no se re-renderiza tras salir del split/custom-material.
+        //    Toggle enabled = OnDisable/OnEnable → re-engancha el command buffer al viewport nuevo.
+        var leftBg = _leftBg != null
+            ? _leftBg
+            : (arCamera != null ? arCamera.GetComponent<ARCameraBackground>() : null);
+        if (leftBg != null)
+        {
+            leftBg.useCustomMaterial = false;
+            leftBg.customMaterial    = null;
+            leftBg.enabled = false;
+            leftBg.enabled = true;
+        }
+        _leftBg = null;
+
+        // 4) Devuelve la orientación tal como estaba (si no, el celular queda trabado en landscape).
+        RestoreOrientation();
 
         CardboardActive = false;
         Debug.Log("[MRCardboard] Estéreo OFF (AR mono).");
+    }
+
+    // Restaura los flags de autorotación y la orientación previos a entrar a Cardboard.
+    // Primero los flags (para que AutoRotation sepa qué orientaciones permitir) y después la
+    // orientación: si la app permitía autorotar, volvemos a AutoRotation; si estaba fija
+    // (p. ej. portrait bloqueado), restauramos esa orientación concreta.
+    private void RestoreOrientation()
+    {
+        Screen.autorotateToPortrait           = _prevAutoPortrait;
+        Screen.autorotateToPortraitUpsideDown = _prevAutoPortraitUpsideDown;
+        Screen.autorotateToLandscapeLeft      = _prevAutoLandscapeLeft;
+        Screen.autorotateToLandscapeRight     = _prevAutoLandscapeRight;
+
+        bool anyAuto = _prevAutoPortrait || _prevAutoPortraitUpsideDown ||
+                       _prevAutoLandscapeLeft || _prevAutoLandscapeRight;
+        Screen.orientation = anyAuto ? ScreenOrientation.AutoRotation : _prevOrientation;
     }
 
     // Busca la cámara AR (la que tiene ARCameraManager) si no fue asignada en el Inspector.

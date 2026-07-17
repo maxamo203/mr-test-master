@@ -1,12 +1,12 @@
 using UnityEngine;
-using UnityEngine.XR.ARFoundation;
 
-// Panel de calibración en vivo para el modo Cardboard.
-// Muestra sliders sobre la imagen (IMGUI) para ajustar la separación de ojos
-// y el zoom del feed de cámara sin necesidad de recompilar.
-// Los valores se persisten con PlayerPrefs.
+// Estado de calibración del modo Cardboard. Antes dibujaba su propio panel IMGUI con un
+// botón "Config" en pantalla; ahora es HEADLESS: solo mantiene/aplica/persiste los valores
+// (zoom del feed, offset de cada ojo, IPD) y los expone como propiedades para que el menú
+// de pausa (Opciones → Cardboard) los edite. El botón de pantalla se eliminó.
 //
-// Activar/desactivar: triple tap en la pantalla.
+// Los valores se persisten con PlayerPrefs. Se sigue requiriendo el MRCardboardController
+// en el mismo GameObject (dueño de las cámaras estéreo y del IPD).
 [RequireComponent(typeof(MRCardboardController))]
 public class CardboardCalibrationUI : MonoBehaviour
 {
@@ -14,6 +14,7 @@ public class CardboardCalibrationUI : MonoBehaviour
     const string K_OFFSET_L = "cardboard_offsetL";
     const string K_OFFSET_R = "cardboard_offsetR";
     const string K_SCALE    = "cardboard_scale";
+    const string K_IPD      = "cardboard_ipd";
 
     [SerializeField] private Material _cropLeft;
     [SerializeField] private Material _cropRight;
@@ -23,8 +24,37 @@ public class CardboardCalibrationUI : MonoBehaviour
     private float _offsetL;
     private float _offsetR;
     private float _scale;
+    private float _ipd;
 
-    private bool  _visible = false;
+    // ── API pública para el menú de pausa (Opciones → Cardboard) ──────────────────
+    // Rangos y clamps centralizados acá; los setters aplican al toque (materiales / IPD)
+    // y guardan en memoria (el flush a disco se hace con Save(), al cerrar el menú).
+    public const float ScaleMin = 0.3f, ScaleMax = 1f;
+    public const float IpdMin   = 0f,   IpdMax   = 0.15f;
+
+    public float Scale
+    {
+        get => _scale;
+        set { _scale = Mathf.Clamp(value, ScaleMin, ScaleMax); ClampOffsets(); ApplyAll(); Store(); }
+    }
+    public float OffsetL
+    {
+        get => _offsetL;
+        set { _offsetL = Mathf.Clamp(value, 0f, MaxOffset); ApplyAll(); Store(); }
+    }
+    public float OffsetR
+    {
+        get => _offsetR;
+        set { _offsetR = Mathf.Clamp(value, 0f, MaxOffset); ApplyAll(); Store(); }
+    }
+    public float Ipd
+    {
+        get => _ipd;
+        set { _ipd = Mathf.Clamp(value, IpdMin, IpdMax); if (_controller != null) _controller.SetIPD(_ipd); Store(); }
+    }
+
+    // Offset máximo de cada ojo dado el zoom actual (no puede pasarse del borde del feed).
+    public float MaxOffset => 1f - _scale;
 
     private void Awake()
     {
@@ -33,123 +63,74 @@ public class CardboardCalibrationUI : MonoBehaviour
         _scale   = PlayerPrefs.GetFloat(K_SCALE,    0.77f);
         _offsetL = PlayerPrefs.GetFloat(K_OFFSET_L, 0.064f);
         _offsetR = PlayerPrefs.GetFloat(K_OFFSET_R, 0.183f);
+        // Default 0 = objetos virtuales en la MISMA posición en ambos ojos (sin parallax).
+        // Subirlo agrega efecto de profundidad, a costa de que el passthrough (monoscópico)
+        // no acompañe. Ver menú Opciones → Cardboard.
+        _ipd     = PlayerPrefs.GetFloat(K_IPD,      0f);
 
+        ClampOffsets();
         ApplyAll();
-    }
-
-    private bool IsCardboardActive()
-    {
-        foreach (var bg in FindObjectsByType<ARCameraBackground>(FindObjectsSortMode.None))
-        {
-            var cam = bg.GetComponent<Camera>();
-            if (cam != null && Mathf.Abs(cam.rect.width - 0.5f) < 0.1f) return true;
-        }
-        return false;
+        if (_controller != null) _controller.SetIPD(_ipd);
     }
 
     private void Update()
     {
+        // Mientras el estéreo está activo re-aplicamos por si el ARCameraBackground
+        // recreó/reseteó su material (igual que antes).
         if (IsCardboardActive()) ApplyAll();
     }
 
-    private void OnGUI()
+    private bool IsCardboardActive()
     {
-        if (!IsCardboardActive()) return;
-
-        // Tamaños proporcionales a la resolución real (sin GUI.matrix).
-        // En 1080p landscape: fs≈34, bh≈86, slh≈65.
-        int   fs  = Mathf.RoundToInt(Screen.height * 0.032f);
-        float bh  = Screen.height * 0.08f;
-        float slh = Screen.height * 0.06f;
-
-        var lblStyle = new GUIStyle(GUI.skin.label)  { fontSize = fs };
-        var btnStyle = new GUIStyle(GUI.skin.button) { fontSize = fs };
-
-        // Debajo de "Unirse a partida" del GameBootstrapper (~y=155px)
-        var btnRect = new Rect(10, 170, 220, bh);
-        if (GUI.Button(btnRect, _visible ? "Cerrar" : "Config", btnStyle))
-            _visible = !_visible;
-
-        if (!_visible) return;
-
-        float pw = Screen.width  * 0.75f;
-        float ph = Screen.height * 0.85f;
-        float px = (Screen.width  - pw) * 0.5f;
-        float py = (Screen.height - ph) * 0.5f;
-
-        GUI.Box(new Rect(px - 8, py - 8, pw + 16, ph + 16), "");
-        GUILayout.BeginArea(new Rect(px, py, pw, ph));
-
-        GUILayout.Label("Calibración Cardboard", lblStyle);
-        GUILayout.Space(10);
-
-        _scale   = Slider("Zoom feed",      _scale,   0.3f, 1f,        "F2", fs, slh);
-        float maxOffset = 1f - _scale;
-        _offsetL = Slider("Offset ojo izq", _offsetL, 0f,   maxOffset, "F3", fs, slh);
-        _offsetR = Slider("Offset ojo der", _offsetR, 0f,   maxOffset, "F3", fs, slh);
-        _offsetL = Mathf.Clamp(_offsetL, 0f, maxOffset);
-        _offsetR = Mathf.Clamp(_offsetR, 0f, maxOffset);
-
-        GUILayout.Space(14);
-        if (GUILayout.Button("Resetear defaults", btnStyle, GUILayout.Height(bh)))
-            { _scale = 0.77f; _offsetL = 0.064f; _offsetR = 0.183f; }
-
-        GUILayout.Space(8);
-        if (GUILayout.Button("Guardar y cerrar", btnStyle, GUILayout.Height(bh)))
-            { Save(); _visible = false; }
-
-        GUILayout.EndArea();
-        ApplyAll();
+        return _controller != null && _controller.CardboardActive;
     }
 
-    private float Slider(string label, float value, float min, float max, string fmt, int fs, float slh)
+    private void ClampOffsets()
     {
-        GUILayout.Label($"{label}: {value.ToString(fmt)}", new GUIStyle(GUI.skin.label) { fontSize = fs });
-        float v = GUILayout.HorizontalSlider(value, min, max, GUILayout.Height(slh));
-        GUILayout.Space(6);
-        return v;
+        _offsetL = Mathf.Clamp(_offsetL, 0f, MaxOffset);
+        _offsetR = Mathf.Clamp(_offsetR, 0f, MaxOffset);
     }
 
     private void ApplyAll()
     {
+        // Letterbox vertical: preserva el aspecto NATIVO del feed (barras negras arriba/abajo)
+        // en vez de estirarlo. Cada ojo usa medio ancho de pantalla → el horizontal queda
+        // comprimido 2×; para que no se vea estirado, comprimimos el vertical en la misma
+        // proporción. La relación isotrópica exacta (se acopla sola al zoom X):
+        //   _CropScaleY = 2·scale ,  _CropOffsetY = 0.5 − scale
+        // (scale>0.5 → barras negras; scale<0.5 → recorta el feed; scale=0.5 → sin barras).
+        float cropScaleY  = 2f * _scale;
+        float cropOffsetY = 0.5f - _scale;
+
         if (_cropLeft != null)
         {
             _cropLeft.SetFloat("_CropOffsetX", _offsetL);
             _cropLeft.SetFloat("_CropScaleX",  _scale);
+            _cropLeft.SetFloat("_CropScaleY",  cropScaleY);
+            _cropLeft.SetFloat("_CropOffsetY", cropOffsetY);
         }
         if (_cropRight != null)
         {
             _cropRight.SetFloat("_CropOffsetX", _offsetR);
             _cropRight.SetFloat("_CropScaleX",  _scale);
+            _cropRight.SetFloat("_CropScaleY",  cropScaleY);
+            _cropRight.SetFloat("_CropOffsetY", cropOffsetY);
         }
-
-        // Solo toca cámaras en modo split (rect.width ≈ 0.5 = modo Cardboard).
-        // Ignora cámaras full-screen y cámaras sin ARCameraBackground.
-        foreach (var bg in FindObjectsByType<ARCameraBackground>(FindObjectsSortMode.None))
-        {
-            var cam = bg.GetComponent<Camera>();
-            if (cam == null) continue;
-            if (Mathf.Abs(cam.rect.width - 0.5f) > 0.1f) continue; // no es split
-
-            if (cam.rect.x < 0.1f && _cropLeft != null)
-            {
-                bg.useCustomMaterial = true;
-                bg.customMaterial    = _cropLeft;
-            }
-            else if (cam.rect.x >= 0.4f && _cropRight != null)
-            {
-                bg.useCustomMaterial = true;
-                bg.customMaterial    = _cropRight;
-            }
-        }
-
     }
 
-    private void Save()
+    // Guarda los valores en PlayerPrefs (sin flush). Store lo hacen los setters.
+    private void Store()
     {
         PlayerPrefs.SetFloat(K_OFFSET_L, _offsetL);
         PlayerPrefs.SetFloat(K_OFFSET_R, _offsetR);
         PlayerPrefs.SetFloat(K_SCALE,    _scale);
+        PlayerPrefs.SetFloat(K_IPD,      _ipd);
+    }
+
+    // Flush a disco. El menú de pausa lo llama al salir del submenú / cerrarse.
+    public void Save()
+    {
+        Store();
         PlayerPrefs.Save();
     }
 }

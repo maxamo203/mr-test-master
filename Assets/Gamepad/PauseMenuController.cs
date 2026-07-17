@@ -22,11 +22,23 @@ namespace Gamepad
     [DefaultExecutionOrder(-55)]
     public class PauseMenuController : MonoBehaviour
     {
-        private enum Page { Main, Options, Flashlight }
+        // Main → Opciones/Reanudar. Opciones es un hub que abre 3 subcategorías:
+        // Control (mando), Cardboard (calibración estéreo) y Flashlight (linterna).
+        private enum Page { Main, Options, Control, Cardboard, Flashlight }
 
         private bool _open;
         private Page _page = Page.Main;
         private int  _focus;
+        // Al entrar a una página, enfocar el ÚLTIMO ítem (siempre "Volver"/"Reanudar") en vez
+        // del primero, para no dejar resaltado el primer contenido (p. ej. "Control"). Se
+        // resuelve en OnGUI, cuando ya se sabe cuántos ítems hay.
+        private bool _focusLast;
+
+        // El resaltado amarillo es el indicador de foco del GAMEPAD. Con touch no hay
+        // "selección" persistente, así que solo lo mostramos si hay un mando conectado
+        // (si no, todos los botones se ven grises).
+        private bool ShowFocus =>
+            GamepadManager.Instance != null && GamepadManager.Instance.IsConnected;
 
         // Ítems interactivos del panel visible, en coords VIRTUALES. Se reconstruye
         // en cada OnGUI; Update los usa para navegación (foco) y hit-test de tap.
@@ -39,6 +51,7 @@ namespace Gamepad
         private struct SliderHit { public string id; public Rect dec; public Rect inc; public Rect val; }
         private readonly List<SliderHit> _sliderHits = new();
         private Flashlight _fl;
+        private CardboardCalibrationUI _cb;
 
         // Edición manual del valor de un slider: id en edición, teclado nativo (device) y
         // el texto actual. En editor se usa un GUI.TextField con el teclado físico.
@@ -81,11 +94,13 @@ namespace Gamepad
             DrawRect(full, new Color(0f, 0f, 0f, 0.72f));
             UIBlocker.AddVirtualRect(full);
 
-            // Panel centrado.
+            // Panel centrado. La altura depende de la página (cada submenú tiene su alto).
             float pw = Mathf.Min(vw - 40f, 560f);
             float ph = Mathf.Min(vh - 120f,
-                _page == Page.Options   ? 820f :
-                _page == Page.Flashlight ? 540f : 360f);
+                _page == Page.Control    ? 820f :
+                _page == Page.Flashlight ? 660f :
+                _page == Page.Cardboard  ? 560f :
+                _page == Page.Options    ? 460f : 320f);
             var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
             DrawRect(panel, new Color(0.10f, 0.10f, 0.12f, 0.98f));
 
@@ -97,12 +112,82 @@ namespace Gamepad
             {
                 GUI.Label(new Rect(x, y, w, 50f), "Pausa", _title); y += 64f;
                 AddButton("opciones", new Rect(x, y, w, 64f), "Opciones"); y += 76f;
-                AddButton("linterna", new Rect(x, y, w, 64f), "Linterna"); y += 76f;
                 AddButton("reanudar", new Rect(x, y, w, 64f), "Reanudar"); y += 76f;
             }
-            else if (_page == Page.Flashlight)
+            else if (_page == Page.Options)
+            {
+                // Hub de opciones: solo navegación a las 3 subcategorías.
+                GUI.Label(new Rect(x, y, w, 50f), "Opciones", _title); y += 64f;
+                AddButton("control",   new Rect(x, y, w, 64f), "Control (mando)"); y += 76f;
+                AddButton("cardboard", new Rect(x, y, w, 64f), "Cardboard");       y += 76f;
+                AddButton("linterna",  new Rect(x, y, w, 64f), "Linterna");        y += 76f;
+                AddButton("volver",    new Rect(x, y, w, 60f), "Volver");
+            }
+            else if (_page == Page.Control)
+            {
+                // Estado del mando, batería y gamepad virtual en vivo.
+                GUI.Label(new Rect(x, y, w, 50f), "Control", _title); y += 60f;
+
+                var gm = GamepadManager.Instance;
+                string status = (gm != null && gm.IsConnected)
+                    ? $"Joystick: {gm.DisplayName}\nTipo: {gm.Brand}   -   Estado: Conectado"
+                    : "Joystick: ninguno\nConectá un mando por Bluetooth desde el sistema.";
+                GUI.Label(new Rect(x, y, w, 72f), status, _status); y += 78f;
+
+                if (gm != null && gm.IsConnected)
+                {
+                    bool present = gm.TryGetBattery(out float lvl);
+                    DrawBattery(new Rect(x, y, w, 38f), lvl, present);
+                    y += 52f;
+                }
+
+                float gh = w * 0.62f;           // proporción ~landscape
+                var gpArea = new Rect(x, y, w, gh);
+                DrawRect(gpArea, new Color(0.06f, 0.06f, 0.07f, 1f));
+                var st = gm != null ? gm.ReadState() : default;
+                GamepadVisualizer.Draw(gpArea, gm != null ? gm.Brand : GamepadBrand.None, st);
+                y += gh + 16f;
+
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+            }
+            else if (_page == Page.Cardboard)
+            {
+                // Calibración del estéreo Cardboard (antes en el botón "Config" de pantalla).
+                GUI.Label(new Rect(x, y, w, 50f), "Cardboard", _title); y += 62f;
+
+                var cb = GetCardboard();
+                if (cb == null)
+                {
+                    GUI.Label(new Rect(x, y, w, 60f),
+                              "El modo Cardboard no está disponible en esta escena.", _status);
+                    y += 70f;
+                }
+                else
+                {
+                    AddSlider("cb_zoom", new Rect(x, y, w, 60f), "Zoom feed", cb.Scale,
+                              CardboardCalibrationUI.ScaleMin, CardboardCalibrationUI.ScaleMax, "{0:0.00}");   y += 68f;
+                    AddSlider("cb_offL", new Rect(x, y, w, 60f), "Distancia ojo izq", cb.OffsetL,
+                              0f, cb.MaxOffset, "{0:0.000}"); y += 68f;
+                    AddSlider("cb_offR", new Rect(x, y, w, 60f), "Distancia ojo der", cb.OffsetR,
+                              0f, cb.MaxOffset, "{0:0.000}"); y += 68f;
+                    AddSlider("cb_ipd",  new Rect(x, y, w, 60f), "Profundidad (IPD)", cb.Ipd,
+                              CardboardCalibrationUI.IpdMin, CardboardCalibrationUI.IpdMax, "{0:0.000} m"); y += 68f;
+                }
+
+                y += 6f;
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+            }
+            else // Flashlight
             {
                 GUI.Label(new Rect(x, y, w, 50f), "Linterna", _title); y += 62f;
+
+                // Toggles de iluminación (efecto de oscurecido y malla LiDAR/AR).
+                AddToggle("envlight", new Rect(x, y, w, 52f),
+                          "Iluminación del entorno (tiempo real)",
+                          EnvironmentLightingController.Enabled); y += 62f;
+                AddToggle("meshlight", new Rect(x, y, w, 52f),
+                          "Iluminar malla del entorno (LiDAR/AR)",
+                          FlashlightMeshLighting.Enabled); y += 66f;
 
                 var fl = GetFlashlight();
                 if (fl == null)
@@ -121,56 +206,20 @@ namespace Gamepad
                 y += 6f;
                 AddButton("volver", new Rect(x, y, w, 60f), "Volver");
             }
-            else // Options
+
+            // Resuelve el foco: si se pidió "enfocar el último" (al entrar a la página), ahora
+            // que ya sabemos cuántos ítems hay, apuntamos a "Volver"/"Reanudar". Si no, clamp.
+            if (_items.Count > 0)
             {
-                GUI.Label(new Rect(x, y, w, 50f), "Opciones", _title); y += 60f;
-
-                // Toggle: efecto de oscurecido/linterna (DarknessOverlay) — para probar.
-                AddToggle("envlight", new Rect(x, y, w, 52f),
-                          "Iluminación del entorno (tiempo real)",
-                          EnvironmentLightingController.Enabled);
-                y += 62f;
-
-                // Toggle: malla dinámica del entorno (AR/LiDAR) iluminada por la linterna.
-                AddToggle("meshlight", new Rect(x, y, w, 52f),
-                          "Iluminar malla del entorno (LiDAR/AR)",
-                          FlashlightMeshLighting.Enabled);
-                y += 66f;
-
-                // Estado del joystick.
-                var gm = GamepadManager.Instance;
-                string status = (gm != null && gm.IsConnected)
-                    ? $"Joystick: {gm.DisplayName}\nTipo: {gm.Brand}   -   Estado: Conectado"
-                    : "Joystick: ninguno\nConectá un mando por Bluetooth desde el sistema.";
-                GUI.Label(new Rect(x, y, w, 72f), status, _status); y += 78f;
-
-                // Batería del mando (barrita con forma de batería + porcentaje).
-                if (gm != null && gm.IsConnected)
-                {
-                    bool present = gm.TryGetBattery(out float lvl);
-                    DrawBattery(new Rect(x, y, w, 38f), lvl, present);
-                    y += 52f;
-                }
-
-                // Gamepad virtual (refleja las pulsaciones en vivo).
-                float gh = w * 0.62f;           // proporción ~landscape
-                var gpArea = new Rect(x, y, w, gh);
-                DrawRect(gpArea, new Color(0.06f, 0.06f, 0.07f, 1f));
-                var st = gm != null ? gm.ReadState() : default;
-                GamepadVisualizer.Draw(gpArea, gm != null ? gm.Brand : GamepadBrand.None, st);
-                y += gh + 16f;
-
-                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+                if (_focusLast) { _focus = _items.Count - 1; _focusLast = false; }
+                else _focus = Mathf.Clamp(_focus, 0, _items.Count - 1);
             }
-
-            // Asegura que el foco quede dentro de rango.
-            if (_items.Count > 0) _focus = Mathf.Clamp(_focus, 0, _items.Count - 1);
         }
 
         // Dibuja un botón (resaltado si tiene el foco) y lo registra como ítem.
         private void AddButton(string id, Rect rect, string label)
         {
-            bool focused = _items.Count == _focus;
+            bool focused = ShowFocus && _items.Count == _focus;
             GUI.Label(rect, label, focused ? _btnFocus : _btn);
             UIBlocker.AddVirtualRect(rect);
             _items.Add(new Item { id = id, rect = rect });
@@ -181,7 +230,7 @@ namespace Gamepad
         private void AddSlider(string id, Rect rect, string label, float value,
                                float min, float max, string fmt)
         {
-            bool focused = _items.Count == _focus;
+            bool focused = ShowFocus && _items.Count == _focus;
             DrawRect(rect, focused ? new Color(0.95f, 0.85f, 0.20f, 0.30f)
                                    : new Color(1f, 1f, 1f, 0.07f));
 
@@ -238,40 +287,70 @@ namespace Gamepad
             return _fl;
         }
 
-        private static bool IsSlider(string id) => id != null && id.StartsWith("fl_");
+        private CardboardCalibrationUI GetCardboard()
+        {
+            if (_cb == null) _cb = FindFirstObjectByType<CardboardCalibrationUI>();
+            return _cb;
+        }
 
-        // Ajusta un parámetro de la linterna (dir = ±1). Pasos por parámetro.
+        // Persiste la calibración de Cardboard a disco (si existe en la escena).
+        private void SaveCardboard()
+        {
+            var cb = GetCardboard();
+            if (cb != null) cb.Save();
+        }
+
+        // Los sliders llevan prefijo por familia: fl_ (linterna) y cb_ (cardboard).
+        private static bool IsSlider(string id) =>
+            id != null && (id.StartsWith("fl_") || id.StartsWith("cb_"));
+
+        // Ajusta un parámetro (dir = ±1). Paso por parámetro (grados/metros/factor).
         private void Adjust(string id, float dir)
         {
-            float step = id == "fl_range" ? 1f : id == "fl_intensity" ? 0.5f : 2f;
-            SetFlashlightValue(id, CurrentValue(id) + dir * step);
+            float step;
+            switch (id)
+            {
+                case "fl_range":     step = 1f;     break;
+                case "fl_intensity": step = 0.5f;   break;
+                case "cb_zoom":      step = 0.02f;  break;
+                case "cb_offL":
+                case "cb_offR":
+                case "cb_ipd":       step = 0.005f; break;
+                default:             step = 2f;     break;   // fl_outer / fl_inner (grados)
+            }
+            SetSliderValue(id, CurrentValue(id) + dir * step);
         }
 
         private float CurrentValue(string id)
         {
-            var fl = GetFlashlight();
-            if (fl == null) return 0f;
             switch (id)
             {
-                case "fl_range":     return fl.range;
-                case "fl_outer":     return fl.outerAngleDeg;
-                case "fl_inner":     return fl.innerAngleDeg;
-                case "fl_intensity": return fl.intensity;
+                case "fl_range":     { var fl = GetFlashlight(); return fl != null ? fl.range         : 0f; }
+                case "fl_outer":     { var fl = GetFlashlight(); return fl != null ? fl.outerAngleDeg : 0f; }
+                case "fl_inner":     { var fl = GetFlashlight(); return fl != null ? fl.innerAngleDeg : 0f; }
+                case "fl_intensity": { var fl = GetFlashlight(); return fl != null ? fl.intensity     : 0f; }
+                case "cb_zoom":      { var cb = GetCardboard();  return cb != null ? cb.Scale   : 0f; }
+                case "cb_offL":      { var cb = GetCardboard();  return cb != null ? cb.OffsetL : 0f; }
+                case "cb_offR":      { var cb = GetCardboard();  return cb != null ? cb.OffsetR : 0f; }
+                case "cb_ipd":       { var cb = GetCardboard();  return cb != null ? cb.Ipd     : 0f; }
             }
             return 0f;
         }
 
         // Setea un parámetro con su clamp (compartido por [-]/[+] y por la edición manual).
-        private void SetFlashlightValue(string id, float value)
+        // Los cb_ clampean dentro de CardboardCalibrationUI (setters).
+        private void SetSliderValue(string id, float value)
         {
-            var fl = GetFlashlight();
-            if (fl == null) return;
             switch (id)
             {
-                case "fl_range":     fl.range         = Mathf.Clamp(value, 0.5f, 30f); break;
-                case "fl_outer":     fl.outerAngleDeg = Mathf.Clamp(value, 2f,   89f); break;
-                case "fl_inner":     fl.innerAngleDeg = Mathf.Clamp(value, 0f,   fl.outerAngleDeg - 1f); break;
-                case "fl_intensity": fl.intensity     = Mathf.Clamp(value, 0f,   10f); break;
+                case "fl_range":     { var fl = GetFlashlight(); if (fl != null) fl.range         = Mathf.Clamp(value, 0.5f, 30f); break; }
+                case "fl_outer":     { var fl = GetFlashlight(); if (fl != null) fl.outerAngleDeg = Mathf.Clamp(value, 2f,   89f); break; }
+                case "fl_inner":     { var fl = GetFlashlight(); if (fl != null) fl.innerAngleDeg = Mathf.Clamp(value, 0f, fl.outerAngleDeg - 1f); break; }
+                case "fl_intensity": { var fl = GetFlashlight(); if (fl != null) fl.intensity     = Mathf.Clamp(value, 0f,   10f); break; }
+                case "cb_zoom":      { var cb = GetCardboard(); if (cb != null) cb.Scale   = value; break; }
+                case "cb_offL":      { var cb = GetCardboard(); if (cb != null) cb.OffsetL = value; break; }
+                case "cb_offR":      { var cb = GetCardboard(); if (cb != null) cb.OffsetR = value; break; }
+                case "cb_ipd":       { var cb = GetCardboard(); if (cb != null) cb.Ipd     = value; break; }
             }
         }
 
@@ -292,7 +371,7 @@ namespace Gamepad
         {
             if (_editingSlider == null) return;
             if (float.TryParse(_editText, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
-                SetFlashlightValue(_editingSlider, v);
+                SetSliderValue(_editingSlider, v);
             CancelEdit();
         }
 
@@ -307,7 +386,7 @@ namespace Gamepad
         // como ítem (tap / South la togglean, igual que un botón).
         private void AddToggle(string id, Rect rect, string label, bool value)
         {
-            bool focused = _items.Count == _focus;
+            bool focused = ShowFocus && _items.Count == _focus;
             DrawRect(rect, focused ? new Color(0.95f, 0.85f, 0.20f, 0.30f)
                                    : new Color(1f, 1f, 1f, 0.07f));
             GUI.Label(new Rect(rect.x + 14f, rect.y, rect.width - 80f, rect.height), label, _toggleLbl);
@@ -438,25 +517,40 @@ namespace Gamepad
         {
             CommitEdit();
             _open = !_open;
+            if (!_open) SaveCardboard();   // al cerrar, persistir la calibración
             _page = Page.Main;
-            _focus = 0;
+            _focus = 0; _focusLast = true;
         }
 
+        // Un nivel hacia atrás: submenú → Opciones, Opciones → Main, Main → cerrar.
         private void Back()
         {
             CommitEdit();
-            if (_page == Page.Options || _page == Page.Flashlight) { _page = Page.Main; _focus = 0; }
-            else _open = false;
+            switch (_page)
+            {
+                case Page.Options:
+                    _page = Page.Main; _focus = 0; _focusLast = true; break;
+                case Page.Cardboard:
+                    SaveCardboard();
+                    _page = Page.Options; _focus = 0; _focusLast = true; break;
+                case Page.Control:
+                case Page.Flashlight:
+                    _page = Page.Options; _focus = 0; _focusLast = true; break;
+                default: // Main
+                    _open = false; break;
+            }
         }
 
         private void Activate(string id)
         {
             switch (id)
             {
-                case "opciones": _page = Page.Options;   _focus = 0; break;
-                case "linterna": _page = Page.Flashlight; _focus = 0; break;
-                case "reanudar": _open = false; break;
-                case "volver":   _page = Page.Main;  _focus = 0; break;
+                case "opciones":  _page = Page.Options;    _focus = 0; _focusLast = true; break;
+                case "control":   _page = Page.Control;    _focus = 0; _focusLast = true; break;
+                case "cardboard": _page = Page.Cardboard;  _focus = 0; _focusLast = true; break;
+                case "linterna":  _page = Page.Flashlight; _focus = 0; _focusLast = true; break;
+                case "reanudar":  _open = false; SaveCardboard(); break;
+                case "volver":    Back(); break;
                 case "envlight":  EnvironmentLightingController.Enabled = !EnvironmentLightingController.Enabled; break;
                 case "meshlight": FlashlightMeshLighting.Enabled       = !FlashlightMeshLighting.Enabled;       break;
             }
