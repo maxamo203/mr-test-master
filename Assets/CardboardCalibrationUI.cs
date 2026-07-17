@@ -93,28 +93,24 @@ public class CardboardCalibrationUI : MonoBehaviour
 
     private void ApplyAll()
     {
-        // Letterbox vertical: preserva el aspecto NATIVO del feed (barras negras arriba/abajo)
-        // en vez de estirarlo. Cada ojo usa medio ancho de pantalla → el horizontal queda
-        // comprimido 2×; para que no se vea estirado, comprimimos el vertical en la misma
-        // proporción. La relación isotrópica exacta (se acopla sola al zoom X):
-        //   _CropScaleY = 2·scale ,  _CropOffsetY = 0.5 − scale
-        // (scale>0.5 → barras negras; scale<0.5 → recorta el feed; scale=0.5 → sin barras).
-        float cropScaleY  = 2f * _scale;
-        float cropOffsetY = 0.5f - _scale;
-
+        // NOTA: el letterbox vertical por shader (_CropScaleY/_CropOffsetY) se REVIRTIÓ.
+        // Comprimía solo el FEED, no la proyección de los objetos virtuales → estos quedaban
+        // desfasados (se movían ~1.5× más que la cámara). Arreglar el aspecto SIN romper el
+        // alineado AR requiere renderizar cada ojo a un RenderTexture con su aspecto correcto
+        // y hacer blit con letterbox (pendiente). Por ahora Y sin recorte (1/0).
         if (_cropLeft != null)
         {
             _cropLeft.SetFloat("_CropOffsetX", _offsetL);
             _cropLeft.SetFloat("_CropScaleX",  _scale);
-            _cropLeft.SetFloat("_CropScaleY",  cropScaleY);
-            _cropLeft.SetFloat("_CropOffsetY", cropOffsetY);
+            _cropLeft.SetFloat("_CropScaleY",  1f);
+            _cropLeft.SetFloat("_CropOffsetY", 0f);
         }
         if (_cropRight != null)
         {
             _cropRight.SetFloat("_CropOffsetX", _offsetR);
             _cropRight.SetFloat("_CropScaleX",  _scale);
-            _cropRight.SetFloat("_CropScaleY",  cropScaleY);
-            _cropRight.SetFloat("_CropOffsetY", cropOffsetY);
+            _cropRight.SetFloat("_CropScaleY",  1f);
+            _cropRight.SetFloat("_CropOffsetY", 0f);
         }
     }
 

@@ -57,9 +57,18 @@ public class DarknessOverlay : MonoBehaviour
     {
         if (_quad == null || arCamera == null) return;
 
+        // Sobredimensionamos el quad para que SIEMPRE tape toda la cámara visible. Dos motivos:
+        //  1) AR Foundation reemplaza la proyección por las intrínsecas de la cámara, así que la
+        //     FOV real no coincide con arCamera.fieldOfView → el quad "exacto" queda chico y deja
+        //     márgenes (parece que respeta la zona segura).
+        //  2) En Cardboard hay dos ojos (viewports izq/der); un quad ajustado a uno deja el otro
+        //     costado sin tapar.
+        // El negro sobrante se recorta contra el borde de pantalla y el cono de la linterna se
+        // calcula en world-space (por-ojo), así que pasarnos de tamaño no tiene costo visual.
+        const float kOversize = 2.5f;
         float dist = arCamera.nearClipPlane * 1.5f + 0.01f;
-        float h = 2f * dist * Mathf.Tan(arCamera.fieldOfView * 0.5f * Mathf.Deg2Rad);
-        float w = h * arCamera.aspect;
+        float h = 2f * dist * Mathf.Tan(arCamera.fieldOfView * 0.5f * Mathf.Deg2Rad) * kOversize;
+        float w = h * Mathf.Max(arCamera.aspect, 2.2f);   // ancho suficiente para landscape y ambos ojos
         _quad.transform.localPosition = new Vector3(0f, 0f, dist);
         _quad.transform.localRotation = Quaternion.identity;
         _quad.transform.localScale = new Vector3(w, h, 1f);
