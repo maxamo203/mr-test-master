@@ -94,14 +94,21 @@ izquierdo (`enabled=false; enabled=true`) tras restaurar material default + view
 — el blit del fondo se "pega" al salir del split/custom-material; (b) `RestoreOrientation()`
 guarda/restaura los **4 flags** de autorotación (antes miraba solo `autorotateToLandscapeLeft`).
 
-**Aspecto estirado — el fix por shader NO sirve para AR (revertido).** El feed se estira
-porque `_UnityDisplayTransform` asume pantalla completa pero se renderiza en medio viewport.
-Se intentó `_CropScaleY`/`_CropOffsetY` en el shader (quedan con default 1/0 = no-op),
-calculados como `2·scale`/`0.5−scale`. **Problema:** comprime solo el FEED, no la proyección
-de los virtuales → desfase (los virtuales se mueven ~1.5× más que la cámara). **Regla:**
-cualquier corrección de aspecto que toque solo el feed rompe el alineado AR; feed y virtuales
-tienen que escalarse juntos. El fix correcto (pendiente, grande) es **renderizar cada ojo a
-un RenderTexture con su aspecto propio + blit con letterbox** — mismo rewrite que [[4]].
+**REWRITE a RenderTexture (2026-07-18, implementado, falta probar en device).** Antes: 2
+`ARCameraBackground` + recorte por shader `ARCameraLateralCrop` → crash al salir ([[4]]) y no
+se podía corregir el aspecto sin desfasar los virtuales (el recorte tocaba solo el FEED, no la
+proyección → "muevo poco y las paredes se mueven mucho"). **Regla aprendida:** cualquier
+corrección que toque solo el feed rompe el alineado AR; feed y virtuales tienen que escalarse
+juntos. **Arquitectura nueva:** UN solo `ARCameraBackground`. La cámara AR renderiza TODO
+(passthrough + virtuales + oscuridad) a una `RenderTexture` `_fullRT` (el AR mono a textura).
+Se muestra 2 veces con un Canvas Overlay + dos `RawImage`, cada una con su `uvRect`
+(zoom + offset por ojo) y su tamaño con **letterbox** (aspecto nativo, barras negras). Como
+passthrough y virtuales viven juntos en `_fullRT`, recortar/letterboxear nunca los desfasa.
+Trade-off: MONO (sin estéreo real de profundidad; IPD ya era 0). Nunca 2 backgrounds → sin
+crash. Salir: `targetTexture=null` + toggle `_bg.enabled` (rebuild, si no se congela) +
+destruir Canvas/RT + `RestoreOrientation()` (4 flags). **Riesgo #1 a validar:** que el
+`ARCameraBackground` renderice el passthrough DENTRO de la RT. El shader `ARCameraLateralCrop`
+y sus materiales quedaron sin uso.
 
 **`DarknessOverlay` debe tapar TODA la cámara.** El quad se dimensionaba con
 `arCamera.fieldOfView`/`aspect`, pero AR Foundation reemplaza la proyección por las
@@ -112,8 +119,8 @@ de tamaño no tiene costo.
 
 **Menú de pausa (`PauseMenuController`):** reestructurado a Main (Opciones/Reanudar) →
 Opciones (Control/Cardboard/Linterna). `CardboardCalibrationUI` pasó de panel IMGUI con botón
-"Config" en pantalla a **servicio headless** (estado + props `Scale/OffsetL/OffsetR/Ipd` +
-`Save`); el menú lo maneja. Relacionado: [[4]], [[5]].
+"Config" en pantalla a **servicio headless** (solo estado + props `Scale/OffsetL/OffsetR` +
+`Save`, PlayerPrefs); el compositor de [[3]] los lee. Relacionado: [[4]], [[5]].
 
 ---
 

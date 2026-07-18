@@ -99,7 +99,7 @@ namespace Gamepad
             float ph = Mathf.Min(vh - 120f,
                 _page == Page.Control    ? 820f :
                 _page == Page.Flashlight ? 660f :
-                _page == Page.Cardboard  ? 560f :
+                _page == Page.Cardboard  ? 460f :
                 _page == Page.Options    ? 460f : 320f);
             var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
             DrawRect(panel, new Color(0.10f, 0.10f, 0.12f, 0.98f));
@@ -170,8 +170,6 @@ namespace Gamepad
                               0f, cb.MaxOffset, "{0:0.000}"); y += 68f;
                     AddSlider("cb_offR", new Rect(x, y, w, 60f), "Distancia ojo der", cb.OffsetR,
                               0f, cb.MaxOffset, "{0:0.000}"); y += 68f;
-                    AddSlider("cb_ipd",  new Rect(x, y, w, 60f), "Profundidad (IPD)", cb.Ipd,
-                              CardboardCalibrationUI.IpdMin, CardboardCalibrationUI.IpdMax, "{0:0.000} m"); y += 68f;
                 }
 
                 y += 6f;
@@ -314,8 +312,7 @@ namespace Gamepad
                 case "fl_intensity": step = 0.5f;   break;
                 case "cb_zoom":      step = 0.02f;  break;
                 case "cb_offL":
-                case "cb_offR":
-                case "cb_ipd":       step = 0.005f; break;
+                case "cb_offR":      step = 0.005f; break;
                 default:             step = 2f;     break;   // fl_outer / fl_inner (grados)
             }
             SetSliderValue(id, CurrentValue(id) + dir * step);
@@ -332,7 +329,6 @@ namespace Gamepad
                 case "cb_zoom":      { var cb = GetCardboard();  return cb != null ? cb.Scale   : 0f; }
                 case "cb_offL":      { var cb = GetCardboard();  return cb != null ? cb.OffsetL : 0f; }
                 case "cb_offR":      { var cb = GetCardboard();  return cb != null ? cb.OffsetR : 0f; }
-                case "cb_ipd":       { var cb = GetCardboard();  return cb != null ? cb.Ipd     : 0f; }
             }
             return 0f;
         }
@@ -350,7 +346,6 @@ namespace Gamepad
                 case "cb_zoom":      { var cb = GetCardboard(); if (cb != null) cb.Scale   = value; break; }
                 case "cb_offL":      { var cb = GetCardboard(); if (cb != null) cb.OffsetL = value; break; }
                 case "cb_offR":      { var cb = GetCardboard(); if (cb != null) cb.OffsetR = value; break; }
-                case "cb_ipd":       { var cb = GetCardboard(); if (cb != null) cb.Ipd     = value; break; }
             }
         }
 
