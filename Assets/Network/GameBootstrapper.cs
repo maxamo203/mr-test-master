@@ -29,11 +29,17 @@ public class GameBootstrapper : MonoBehaviour
     private List<string>         _maps = new();
     private Vector2              _mapsScroll;
 
+    // Navegación con gamepad de todos los botones del lobby (host/join/mapas/cardboard).
+    private readonly Gamepad.ImguiGamepadMenu _nav = new();
+
     private void Awake() => _net = GetComponent<NetworkManager>();
+
+    private void Update() => _nav.Update();
 
     private void OnGUI()
     {
         GUILayout.BeginArea(new Rect(10, 10, 380, 460));
+        _nav.Begin();
 
         switch (_screen)
         {
@@ -43,6 +49,7 @@ public class GameBootstrapper : MonoBehaviour
             case Screen.Running:      DrawRunning();     break;
         }
 
+        _nav.End();
         GUILayout.EndArea();
     }
 
@@ -53,14 +60,14 @@ public class GameBootstrapper : MonoBehaviour
         GUILayout.Label("=== Multiplayer AR ===");
         GUILayout.Space(8);
 
-        if (GUILayout.Button("Crear partida (Host)", GUILayout.Width(280), GUILayout.Height(50)))
+        _nav.Button("Crear partida (Host)", () =>
         {
             _maps   = ScanSerializer.ListSaved();
             _screen = Screen.SelectingMap;
-        }
+        }, GUILayout.Width(280), GUILayout.Height(50));
         GUILayout.Space(8);
-        if (GUILayout.Button("Unirse a partida", GUILayout.Width(280), GUILayout.Height(50)))
-            _screen = Screen.JoinEntry;
+        _nav.Button("Unirse a partida", () => _screen = Screen.JoinEntry,
+                    GUILayout.Width(280), GUILayout.Height(50));
     }
 
     private void DrawMapSelect()
@@ -81,15 +88,15 @@ public class GameBootstrapper : MonoBehaviour
                 bool hasImg = ScanSerializer.HasRefImage(name);
                 GUI.enabled = hasImg; // sin imagen de referencia no se puede sincronizar
                 var label = hasImg ? name : $"{name}  (sin imagen de ref)";
-                if (GUILayout.Button(label, GUILayout.Width(340), GUILayout.Height(44)))
-                    StartHost(name);
+                var mapName = name;   // captura por iteración para el closure
+                _nav.Button(label, () => StartHost(mapName), GUILayout.Width(340), GUILayout.Height(44));
                 GUI.enabled = true;
             }
             GUILayout.EndScrollView();
         }
 
         GUILayout.Space(6);
-        if (GUILayout.Button("Volver", GUILayout.Width(120))) _screen = Screen.Menu;
+        _nav.Button("Volver", () => _screen = Screen.Menu, GUILayout.Width(120));
     }
 
     private void DrawJoinEntry()
@@ -105,11 +112,10 @@ public class GameBootstrapper : MonoBehaviour
             _port = p;
 
         GUILayout.Space(8);
-        if (GUILayout.Button("Conectar", GUILayout.Width(200), GUILayout.Height(46)))
-            StartJoin();
+        _nav.Button("Conectar", StartJoin, GUILayout.Width(200), GUILayout.Height(46));
 
         GUILayout.Space(6);
-        if (GUILayout.Button("Volver", GUILayout.Width(120))) _screen = Screen.Menu;
+        _nav.Button("Volver", () => _screen = Screen.Menu, GUILayout.Width(120));
     }
 
     private void DrawRunning()
@@ -136,9 +142,21 @@ public class GameBootstrapper : MonoBehaviour
         if (_cardboard != null)
         {
             bool active = _cardboard.CardboardActive;
-            if (GUILayout.Button(active ? "Salir de Cardboard" : "Modo Cardboard",
-                                 GUILayout.Width(220), GUILayout.Height(46)))
-                _cardboard.ToggleCardboardMode();
+            string cbLabel = active ? "Salir de Cardboard" : "Modo Cardboard";
+            // En partida, el A del control es la linterna. Dejamos el botón de Cardboard
+            // touch-only (donde está, pero FUERA de la navegación con gamepad) para que
+            // apretar A no toggle Cardboard además de la linterna. En el lobby (antes de
+            // arrancar) sí es navegable con el joystick.
+            if (_net != null && _net.GameStarted)
+            {
+                if (GUILayout.Button(cbLabel, GUILayout.Width(220), GUILayout.Height(46)))
+                    _cardboard.ToggleCardboardMode();
+            }
+            else
+            {
+                _nav.Button(cbLabel, () => _cardboard.ToggleCardboardMode(),
+                            GUILayout.Width(220), GUILayout.Height(46));
+            }
         }
     }
 

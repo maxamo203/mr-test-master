@@ -4,6 +4,7 @@ public class ARLobbyUI : MonoBehaviour
 {
     private ARLobbyManager _lobby;
     private NetworkManager _net;
+    private readonly Gamepad.ImguiGamepadMenu _nav = new();
 
     private void Start()
     {
@@ -11,8 +12,11 @@ public class ARLobbyUI : MonoBehaviour
         _net   = NetworkManager.Instance;
     }
 
+    private void Update() => _nav.Update();
+
     private void OnGUI()
     {
+        _nav.Begin();
         if (_lobby == null || _net == null) return;
         if (_lobby.State == ARLobbyManager.LobbyState.Idle) return;
         if (_lobby.State == ARLobbyManager.LobbyState.GameStarted) return;
@@ -37,8 +41,7 @@ public class ARLobbyUI : MonoBehaviour
                 GUILayout.Label($"Conectados: {_lobby.ConnectedCount}");
                 GUILayout.Label($"Listos:     {_lobby.ResolvedCount}");
                 GUILayout.Space(8);
-                if (GUILayout.Button("Empezar Partida", GUILayout.Width(180)))
-                    _lobby.ServerStartGame();
+                _nav.Button("Empezar Partida", () => _lobby.ServerStartGame(), GUILayout.Width(180));
                 break;
 
             case ARLobbyManager.LobbyState.AllReady:
@@ -47,6 +50,7 @@ public class ARLobbyUI : MonoBehaviour
                 break;
         }
 
+        _nav.End();
         GUILayout.EndArea();
     }
 

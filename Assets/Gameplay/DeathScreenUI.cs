@@ -12,8 +12,11 @@ namespace Gameplay
 
         private GUIStyle _title, _btn;
         private bool _ready;
+        private readonly Gamepad.ImguiGamepadMenu _nav = new();
 
         private void Awake() => LocalDeath.Ensure();
+
+        private void Update() => _nav.Update();
 
         private void EnsureStyles()
         {
@@ -26,6 +29,7 @@ namespace Gameplay
 
         private void OnGUI()
         {
+            _nav.Begin();
             var ld = LocalDeath.Instance;
             if (ld == null || !ld.IsDead) return;
 
@@ -41,7 +45,8 @@ namespace Gameplay
 
             float w = 300f, h = 74f;
             var r = new Rect(sa.x + (sa.width - w) * 0.5f, sa.y + sa.height * 0.52f, w, h);
-            if (GUI.Button(r, "Volver al menú", _btn)) ReturnToMenu();
+            _nav.Button(r, "Volver al menú", _btn, ReturnToMenu);
+            _nav.End();
         }
 
         private void ReturnToMenu()

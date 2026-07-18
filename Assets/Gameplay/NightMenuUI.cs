@@ -21,7 +21,12 @@ namespace Gameplay
         private GUIStyle _title, _btn, _btnSel;
         private bool _styleReady;
 
+        // Navegación con gamepad de las noches + "Continuar".
+        private readonly Gamepad.ImguiGamepadMenu _nav = new();
+
         private void Awake() => GameSession.Ensure();
+
+        private void Update() => _nav.Update();
 
         private void EnsureStyles()
         {
@@ -37,6 +42,7 @@ namespace Gameplay
         private void OnGUI()
         {
             EnsureStyles();
+            _nav.Begin();
 
             // Fondo negro.
             var prev = GUI.color;
@@ -55,6 +61,7 @@ namespace Gameplay
             if (_nights == null || _nights.Length == 0)
             {
                 GUI.Label(new Rect(x, y, w, 40f), "Sin noches configuradas (asigná NightConfig).", _title);
+                _nav.End();
                 return;
             }
 
@@ -65,19 +72,22 @@ namespace Gameplay
                 string label = n != null
                     ? (string.IsNullOrEmpty(n.displayName) ? n.name : n.displayName)
                     : "(vacío)";
-                if (GUI.Button(new Rect(x, y, w, 60f), label, i == _selected ? _btnSel : _btn))
-                    _selected = i;
+                int idx = i;   // captura por iteración para el closure
+                _nav.Button(new Rect(x, y, w, 60f), label, idx == _selected ? _btnSel : _btn,
+                            () => _selected = idx);
                 y += 72f;
             }
 
             y += 20f;
             GUI.enabled = _nights[_selected] != null;
-            if (GUI.Button(new Rect(x, y, w, 80f), "Continuar", _btn))
+            _nav.Button(new Rect(x, y, w, 80f), "Continuar", _btn, () =>
             {
                 GameSession.Ensure().SelectedNight = _nights[_selected];
                 SceneManager.LoadScene(_lobbyScene);
-            }
+            });
             GUI.enabled = true;
+
+            _nav.End();
         }
     }
 }

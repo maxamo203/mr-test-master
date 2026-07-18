@@ -97,7 +97,15 @@ namespace Gamepad
                 _batteryTimer = 5f;
                 RefreshBattery();
             }
+
+            // Navegación con gamepad de los menús IMGUI (foco global compartido). Ver
+            // ImguiGamepadMenu: GamepadManager es el driver (BeginPass en OnGUI + Tick acá).
+            ImguiGamepadMenu.Tick();
         }
+
+        // Corre ANTES que los OnGUI de los menús (execution order -60) en cada pass: resetea el
+        // índice de dibujo del navegador de menús. Ver ImguiGamepadMenu.
+        private void OnGUI() => ImguiGamepadMenu.BeginPass();
 
         private void OnDeviceChange(InputDevice device, InputDeviceChange change)
         {
