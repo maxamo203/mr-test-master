@@ -1,30 +1,19 @@
 using UnityEngine;
+using Scanner;   // UIScale
+using T = MortuoriumTheme;
 
 namespace Gameplay
 {
-    // HUD de cordura del jugador local: una barra discreta arriba-centro (pensada para
-    // no tapar el centro de la accion) y, al llegar a cordura 0, una distorsion visual
-    // de la interfaz. Solo lee LocalSanity (el server es autoritativo).
+    // HUD de cordura del jugador local: una barra abajo-izquierda, APILADA encima de
+    // la barra de batería (misma estética), y al llegar a cordura 0 una distorsion
+    // visual de la interfaz. Solo lee LocalSanity (el server es autoritativo).
     //
     // Wiring: poner en un GameObject de SampleScene. Se muestra solo en partida.
     public class SanityHUD : MonoBehaviour
     {
-        [Tooltip("Ancho de la barra de cordura (px virtuales de pantalla).")]
-        [SerializeField] private float _barWidth = 220f;
-
-        private GUIStyle _label;
-        private bool _styleReady;
         private static readonly int ID_DISTORT = Shader.PropertyToID("_SanityDistort");
 
         private void Awake() => LocalSanity.Ensure();
-
-        private void EnsureStyle()
-        {
-            if (_styleReady) return;
-            _label = new GUIStyle(GUI.skin.label) { fontSize = 14, alignment = TextAnchor.MiddleCenter };
-            _label.normal.textColor = Color.white;
-            _styleReady = true;
-        }
 
         private void OnGUI()
         {
@@ -33,28 +22,17 @@ namespace Gameplay
             var ls = LocalSanity.Instance;
             if (ls == null) return;
 
-            EnsureStyle();
             float pct = ls.Value01;
 
-            // ── Barra (arriba-centro, dentro del area segura) ─────────────────
-            var sa = Scanner.SafeArea.GuiRect;
-            float w = _barWidth, h = 16f;
-            var box  = new Rect(sa.x + (sa.width - w) * 0.5f, sa.y + 12f, w, h);
-            var prev = GUI.color;
-
-            GUI.color = new Color(0f, 0f, 0f, 0.5f);
-            GUI.DrawTexture(box, Texture2D.whiteTexture);
-
-            var fill = new Rect(box.x + 2f, box.y + 2f, (box.width - 4f) * pct, box.height - 4f);
-            GUI.color = Color.Lerp(new Color(0.8f, 0.1f, 0.1f), new Color(0.5f, 0.85f, 1f), pct);
-            GUI.DrawTexture(fill, Texture2D.whiteTexture);
-
-            GUI.color = prev;
-            GUI.Label(new Rect(box.x, box.y - 2f, box.width, box.height), "Cordura", _label);
-
-            // ── Distorsion a cordura 0 (no recuperable) ───────────────────────
+            // ── Distorsion a cordura 0 (full-screen, sin la matriz de UIScale) ──
             if (pct <= 0f) DrawDistortion();
             else           Shader.SetGlobalFloat(ID_DISTORT, 0f);
+
+            // ── Barra (fila 1: encima de la batería) ──────────────────────────
+            UIScale.Begin();
+            var r = T.HudBarRect(UIScale.VirtualWidth, UIScale.VirtualHeight, fila: 1);
+            Color fill = Color.Lerp(T.Red, T.Blue, pct);
+            T.Barra(r, pct, fill, "CORDURA", $"{Mathf.RoundToInt(pct * 100f)}%");
         }
 
         // Distorsion IMGUI sin shader: tinte rojo-oscuro pulsante + bandas de glitch.

@@ -1,8 +1,11 @@
 using UnityEngine;
+using Scanner;   // UIScale
+using T = MortuoriumTheme;
 
 // Muestra el estado de la linterna (barra de carga) en pantalla. Es SOLO display:
 // lee la carga de la Flashlight de su mismo GameObject y la dibuja. Poné este componente
-// en el GameObject de la linterna.
+// en el GameObject de la linterna. Se dibuja abajo-izquierda (fila 0), con la barra de
+// cordura apilada encima (ver SanityHUD).
 [RequireComponent(typeof(Flashlight))]
 public class FlashlightHUD : MonoBehaviour
 {
@@ -10,8 +13,6 @@ public class FlashlightHUD : MonoBehaviour
     public bool showChargeBar = true;
 
     private Flashlight _fl;
-    private GUIStyle   _labelStyle;
-    private bool       _styleReady;
 
     private void Awake() => _fl = GetComponent<Flashlight>();
 
@@ -21,20 +22,14 @@ public class FlashlightHUD : MonoBehaviour
         // Fuera de partida la linterna no opera: tampoco mostramos su barra.
         if (!_fl.Operational) return;
 
-        // Estilo cacheado (crear GUIStyle en cada OnGUI genera GC).
-        if (!_styleReady) { _labelStyle = new GUIStyle(GUI.skin.label); _styleReady = true; }
-
+        UIScale.Begin();
         float pct = _fl.Charge01;
-        var sa = Scanner.SafeArea.GuiRect;
-        var barRect = new Rect(sa.x + 20, sa.yMax - 40, 220, 22);
-        GUI.Box(barRect, GUIContent.none);
-        var fill = new Rect(barRect.x + 2, barRect.y + 2, (barRect.width - 4) * pct, barRect.height - 4);
-        var prev = GUI.color;
-        GUI.color = _fl.IsEmpty ? Color.red
-                  : pct < 0.25f ? new Color(1f, 0.5f, 0f) : Color.green;
-        GUI.DrawTexture(fill, Texture2D.whiteTexture);
-        GUI.color = prev;
-        GUI.Label(new Rect(barRect.x + 6, barRect.y, barRect.width, barRect.height),
-                  $"Linterna {Mathf.RoundToInt(pct * 100f)}%", _labelStyle);
+
+        Color fill = _fl.IsEmpty ? T.Red
+                   : pct < 0.25f ? T.Tan
+                                 : T.Green;
+
+        var r = T.HudBarRect(UIScale.VirtualWidth, UIScale.VirtualHeight, fila: 0);
+        T.Barra(r, pct, fill, "LINTERNA", $"{Mathf.RoundToInt(pct * 100f)}%");
     }
 }

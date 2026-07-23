@@ -58,7 +58,6 @@ namespace Bateries
         [Tooltip("Muestra un panel en pantalla con el estado del sistema de pilas. " +
                  "Dejalo apagado en device: el OnGUI tiene costo. Solo para diagnosticar.")]
         [SerializeField] private bool _showDebugHud = false;
-        private GUIStyle _hudStyle; // cacheado: crear GUIStyle en cada OnGUI genera GC.
 
         // Ultimo estado legible para el HUD de diagnostico.
         private string _status = "esperando arranque de partida…";
@@ -392,34 +391,23 @@ namespace Bateries
         }
 
         // ── HUD de diagnostico ────────────────────────────────────────────────
-
-        private void OnGUI()
+        // El dibujo vive en DebugHud/DebugBateriasUI (solo development builds);
+        // aca solo se arma el snapshot legible. Null si el toggle esta apagado.
+        public string DebugSnapshot()
         {
-            if (!_showDebugHud) return;
+            if (!_showDebugHud) return null;
 
             var net       = NetworkManager.Instance;
             bool isServer = net != null && net.IsServer;
             bool started  = net != null && net.GameStarted;
             bool woReady  = WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady;
 
-            string txt =
+            return
                 $"[Bateries]\n" +
                 $"NetworkManager: {(net != null ? "OK" : "NULL")}   Server: {isServer}   GameStarted: {started}\n" +
                 $"WorldOrigin ready: {woReady}   Camera.main: {(Camera.main != null)}\n" +
                 $"RaritySet: {(rarities != null ? "OK" : "FALTA")}   Puntos: {_points.Count}   Activas: {_byNetId.Count}\n" +
                 $"Estado: {_status}";
-
-            if (_hudStyle == null)
-            {
-                _hudStyle = new GUIStyle(GUI.skin.box)
-                {
-                    fontSize  = 20,
-                    alignment = TextAnchor.UpperLeft,
-                    wordWrap  = true,
-                };
-                _hudStyle.normal.textColor = Color.white;
-            }
-            GUI.Box(new Rect(10, 120, 620, 150), txt, _hudStyle);
         }
     }
 }

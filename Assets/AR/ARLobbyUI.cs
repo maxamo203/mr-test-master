@@ -1,10 +1,35 @@
+using Scanner;
 using UnityEngine;
+using T = MortuoriumTheme;
 
+// UI del lobby AR (SampleScene) con la estética del prototipo: la pantalla de
+// SINCRONIZACIÓN (todos apuntan la cámara a la imagen de referencia del mapa)
+// y el briefing de la noche cuando el host arranca la partida.
+//
+// Se dibuja ENCIMA de la cámara AR y DEBAJO/JUNTO al panel de sala de
+// GameBootstrapper (que ocupa la franja superior). La lógica de estados vive en
+// ARLobbyManager; acá solo se presenta.
 public class ARLobbyUI : MonoBehaviour
 {
+    [Header("Briefing de la noche")]
+    [Tooltip("Segundos que el título de la noche permanece en pantalla al arrancar.")]
+    [SerializeField] private float _briefingDuration = 3f;
+
     private ARLobbyManager _lobby;
     private NetworkManager _net;
     private readonly Gamepad.ImguiGamepadMenu _nav = new();
+
+    // Briefing: cartel de intro (NOCHE X + texto) que entra deslizándose desde la
+    // izquierda con fade, se sostiene y sale con fade. Sin overlay ni botón; dura
+    // _briefingDuration y se descarta solo.
+    private bool  _briefingArmado;   // ya detectamos el arranque de la partida
+    private bool  _briefingDone;     // terminó (ya no se dibuja)
+    private float _briefingT;        // segundos transcurridos
+
+    // Tiempos de la animación de entrada/salida (dentro de la duración total).
+    private const float InDur = 0.5f, OutDur = 0.5f, SlidePx = 60f;
+
+    private const float Pad = 28f;
 
     private void Start()
     {
@@ -12,55 +37,160 @@ public class ARLobbyUI : MonoBehaviour
         _net   = NetworkManager.Instance;
     }
 
-    private void Update() => _nav.Update();
+    private void Update()
+    {
+        _nav.Update();
+
+        // Timer del briefing (en Update para no depender de los múltiples pasos de
+        // OnGUI por frame). Arranca al entrar a GameStarted.
+        if (_lobby != null && _lobby.State == ARLobbyManager.LobbyState.GameStarted && !_briefingDone)
+        {
+            if (!_briefingArmado) { _briefingArmado = true; _briefingT = 0f; }
+            _briefingT += Time.deltaTime;
+            if (_briefingT >= Mathf.Max(0.1f, _briefingDuration)) _briefingDone = true;
+        }
+    }
 
     private void OnGUI()
     {
-        _nav.Begin();
         if (_lobby == null || _net == null) return;
         if (_lobby.State == ARLobbyManager.LobbyState.Idle) return;
-        if (_lobby.State == ARLobbyManager.LobbyState.GameStarted) return;
 
-        // Debajo del panel de GameBootstrapper (IP del host / estado de conexion).
-        GUILayout.BeginArea(new Rect(10, 200, 360, 300));
-        GUILayout.Label($"=== LOBBY ({(_net.IsServer ? "HOST" : "CLIENTE")}) ===");
-        GUILayout.Label($"Estado: {_lobby.State}");
-        GUILayout.Space(8);
+        UIScale.Begin();
+        _nav.Begin();
+
+        float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
+
+        if (_lobby.State == ARLobbyManager.LobbyState.GameStarted)
+        {
+            if (!_briefingDone) DrawBriefing(vw, vh);
+            _nav.End();
+            return;
+        }
+
+        // ── SINCRONIZACIÓN (encima de la cámara, debajo de la franja de sala) ──
+        bool solo = Gameplay.GameSession.Instance != null &&
+                    Gameplay.GameSession.Instance.SoloUnJugador;
+
+        T.Gradiente(new Rect(0, vh - 320f, vw, 320f), 0.9f, haciaAbajo: false);
+
+        float y = vh - 290f;
+        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 36f), "SINCRONIZACIÓN",
+                  T.Estilo(T.FBebas, 26, T.Cream));
+        y += 38f;
+
+        string entorno = Gameplay.GameSession.Instance != null &&
+                         !string.IsNullOrEmpty(Gameplay.GameSession.Instance.SelectedMap)
+            ? $"entorno: {Gameplay.GameSession.Instance.SelectedMap}"
+            : "entorno compartido por el host";
+        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), entorno,
+                  T.Estilo(T.FElite, 13, T.CreamDim));
+        y += 26f;
+
+        // El texto de sincronización se personaliza: en un jugador no hay "todos
+        // los jugadores" ni "mismo espacio virtual" (no hay con quién compartirlo).
+        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 40f),
+                  solo
+                      ? "apuntá la cámara a la imagen de referencia para ubicarte " +
+                        "en tu espacio escaneado."
+                      : "todos los jugadores deben apuntar la cámara a la imagen de " +
+                        "referencia para ubicarse en el mismo espacio virtual.",
+                  T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
+        y += 48f;
 
         switch (_lobby.State)
         {
             case ARLobbyManager.LobbyState.Scanning:
-                GUILayout.Label("Apuntá la cámara a la imagen de referencia.");
-                GUILayout.Label("La esfera blanca aparecerá encima cuando la detecte.");
-                DrawSpinner();
+                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f),
+                          $"buscando la imagen… {Spinner()}",
+                          T.Estilo(T.FMono, 13, T.Tan));
                 break;
 
             case ARLobbyManager.LobbyState.WaitingForClients:
-                GUILayout.Label("Imagen detectada.");
-                GUILayout.Space(4);
-                GUILayout.Label($"Conectados: {_lobby.ConnectedCount}");
-                GUILayout.Label($"Listos:     {_lobby.ResolvedCount}");
-                GUILayout.Space(8);
-                _nav.Button("Empezar Partida", () => _lobby.ServerStartGame(), GUILayout.Width(180));
+                // El contador de conectados/listos solo aplica a multijugador.
+                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f),
+                          solo
+                              ? "imagen detectada · listo para empezar"
+                              : $"imagen detectada · conectados {_lobby.ConnectedCount} · listos {_lobby.ResolvedCount}",
+                          T.Estilo(T.FMono, 12, T.Green));
+                T.Boton(_nav, new Rect(Pad, vh - 44f - 56f, vw - Pad * 2f, 56f),
+                        "INICIAR NOCHE", primario: true, () => _lobby.ServerStartGame());
                 break;
 
             case ARLobbyManager.LobbyState.AllReady:
-                GUILayout.Label("Imagen detectada.");
-                GUILayout.Label("Esperando que el host arranque la partida...");
+                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f), "imagen detectada",
+                          T.Estilo(T.FMono, 12, T.Green));
+                GUI.Label(new Rect(Pad, y + 26f, vw - Pad * 2f, 24f),
+                          "esperando a que el host inicie la noche…",
+                          T.Estilo(T.FMono, 12, T.Muted));
                 break;
         }
 
         _nav.End();
-        GUILayout.EndArea();
     }
 
-    private float _spinnerTime;
-    private readonly string[] _spinnerFrames = { "—", "\\", "|", "/" };
+    // ── Briefing de la noche (cartel de intro, sin overlay ni botón) ──────
+    // Entra deslizándose desde la izquierda con fade, se sostiene y sale con fade.
+    // Se dibuja directamente sobre la cámara.
+    private void DrawBriefing(float vw, float vh)
+    {
+        float dur = Mathf.Max(0.1f, _briefingDuration);
+        float t   = _briefingT;
 
-    private void DrawSpinner()
+        // Alpha y desplazamiento en X según la fase (entrada / sostenido / salida).
+        float alpha, slide;
+        if (t < InDur)
+        {
+            float k = Mathf.Clamp01(t / InDur);
+            alpha = k;
+            slide = -SlidePx * (1f - EaseOut(k));   // llega desde la izquierda
+        }
+        else if (t > dur - OutDur)
+        {
+            alpha = Mathf.Clamp01((dur - t) / OutDur);
+            slide = 0f;
+        }
+        else { alpha = 1f; slide = 0f; }
+
+        var night = Gameplay.GameSession.Instance != null
+            ? Gameplay.GameSession.Instance.SelectedNight : null;
+
+        // GUI.color multiplica el alpha de todo lo dibujado (incluido el texto).
+        var prevColor = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, alpha);
+
+        float x = Pad + slide;
+        float y = vh * 0.30f;
+        GUI.Label(new Rect(x, y, vw - Pad * 2f, 24f), "NOCHE",
+                  T.Estilo(T.FBebas, 16, T.Red));
+        y += 28f;
+
+        // El cliente no conoce la config de la noche (la define el host).
+        string nombre = night != null
+            ? (string.IsNullOrEmpty(night.displayName) ? night.name : night.displayName)
+            : "LA NOCHE COMIENZA";
+        GUI.Label(new Rect(x, y, vw - Pad * 2f, 70f), nombre.ToUpperInvariant(),
+                  T.Estilo(T.FBebas, 48, T.Cream));
+        y += 84f;
+
+        string briefing = night != null && !string.IsNullOrEmpty(night.briefing)
+            ? night.briefing
+            : "Sobreviví hasta el amanecer. El ritual no debe parar.";
+        GUI.Label(new Rect(x, y, vw - Pad * 2f, 140f), briefing,
+                  T.Estilo(T.FElite, 14, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
+
+        GUI.color = prevColor;
+    }
+
+    // Easing suave para la entrada (desaceleración).
+    private static float EaseOut(float k) => 1f - (1f - k) * (1f - k);
+
+    private float _spinnerTime;
+    private static readonly string[] _spinnerFrames = { "—", "\\", "|", "/" };
+
+    private string Spinner()
     {
         _spinnerTime += Time.deltaTime;
-        int frame = Mathf.FloorToInt(_spinnerTime * 6) % _spinnerFrames.Length;
-        GUILayout.Label(_spinnerFrames[frame]);
+        return _spinnerFrames[Mathf.FloorToInt(_spinnerTime * 6) % _spinnerFrames.Length];
     }
 }

@@ -15,7 +15,15 @@
       "Read(//c/Users/maxam/Downloads/**)",
       "Bash(grep -rli \"pause\\\\|pausa\" Assets/Scenes/*.unity Assets/Prefabs/*.prefab)",
       "Bash(ls Assets/**/*ause*)",
-      "Bash(find Assets -iname \"*pause*\")"
+      "Bash(find Assets -iname \"*pause*\")",
+      "Bash(python -m http.server 8931)",
+      "Bash(mkdir -p \"Assets/Resources/Fonts\")",
+      "Bash(curl -sL -o BebasNeue-Regular.ttf \"https://github.com/google/fonts/raw/main/ofl/bebasneue/BebasNeue-Regular.ttf\")",
+      "Bash(curl -sL -o SpecialElite-Regular.ttf \"https://github.com/google/fonts/raw/main/apache/specialelite/SpecialElite-Regular.ttf\")",
+      "Bash(curl -sL -o IBMPlexMono-Regular.ttf \"https://github.com/google/fonts/raw/main/ofl/ibmplexmono/IBMPlexMono-Regular.ttf\")",
+      "Bash(file *.ttf)",
+      "Read(//tmp/**)",
+      "Bash(dotnet exec *)"
     ]
   }
 }

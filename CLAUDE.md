@@ -21,8 +21,21 @@ Saved scans live at `Application.persistentDataPath/scans/<name>.json` (plus a s
 
 ## Scenes
 
-- **`ScannerScene.unity`** — the active scene; all scanner work happens here.
-- **`SampleScene.unity`** — older MR / multiplayer-lobby scene (Cardboard controller, AR lobby). The `Assets/Network`, `Assets/AR/ARLobby*`, `Assets/AR/CloudAnchor*`, and `Assets/Entities` code belongs to this multiplayer lineage and is **not** wired into the scanner flow. The `README.md` describes only this older sample and is stale.
+- **`NightMenuScene.unity`** — entry scene: the MORTUORIUM main menu (`NightMenuUI`). It resolves **everything before the AR camera**: game mode, night and environment. Buttons: UN JUGADOR, MULTIJUGADOR (→ create-room / join), ESCANEAR ENTORNO (saved-scan management → `ScannerScene`), OPCIONES. UN JUGADOR and CREAR SALA share the sub-flow *night → environment → CONFIRMAR*; if there's no playable environment (a scan **with a reference image**) it shows the "falta un entorno" alert → scan. The choice is written to `GameSession` (`Mode` ∈ SinglePlayer/MultiHost/MultiClient, `SelectedNight`, `SelectedMap`, `HostPort`) and then `SampleScene` loads.
+- **`ScannerScene.unity`** — the scanner; all scanning work happens here. Entered from the main menu with `ScannerLaunchParams.EditScanName` set (null = new scan; a name = `ScannerSceneBootstrap` auto-loads it for editing).
+- **`SampleScene.unity`** — MR / multiplayer scene (Cardboard controller, AR lobby, gameplay). `GameBootstrapper` is now a thin executor: it reads `GameSession.Mode` and either **auto-hosts** (SinglePlayer/MultiHost → `StartHost` with the chosen map, then the SALA / sync screen; deferred one frame so `ARLobbyManager` has subscribed) or shows **UNIRSE** (MultiClient → LAN auto-discovery + manual IP, then connect). All mode/night/map selection UI moved to `NightMenuUI`. The `README.md` describes only the older sample and is stale.
+
+Scene navigation goes through `SceneFlow.GoTo` (`Assets/UI/SceneFlow.cs`), which destroys the cross-scene singletons (`NetworkManager`, `EntityRegistry`, `WorldOrigin`) so the target scene starts clean. `SceneNavUI` is an obsolete empty shell (its prefab is still referenced in two scenes).
+
+**LAN multiplayer** (`Assets/Network/`): `NetworkConfig.DefaultPort` is the single source for the game port. The host auto-advertises via `LanDiscovery` (UDP) **only when multiplayer and on the default port** — custom ports (set in the menu's "Avanzado" section) don't advertise, so clients must type `ip:port`. The client's UNIRSE screen lists auto-discovered rooms and accepts a manual IP (`ip` alone → default port). `LanAddress.BestLanIPv4()`/`AllLanIPv4()` pick the real LAN IPv4 to share, scoring RFC1918 private ranges + gateway + WiFi/Ethernet and penalizing virtual/VPN adapters (fixes Radmin VPN's 26.x showing up on Windows).
+
+## UI Mortuorium (`Assets/UI/`)
+
+All menus/HUD are IMGUI styled by **`MortuoriumTheme`** (static): palette, fonts (Bebas Neue / Special Elite / IBM Plex Mono under `Assets/Resources/Fonts/`, loaded via `Resources.Load`) and widgets (`Boton`, `Celda`, `CampoTexto`, `Slider`, `Gradiente`, `BotonVolver`). It was ported from the HTML prototype in `Assets/Prototipo Navegacion/` — that folder is the design reference, not runtime code. Buttons integrate with `ImguiGamepadMenu` (focus is drawn by the theme via `ImguiGamepadMenu.NextHasFocus`, a tan border, not the old yellow tint). `GameOptions` holds persistent user options (master volume). Screens over the AR camera (scanner HUD, SINCRONIZACIÓN, sala) use translucent gradients; pure menu screens paint an opaque `Bg` fill.
+
+## Debug HUD (`Assets/DebugHud/`)
+
+Every on-screen diagnostic lives under a single runtime-created `DebugHud` GameObject (DontDestroyOnLoad), one child GameObject + script per panel (`DebugRedUI`, `DebugEscanerUI`, `DebugRaycastUI`, `DebugFallbackUI`, `DebugDirectorUI`, `DebugBateriasUI`, `DebugLidarUI`, `DebugBenchmarkUI`). It is only created when `Debug.isDebugBuild` (editor / development build) — release builds have no debug UI at all — and can be toggled at runtime from the pause menu (Opciones → Debug HUD, dev-only; persisted in PlayerPrefs). Data sources expose read-only snapshots (`GameDirector.DebugSnapshot()`, `BatterySpawnManager.DebugSnapshot()`, `LiDARScanner.DebugSnapshot()`, `ARTrackingBenchmark.Report`, `ReticleController.LastHit`) instead of drawing their own OnGUI; `NetworkDebugUI` is an obsolete empty shell. Flashlight tuning sliders (rango/ángulos/intensidad) in the pause menu are dev-build-only too.
 
 ## Core architecture
 

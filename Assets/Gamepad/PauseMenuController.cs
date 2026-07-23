@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.EnhancedTouch;
 using ETouch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 using Scanner;   // UIScale, UIBlocker
+using T = MortuoriumTheme;
 
 namespace Gamepad
 {
@@ -22,12 +23,15 @@ namespace Gamepad
     [DefaultExecutionOrder(-55)]
     public class PauseMenuController : MonoBehaviour
     {
-        // Main → Opciones/Reanudar. Opciones es un hub que abre 3 subcategorías:
-        // Control (mando), Cardboard (calibración estéreo) y Flashlight (linterna).
+        // Main → Opciones/Salir/Reanudar. Opciones es un hub con el volumen y las
+        // subcategorías: Control (mando), Cardboard (calibración estéreo) y — SOLO
+        // en development build — Linterna (tuning) y el toggle del Debug HUD.
         private enum Page { Main, Options, Control, Cardboard, Flashlight }
 
         private bool _open;
         private Page _page = Page.Main;
+        // "Salir al menú" pide una segunda pulsación de confirmación (corta la partida).
+        private bool _confirmSalir;
         private int  _focus;
         // Al entrar a una página, enfocar el ÚLTIMO ítem (siempre "Volver"/"Reanudar") en vez
         // del primero, para no dejar resaltado el primer contenido (p. ej. "Control"). Se
@@ -65,7 +69,7 @@ namespace Gamepad
 
         // Estilos / texturas IMGUI.
         private static Texture2D _tex;
-        private GUIStyle _btn, _btnFocus, _icon, _title, _status, _battTxt, _toggleLbl;
+        private GUIStyle _btn, _icon, _title, _status, _battTxt, _toggleLbl;
 
         private void Awake()
         {
@@ -85,13 +89,15 @@ namespace Gamepad
             // Botón de pausa, siempre visible (arriba-derecha, zona libre).
             _pauseBtnRect = new Rect(vw - 84f, 28f, 60f, 60f);
             UIBlocker.AddVirtualRect(_pauseBtnRect);
+            DrawRect(_pauseBtnRect, new Color(0f, 0f, 0f, 0.5f));
+            T.Borde(_pauseBtnRect, T.Border);
             GUI.Label(_pauseBtnRect, _open ? "X" : "II", _icon);
 
             if (!_open) return;
 
             // Overlay oscuro que bloquea la escena de atrás.
             var full = new Rect(0, 0, vw, vh);
-            DrawRect(full, new Color(0f, 0f, 0f, 0.72f));
+            DrawRect(full, new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.8f));
             UIBlocker.AddVirtualRect(full);
 
             // Panel centrado. La altura depende de la página (cada submenú tiene su alto).
@@ -100,9 +106,10 @@ namespace Gamepad
                 _page == Page.Control    ? 820f :
                 _page == Page.Flashlight ? 660f :
                 _page == Page.Cardboard  ? 460f :
-                _page == Page.Options    ? 460f : 320f);
+                _page == Page.Options    ? (Debug.isDebugBuild ? 620f : 480f) : 400f);
             var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
-            DrawRect(panel, new Color(0.10f, 0.10f, 0.12f, 0.98f));
+            DrawRect(panel, new Color(T.BgPanel.r, T.BgPanel.g, T.BgPanel.b, 0.98f));
+            T.Borde(panel, T.Border);
 
             float pad = 24f;
             float x = panel.x + pad, w = pw - pad * 2f;
@@ -110,18 +117,28 @@ namespace Gamepad
 
             if (_page == Page.Main)
             {
-                GUI.Label(new Rect(x, y, w, 50f), "Pausa", _title); y += 64f;
-                AddButton("opciones", new Rect(x, y, w, 64f), "Opciones"); y += 76f;
-                AddButton("reanudar", new Rect(x, y, w, 64f), "Reanudar"); y += 76f;
+                GUI.Label(new Rect(x, y, w, 50f), "PAUSA", _title); y += 64f;
+                AddButton("opciones", new Rect(x, y, w, 64f), "OPCIONES"); y += 76f;
+                AddButton("salir",    new Rect(x, y, w, 64f),
+                          _confirmSalir ? "¿SEGURO? TOCÁ DE NUEVO" : "SALIR AL MENÚ"); y += 76f;
+                AddButton("reanudar", new Rect(x, y, w, 64f), "REANUDAR"); y += 76f;
             }
             else if (_page == Page.Options)
             {
-                // Hub de opciones: solo navegación a las 3 subcategorías.
-                GUI.Label(new Rect(x, y, w, 50f), "Opciones", _title); y += 64f;
-                AddButton("control",   new Rect(x, y, w, 64f), "Control (mando)"); y += 76f;
-                AddButton("cardboard", new Rect(x, y, w, 64f), "Cardboard");       y += 76f;
-                AddButton("linterna",  new Rect(x, y, w, 64f), "Linterna");        y += 76f;
-                AddButton("volver",    new Rect(x, y, w, 60f), "Volver");
+                // Hub de opciones: volumen + subcategorías. Linterna y Debug HUD
+                // solo existen en development build.
+                GUI.Label(new Rect(x, y, w, 50f), "OPCIONES", _title); y += 64f;
+                AddSlider("opt_vol", new Rect(x, y, w, 60f), "Volumen",
+                          GameOptions.Volumen * 100f, 0f, 100f, "{0:0}%"); y += 72f;
+                AddButton("control",   new Rect(x, y, w, 64f), "CONTROL (MANDO)"); y += 76f;
+                AddButton("cardboard", new Rect(x, y, w, 64f), "CARDBOARD");       y += 76f;
+                if (Debug.isDebugBuild)
+                {
+                    AddButton("linterna", new Rect(x, y, w, 64f), "LINTERNA (DEV)"); y += 76f;
+                    AddToggle("debughud", new Rect(x, y, w, 52f), "Debug HUD (dev)",
+                              DebugHud.Visible); y += 64f;
+                }
+                AddButton("volver", new Rect(x, y, w, 60f), "VOLVER");
             }
             else if (_page == Page.Control)
             {
@@ -175,9 +192,10 @@ namespace Gamepad
                 y += 6f;
                 AddButton("volver", new Rect(x, y, w, 60f), "Volver");
             }
-            else // Flashlight
+            else // Flashlight — tuning de linterna, SOLO development build.
             {
-                GUI.Label(new Rect(x, y, w, 50f), "Linterna", _title); y += 62f;
+                if (!Debug.isDebugBuild) { _page = Page.Options; return; }
+                GUI.Label(new Rect(x, y, w, 50f), "LINTERNA (DEV)", _title); y += 62f;
 
                 // Toggles de iluminación (efecto de oscurecido y malla LiDAR/AR).
                 AddToggle("envlight", new Rect(x, y, w, 52f),
@@ -218,7 +236,17 @@ namespace Gamepad
         private void AddButton(string id, Rect rect, string label)
         {
             bool focused = ShowFocus && _items.Count == _focus;
-            GUI.Label(rect, label, focused ? _btnFocus : _btn);
+            if (focused)
+            {
+                DrawRect(rect, new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.14f));
+                T.Borde(rect, T.Tan);
+            }
+            else
+            {
+                DrawRect(rect, new Color(0f, 0f, 0f, 0.35f));
+                T.Borde(rect, id == "salir" || id == "reanudar" ? T.Red : T.Border);
+            }
+            GUI.Label(rect, label, _btn);
             UIBlocker.AddVirtualRect(rect);
             _items.Add(new Item { id = id, rect = rect });
         }
@@ -229,8 +257,9 @@ namespace Gamepad
                                float min, float max, string fmt)
         {
             bool focused = ShowFocus && _items.Count == _focus;
-            DrawRect(rect, focused ? new Color(0.95f, 0.85f, 0.20f, 0.30f)
-                                   : new Color(1f, 1f, 1f, 0.07f));
+            DrawRect(rect, focused ? new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.18f)
+                                   : new Color(1f, 1f, 1f, 0.05f));
+            if (focused) T.Borde(rect, T.Tan);
 
             float btnW = rect.height - 12f;
             var dec = new Rect(rect.xMax - btnW * 2f - 14f, rect.y + 6f, btnW, btnW);
@@ -267,10 +296,11 @@ namespace Gamepad
             // Barra min..max (bajo el label).
             float t = Mathf.InverseLerp(min, max, value);
             var barBg = new Rect(lblRect.x, rect.yMax - 12f, lblRect.width, 5f);
-            DrawRect(barBg, new Color(1f, 1f, 1f, 0.15f));
-            DrawRect(new Rect(barBg.x, barBg.y, barBg.width * Mathf.Clamp01(t), barBg.height),
-                     new Color(0.95f, 0.85f, 0.20f, 0.9f));
+            DrawRect(barBg, new Color(1f, 1f, 1f, 0.12f));
+            DrawRect(new Rect(barBg.x, barBg.y, barBg.width * Mathf.Clamp01(t), barBg.height), T.Red);
 
+            T.Borde(dec, T.Border);
+            T.Borde(inc, T.Border);
             GUI.Label(dec, "-", _btn);
             GUI.Label(inc, "+", _btn);
 
@@ -298,9 +328,10 @@ namespace Gamepad
             if (cb != null) cb.Save();
         }
 
-        // Los sliders llevan prefijo por familia: fl_ (linterna) y cb_ (cardboard).
+        // Los sliders llevan prefijo por familia: fl_ (linterna), cb_ (cardboard)
+        // y opt_ (opciones de usuario).
         private static bool IsSlider(string id) =>
-            id != null && (id.StartsWith("fl_") || id.StartsWith("cb_"));
+            id != null && (id.StartsWith("fl_") || id.StartsWith("cb_") || id.StartsWith("opt_"));
 
         // Ajusta un parámetro (dir = ±1). Paso por parámetro (grados/metros/factor).
         private void Adjust(string id, float dir)
@@ -313,6 +344,7 @@ namespace Gamepad
                 case "cb_zoom":      step = 0.02f;  break;
                 case "cb_offL":
                 case "cb_offR":      step = 0.005f; break;
+                case "opt_vol":      step = 5f;     break;   // porcentaje
                 default:             step = 2f;     break;   // fl_outer / fl_inner (grados)
             }
             SetSliderValue(id, CurrentValue(id) + dir * step);
@@ -329,6 +361,7 @@ namespace Gamepad
                 case "cb_zoom":      { var cb = GetCardboard();  return cb != null ? cb.Scale   : 0f; }
                 case "cb_offL":      { var cb = GetCardboard();  return cb != null ? cb.OffsetL : 0f; }
                 case "cb_offR":      { var cb = GetCardboard();  return cb != null ? cb.OffsetR : 0f; }
+                case "opt_vol":      return GameOptions.Volumen * 100f;
             }
             return 0f;
         }
@@ -346,6 +379,7 @@ namespace Gamepad
                 case "cb_zoom":      { var cb = GetCardboard(); if (cb != null) cb.Scale   = value; break; }
                 case "cb_offL":      { var cb = GetCardboard(); if (cb != null) cb.OffsetL = value; break; }
                 case "cb_offR":      { var cb = GetCardboard(); if (cb != null) cb.OffsetR = value; break; }
+                case "opt_vol":      GameOptions.Volumen = Mathf.Clamp(value, 0f, 100f) / 100f; break;
             }
         }
 
@@ -382,16 +416,16 @@ namespace Gamepad
         private void AddToggle(string id, Rect rect, string label, bool value)
         {
             bool focused = ShowFocus && _items.Count == _focus;
-            DrawRect(rect, focused ? new Color(0.95f, 0.85f, 0.20f, 0.30f)
-                                   : new Color(1f, 1f, 1f, 0.07f));
-            GUI.Label(new Rect(rect.x + 14f, rect.y, rect.width - 80f, rect.height), label, _toggleLbl);
+            DrawRect(rect, focused ? new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.18f)
+                                   : new Color(1f, 1f, 1f, 0.05f));
+            if (focused) T.Borde(rect, T.Tan);
+            GUI.Label(new Rect(rect.x + 14f, rect.y, rect.width - 100f, rect.height), label, _toggleLbl);
 
-            float bs = rect.height * 0.5f;
-            var box = new Rect(rect.xMax - bs - 16f, rect.y + (rect.height - bs) * 0.5f, bs, bs);
-            DrawRect(box, new Color(0.75f, 0.75f, 0.8f));                         // marco
-            float b = Mathf.Max(2f, bs * 0.14f);
-            DrawRect(new Rect(box.x + b, box.y + b, box.width - 2f * b, box.height - 2f * b),
-                     value ? new Color(0.30f, 0.80f, 0.35f) : new Color(0.12f, 0.12f, 0.14f));
+            // Pill ON/OFF a la derecha (estilo prototipo).
+            var pill = new Rect(rect.xMax - 76f, rect.y + (rect.height - 30f) * 0.5f, 60f, 30f);
+            T.Borde(pill, value ? T.Tan : T.Border);
+            GUI.Label(pill, value ? "ON" : "OFF",
+                      T.Estilo(T.FMono, 13, value ? T.Tan : T.Dim, TextAnchor.MiddleCenter));
 
             UIBlocker.AddVirtualRect(rect);
             _items.Add(new Item { id = id, rect = rect });
@@ -514,6 +548,7 @@ namespace Gamepad
             _open = !_open;
             if (!_open) SaveCardboard();   // al cerrar, persistir la calibración
             _page = Page.Main;
+            _confirmSalir = false;
             _focus = 0; _focusLast = true;
         }
 
@@ -521,6 +556,7 @@ namespace Gamepad
         private void Back()
         {
             CommitEdit();
+            _confirmSalir = false;
             switch (_page)
             {
                 case Page.Options:
@@ -538,14 +574,27 @@ namespace Gamepad
 
         private void Activate(string id)
         {
+            // Cualquier acción que no sea "salir" cancela la confirmación pendiente.
+            if (id != "salir") _confirmSalir = false;
+
             switch (id)
             {
                 case "opciones":  _page = Page.Options;    _focus = 0; _focusLast = true; break;
                 case "control":   _page = Page.Control;    _focus = 0; _focusLast = true; break;
                 case "cardboard": _page = Page.Cardboard;  _focus = 0; _focusLast = true; break;
-                case "linterna":  _page = Page.Flashlight; _focus = 0; _focusLast = true; break;
+                case "linterna":
+                    if (Debug.isDebugBuild) { _page = Page.Flashlight; _focus = 0; _focusLast = true; }
+                    break;
                 case "reanudar":  _open = false; SaveCardboard(); break;
+                case "salir":
+                    // Doble confirmación: corta la partida y vuelve al menú principal.
+                    if (!_confirmSalir) { _confirmSalir = true; break; }
+                    _open = false;
+                    SaveCardboard();
+                    SceneFlow.GoTo(SceneFlow.EscenaMenu);
+                    break;
                 case "volver":    Back(); break;
+                case "debughud":  DebugHud.SetVisible(!DebugHud.Visible); break;
                 case "envlight":  EnvironmentLightingController.Enabled = !EnvironmentLightingController.Enabled; break;
                 case "meshlight": FlashlightMeshLighting.Enabled       = !FlashlightMeshLighting.Enabled;       break;
             }
@@ -592,32 +641,24 @@ namespace Gamepad
             }
             if (_btn != null) return;
 
-            _icon = new GUIStyle(GUI.skin.box)
-            {
-                fontSize = 26, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter
-            };
-            _icon.normal.textColor = Color.white;
+            _icon = new GUIStyle { fontSize = 24, alignment = TextAnchor.MiddleCenter, font = T.FBebas };
+            _icon.normal.textColor = T.Cream;
 
-            _btn = new GUIStyle(GUI.skin.button)
-            {
-                fontSize = 24, alignment = TextAnchor.MiddleCenter
-            };
-            _btnFocus = new GUIStyle(_btn) { fontStyle = FontStyle.Bold };
-            _btnFocus.normal.textColor = Color.black;
-            _btnFocus.normal.background = SolidTex(new Color(0.95f, 0.85f, 0.20f));
-            _btnFocus.hover.background = _btnFocus.normal.background;
+            // Bebas Neue es caps-only: los labels salen en mayúsculas solos.
+            _btn = new GUIStyle { fontSize = 22, alignment = TextAnchor.MiddleCenter, font = T.FBebas };
+            _btn.normal.textColor = T.Cream;
 
-            _title = new GUIStyle { fontSize = 34, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
-            _title.normal.textColor = Color.white;
+            _title = new GUIStyle { fontSize = 32, alignment = TextAnchor.MiddleLeft, font = T.FBebas };
+            _title.normal.textColor = T.Cream;
 
-            _status = new GUIStyle { fontSize = 20, alignment = TextAnchor.UpperLeft, wordWrap = true };
-            _status.normal.textColor = new Color(0.85f, 0.85f, 0.9f);
+            _status = new GUIStyle { fontSize = 16, alignment = TextAnchor.UpperLeft, wordWrap = true, font = T.FMono };
+            _status.normal.textColor = T.CreamDim;
 
-            _battTxt = new GUIStyle { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
-            _battTxt.normal.textColor = Color.white;
+            _battTxt = new GUIStyle { fontSize = 18, alignment = TextAnchor.MiddleLeft, font = T.FMono };
+            _battTxt.normal.textColor = T.Cream;
 
-            _toggleLbl = new GUIStyle { fontSize = 22, alignment = TextAnchor.MiddleLeft, wordWrap = true };
-            _toggleLbl.normal.textColor = Color.white;
+            _toggleLbl = new GUIStyle { fontSize = 16, alignment = TextAnchor.MiddleLeft, wordWrap = true, font = T.FMono };
+            _toggleLbl.normal.textColor = T.CreamDim;
         }
 
         // Dibuja una batería (cuerpo + terminal) con relleno proporcional y el
@@ -655,13 +696,5 @@ namespace Gamepad
             GUI.Label(new Rect(tip.xMax + h * 0.4f, area.y, area.width - bodyW, h), label, _battTxt);
         }
 
-        private static Texture2D SolidTex(Color c)
-        {
-            var t = new Texture2D(1, 1, TextureFormat.RGBA32, false);
-            t.SetPixel(0, 0, c);
-            t.Apply();
-            t.hideFlags = HideFlags.HideAndDontSave;
-            return t;
-        }
     }
 }

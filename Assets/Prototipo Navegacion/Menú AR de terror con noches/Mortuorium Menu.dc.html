@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Special+Elite&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #050403; }
+    a { color: #c98a3d; }
+    a:hover { color: #e0a860; }
+    @keyframes flicker { 0%,100%{opacity:1} 92%{opacity:1} 93%{opacity:.82} 94%{opacity:1} 97%{opacity:.9} }
+    @keyframes pulseRed { 0%,100%{opacity:.55} 50%{opacity:1} }
+  </style>
+  <script src="./image-slot.js"></script>
+</helmet>
+<div style="display:flex;justify-content:center;align-items:flex-start;width:100%;height:100vh;background:#050403;box-sizing:border-box;overflow-y:auto;padding:16px 0;">
+<div style="width:402px;height:874px;flex-shrink:0;transform:scale(0.78);transform-origin:top center;">
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402,874">
+  <div style="position:relative;width:100%;height:100%;background:#0c0a08;overflow:hidden;font-family:'IBM Plex Mono',monospace;">
+
+    <!-- scanline + vignette overlay, always on top of every screen -->
+    <div style="position:absolute;inset:0;pointer-events:none;z-index:40;background:repeating-linear-gradient(rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.22) 3px);"></div>
+    <div style="position:absolute;inset:0;pointer-events:none;z-index:41;box-shadow:inset 0 0 120px 40px rgba(0,0,0,0.75);"></div>
+
+    <!-- ============ MAIN MENU ============ -->
+    <sc-if value="{{ isMenu }}" hint-placeholder-val="{{ true }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:58px;letter-spacing:6px;color:#e9e3d6;text-shadow:2px 0 rgba(255,30,50,0.55), -2px 0 rgba(0,220,200,0.35);animation:flicker 6s infinite;">MORTUORIUM</div>
+          <div style="font-family:'Special Elite',monospace;font-size:14px;color:#8a8074;letter-spacing:1px;">El ritual no debe parar</div>
+        </div>
+        <div style="width:100%;display:flex;flex-direction:column;gap:14px;">
+          <div onClick="{{ goPlay }}" style="width:100%;padding:16px;background:transparent;border:1px solid #a3222c;color:#e9e3d6;font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;text-align:center;cursor:pointer;box-sizing:border-box;">JUGAR</div>
+          <div onClick="{{ openScanFlow }}" style="width:100%;padding:16px;background:transparent;border:1px solid #3a322a;color:#c9c2b4;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;text-align:center;cursor:pointer;box-sizing:border-box;">ESCANEAR ENTORNO</div>
+          <div onClick="{{ goOptions }}" style="width:100%;padding:16px;background:transparent;border:1px solid #3a322a;color:#c9c2b4;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;text-align:center;cursor:pointer;box-sizing:border-box;">OPCIONES</div>
+        </div>
+        <div style="margin-top:18px;font-size:10px;color:#4a443c;letter-spacing:1px;">build interna &middot; equipo 112</div>
+      </div>
+    </sc-if>
+
+<!-- ============ NO SCANS (PLAY BLOCKED) ============ -->
+    <sc-if value="{{ isNoScansPlay }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+        <div onClick="{{ goMenu }}" style="cursor:pointer;color:#8a8074;font-size:22px;margin-bottom:26px;">&#8592;</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;color:#e9e3d6;margin-bottom:16px;">FALTA UN ENTORNO</div>
+        <div style="font-family:'Special Elite',monospace;font-size:14px;color:#c9c2b4;line-height:1.7;margin-bottom:auto;">no hay ningún entorno escaneado todavía. el ritual necesita conocer tu espacio real antes de empezar a jugar.</div>
+        <div onClick="{{ openScanFlow }}" style="padding:16px;border:1px solid #a3222c;color:#e9e3d6;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer;">ESCANEAR ENTORNO</div>
+      </div>
+    </sc-if>
+
+    <!-- ============ MODE SELECT ============ -->
+    <sc-if value="{{ isModeSelect }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+        <div onClick="{{ goMenu }}" style="cursor:pointer;color:#8a8074;font-size:22px;margin-bottom:26px;">&#8592;</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:2px;color:#e9e3d6;margin-bottom:6px;">¿COMO ENFRENTARÁS LA NOCHE?</div>
+        <div style="font-family:'Special Elite',monospace;font-size:13px;color:#6b6459;margin-bottom:40px;">solo, o acompañado, la oscuridad es la misma</div>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div onClick="{{ goNightSelect }}" style="padding:22px;border:1px solid #3a322a;color:#e9e3d6;cursor:pointer;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;">UN JUGADOR</div>
+            <div style="font-size:12px;color:#6b6459;margin-top:6px;">sobrevive la noche por tu cuenta</div>
+          </div>
+          <div onClick="{{ goMpRole }}" style="padding:22px;border:1px solid #a3222c;color:#e9e3d6;cursor:pointer;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;">MULTIJUGADOR</div>
+            <div style="font-size:12px;color:#6b6459;margin-top:6px;">de 1 a 4 jugadores, misma sesión</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ============ MP ROLE SELECT ============ -->
+    <sc-if value="{{ isMpRole }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+        <div onClick="{{ goModeSelect }}" style="cursor:pointer;color:#8a8074;font-size:22px;margin-bottom:26px;">&#8592;</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:2px;color:#e9e3d6;margin-bottom:40px;">SESIÓN COMPARTIDA</div>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div onClick="{{ selectHost }}" style="padding:22px;border:1px solid #3a322a;color:#e9e3d6;cursor:pointer;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;">CREAR SALA (HOST)</div>
+            <div style="font-size:12px;color:#6b6459;margin-top:6px;">tu dispositivo aloja la sesión</div>
+          </div>
+          <div onClick="{{ selectClient }}" style="padding:22px;border:1px solid #3a322a;color:#e9e3d6;cursor:pointer;">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;">UNIRSE (CLIENTE)</div>
+            <div style="font-size:12px;color:#6b6459;margin-top:6px;">ingresá la IP de un host</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ============ MP HOST ============ -->
+    <sc-if value="{{ isMpHost }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+        <div onClick="{{ goMpRole }}" style="cursor:pointer;color:#8a8074;font-size:22px;margin-bottom:26px;">&#8592;</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;color:#e9e3d6;margin-bottom:6px;">SALA DE HOST</div>
+        <sc-if value="{{ notHostStarted }}">
+          <div style="font-size:13px;color:#6b6459;margin-bottom:28px;">abrí la sala para que otros jugadores se conecten</div>
+          <div onClick="{{ startHostRoom }}" style="padding:16px;border:1px solid #a3222c;color:#e9e3d6;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer;">ABRIR SALA</div>
+        </sc-if>
+        <sc-if value="{{ state.hostStarted }}">
+          <div style="padding:16px;border:1px solid #3a322a;margin-bottom:20px;">
+            <div style="font-size:11px;color:#6b6459;letter-spacing:1px;">DIRECCIÓN DE SALA</div>
+            <div style="font-size:20px;color:#c98a3d;margin-top:4px;">192.168.1.42 : 7777</div>
+          </div>
+          <div style="font-size:13px;color:#8a8074;margin-bottom:14px;">esperando jugadores… ({{ state.hostPlayers }}/4)</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px;">
+            <sc-for list="{{ hostSlots }}" as="slot" hint-placeholder-count="4">
+              <div style="padding:12px 14px;border:1px solid #2a231c;color:{{ slot.color }};font-size:13px;">{{ slot.label }}</div>
+            </sc-for>
+          </div>
+          <div onClick="{{ simulateJoin }}" style="padding:12px;border:1px solid #3a322a;color:#8a8074;text-align:center;font-size:13px;cursor:pointer;margin-bottom:10px;">+ simular jugador conectado</div>
+          <div onClick="{{ goNightSelect }}" style="padding:16px;border:1px solid #a3222c;color:#e9e3d6;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer;">INICIAR NOCHE</div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- ============ MP CLIENT ============ -->
+    <sc-if value="{{ isMpClient }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+        <div onClick="{{ goMpRole }}" style="cursor:pointer;color:#8a8074;font-size:22px;margin-bottom:26px;">&#8592;</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;color:#e9e3d6;margin-bottom:6px;">UNIRSE A SALA</div>
+        <sc-if value="{{ notClientConnected }}">
+          <div style="font-size:13px;color:#6b6459;margin-bottom:24px;">ingresá la IP y puerto que te compartió el host</div>
+          <input value="{{ state.clientIp }}" onChange="{{ onClientIpChange }}" placeholder="192.168.1.42 : 7777" style="width:100%;box-sizing:border-box;padding:14px;background:#131010;border:1px solid #3a322a;color:#e9e3d6;font-family:'IBM Plex Mono',monospace;font-size:15px;margin-bottom:16px;" />
+          <div onClick="{{ connectClient }}" style="padding:16px;border:1px solid #a3222c;color:#e9e3d6;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer;">CONECTAR</div>
+        </sc-if>
+        <sc-if value="{{ state.clientConnected }}">
+          <div style="padding:16px;border:1px solid #3a322a;margin-bottom:20px;">
+            <div style="font-size:11px;color:#6b6459;letter-spacing:1px;">CONECTADO A</div>
+            <div style="font-size:18px;color:#c98a3d;margin-top:4px;">{{ state.clientIp }}</div>
+          </div>
+          <div style="font-size:13px;color:#8a8074;margin-bottom:24px;">esperando a que el host inicie la noche…</div>
+          <div onClick="{{ clientStartNight }}" style="padding:12px;border:1px solid #3a322a;color:#8a8074;text-align:center;font-size:13px;cursor:pointer;">simular inicio del host &#8594;</div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- ============ NIGHT SELECT ============ -->
+    <sc-if value="{{ isNightSelect }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+        <div onClick="{{ goModeSelect }}" style="cursor:pointer;color:#8a8074;font-size:22px;margin-bottom:26px;">&#8592;</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;color:#e9e3d6;margin-bottom:20px;">ELEGÍ LA NOCHE</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;">
+          <sc-for list="{{ nights }}" as="night" hint-placeholder-count="6">
+            <div onClick="{{ night.onSelect }}" style="{{ night.boxStyle }}">
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;">{{ night.n }}</div>
+              <sc-if value="{{ night.locked }}">
+                <div style="margin-top:6px;">
+                  <svg width="16" height="16" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.2" fill="none" stroke="#4a443c" stroke-width="1.4"/><path d="M5 7V4.8a3 3 0 016 0V7" fill="none" stroke="#4a443c" stroke-width="1.4"/></svg>
+                </div>
+              </sc-if>
+              <sc-if value="{{ night.unlockedNotSelected }}"><div style="font-size:10px;color:#6b6459;margin-top:4px;">disponible</div></sc-if>
+              <sc-if value="{{ night.isSelected }}"><div style="font-size:10px;color:#c98a3d;margin-top:4px;">elegida</div></sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <sc-if value="{{ showContinueBtn }}">
+          <div onClick="{{ continueNight }}" style="padding:16px;border:1px solid #a3222c;color:#e9e3d6;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer;">CONTINUAR</div>
+        </sc-if>
+        <sc-if value="{{ showNoScansWarning }}">
+          <div style="padding:14px;border:1px solid #3a322a;color:#6b6459;font-size:12px;line-height:1.6;">no hay entornos escaneados todavía. volvé al menú principal y tocá "ESCANEAR ENTORNO" antes de empezar.</div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- ============ SELECT SCAN ============ -->
+    <sc-if value="{{ isSelectScan }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+        <div onClick="{{ goNightSelect }}" style="cursor:pointer;color:#8a8074;font-size:22px;margin-bottom:26px;">&#8592;</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;color:#e9e3d6;margin-bottom:6px;">ELEGÍ EL ENTORNO</div>
+        <div style="font-family:'Special Elite',monospace;font-size:12px;color:#6b6459;margin-bottom:24px;">seleccioná un escaneo guardado para esta noche</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <sc-for list="{{ savedScansList }}" as="scan" hint-placeholder-count="2">
+            <div onClick="{{ scan.onSelect }}" style="padding:16px;border:1px solid #3a322a;color:#e9e3d6;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-size:15px;">{{ scan.name }}</div>
+              <div style="font-size:11px;color:#6b6459;">{{ scan.itemCount }} elementos</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+<!-- ============ SCAN LOAD ============ -->
+    <sc-if value="{{ isScanLoad }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+        <div onClick="{{ goMenu }}" style="cursor:pointer;color:#8a8074;font-size:22px;margin-bottom:26px;">&#8592;</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;color:#e9e3d6;margin-bottom:6px;">ESCANEO DE ENTORNO</div>
+        <div style="font-family:'Special Elite',monospace;font-size:12px;color:#6b6459;margin-bottom:24px;">continuá editando un escaneo guardado o empezá uno nuevo</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+          <sc-for list="{{ editScansList }}" as="scan" hint-placeholder-count="2">
+            <div onClick="{{ scan.onLoad }}" style="padding:16px;border:1px solid #3a322a;color:#e9e3d6;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+              <div style="font-size:15px;">{{ scan.name }}</div>
+              <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+                <div style="font-size:11px;color:#6b6459;">{{ scan.itemCount }} elementos &middot; editar</div>
+                <div onClick="{{ scan.onDelete }}" style="padding:4px;cursor:pointer;">
+                  <svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4.5V3a1 1 0 011-1h1a1 1 0 011 1v1.5M4 4.5l.6 9a1 1 0 001 .9h4.8a1 1 0 001-.9l.6-9" fill="none" stroke="#a3222c" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div onClick="{{ newScan }}" style="padding:16px;border:1px solid #a3222c;color:#e9e3d6;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer;">+ NUEVO ESCANEO</div>
+      </div>
+    </sc-if>
+
+    <!-- ============ DELETE SCAN CONFIRM ============ -->
+    <sc-if value="{{ hasDeleteConfirm }}">
+      <div style="position:absolute;inset:0;background:rgba(0,0,0,0.7);z-index:60;display:flex;align-items:center;justify-content:center;padding:28px;box-sizing:border-box;">
+        <div style="background:#141110;border:1px solid #a3222c;padding:26px;width:100%;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:#e9e3d6;margin-bottom:8px;">¿ELIMINAR "{{ deleteConfirmScanName }}"?</div>
+          <div style="font-size:12px;color:#8a8074;margin-bottom:22px;">esta acción no se puede deshacer</div>
+          <div style="display:flex;gap:10px;">
+            <div onClick="{{ cancelDeleteScan }}" style="flex:1;padding:12px;border:1px solid #3a322a;color:#c9c2b4;text-align:center;font-size:13px;cursor:pointer;">CANCELAR</div>
+            <div onClick="{{ confirmDeleteScan }}" style="flex:1;padding:12px;border:1px solid #a3222c;color:#e9e3d6;text-align:center;font-size:13px;cursor:pointer;">ELIMINAR</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ============ SCAN NAME ============ -->
+    <sc-if value="{{ isScanName }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+        <div onClick="{{ backToArScan }}" style="cursor:pointer;color:#8a8074;font-size:22px;margin-bottom:26px;">&#8592;</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;color:#e9e3d6;margin-bottom:6px;">GUARDAR ESCANEO</div>
+        <div style="font-family:'Special Elite',monospace;font-size:12px;color:#6b6459;margin-bottom:24px;">nombrá este entorno para encontrarlo luego</div>
+        <input value="{{ state.scanNameInput }}" onChange="{{ onScanNameChange }}" placeholder="ej: living de casa" style="width:100%;box-sizing:border-box;padding:14px;background:#131010;border:1px solid #3a322a;color:#e9e3d6;font-family:'IBM Plex Mono',monospace;font-size:15px;margin-bottom:16px;" />
+        <div onClick="{{ saveScan }}" style="padding:16px;border:1px solid #a3222c;color:#e9e3d6;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer;">GUARDAR</div>
+      </div>
+    </sc-if>
+
+    <!-- ============ SYNC IMAGE ============ -->
+    <sc-if value="{{ isSyncImage }}">
+      <div style="position:absolute;inset:0;">
+        <image-slot id="ar-env-bg" shape="rect" placeholder="Soltá una foto de tu ambiente (simulación de cámara)"></image-slot>
+      </div>
+      <div style="position:absolute;inset:0;background:linear-gradient(rgba(0,0,0,0.55),rgba(0,0,0,0.75));padding:70px 24px 44px;box-sizing:border-box;display:flex;flex-direction:column;z-index:30;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:2px;color:#e9e3d6;margin-bottom:8px;">SINCRONIZACIÓN</div>
+        <div style="font-family:'Special Elite',monospace;font-size:13px;color:#c9c2b4;margin-bottom:6px;">{{ syncSubtitle }}</div>
+        <div style="font-size:12px;color:#8a8074;margin-bottom:auto;">todos los jugadores deben apuntar la cámara a esta imagen de referencia para ubicarse en el mismo espacio virtual.</div>
+        <div onClick="{{ confirmSync }}" style="padding:16px;border:1px solid #a3222c;color:#e9e3d6;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer;">SINCRONIZADO, COMENZAR</div>
+      </div>
+    </sc-if>
+
+    <!-- ============ OPTIONS ============ -->
+    <sc-if value="{{ isOptions }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+        <div onClick="{{ goMenu }}" style="cursor:pointer;color:#8a8074;font-size:22px;margin-bottom:26px;">&#8592;</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;color:#e9e3d6;margin-bottom:30px;">OPCIONES</div>
+
+        <div style="margin-bottom:26px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:#c9c2b4;margin-bottom:8px;"><span>BRILLO</span><span style="color:#c98a3d;">{{ state.opt.brightness }}%</span></div>
+          <input type="range" min="0" max="100" value="{{ state.opt.brightness }}" onChange="{{ onBrightnessChange }}" style="width:100%;accent-color:#a3222c;" />
+        </div>
+
+        <div style="margin-bottom:26px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:#c9c2b4;margin-bottom:8px;"><span>VOLUMEN</span><span style="color:#c98a3d;">{{ state.opt.volume }}%</span></div>
+          <input type="range" min="0" max="100" value="{{ state.opt.volume }}" onChange="{{ onVolumeChange }}" style="width:100%;accent-color:#a3222c;" />
+        </div>
+
+        <div onClick="{{ toggleAberration }}" style="display:flex;justify-content:space-between;align-items:center;padding:16px;border:1px solid #3a322a;margin-bottom:14px;cursor:pointer;">
+          <div>
+            <div style="font-size:14px;color:#e9e3d6;">Aberración cromática</div>
+            <div style="font-size:11px;color:#6b6459;margin-top:2px;">distorsión visual en momentos de tensión</div>
+          </div>
+          <div style="padding:6px 14px;border:1px solid {{ aberrationBorder }};color:{{ aberrationColor }};font-family:'IBM Plex Mono',monospace;font-size:12px;">{{ aberrationLabel }}</div>
+        </div>
+
+        <div onClick="{{ toggleMotion }}" style="display:flex;justify-content:space-between;align-items:center;padding:16px;border:1px solid #3a322a;cursor:pointer;">
+          <div>
+            <div style="font-size:14px;color:#e9e3d6;">Modo confort</div>
+            <div style="font-size:11px;color:#6b6459;margin-top:2px;">reduce efectos para evitar motion sickness</div>
+          </div>
+          <div style="padding:6px 14px;border:1px solid {{ motionBorder }};color:{{ motionColor }};font-family:'IBM Plex Mono',monospace;font-size:12px;">{{ motionLabel }}</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ============ AR SCAN ============ -->
+    <sc-if value="{{ isArScan }}">
+      <div style="position:absolute;inset:0;">
+        <image-slot id="ar-env-bg" shape="rect" placeholder="Soltá una foto de tu ambiente (simulación de cámara)"></image-slot>
+      </div>
+      <div style="position:absolute;inset:0;pointer-events:none;">
+        <sc-for list="{{ state.placedItems }}" as="item" hint-placeholder-count="0">
+          <div style="position:absolute;left:{{ item.x }}%;top:{{ item.y }}%;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:50%;background:rgba(10,8,6,0.85);border:2px solid {{ item.color }};display:flex;align-items:center;justify-content:center;color:{{ item.color }};font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;box-shadow:0 0 10px {{ item.color }};">{{ item.symbol }}</div>
+        </sc-for>
+        <!-- center reticle: AR determines placement position/depth from where the phone points -->
+        <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:46px;height:46px;border:1.5px solid rgba(233,227,214,0.7);border-radius:50%;">
+          <div style="position:absolute;left:50%;top:-8px;transform:translateX(-50%);width:1.5px;height:14px;background:rgba(233,227,214,0.7);"></div>
+          <div style="position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);width:1.5px;height:14px;background:rgba(233,227,214,0.7);"></div>
+          <div style="position:absolute;top:50%;left:-8px;transform:translateY(-50%);height:1.5px;width:14px;background:rgba(233,227,214,0.7);"></div>
+          <div style="position:absolute;top:50%;right:-8px;transform:translateY(-50%);height:1.5px;width:14px;background:rgba(233,227,214,0.7);"></div>
+        </div>
+      </div>
+
+      <div style="position:absolute;top:0;left:0;right:0;padding:58px 20px 14px;box-sizing:border-box;background:linear-gradient(rgba(0,0,0,0.75),rgba(0,0,0,0));z-index:30;pointer-events:none;">
+        <div style="display:flex;align-items:center;gap:14px;pointer-events:auto;">
+          <div onClick="{{ goMenu }}" style="cursor:pointer;color:#e9e3d6;font-size:20px;">&#8592;</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:#e9e3d6;">{{ arScanTitle }}</div>
+        </div>
+        <div style="font-size:12px;color:#c9c2b4;margin-top:6px;pointer-events:auto;">apuntá con el centro de la pantalla al punto real y tocá COLOCAR</div>
+      </div>
+
+      <div style="position:absolute;left:0;right:0;bottom:0;padding:14px 16px 24px;box-sizing:border-box;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,0.9) 40%);z-index:30;display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;">
+          <div onClick="{{ selectToolPared }}" style="{{ toolStyles.pared }}">
+            <svg width="26" height="26" viewBox="0 0 26 26"><rect x="2" y="4" width="22" height="18" fill="none" stroke="currentColor" stroke-width="2"/><line x1="2" y1="13" x2="24" y2="13" stroke="currentColor" stroke-width="2"/><line x1="13" y1="4" x2="13" y2="22" stroke="currentColor" stroke-width="2"/></svg>
+            <div style="font-size:11px;margin-top:6px;white-space:nowrap;">PARED</div>
+          </div>
+          <div onClick="{{ selectToolCubo }}" style="{{ toolStyles.cubo }}">
+            <svg width="26" height="26" viewBox="0 0 26 26"><polygon points="13,2 24,7 24,18 13,23 2,18 2,7" fill="none" stroke="currentColor" stroke-width="2"/><line x1="13" y1="2" x2="13" y2="12" stroke="currentColor" stroke-width="2"/><line x1="2" y1="7" x2="13" y2="12" stroke="currentColor" stroke-width="2"/><line x1="24" y1="7" x2="13" y2="12" stroke="currentColor" stroke-width="2"/></svg>
+            <div style="font-size:11px;margin-top:6px;white-space:nowrap;">CUBO</div>
+          </div>
+          <div onClick="{{ selectToolPuerta }}" style="{{ toolStyles.puerta }}">
+            <svg width="26" height="26" viewBox="0 0 26 26"><path d="M4 23V10a9 9 0 0118 0v13" fill="none" stroke="currentColor" stroke-width="2"/><line x1="2" y1="23" x2="24" y2="23" stroke="currentColor" stroke-width="2"/></svg>
+            <div style="font-size:11px;margin-top:6px;white-space:nowrap;">AGUJERO PUERTA</div>
+          </div>
+          <div onClick="{{ toggleIdentificadorMenu }}" style="{{ toolStyles.identificador }}">
+            <svg width="26" height="26" viewBox="0 0 26 26"><path d="M13 24s9-9.5 9-15a9 9 0 10-18 0c0 5.5 9 15 9 15z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="13" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            <div style="font-size:11px;margin-top:6px;white-space:nowrap;">IDENTIFICADOR</div>
+            <sc-if value="{{ identificadorSubtypeLabel }}"><div style="font-size:9px;color:#7aa6c2;margin-top:2px;">{{ identificadorSubtypeLabel }}</div></sc-if>
+          </div>
+        </div>
+        <sc-if value="{{ state.identificadorMenuOpen }}">
+          <div style="position:absolute;right:16px;bottom:112px;background:#141110;border:1px solid #3a322a;width:140px;z-index:55;box-shadow:0 6px 20px rgba(0,0,0,0.6);">
+            <div onClick="{{ chooseIdentificadorPuerta }}" style="padding:12px 14px;color:#e9e3d6;font-size:13px;cursor:pointer;border-bottom:1px solid #2a231c;">Puerta</div>
+            <div onClick="{{ chooseIdentificadorVentana }}" style="padding:12px 14px;color:#e9e3d6;font-size:13px;cursor:pointer;">Ventana</div>
+          </div>
+        </sc-if>
+        <div style="font-size:10px;color:#6b6459;">identificador = punto de puerta o ventana en el escaneo</div>
+        <div style="display:flex;gap:10px;">
+          <div onClick="{{ placeCurrent }}" style="{{ placeBtnStyle }}">COLOCAR</div>
+          <div onClick="{{ confirmScan }}" style="{{ confirmScanStyle }}">GUARDAR ESCANEO</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ============ BRIEFING ============ -->
+    <sc-if value="{{ isBriefing }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:3px;color:#a3222c;margin-bottom:6px;">NOCHE</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:70px;letter-spacing:2px;color:#e9e3d6;line-height:1;margin-bottom:20px;">{{ state.selectedNight }}</div>
+          <div style="font-family:'Special Elite',monospace;font-size:14px;color:#c9c2b4;line-height:1.7;">{{ briefingText }}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div onClick="{{ completeNight }}" style="padding:16px;border:1px solid #3a322a;color:#8a8074;text-align:center;font-size:13px;cursor:pointer;">simular noche superada &#8594;</div>
+          <div onClick="{{ resetToMenu }}" style="padding:16px;border:1px solid #a3222c;color:#e9e3d6;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer;">VOLVER AL MENÚ</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ============ VICTORY ============ -->
+    <sc-if value="{{ isVictory }}">
+      <div style="position:absolute;inset:0;padding:70px 28px 44px;box-sizing:border-box;display:flex;flex-direction:column;">
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;">
+          <svg width="40" height="40" viewBox="0 0 40 40" style="margin-bottom:18px;"><circle cx="20" cy="20" r="18" fill="none" stroke="#c98a3d" stroke-width="2"/><path d="M12 20l6 6 10-12" fill="none" stroke="#c98a3d" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:3px;color:#c98a3d;margin-bottom:6px;">NOCHE {{ state.selectedNight }} SUPERADA</div>
+          <div style="font-family:'Special Elite',monospace;font-size:14px;color:#c9c2b4;line-height:1.7;">{{ victoryText }}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <sc-if value="{{ showNextNightBtn }}">
+            <div onClick="{{ goNextNight }}" style="padding:16px;border:1px solid #a3222c;color:#e9e3d6;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer;">SIGUIENTE NOCHE</div>
+          </sc-if>
+          <div onClick="{{ resetToMenu }}" style="padding:16px;border:1px solid #3a322a;color:#c9c2b4;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;cursor:pointer;">VOLVER AL MENÚ</div>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+</x-import>
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    screen: 'menu',
+    unlockedNights: 3,
+    selectedNight: null,
+    savedScans: [],
+    selectedScanId: null,
+    editingScanId: null,
+    scanNameInput: '',
+    deleteConfirmScanId: null,
+    mpRole: null,
+    clientIp: '',
+    clientConnected: false,
+    hostStarted: false,
+    hostPlayers: 1,
+    arTool: null,
+    identificadorMenuOpen: false,
+    identificadorSubtype: null,
+    placedItems: [],
+    opt: { brightness: 60, volume: 70, aberration: true, motionReduce: false },
+  };
+
+  go = (screen) => () => this.setState({ screen });
+  goPlay = () => this.setState({ screen: this.state.savedScans.length ? 'modeSelect' : 'noScansPlay' });
+  openScanFlow = () => { if (this.state.savedScans.length) this.setState({ screen: 'scanLoad' }); else this.newScan(); };
+  newScan = () => this.setState({ arTool: null, placedItems: [], editingScanId: null, screen: 'arScan' });
+  loadScanForEdit = (scan) => () => this.setState({ placedItems: scan.items.map(i => ({ ...i })), arTool: null, editingScanId: scan.id, screen: 'arScan' });
+  backToArScan = () => this.setState({ screen: 'arScan' });
+  onScanNameChange = (e) => this.setState({ scanNameInput: e.target.value });
+  saveScan = () => {
+    const name = this.state.scanNameInput.trim();
+    if (!name) return;
+    const items = this.state.placedItems;
+    this.setState(s => {
+      const savedScans = s.editingScanId
+        ? s.savedScans.map(sc => sc.id === s.editingScanId ? { ...sc, name, itemCount: items.length, items } : sc)
+        : [...s.savedScans, { id: Date.now(), name, itemCount: items.length, items }];
+      return { savedScans, placedItems: [], arTool: null, scanNameInput: '', editingScanId: null, screen: 'menu' };
+    });
+  };
+  selectScan = (scan) => () => this.setState({ selectedScanId: scan.id, screen: 'syncImage' });
+  askDeleteScan = (scan) => (e) => { e.stopPropagation(); this.setState({ deleteConfirmScanId: scan.id }); };
+  cancelDeleteScan = () => this.setState({ deleteConfirmScanId: null });
+  confirmDeleteScan = () => this.setState(s => ({ savedScans: s.savedScans.filter(x => x.id !== s.deleteConfirmScanId), deleteConfirmScanId: null }));
+  confirmSync = () => this.setState({ screen: 'briefing' });
+
+  selectMpRole = (role) => () => this.setState({ mpRole: role, screen: role === 'host' ? 'mpHost' : 'mpClient' });
+  startHostRoom = () => this.setState({ hostStarted: true });
+  simulateJoin = () => this.setState(s => ({ hostPlayers: Math.min(4, s.hostPlayers + 1) }));
+  onClientIpChange = (e) => this.setState({ clientIp: e.target.value });
+  connectClient = () => { if (this.state.clientIp.trim()) this.setState({ clientConnected: true }); };
+  clientStartNight = () => this.setState({ selectedNight: 1, screen: 'syncImage' });
+
+  selectNight = (n) => () => { if (n <= this.state.unlockedNights) this.setState({ selectedNight: n }); };
+  continueNight = () => {
+    if (!this.state.selectedNight || !this.state.savedScans.length) return;
+    this.setState({ screen: 'selectScan' });
+  };
+  completeNight = () => {
+    this.setState(s => ({ unlockedNights: Math.min(6, Math.max(s.unlockedNights, s.selectedNight + 1)), screen: 'victory' }));
+  };
+  goNextNight = () => this.setState(s => ({ selectedNight: Math.min(6, s.selectedNight + 1), screen: 'syncImage' }));
+  resetToMenu = () => this.setState({ selectedNight: null, screen: 'menu' });
+
+  onBrightnessChange = (e) => this.setState(s => ({ opt: { ...s.opt, brightness: Number(e.target.value) } }));
+  onVolumeChange = (e) => this.setState(s => ({ opt: { ...s.opt, volume: Number(e.target.value) } }));
+  toggleAberration = () => this.setState(s => ({ opt: { ...s.opt, aberration: !s.opt.aberration } }));
+  toggleMotion = () => this.setState(s => ({ opt: { ...s.opt, motionReduce: !s.opt.motionReduce } }));
+
+  selectTool = (tool) => () => this.setState({ arTool: tool, identificadorMenuOpen: false });
+  toggleIdentificadorMenu = () => this.setState(s => ({ identificadorMenuOpen: !s.identificadorMenuOpen }));
+  chooseIdentificador = (subtype) => () => this.setState({ arTool: 'identificador', identificadorSubtype: subtype, identificadorMenuOpen: false });
+  // scatter offsets purely for on-screen legibility — in the real app AR determines
+  // the actual world position/depth of whatever the center reticle is pointing at.
+  static SCATTER = [[0, 0], [-11, -7], [11, -7], [-11, 8], [11, 8], [-17, 1], [17, 1], [0, -13], [0, 13]];
+  placeCurrent = () => {
+    const tool = this.state.arTool;
+    if (!tool) return;
+    const metaMap = {
+      pared: { symbol: 'P', color: '#c98a3d' },
+      cubo: { symbol: 'C', color: '#8fae7a' },
+      puerta: { symbol: 'D', color: '#a3222c' },
+      identificador: { symbol: this.state.identificadorSubtype === 'ventana' ? 'V' : 'P', color: '#7aa6c2' },
+    };
+    const meta = metaMap[tool];
+    this.setState(s => {
+      const [dx, dy] = Component.SCATTER[s.placedItems.length % Component.SCATTER.length];
+      return { placedItems: [...s.placedItems, { id: Date.now() + Math.random(), tool, x: 50 + dx, y: 50 + dy, ...meta }] };
+    });
+  };
+  confirmScan = () => {
+    if (!this.state.placedItems.length) return;
+    const editing = this.state.savedScans.find(x => x.id === this.state.editingScanId);
+    this.setState({ scanNameInput: editing ? editing.name : `Escaneo ${this.state.savedScans.length + 1}`, screen: 'scanName' });
+  };
+
+  briefingLines = {
+    1: 'Primera noche. La casa está en silencio, pero algo ya intenta entrar.',
+    2: 'Sorken conoce mejor los puntos de entrada. Prestá atención al oído.',
+    3: 'La batería no dura lo que antes. Administrá cada segundo de luz.',
+    4: 'Algo más aparece cuando te quedás quieto. No lo mires demasiado.',
+    5: 'El libro del ritual empieza a fallar más seguido. No lo pierdas de vista.',
+    6: 'Última noche. Todo lo que temías converge esta vez.',
+  };
+
+  renderVals() {
+    const s = this.state;
+    const screenIs = (v) => s.screen === v;
+    const boxBase = 'padding:18px 8px;border:1px solid #3a322a;text-align:center;color:#e9e3d6;cursor:pointer;';
+    const nights = [1, 2, 3, 4, 5, 6].map(n => {
+      const locked = n > s.unlockedNights;
+      const isSelected = s.selectedNight === n;
+      let boxStyle = boxBase;
+      if (locked) boxStyle = 'padding:18px 8px;border:1px solid #241d17;text-align:center;color:#4a443c;cursor:not-allowed;background:rgba(255,255,255,0.02);';
+      else if (isSelected) boxStyle = 'padding:18px 8px;border:1px solid #a3222c;text-align:center;color:#e9e3d6;cursor:pointer;background:rgba(163,34,44,0.12);';
+      return {
+        n, locked, isSelected,
+        unlockedNotSelected: !locked && !isSelected,
+        boxStyle,
+        onSelect: locked ? () => {} : this.selectNight(n),
+      };
+    });
+
+    const toolBase = (active) => `display:flex;flex-direction:column;align-items:center;padding:10px 14px;border:1px solid ${active ? '#a3222c' : '#3a322a'};background:${active ? 'rgba(163,34,44,0.18)' : 'rgba(10,8,6,0.55)'};color:${active ? '#e9e3d6' : '#c9c2b4'};cursor:pointer;flex-shrink:0;`;
+    const toolStyles = {
+      pared: toolBase(s.arTool === 'pared'),
+      cubo: toolBase(s.arTool === 'cubo'),
+      puerta: toolBase(s.arTool === 'puerta'),
+      identificador: toolBase(s.arTool === 'identificador'),
+    };
+
+    const hostSlots = [];
+    for (let i = 0; i < 4; i++) {
+      hostSlots.push(i < s.hostPlayers
+        ? { label: i === 0 ? 'Jugador 1 (vos) — conectado' : `Jugador ${i + 1} — conectado`, color: '#8fae7a' }
+        : { label: `Jugador ${i + 1} — esperando…`, color: '#4a443c' });
+    }
+
+    return {
+      state: s,
+      goMenu: this.go('menu'),
+      goPlay: this.goPlay,
+      goOptions: this.go('options'),
+      goModeSelect: this.go('modeSelect'),
+      goNightSelect: this.go('nightSelect'),
+      goMpRole: this.go('mpRole'),
+      selectHost: this.selectMpRole('host'),
+      selectClient: this.selectMpRole('client'),
+      selectToolPared: this.selectTool('pared'),
+      selectToolCubo: this.selectTool('cubo'),
+      selectToolPuerta: this.selectTool('puerta'),
+      selectToolIdentificador: this.selectTool('identificador'),
+      toggleIdentificadorMenu: this.toggleIdentificadorMenu,
+      chooseIdentificadorPuerta: this.chooseIdentificador('puerta'),
+      chooseIdentificadorVentana: this.chooseIdentificador('ventana'),
+      identificadorSubtypeLabel: s.arTool === 'identificador' && s.identificadorSubtype ? s.identificadorSubtype.toUpperCase() : '',
+      openScanFlow: this.openScanFlow,
+      newScan: this.newScan,
+      backToArScan: this.backToArScan,
+      onScanNameChange: this.onScanNameChange,
+      saveScan: this.saveScan,
+      confirmSync: this.confirmSync,
+      isMenu: screenIs('menu'),
+      isNoScansPlay: screenIs('noScansPlay'),
+      isModeSelect: screenIs('modeSelect'),
+      isMpRole: screenIs('mpRole'),
+      isMpHost: screenIs('mpHost'),
+      isMpClient: screenIs('mpClient'),
+      isNightSelect: screenIs('nightSelect'),
+      isOptions: screenIs('options'),
+      isArScan: screenIs('arScan'),
+      isScanLoad: screenIs('scanLoad'),
+      isSelectScan: screenIs('selectScan'),
+      isScanName: screenIs('scanName'),
+      isSyncImage: screenIs('syncImage'),
+      isBriefing: screenIs('briefing'),
+      isVictory: screenIs('victory'),
+      showNextNightBtn: s.selectedNight < 6,
+      victoryText: s.selectedNight < 6
+        ? 'Sobreviviste hasta el amanecer. El ritual sigue en pie, pero la próxima noche será peor.'
+        : 'Sobreviviste las seis noches. El ritual permanece a salvo… por ahora.',
+      notHostStarted: !s.hostStarted,
+      notClientConnected: !s.clientConnected,
+      hasSelectedNight: !!s.selectedNight,
+      showContinueBtn: !!s.selectedNight && s.savedScans.length > 0,
+      showNoScansWarning: !!s.selectedNight && s.savedScans.length === 0,
+      savedScansList: s.savedScans.map(scan => ({ ...scan, onSelect: this.selectScan(scan) })),
+      editScansList: s.savedScans.map(scan => ({ ...scan, onLoad: this.loadScanForEdit(scan), onDelete: this.askDeleteScan(scan) })),
+      hasDeleteConfirm: !!s.deleteConfirmScanId,
+      deleteConfirmScanName: (s.savedScans.find(x => x.id === s.deleteConfirmScanId) || {}).name || '',
+      cancelDeleteScan: this.cancelDeleteScan,
+      confirmDeleteScan: this.confirmDeleteScan,
+      selectedScanName: (s.savedScans.find(x => x.id === s.selectedScanId) || {}).name || '',
+      syncSubtitle: s.mpRole === 'client' ? 'entorno compartido por el host' : `entorno: ${(s.savedScans.find(x => x.id === s.selectedScanId) || {}).name || ''}`,
+      arScanTitle: s.editingScanId ? 'EDITANDO ESCANEO' : 'ESCANEO DE ENTORNO',
+      nights,
+      hostSlots,
+      toolStyles,
+      placeBtnStyle: `flex:1;padding:14px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;cursor:${s.arTool ? 'pointer' : 'not-allowed'};border:1px solid ${s.arTool ? '#c98a3d' : '#2a231c'};background:${s.arTool ? 'rgba(201,138,61,0.18)' : 'rgba(0,0,0,0.4)'};color:${s.arTool ? '#e9e3d6' : '#4a443c'};`,
+      confirmScanStyle: `flex:1;padding:14px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;cursor:${s.placedItems.length ? 'pointer' : 'not-allowed'};border:1px solid ${s.placedItems.length ? '#a3222c' : '#2a231c'};background:${s.placedItems.length ? 'rgba(163,34,44,0.2)' : 'rgba(0,0,0,0.4)'};color:${s.placedItems.length ? '#e9e3d6' : '#4a443c'};`,
+      aberrationLabel: s.opt.aberration ? 'ON' : 'OFF',
+      aberrationColor: s.opt.aberration ? '#c98a3d' : '#6b6459',
+      aberrationBorder: s.opt.aberration ? '#c98a3d' : '#3a322a',
+      motionLabel: s.opt.motionReduce ? 'ON' : 'OFF',
+      motionColor: s.opt.motionReduce ? '#c98a3d' : '#6b6459',
+      motionBorder: s.opt.motionReduce ? '#c98a3d' : '#3a322a',
+      briefingText: this.briefingLines[s.selectedNight] || '',
+      startHostRoom: this.startHostRoom,
+      simulateJoin: this.simulateJoin,
+      onClientIpChange: this.onClientIpChange,
+      connectClient: this.connectClient,
+      clientStartNight: this.clientStartNight,
+      continueNight: this.continueNight,
+      completeNight: this.completeNight,
+      goNextNight: this.goNextNight,
+      resetToMenu: this.resetToMenu,
+      onBrightnessChange: this.onBrightnessChange,
+      onVolumeChange: this.onVolumeChange,
+      toggleAberration: this.toggleAberration,
+      toggleMotion: this.toggleMotion,
+      placeCurrent: this.placeCurrent,
+      confirmScan: this.confirmScan,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

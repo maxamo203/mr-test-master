@@ -1,10 +1,19 @@
+using System;
 using UnityEngine;
+using T = MortuoriumTheme;
 
 namespace Scanner
 {
-    // Reticula central + boton Colocar + slider de distancia para fallback.
-    // Dibuja todo con OnGUI/IMGUI (cero dependencia de UI Toolkit/uGUI prefab).
-    // Tambien muestra el RaycastSource actual para diagnostico.
+    // HUD del escáner con la estética del prototipo (Assets/Prototipo Navegacion):
+    //   - Barra superior con gradiente: volver al menú + título + hint.
+    //   - Retícula central (color según la fuente del raycast).
+    //   - Panel inferior con gradiente: fila contextual del flujo activo,
+    //     herramientas (PARED / CUBO / AGUJERO PUERTA / IDENTIFICAR / PISO) y los
+    //     botones COLOCAR + GUARDAR ESCANEO.
+    //
+    // La cámara AR se ve detrás (acá solo se dibujan overlays IMGUI). Los datos de
+    // debug que antes vivían acá (fuente del raycast, modo FSM, posición del
+    // jugador, slider de distancia fallback) se movieron al GameObject DebugHud.
     public class ReticleController : MonoBehaviour
     {
         [SerializeField] private WallBuilder _wallBuilder;
@@ -16,15 +25,17 @@ namespace Scanner
         private ResolvedHit _lastHit;
         private Camera _camera;
 
-        // Submenu de "Identificar" (marcadores) abierto en el panel de modos.
+        // Último hit resuelto desde el centro (para DebugHud/DebugRaycastUI).
+        public ResolvedHit LastHit => _lastHit;
+
+        // Submenú de "Identificar" (tipos de marcador del catálogo) abierto.
         private bool _markerSubmenuOpen;
-        // Rect (local al area de modos) del boton "Identificar", para colgar el
-        // submenu a su derecha y centrado en el.
-        private Rect _identBtnLocalRect;
 
         // Si al terminar la polilinea se cierra el bucle (ultimo vertice -> primero).
         // En memoria: se mantiene entre polilineas, no persiste entre sesiones.
         private bool _closePolyline = true;
+
+        private const float Pad = 16f;
 
         private void Awake()
         {
@@ -53,250 +64,300 @@ namespace Scanner
             m == ScannerMode.Cube_V1 || m == ScannerMode.Cube_V2 || m == ScannerMode.Cube_V3 ||
             m == ScannerMode.Floor_Place || m == ScannerMode.Marker_Place || m == ScannerMode.EditMoveTarget;
 
-        private static Texture2D _bgTex;
-        private static Texture2D BG()
-        {
-            if (_bgTex == null) { _bgTex = new Texture2D(1,1); _bgTex.SetPixel(0,0, new Color(0,0,0,0.7f)); _bgTex.Apply(); }
-            return _bgTex;
-        }
-
+        // ------------------------------------------------------------- OnGUI
         private void OnGUI()
         {
             if (_fsm == null) return;
+            // Durante la calibración la pantalla es de ReferenceCaptureUI; con el
+            // overlay de guardado abierto, de SaveLoadUI.
+            if (_fsm.Current == ScannerMode.Calibrating) return;
+            if (SaveLoadUI.EstaAbierto) return;
 
             UIScale.Begin();
             float vw = UIScale.VirtualWidth;
             float vh = UIScale.VirtualHeight;
 
-            // ── Reticula central ──────────────────────────────────────────
-            if (IsPlacingMode(_fsm.Current))
+            DrawReticula(vw, vh);
+            DrawBarraSuperior(vw);
+            DrawPanelInferior(vw, vh);
+        }
+
+        // Retícula del prototipo: 4 ticks alrededor del centro, color según la
+        // calidad/fuente del hit (feedback útil al escanear).
+        private void DrawReticula(float vw, float vh)
+        {
+            if (!IsPlacingMode(_fsm.Current)) return;
+
+            float cx = vw * 0.5f, cy = vh * 0.5f;
+            var color = _fsm.Current switch
             {
-                float cx = vw * 0.5f;
-                float cy = vh * 0.5f;
-                float s  = 18f;
-                var ringColor = _lastHit.Source switch
+                _ when !_lastHit.Hit => T.CreamDim,
+                _ => _lastHit.Source switch
                 {
                     RaycastSource.LidarMesh      => Color.green,
                     RaycastSource.ArDepth        => new Color(0.5f, 1f, 0.5f),
                     RaycastSource.ArPlane        => new Color(0.7f, 1f, 1f),
                     RaycastSource.ArFeaturePoint => Color.yellow,
                     RaycastSource.Fallback       => new Color(1f, 0.6f, 0.4f),
-                    _                            => Color.white,
-                };
-                var prev = GUI.color;
-                GUI.color = ringColor;
-                GUI.Box(new Rect(cx - s, cy - 1, s * 2, 2), GUIContent.none);
-                GUI.Box(new Rect(cx - 1, cy - s, 2, s * 2), GUIContent.none);
-                GUI.color = prev;
+                    _                            => T.Cream,
+                },
+            };
 
-                // Label fuente del raycast
-                var lab = new GUIStyle { fontSize = 22, alignment = TextAnchor.MiddleCenter };
-                lab.normal.textColor = ringColor;
-                GUI.Label(new Rect(cx - 200, cy + s + 4, 400, 30), $"src: {_lastHit.Source}", lab);
-            }
-
-            // ── Botonera de modo + Colocar ────────────────────────────────
-            var modeArea = new Rect(10, 10, 220, vh - 20);
-            UIBlocker.AddVirtualRect(modeArea);
-            GUILayout.BeginArea(modeArea);
-            DrawModeButtons();
-            GUILayout.EndArea();
-
-            // Submenu de "Identificar": colgado a la DERECHA del boton, centrado en el.
-            if (_markerSubmenuOpen && _fsm.Current == ScannerMode.Idle && _markerBuilder != null)
-                DrawMarkerSubmenu(modeArea);
-
-            // ── Boton Colocar (centro inferior, grande, solo en modos placing)
-            if (IsPlacingMode(_fsm.Current))
-            {
-                float w = 220, h = 90;
-                var placeRect = new Rect((vw - w) * 0.5f, vh - h - 30, w, h);
-                UIBlocker.AddVirtualRect(placeRect);
-                if (GUI.Button(placeRect, "COLOCAR"))
-                    OnPlace();
-            }
-
-            // ── Slider de fallback distance (esquina inf-izq, solo placing)
-            if (IsPlacingMode(_fsm.Current) && RaycastResolver.Instance != null)
-            {
-                var sliderArea = new Rect(10, vh - 90, 320, 80);
-                UIBlocker.AddVirtualRect(sliderArea);
-                GUILayout.BeginArea(sliderArea, GUIContent.none);
-                GUILayout.Label($"Distancia fallback: {RaycastResolver.Instance.FallbackDistance:F2}m");
-                RaycastResolver.Instance.FallbackDistance =
-                    GUILayout.HorizontalSlider(RaycastResolver.Instance.FallbackDistance, 0.3f, 5f);
-                GUILayout.EndArea();
-            }
+            const float r = 24f, tick = 14f, g = 2f;   // radio, largo del tick, grosor/2
+            T.Fill(new Rect(cx - g, cy - r - tick, g * 2f, tick), color);   // arriba
+            T.Fill(new Rect(cx - g, cy + r, g * 2f, tick), color);          // abajo
+            T.Fill(new Rect(cx - r - tick, cy - g, tick, g * 2f), color);   // izq
+            T.Fill(new Rect(cx + r, cy - g, tick, g * 2f), color);          // der
+            T.Fill(new Rect(cx - g, cy - g, g * 2f, g * 2f), color);        // centro
         }
 
-        private void DrawModeButtons()
+        private void DrawBarraSuperior(float vw)
         {
-            var style = GUI.skin.button;
-            GUILayout.Label($"Modo: {_fsm.Current}", new GUIStyle { fontSize = 20, normal = { textColor = Color.white, background = BG() }, padding = new RectOffset(8,8,4,4) });
-            GUILayout.Space(4);
+            T.Gradiente(new Rect(0, 0, vw, 150f), 0.8f, haciaAbajo: true);
 
-            GUI.enabled = _fsm.Current == ScannerMode.Idle;
-            if (GUILayout.Button("Pared (polilinea)", GUILayout.Height(50))) _wallBuilder?.StartPolyline();
-            if (GUILayout.Button("Puerta",            GUILayout.Height(50))) _doorBuilder?.StartDoor();
-            if (GUILayout.Button("Cubo",              GUILayout.Height(50))) _cubeBuilder?.StartCube();
-            string pisoLabel = FloorPoint.Instance != null ? "Piso (reubicar)" : "Piso";
-            if (GUILayout.Button(pisoLabel,           GUILayout.Height(50))) _fsm.SetMode(ScannerMode.Floor_Place);
+            var back = new Rect(Pad, 14f, 56f, 44f);
+            UIBlocker.AddVirtualRect(back);
+            T.BotonVolver(null, VolverAlMenu, back.x, back.y);
 
-            // "Identificar": un unico boton que despliega un submenu con los tipos de
-            // marcador (puerta/ventana/...), en vez de un boton por tipo. Las opciones
-            // salen a la DERECHA del boton (no debajo) — se dibujan en DrawMarkerSubmenu
-            // fuera de este area. El submenu se arma solo desde el MarkerCatalog.
-            if (GUILayout.Button(_markerSubmenuOpen ? "Identificar (-)" : "Identificar (+)",
-                                 GUILayout.Height(50)))
-                _markerSubmenuOpen = !_markerSubmenuOpen;
-            // GetLastRect da valores validos en todos los eventos salvo Layout.
-            if (Event.current.type != EventType.Layout)
-                _identBtnLocalRect = GUILayoutUtility.GetLastRect();
-
-            bool inWall = _fsm.Current == ScannerMode.Wall_V1
-                       || _fsm.Current == ScannerMode.Wall_Height
-                       || _fsm.Current == ScannerMode.Wall_Vn;
-            GUI.enabled = inWall;
-            if (GUILayout.Button("Terminar polilinea", GUILayout.Height(40)))
-                _wallBuilder?.EndPolyline(_closePolyline);
-            // Check de cierre automatico (en memoria, se mantiene entre ediciones).
-            if (inWall)
-                _closePolyline = GUILayout.Toggle(_closePolyline, " Cerrar (unir al inicio)");
-
-            // Si estamos en polilinea, mostrar la altura calibrada.
-            if ((_fsm.Current == ScannerMode.Wall_Vn || _fsm.Current == ScannerMode.Wall_Height) && _wallBuilder != null)
-            {
-                GUI.enabled = true;
-                var hStyle = new GUIStyle { fontSize = 18, normal = { textColor = Color.yellow } };
-                string hint = _fsm.Current == ScannerMode.Wall_Height
-                    ? "Apunta arriba (cielorraso) y COLOCAR"
-                    : $"Altura polilinea: {_wallBuilder.CurrentPolylineHeight:F2}m";
-                GUILayout.Label(hint, hStyle);
-
-                // Slider de grosor (ancho) en vivo: propaga a toda la polilinea.
-                GUILayout.Label($"Ancho pared: {_wallBuilder.CurrentPolylineWidth:F2}m", hStyle);
-                float newW = GUILayout.HorizontalSlider(_wallBuilder.CurrentPolylineWidth, 0.05f, 0.5f);
-                if (Mathf.Abs(newW - _wallBuilder.CurrentPolylineWidth) > 0.001f)
-                    _wallBuilder.SetPolylineWidth(newW);
-            }
-
-            // Hint del flujo de cubo (2 esquinas de la diagonal + 3er punto de rotacion).
-            if (_fsm.Current == ScannerMode.Cube_V1 || _fsm.Current == ScannerMode.Cube_V2
-             || _fsm.Current == ScannerMode.Cube_V3)
-            {
-                GUI.enabled = true;
-                var cubeHint = new GUIStyle { fontSize = 18, normal = { textColor = Color.yellow } };
-                string hint = _fsm.Current switch
-                {
-                    ScannerMode.Cube_V1 => "Apunta a la 1ra esquina del cubo y COLOCAR",
-                    ScannerMode.Cube_V2 => "Apunta a la esquina opuesta (diagonal) y COLOCAR",
-                    _                   => "Apunta a un 3er punto para fijar la rotacion y COLOCAR",
-                };
-                GUILayout.Label(hint, cubeHint);
-
-                // En el 3er paso, opcion de cerrar sin rotar (cubo axis-aligned).
-                if (_fsm.Current == ScannerMode.Cube_V3 &&
-                    GUILayout.Button("Confirmar sin rotar", GUILayout.Height(40)))
-                    _cubeBuilder?.ConfirmCubeAxisAligned();
-            }
-
-            // Hint del flujo de piso.
-            if (_fsm.Current == ScannerMode.Floor_Place)
-            {
-                GUI.enabled = true;
-                var floorHint = new GUIStyle { fontSize = 18, normal = { textColor = Color.yellow } };
-                GUILayout.Label("Apunta al piso real y COLOCAR\n(podes reubicarlo despues arrastrandolo)", floorHint);
-            }
-
-            // Hint del flujo de marcador (identificar puerta/ventana sobre una pared).
-            if (_fsm.Current == ScannerMode.Marker_Place)
-            {
-                GUI.enabled = true;
-                var mkHint = new GUIStyle { fontSize = 18, normal = { textColor = Color.yellow } };
-                string tipo = _markerBuilder != null && _markerBuilder.PendingType != null
-                    ? _markerBuilder.PendingType.DisplayName : "";
-                GUILayout.Label($"Apunta a la PARED donde hay {tipo} y COLOCAR", mkHint);
-            }
-
-            GUI.enabled = _fsm.Current != ScannerMode.Idle && _fsm.Current != ScannerMode.Selected;
-            if (GUILayout.Button("Cancelar", GUILayout.Height(40))) _fsm.SetMode(ScannerMode.Idle);
-
-            GUI.enabled = true;
-
-            // Ubicacion virtual del jugador, en coordenadas relativas al anchor.
-            DrawPlayerLocation();
+            string titulo = !string.IsNullOrEmpty(SaveLoadUI.NombreEdicion)
+                ? "EDITANDO ESCANEO" : "ESCANEO DE ENTORNO";
+            GUI.Label(new Rect(84f, 18f, vw - 100f, 36f), titulo, T.Estilo(T.FBebas, 22, T.Cream));
+            GUI.Label(new Rect(84f, 56f, vw - 100f, 40f),
+                      "apuntá con el centro de la pantalla al punto real y tocá COLOCAR",
+                      T.Estilo(T.FMono, 11, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
         }
 
-        // Panel flotante con los tipos de marcador, a la derecha del boton
-        // "Identificar" y centrado verticalmente en el. _identBtnLocalRect esta en
-        // coords locales al area de modos; le sumamos la posicion del area.
-        private void DrawMarkerSubmenu(Rect modeArea)
+        private void VolverAlMenu()
         {
-            var catalog = _markerBuilder != null ? _markerBuilder.Catalog : null;
+            // Lo no guardado se pierde (mismo criterio que el prototipo).
+            SceneFlow.GoTo(SceneFlow.EscenaMenu);
+        }
+
+        // ---------------------------------------------------- panel inferior
+        private void DrawPanelInferior(float vw, float vh)
+        {
+            var modo = _fsm.Current;
+
+            float botonesH = 56f;
+            float toolsH = 84f;
+            float yBotones = vh - 40f - botonesH;
+            float yTools = yBotones - 12f - toolsH;
+
+            T.Gradiente(new Rect(0, yTools - 60f, vw, vh - (yTools - 60f)), 0.92f, haciaAbajo: false);
+            UIBlocker.AddVirtualRect(new Rect(0, yTools - 12f, vw, vh - yTools + 12f));
+
+            DrawContextual(vw, yTools - 20f);
+            DrawHerramientas(vw, yTools, toolsH);
+
+            // COLOCAR + GUARDAR ESCANEO.
+            float bw = (vw - Pad * 2f - 10f) / 2f;
+            bool puedeColocar = IsPlacingMode(modo);
+            bool puedeGuardar = (modo == ScannerMode.Idle || modo == ScannerMode.Selected) && HayContenido();
+
+            var rColocar = new Rect(Pad, yBotones, bw, botonesH);
+            bool focoColocar = puedeColocar;
+            T.Fill(rColocar, focoColocar ? new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.18f)
+                                         : new Color(0f, 0f, 0f, 0.4f));
+            T.Borde(rColocar, puedeColocar ? T.Tan : T.BorderDim);
+            if (GUI.Button(rColocar, "COLOCAR",
+                           T.Estilo(T.FBebas, 18, puedeColocar ? T.Cream : T.Disabled, TextAnchor.MiddleCenter))
+                && puedeColocar)
+                OnPlace();
+
+            var rGuardar = new Rect(Pad + bw + 10f, yBotones, bw, botonesH);
+            T.Fill(rGuardar, puedeGuardar ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.20f)
+                                          : new Color(0f, 0f, 0f, 0.4f));
+            T.Borde(rGuardar, puedeGuardar ? T.Red : T.BorderDim);
+            if (GUI.Button(rGuardar, "GUARDAR ESCANEO",
+                           T.Estilo(T.FBebas, 16, puedeGuardar ? T.Cream : T.Disabled, TextAnchor.MiddleCenter))
+                && puedeGuardar)
+                SaveLoadUI.Abrir();
+        }
+
+        private bool HayContenido()
+        {
+            var reg = SceneRegistry.Instance;
+            if (reg == null) return false;
+            return reg.Walls.Count > 0 || reg.Cubes.Count > 0 || reg.Markers.Count > 0
+                   || FloorPoint.Instance != null;
+        }
+
+        // Fila de herramientas (estilo prototipo). Solo inician flujo desde Idle;
+        // la herramienta del flujo activo queda resaltada.
+        private void DrawHerramientas(float vw, float y, float h)
+        {
+            var modo = _fsm.Current;
+            bool idle = modo == ScannerMode.Idle;
+
+            bool enPared  = modo == ScannerMode.Wall_V1 || modo == ScannerMode.Wall_Height || modo == ScannerMode.Wall_Vn;
+            bool enCubo   = modo == ScannerMode.Cube_V1 || modo == ScannerMode.Cube_V2 || modo == ScannerMode.Cube_V3;
+            bool enPuerta = modo == ScannerMode.DoorPickWall || modo == ScannerMode.Door_V1 || modo == ScannerMode.Door_V2;
+            bool enMarker = modo == ScannerMode.Marker_Place;
+            bool enPiso   = modo == ScannerMode.Floor_Place;
+
+            float cw = (vw - Pad * 2f - 4f * 8f) / 5f;
+            float x = Pad;
+
+            DrawTool(new Rect(x, y, cw, h), "PARED", enPared, idle,
+                     () => _wallBuilder?.StartPolyline());
+            x += cw + 8f;
+            DrawTool(new Rect(x, y, cw, h), "CUBO", enCubo, idle,
+                     () => _cubeBuilder?.StartCube());
+            x += cw + 8f;
+            DrawTool(new Rect(x, y, cw, h), "AGUJERO\nPUERTA", enPuerta, idle,
+                     () => _doorBuilder?.StartDoor());
+            x += cw + 8f;
+            var rIdent = new Rect(x, y, cw, h);
+            DrawTool(rIdent, "IDENTI-\nFICAR", enMarker || _markerSubmenuOpen, idle,
+                     () => _markerSubmenuOpen = !_markerSubmenuOpen);
+            x += cw + 8f;
+            string lblPiso = FloorPoint.Instance != null ? "PISO\n(REUBICAR)" : "PISO";
+            DrawTool(new Rect(x, y, cw, h), lblPiso, enPiso, idle,
+                     () => _fsm.SetMode(ScannerMode.Floor_Place));
+
+            if (_markerSubmenuOpen && idle && _markerBuilder != null)
+                DrawMarkerSubmenu(rIdent);
+            else if (!idle)
+                _markerSubmenuOpen = false;
+        }
+
+        private void DrawTool(Rect r, string label, bool activo, bool enabled, Action onTap)
+        {
+            Color borde = activo ? T.Red : enabled ? T.Border : T.BorderDim;
+            T.Fill(r, activo ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.18f)
+                             : new Color(0f, 0f, 0f, 0.55f));
+            T.Borde(r, borde);
+            var st = T.Estilo(T.FMono, 11, activo ? T.Cream : enabled ? T.CreamDim : T.Disabled,
+                              TextAnchor.MiddleCenter);
+            if (GUI.Button(r, label, st) && enabled) onTap?.Invoke();
+        }
+
+        // Submenú con los tipos de marcador del catálogo, colgado ARRIBA del botón
+        // IDENTIFICAR (el panel inferior está abajo de todo).
+        private void DrawMarkerSubmenu(Rect btnIdent)
+        {
+            var catalog = _markerBuilder.Catalog;
             var types = catalog != null ? catalog.Types : null;
             int n = types != null ? types.Count : 0;
-            const float bw = 180f, bh = 46f, gap = 6f;
-            float vh = UIScale.VirtualHeight;
 
-            float x = modeArea.xMax + 8f;
-            // Centro vertical del boton "Identificar". Si aun no capturamos su rect
-            // (height 0), estimamos ~55% del panel de modos para no quedar arriba de todo.
-            float btnCenterY = _identBtnLocalRect.height > 1f
-                ? modeArea.y + _identBtnLocalRect.y + _identBtnLocalRect.height * 0.5f
-                : modeArea.y + modeArea.height * 0.55f;
+            const float bw = 190f, bh = 46f, gap = 6f;
+            float totalH = n == 0 ? 48f : n * bh + (n - 1) * gap;
+            float x = Mathf.Min(btnIdent.x, UIScale.VirtualWidth - bw - 8f);
+            float y = btnIdent.y - totalH - 14f;
+
+            var panel = new Rect(x - 5f, y - 5f, bw + 10f, totalH + 10f);
+            UIBlocker.AddVirtualRect(panel);
+            T.Panel(panel, T.BgPanel, T.Border);
 
             if (n == 0)
             {
-                var r = new Rect(x, Mathf.Clamp(btnCenterY - 24f, 4f, vh - 52f), bw + 40f, 48f);
-                UIBlocker.AddVirtualRect(r);
-                GUI.Box(r, "Catalogo vacio", new GUIStyle(GUI.skin.box) { normal = { textColor = Color.white, background = BG() } });
+                GUI.Label(new Rect(x, y, bw, 44f), "catálogo vacío",
+                          T.Estilo(T.FMono, 12, T.Dim, TextAnchor.MiddleCenter));
                 return;
             }
-
-            float totalH = n * bh + (n - 1) * gap;
-            // Clamp para que el panel nunca quede fuera de pantalla (arriba o abajo).
-            float y = Mathf.Clamp(btnCenterY - totalH * 0.5f, 4f, Mathf.Max(4f, vh - totalH - 4f));
-
-            var panel = new Rect(x - 4f, y - 4f, bw + 8f, totalH + 8f);
-            UIBlocker.AddVirtualRect(panel);
-            GUI.Box(panel, GUIContent.none, new GUIStyle(GUI.skin.box) { normal = { background = BG() } });
 
             float cy = y;
             foreach (var t in types)
             {
                 if (t == null) { cy += bh + gap; continue; }
-                if (GUI.Button(new Rect(x, cy, bw, bh), t.DisplayName))
+                var r = new Rect(x, cy, bw, bh);
+                if (GUI.Button(r, t.DisplayName, T.Estilo(T.FMono, 13, T.Cream, TextAnchor.MiddleCenter)))
                 {
                     _markerBuilder.StartMarker(t);
                     _markerSubmenuOpen = false;
                 }
+                T.Borde(new Rect(r.x, r.yMax - 1f, r.width, 1f), T.BorderDim, 1f);
                 cy += bh + gap;
             }
         }
 
-        private void DrawPlayerLocation()
+        // ------------------------------------------- fila contextual del flujo
+        // Panel con hints y controles del flujo activo, apilado arriba de las
+        // herramientas. yBase es el borde INFERIOR del panel.
+        private void DrawContextual(float vw, float yBase)
         {
-            if (_camera == null) _camera = Camera.main;
-            var wo = WorldOrigin.Instance;
+            var modo = _fsm.Current;
 
-            GUILayout.Space(10);
-            var labelStyle = new GUIStyle
+            bool enPared = modo == ScannerMode.Wall_V1 || modo == ScannerMode.Wall_Height || modo == ScannerMode.Wall_Vn;
+            bool enCubo  = modo == ScannerMode.Cube_V1 || modo == ScannerMode.Cube_V2 || modo == ScannerMode.Cube_V3;
+
+            string hint = modo switch
             {
-                fontSize = 18,
-                normal   = { textColor = Color.white, background = BG() },
-                padding  = new RectOffset(8, 8, 6, 6),
+                ScannerMode.Wall_V1        => "apuntá al primer vértice de la pared (piso) y tocá COLOCAR",
+                ScannerMode.Wall_Height    => "apuntá arriba (cielorraso) y tocá COLOCAR para fijar la altura",
+                ScannerMode.Wall_Vn        => $"altura de la polilínea: {(_wallBuilder != null ? _wallBuilder.CurrentPolylineHeight : 0f):F2} m — siguiente vértice y COLOCAR",
+                ScannerMode.DoorPickWall   => "tocá la pared donde va el agujero de la puerta",
+                ScannerMode.Door_V1        => "apuntá a la esquina inferior de la puerta y tocá COLOCAR",
+                ScannerMode.Door_V2        => "apuntá a la esquina superior opuesta y tocá COLOCAR",
+                ScannerMode.Cube_V1        => "apuntá a la 1ra esquina del cubo y tocá COLOCAR",
+                ScannerMode.Cube_V2        => "apuntá a la esquina opuesta (diagonal) y tocá COLOCAR",
+                ScannerMode.Cube_V3        => "apuntá a un 3er punto para fijar la rotación y tocá COLOCAR",
+                ScannerMode.Floor_Place    => "apuntá al piso real y tocá COLOCAR (después podés arrastrarlo)",
+                ScannerMode.Marker_Place   => $"apuntá a la PARED donde hay {(_markerBuilder != null && _markerBuilder.PendingType != null ? _markerBuilder.PendingType.DisplayName : "el punto")} y tocá COLOCAR",
+                ScannerMode.EditMoveTarget => "apuntá a la nueva posición y tocá COLOCAR",
+                _ => null,
             };
+            if (hint == null) return;
 
-            if (_camera == null || wo == null || !wo.IsReady)
+            // Altura del panel según los controles extra del modo.
+            float hExtra = 0f;
+            if (enPared) hExtra = 44f /*slider ancho*/ + 48f /*terminar*/ + 34f /*cerrar*/;
+            if (modo == ScannerMode.Cube_V3) hExtra = 48f;
+            float hPanel = 30f /*hint*/ + hExtra + 48f /*cancelar*/ + 24f;
+
+            var panel = new Rect(Pad, yBase - hPanel, vw - Pad * 2f, hPanel);
+            UIBlocker.AddVirtualRect(panel);
+            T.Fill(panel, new Color(0f, 0f, 0f, 0.65f));
+            T.Borde(panel, T.BorderDim);
+
+            float x = panel.x + 12f, w = panel.width - 24f;
+            float y = panel.y + 10f;
+
+            GUI.Label(new Rect(x, y, w, 34f), hint,
+                      T.Estilo(T.FElite, 12, T.Tan, TextAnchor.UpperLeft, wrap: true));
+            y += 34f;
+
+            if (enPared && _wallBuilder != null)
             {
-                GUILayout.Label("Jugador: (sin calibrar)", labelStyle);
-                return;
+                // Ancho (grosor) de la pared en vivo: propaga a toda la polilinea.
+                GUI.Label(new Rect(x, y, w * 0.55f, 20f),
+                          $"ancho pared: {_wallBuilder.CurrentPolylineWidth:F2} m",
+                          T.Estilo(T.FMono, 11, T.CreamDim));
+                float nuevoW = T.Slider(new Rect(x + w * 0.58f, y - 4f, w * 0.42f, 26f),
+                                        _wallBuilder.CurrentPolylineWidth, 0.05f, 0.5f);
+                if (Mathf.Abs(nuevoW - _wallBuilder.CurrentPolylineWidth) > 0.001f)
+                    _wallBuilder.SetPolylineWidth(nuevoW);
+                y += 40f;
+
+                // Check de cierre automatico (en memoria, se mantiene entre ediciones).
+                var rCerrar = new Rect(x, y, w, 26f);
+                var box = new Rect(x, y + 4f, 18f, 18f);
+                T.Borde(box, T.Border);
+                if (_closePolyline) T.Fill(new Rect(box.x + 4f, box.y + 4f, 10f, 10f), T.Tan);
+                if (GUI.Button(rCerrar, GUIContent.none, GUIStyle.none))
+                    _closePolyline = !_closePolyline;
+                GUI.Label(new Rect(x + 26f, y, w - 26f, 26f), "cerrar (unir al inicio)",
+                          T.Estilo(T.FMono, 11, T.CreamDim));
+                y += 32f;
+
+                T.Boton(null, new Rect(x, y, w, 40f), "TERMINAR POLILÍNEA", primario: false,
+                        () => _wallBuilder.EndPolyline(_closePolyline), fontSize: 15);
+                y += 48f;
             }
 
-            var p = wo.ToRelative(_camera.transform.position);
-            GUILayout.Label($"Jugador (rel. anchor):\nX {p.x:F2}  Y {p.y:F2}  Z {p.z:F2} m", labelStyle);
+            if (modo == ScannerMode.Cube_V3)
+            {
+                T.Boton(null, new Rect(x, y, w, 40f), "CONFIRMAR SIN ROTAR", primario: false,
+                        () => _cubeBuilder?.ConfirmCubeAxisAligned(), fontSize: 15);
+                y += 48f;
+            }
+
+            T.Boton(null, new Rect(x, y, w, 40f), "CANCELAR", primario: false,
+                    () => _fsm.SetMode(ScannerMode.Idle), fontSize: 14,
+                    textColor: T.Muted);
         }
 
+        // -------------------------------------------------------- acciones
         private void OnPlace()
         {
             switch (_fsm.Current)
