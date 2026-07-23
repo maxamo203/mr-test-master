@@ -54,6 +54,14 @@ namespace Scanner
             // registra la imagen y arranca la detección. Mientras tanto se muestra
             // la UI de captura porque la FSM está en Calibrating.
             ScanStateMachine.Instance?.SetMode(ScannerMode.Calibrating);
+
+            // Si el menú principal pidió EDITAR un escaneo guardado, cargarlo ya
+            // (reconstruye la escena y re-registra la imagen de referencia; queda
+            // en Calibrating hasta reencontrar la zona física).
+            var editar = ScannerLaunchParams.ConsumeEditScanName();
+            SaveLoadUI.NombreEdicion = null;
+            if (!string.IsNullOrEmpty(editar) && ScanLoader.Load(editar, _imageAnchor))
+                SaveLoadUI.NombreEdicion = editar;
         }
 
         private void OnAnchorReady()

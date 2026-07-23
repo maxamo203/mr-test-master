@@ -43,6 +43,11 @@ namespace Gamepad
         private static bool ShowFocus =>
             GamepadManager.Instance != null && GamepadManager.Instance.IsConnected;
 
+        // ¿El PRÓXIMO botón que se dibuje tiene el foco del gamepad? Para menús con
+        // dibujo custom (MortuoriumTheme) que pintan su propio resaltado (borde
+        // dorado) en vez del tint de backgroundColor.
+        public static bool NextHasFocus => ShowFocus && _drawIndex == _focus;
+
         // Driver: al inicio de CADA pass de OnGUI (lo llama GamepadManager, que corre antes que los
         // menús) resetea el índice; en Repaint arranca de cero la acumulación del frame.
         public static void BeginPass()

@@ -14,6 +14,8 @@ namespace Gameplay
     {
         [Header("Identidad")]
         public string displayName = "Noche";
+        [Tooltip("Texto del briefing que se muestra al arrancar la noche (ARLobbyUI).")]
+        [TextArea] public string briefing = "";
 
         [Header("Entradas del Sorken")]
         [Tooltip("Segundos entre intentos de entrada (rango, se elige al azar).")]

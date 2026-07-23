@@ -1,57 +1,60 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Scanner;   // UIScale, UIBlocker
+using T = MortuoriumTheme;
 
 namespace Gameplay
 {
-    // Pantalla de muerte del jugador local. Se muestra cuando LocalDeath.IsDead.
-    // "Volver al menu" limpia los singletons cross-scene (como SceneNavUI) y carga el
-    // menu de noche.
+    // Pantalla de muerte del jugador local (estilo Mortuorium). Se muestra cuando
+    // LocalDeath.IsDead. "VOLVER AL MENÚ" limpia los singletons cross-scene (mismo
+    // criterio que SceneFlow) y carga el menú de noche.
     public class DeathScreenUI : MonoBehaviour
     {
         [SerializeField] private string _menuScene = "NightMenuScene";
 
-        private GUIStyle _title, _btn;
-        private bool _ready;
         private readonly Gamepad.ImguiGamepadMenu _nav = new();
+
+        private const float Pad = 28f;
 
         private void Awake() => LocalDeath.Ensure();
 
         private void Update() => _nav.Update();
 
-        private void EnsureStyles()
-        {
-            if (_ready) return;
-            _title = new GUIStyle(GUI.skin.label)  { fontSize = 54, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
-            _title.normal.textColor = new Color(0.8f, 0.05f, 0.05f);
-            _btn = new GUIStyle(GUI.skin.button) { fontSize = 26 };
-            _ready = true;
-        }
-
         private void OnGUI()
         {
-            _nav.Begin();
             var ld = LocalDeath.Instance;
             if (ld == null || !ld.IsDead) return;
 
-            EnsureStyles();
+            UIScale.Begin();
+            _nav.Begin();
 
-            var prev = GUI.color;
-            GUI.color = new Color(0f, 0f, 0f, 0.88f);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = prev;
+            float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
 
-            var sa = Scanner.SafeArea.GuiRect;
-            GUI.Label(new Rect(sa.x, sa.y + sa.height * 0.28f, sa.width, 80f), "MORISTE", _title);
+            // Overlay oscuro que bloquea la escena.
+            var full = new Rect(0, 0, vw, vh);
+            T.Fill(full, new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.9f));
+            UIBlocker.AddVirtualRect(full);
 
-            float w = 300f, h = 74f;
-            var r = new Rect(sa.x + (sa.width - w) * 0.5f, sa.y + sa.height * 0.52f, w, h);
-            _nav.Button(r, "Volver al menú", _btn, ReturnToMenu);
+            // Título "MORISTE" (rojo, con leve glitch cromático).
+            var titRect = new Rect(0, vh * 0.28f, vw, 90f);
+            GUI.Label(new Rect(titRect.x + 2f, titRect.y, titRect.width, titRect.height), "MORISTE",
+                      T.Estilo(T.FBebas, 64, new Color(0f, 0.22f, 0.20f, 0.5f), TextAnchor.MiddleCenter));
+            GUI.Label(titRect, "MORISTE", T.Estilo(T.FBebas, 64, T.Red, TextAnchor.MiddleCenter));
+
+            GUI.Label(new Rect(Pad, vh * 0.28f + 96f, vw - Pad * 2f, 26f),
+                      "el ritual te reclamó… por ahora.",
+                      T.Estilo(T.FElite, 14, T.Muted, TextAnchor.MiddleCenter));
+
+            // Botón estilizado.
+            T.Boton(_nav, new Rect(Pad, vh - 44f - 58f, vw - Pad * 2f, 58f),
+                    "VOLVER AL MENÚ", primario: true, ReturnToMenu);
+
             _nav.End();
         }
 
         private void ReturnToMenu()
         {
-            // Teardown de la sesion (mismo criterio que SceneNavUI): salir de la partida.
+            // Teardown de la sesión (mismo criterio que SceneFlow): salir de la partida.
             if (NetworkManager.Instance != null) Destroy(NetworkManager.Instance.gameObject);
             if (EntityRegistry.Instance != null) Destroy(EntityRegistry.Instance.gameObject);
             if (WorldOrigin.Instance    != null) Destroy(WorldOrigin.Instance.gameObject);

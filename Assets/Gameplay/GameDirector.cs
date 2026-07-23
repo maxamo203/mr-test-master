@@ -391,26 +391,19 @@ namespace Gameplay
         }
 
         // --- HUD de diagnostico (solo host) ---
-        private GUIStyle _hudStyle;
-        private void OnGUI()
+        // El dibujo vive en DebugHud/DebugDirectorUI (solo development builds);
+        // aca solo se arma el snapshot legible. Null si el director no corre aca.
+        public string DebugSnapshot()
         {
-            if (!_debugHud || !_running) return;
-            if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return;
-
-            if (_hudStyle == null)
-            {
-                _hudStyle = new GUIStyle(GUI.skin.box) { fontSize = 18, alignment = TextAnchor.UpperLeft };
-                _hudStyle.normal.textColor = Color.white;
-            }
+            if (!_debugHud || !_running) return null;
+            if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return null;
 
             int markers = SceneRegistry.Instance != null ? SceneRegistry.Instance.Markers.Count : 0;
-            string txt =
+            return
                 $"[GameDirector]  phase={_phase}\n" +
                 $"attemptTimer={_attemptTimer:F1}  repel={_repel:F1}  grace={_grace:F1}\n" +
                 $"sorken={(_sorken != null ? _sorken.State.ToString() : "null")}  netId={_sorkenNetId}\n" +
                 $"markers={markers}  alivePlayers={CountAlivePlayers()}  dead={_dead.Count}";
-            var sa = SafeArea.GuiRect;
-            GUI.Box(new Rect(sa.x + 10, sa.y + 300, 560, 110), txt, _hudStyle);
         }
     }
 }

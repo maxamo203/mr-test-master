@@ -353,17 +353,11 @@ public class LiDARScanner : MonoBehaviour
     }
 
     // ── HUD ───────────────────────────────────────────────────────────────
-
-    private static Texture2D _hudBg;
-    private static Texture2D GetHudBg()
+    // El dibujo vive en DebugHud/DebugLidarUI (solo development builds); aca
+    // solo se arma el snapshot legible. Null si el toggle esta apagado.
+    public string DebugSnapshot()
     {
-        if (_hudBg == null) { _hudBg = new Texture2D(1,1); _hudBg.SetPixel(0,0, new Color(0,0,0,0.85f)); _hudBg.Apply(); }
-        return _hudBg;
-    }
-
-    private void OnGUI()
-    {
-        if (!_showHUD) return;
+        if (!_showHUD) return null;
 
         int chunks = 0, verts = 0, tris = 0;
         foreach (var mr in _chunkRenderers)
@@ -378,16 +372,6 @@ public class LiDARScanner : MonoBehaviour
             }
         }
 
-        var style = new GUIStyle
-        {
-            fontSize  = 26,
-            alignment = TextAnchor.LowerRight,
-            wordWrap  = true,
-            padding   = new RectOffset(12, 12, 12, 12),
-        };
-        style.normal.textColor  = new Color(1f, 0.8f, 0.2f, 1f);
-        style.normal.background = GetHudBg();
-
         string lidar = _lidarActive ? "ON" : "OFF";
         int planeQuads = 0;
         if (_planeOccluder != null)
@@ -401,15 +385,12 @@ public class LiDARScanner : MonoBehaviour
         string meshSub = _meshManager == null ? "none" :
             (_meshManager.subsystem == null ? "no-subsystem" : "subsystem-OK");
 
-        string txt =
+        return
             $"[LiDARScanner] LiDAR={lidar}\n" +
             $"Mode: {_mode}  (tap o M para cambiar)\n" +
             $"MeshMgr: {meshSub}   density={_meshDensity}\n" +
             $"Chunks: {chunks}   Verts: {verts}   Tris: {tris}\n" +
             $"PlaneMgr: {planeMgr}   QuadsResiduales: {planeQuads}";
-
-        var sa = Scanner.SafeArea.GuiRect;
-        GUI.Label(new Rect(sa.xMax - 600, sa.yMax - 200, 590, 190), txt, style);
     }
 
     private void OnDestroy()

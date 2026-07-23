@@ -9,9 +9,9 @@ using Scanner;
 // la geometria del mapa pero los enemigos se ocultan correctamente detras de
 // paredes/piso reales.
 //
-// Es un toggle: un check OnGUI (abajo a la izquierda) para activar/desactivar en
-// vivo. Se auto-crea via RuntimeInitializeOnLoadMethod, no hay que ponerlo en la
-// escena. El estado tambien se puede manejar por codigo con Enabled.
+// Es un toggle: el botón que lo activa/desactiva lo dibuja GameBootstrapper en la
+// pantalla de sala (bajo el de Cardboard), llamando a Enabled/Toggle. Se auto-crea
+// via RuntimeInitializeOnLoadMethod, no hay que ponerlo en la escena.
 //
 // Tecnica: swap del sharedMaterial de cada MeshRenderer al material "Hidden/
 // SceneOccluder" (depth-only, ColorMask 0). Guarda el material original para
@@ -22,7 +22,6 @@ public class SceneOccluderMode : MonoBehaviour
 
     [Tooltip("Lado del quad oclusor de piso, en metros.")]
     [SerializeField] private float _floorQuadSize = 20f;
-    [SerializeField] private bool  _showToggle = true;
 
     private bool _enabled;
     private Material _occluderMat;
@@ -140,20 +139,5 @@ public class SceneOccluderMode : MonoBehaviour
         if (_floorQuad != null) Destroy(_floorQuad);
         if (_occluderMat != null && _occluderMat.name.Contains("(runtime)")) Destroy(_occluderMat);
         if (Instance == this) Instance = null;
-    }
-
-    // ── Toggle OnGUI ──────────────────────────────────────────────────────
-    void OnGUI()
-    {
-        if (!_showToggle) return;
-        // Solo en gameplay (sesion multijugador), no en la escena del escaner.
-        if (NetworkManager.Instance == null || !NetworkManager.Instance.InSession) return;
-
-        var style = new GUIStyle(GUI.skin.button) { fontSize = 26, wordWrap = true };
-        string label = _enabled ? "Paredes: OCULTAS (oclusor ON)" : "Paredes: visibles (oclusor OFF)";
-        // Dentro del area segura (arriba del home indicator del iPhone).
-        var sa = SafeArea.GuiRect;
-        if (GUI.Button(new Rect(sa.x + 10, sa.yMax - 100, 460, 88), label, style))
-            Toggle();
     }
 }

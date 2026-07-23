@@ -32,10 +32,12 @@ public class ARTrackingBenchmark : MonoBehaviour
     private Vector3 _windowSum;
     private const int WindowSize = 60; // últimos 60 frames (~1s)
 
-    private GUIStyle _style;
-
     // ── Resultados finales ────────────────────────────────────────────────
     private string _report = "Apuntá a la imagen para iniciar...";
+
+    // Reporte en vivo para el HUD de debug (DebugHud/DebugBenchmarkUI). El
+    // benchmark corre igual; el dibujo se movió fuera de este componente.
+    public string Report => _report;
 
     private void Awake()
     {
@@ -122,23 +124,8 @@ public class ARTrackingBenchmark : MonoBehaviour
     }
 
     // ── UI ────────────────────────────────────────────────────────────────
-
-    private void OnGUI()
-    {
-        if (_style == null)
-        {
-            _style = new GUIStyle(GUI.skin.box)
-            {
-                fontSize  = Mathf.RoundToInt(Screen.height * 0.03f),
-                alignment = TextAnchor.UpperLeft,
-            };
-            _style.normal.textColor = Color.white;
-        }
-
-        float w = Screen.width  * 0.6f;
-        float h = Screen.height * 0.45f;
-        GUI.Box(new Rect(20, 20, w, h), _report, _style);
-    }
+    // El dibujo del reporte vive en DebugHud/DebugBenchmarkUI (solo development
+    // builds); ver la propiedad Report.
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
