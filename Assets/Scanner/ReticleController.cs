@@ -148,15 +148,23 @@ namespace Scanner
             SceneFlow.GoTo(SceneFlow.EscenaMenu);
         }
 
+        // Geometría compartida del panel inferior. La expongo para que EditPanelUI
+        // ancle su panel de edición (al seleccionar pared/cubo/piso) en el mismo lugar
+        // que el panel contextual de colocación: justo ARRIBA de la botonera.
+        public const float BottomMargin = 40f, BotonesH = 56f, ContextGap = 12f, ToolsH = 96f;
+        public static float ToolsY(float vh) => vh - BottomMargin - BotonesH - ContextGap - ToolsH;
+        // Borde INFERIOR del panel contextual/edición (crece hacia arriba desde acá).
+        public static float ContextBottomY(float vh) => ToolsY(vh) - 20f;
+
         // ---------------------------------------------------- panel inferior
         private void DrawPanelInferior(float vw, float vh)
         {
             var modo = _fsm.Current;
 
-            float botonesH = 56f;
-            float toolsH = 96f;
-            float yBotones = vh - 40f - botonesH;
-            float yTools = yBotones - 12f - toolsH;
+            float botonesH = BotonesH;
+            float toolsH = ToolsH;
+            float yBotones = vh - BottomMargin - botonesH;
+            float yTools = ToolsY(vh);
 
             T.Gradiente(new Rect(0, yTools - 60f, vw, vh - (yTools - 60f)), 0.92f, haciaAbajo: false);
             UIBlocker.AddVirtualRect(new Rect(0, yTools - 12f, vw, vh - yTools + 12f));
