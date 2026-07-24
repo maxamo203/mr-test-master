@@ -20,6 +20,7 @@ namespace Scanner
         [SerializeField] private DoorBuilder _doorBuilder;
         [SerializeField] private CubeBuilder _cubeBuilder;
         [SerializeField] private MarkerBuilder _markerBuilder;
+        [SerializeField] private ARImageAnchor _imageAnchor;
 
         private ScanStateMachine _fsm;
         private ResolvedHit _lastHit;
@@ -30,6 +31,15 @@ namespace Scanner
 
         // Submenú de "Identificar" (tipos de marcador del catálogo) abierto.
         private bool _markerSubmenuOpen;
+
+        // Scroll horizontal de la botonera de herramientas (drag con touch/mouse).
+        private float _toolScroll;
+        private bool  _toolDragging;
+        private bool  _toolDragMoved;   // pasó el umbral de arrastre -> suprime el tap
+        private float _toolLastX;
+        // X en pantalla (virtual) del botón "Identificar", para colgarle el submenú.
+        private float _identScreenX;
+        private bool  _identVisible;
 
         // Si al terminar la polilinea se cierra el bucle (ultimo vertice -> primero).
         // En memoria: se mantiene entre polilineas, no persiste entre sesiones.
@@ -45,6 +55,7 @@ namespace Scanner
             if (_doorBuilder == null) _doorBuilder = FindFirstObjectByType<DoorBuilder>();
             if (_cubeBuilder == null) _cubeBuilder = FindFirstObjectByType<CubeBuilder>();
             if (_markerBuilder == null) _markerBuilder = FindFirstObjectByType<MarkerBuilder>();
+            if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
 
             // Fantasma en vivo de lo que se va a colocar. Lo instanciamos acá para no
             // tener que cablearlo en la escena (encuentra los builders por su cuenta).
@@ -76,6 +87,10 @@ namespace Scanner
             UIScale.Begin();
             float vw = UIScale.VirtualWidth;
             float vh = UIScale.VirtualHeight;
+
+            // Las franjas fuera del área segura (notch / home indicator) van en negro
+            // para que no se vea la cámara "cortada" junto al degradado de la UI.
+            T.FillOutsideSafeArea(T.Bg);
 
             DrawReticula(vw, vh);
             DrawBarraSuperior(vw);
@@ -139,7 +154,7 @@ namespace Scanner
             var modo = _fsm.Current;
 
             float botonesH = 56f;
-            float toolsH = 84f;
+            float toolsH = 96f;
             float yBotones = vh - 40f - botonesH;
             float yTools = yBotones - 12f - toolsH;
 
@@ -182,12 +197,16 @@ namespace Scanner
                    || FloorPoint.Instance != null;
         }
 
-        // Fila de herramientas (estilo prototipo). Solo inician flujo desde Idle;
-        // la herramienta del flujo activo queda resaltada.
+        // Botonera de herramientas: fila HORIZONTAL SCROLLEABLE (drag con el dedo),
+        // cada botón con su ícono 3D + etiqueta completa. Incluye las herramientas de
+        // escaneo y, al final, los dos botones de recalibrar el anchor.
+        private const float ToolW = 84f, ToolGap = 8f;
+
         private void DrawHerramientas(float vw, float y, float h)
         {
             var modo = _fsm.Current;
             bool idle = modo == ScannerMode.Idle;
+            bool puedeRecal = !IsPlacingMode(modo);   // recalibrar salvo mientras se coloca
 
             bool enPared  = modo == ScannerMode.Wall_V1 || modo == ScannerMode.Wall_Height || modo == ScannerMode.Wall_Vn;
             bool enCubo   = modo == ScannerMode.Cube_V1 || modo == ScannerMode.Cube_V2 || modo == ScannerMode.Cube_V3;
@@ -195,41 +214,114 @@ namespace Scanner
             bool enMarker = modo == ScannerMode.Marker_Place;
             bool enPiso   = modo == ScannerMode.Floor_Place;
 
-            float cw = (vw - Pad * 2f - 4f * 8f) / 5f;
-            float x = Pad;
+            // Entradas de la botonera (en orden).
+            var items = new (string label, MortuoriumIcons.Icon icon, bool activo, bool enabled, Action onTap)[]
+            {
+                ("PARED",        MortuoriumIcons.Icon.Pared,  enPared,  idle, () => _wallBuilder?.StartPolyline()),
+                ("CUBO",         MortuoriumIcons.Icon.Cubo,   enCubo,   idle, () => _cubeBuilder?.StartCube()),
+                ("AGUJERO\nPUERTA", MortuoriumIcons.Icon.Puerta, enPuerta, idle, () => _doorBuilder?.StartDoor()),
+                ("IDENTIFICAR",  MortuoriumIcons.Icon.Marca,  enMarker || _markerSubmenuOpen, idle,
+                                 () => _markerSubmenuOpen = !_markerSubmenuOpen),
+                (FloorPoint.Instance != null ? "PISO\n(REUBICAR)" : "PISO", MortuoriumIcons.Icon.Piso, enPiso, idle,
+                                 () => _fsm.SetMode(ScannerMode.Floor_Place)),
+                ("RECALIBRAR\n(fijo)", MortuoriumIcons.Icon.RecalFijo, false, puedeRecal, () => Recalibrar(true)),
+                ("RECALIBRAR\n(+mover)", MortuoriumIcons.Icon.RecalMover, false, puedeRecal, () => Recalibrar(false)),
+            };
 
-            DrawTool(new Rect(x, y, cw, h), "PARED", enPared, idle,
-                     () => _wallBuilder?.StartPolyline());
-            x += cw + 8f;
-            DrawTool(new Rect(x, y, cw, h), "CUBO", enCubo, idle,
-                     () => _cubeBuilder?.StartCube());
-            x += cw + 8f;
-            DrawTool(new Rect(x, y, cw, h), "AGUJERO\nPUERTA", enPuerta, idle,
-                     () => _doorBuilder?.StartDoor());
-            x += cw + 8f;
-            var rIdent = new Rect(x, y, cw, h);
-            DrawTool(rIdent, "IDENTI-\nFICAR", enMarker || _markerSubmenuOpen, idle,
-                     () => _markerSubmenuOpen = !_markerSubmenuOpen);
-            x += cw + 8f;
-            string lblPiso = FloorPoint.Instance != null ? "PISO\n(REUBICAR)" : "PISO";
-            DrawTool(new Rect(x, y, cw, h), lblPiso, enPiso, idle,
-                     () => _fsm.SetMode(ScannerMode.Floor_Place));
+            var viewport = new Rect(Pad, y, vw - Pad * 2f, h);
+            float contentW = items.Length * (ToolW + ToolGap) - ToolGap;
+            float maxScroll = Mathf.Max(0f, contentW - viewport.width);
 
-            if (_markerSubmenuOpen && idle && _markerBuilder != null)
-                DrawMarkerSubmenu(rIdent);
+            HandleToolDrag(viewport, maxScroll);
+            _toolScroll = Mathf.Clamp(_toolScroll, 0f, maxScroll);
+
+            // Índice de "Identificar" para colgar el submenú (4º item).
+            const int identIdx = 3;
+            _identScreenX = viewport.x + identIdx * (ToolW + ToolGap) - _toolScroll;
+            _identVisible = _identScreenX + ToolW > viewport.x && _identScreenX < viewport.xMax;
+
+            GUI.BeginGroup(viewport);
+            for (int i = 0; i < items.Length; i++)
+            {
+                float bx = i * (ToolW + ToolGap) - _toolScroll;
+                if (bx + ToolW < 0f || bx > viewport.width) continue;   // fuera de vista
+                DrawTool(new Rect(bx, 0f, ToolW, h), items[i].label, items[i].icon,
+                         items[i].activo, items[i].enabled, items[i].onTap);
+            }
+            GUI.EndGroup();
+
+            // Barrita de scroll (indicador) si hay overflow.
+            if (maxScroll > 1f)
+            {
+                float t = viewport.width / contentW;
+                float sw = viewport.width * t;
+                float sx = viewport.x + (viewport.width - sw) * (_toolScroll / maxScroll);
+                T.Fill(new Rect(viewport.x, viewport.yMax - 3f, viewport.width, 2f), new Color(1f, 1f, 1f, 0.06f));
+                T.Fill(new Rect(sx, viewport.yMax - 3f, sw, 2f), new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.7f));
+            }
+
+            if (_markerSubmenuOpen && idle && _identVisible && _markerBuilder != null)
+                DrawMarkerSubmenu(new Rect(_identScreenX, y, ToolW, h));
             else if (!idle)
                 _markerSubmenuOpen = false;
         }
 
-        private void DrawTool(Rect r, string label, bool activo, bool enabled, Action onTap)
+        // Drag horizontal de la botonera (touch o mouse, vía Event.current — IMGUI
+        // mapea el primer touch a eventos de mouse). Marca _toolDragMoved para que el
+        // release tras un arrastre no dispare el botón de abajo.
+        private void HandleToolDrag(Rect viewport, float maxScroll)
+        {
+            var e = Event.current;
+            switch (e.type)
+            {
+                case EventType.MouseDown:
+                    if (viewport.Contains(e.mousePosition))
+                    { _toolDragging = true; _toolDragMoved = false; _toolLastX = e.mousePosition.x; }
+                    break;
+                case EventType.MouseDrag:
+                    if (_toolDragging)
+                    {
+                        float dx = e.mousePosition.x - _toolLastX;
+                        _toolLastX = e.mousePosition.x;
+                        _toolScroll = Mathf.Clamp(_toolScroll - dx, 0f, maxScroll);
+                        if (Mathf.Abs(dx) > 1f) _toolDragMoved = true;
+                        e.Use();
+                    }
+                    break;
+                case EventType.MouseUp:
+                    _toolDragging = false;
+                    break;
+            }
+        }
+
+        private void DrawTool(Rect r, string label, MortuoriumIcons.Icon icon,
+                              bool activo, bool enabled, Action onTap)
         {
             Color borde = activo ? T.Red : enabled ? T.Border : T.BorderDim;
             T.Fill(r, activo ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.18f)
                              : new Color(0f, 0f, 0f, 0.55f));
             T.Borde(r, borde);
-            var st = T.Estilo(T.FMono, 11, activo ? T.Cream : enabled ? T.CreamDim : T.Disabled,
-                              TextAnchor.MiddleCenter);
-            if (GUI.Button(r, label, st) && enabled) onTap?.Invoke();
+
+            // Ícono arriba (cuadrado centrado), etiqueta abajo.
+            float ico = 42f;
+            MortuoriumIcons.Draw(new Rect(r.x + (r.width - ico) * 0.5f, r.y + 8f, ico, ico),
+                                 icon, enabled ? 1f : 0.4f);
+            var st = T.Estilo(T.FMono, 10, activo ? T.Cream : enabled ? T.CreamDim : T.Disabled,
+                              TextAnchor.UpperCenter, wrap: true);
+            GUI.Label(new Rect(r.x + 2f, r.y + ico + 12f, r.width - 4f, r.height - ico - 14f), label, st);
+
+            // Tap (suprimido si venías arrastrando).
+            if (GUI.Button(r, GUIContent.none, GUIStyle.none) && enabled && !_toolDragMoved)
+                onTap?.Invoke();
+        }
+
+        private void Recalibrar(bool keepVisualPosition)
+        {
+            if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
+            if (_imageAnchor == null) return;
+            _markerSubmenuOpen = false;
+            ScanStateMachine.Instance?.SetMode(ScannerMode.Calibrating);
+            _imageAnchor.RestartTracking(keepVisualPosition);
         }
 
         // Submenú con los tipos de marcador del catálogo, colgado ARRIBA del botón

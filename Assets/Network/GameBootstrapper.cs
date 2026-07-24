@@ -86,13 +86,17 @@ public class GameBootstrapper : MonoBehaviour
 
         float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
 
-        // UNIRSE tapa la cámara (fondo opaco); en la SALA la cámara queda visible
-        // para sincronizar la imagen de referencia.
+        // UNIRSE tapa la cámara (fondo opaco en toda la pantalla); en la SALA la
+        // cámara queda visible dentro del área segura y sólo se ennegrecen las
+        // franjas de afuera (notch / home indicator).
         if (_pantalla != Pantalla.Sala)
         {
-            var full = new Rect(0, 0, vw, vh);
-            T.Fill(full, T.Bg);
-            UIBlocker.AddVirtualRect(full);
+            T.FillScreen(T.Bg);
+            UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
+        }
+        else
+        {
+            T.FillOutsideSafeArea(T.Bg);
         }
 
         switch (_pantalla)

@@ -70,9 +70,9 @@ namespace Scanner
 
             _nav.Begin();
 
-            var full = new Rect(0, 0, vw, vh);
-            T.Fill(full, new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.94f));
-            UIBlocker.AddVirtualRect(full);
+            // Fondo opaco en toda la pantalla (incluye fuera del área segura).
+            T.FillScreen(T.Bg);
+            UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
 
             T.BotonVolver(_nav, () => _abierto = false);
 

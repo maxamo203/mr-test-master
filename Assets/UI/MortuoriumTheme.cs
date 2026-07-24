@@ -139,6 +139,36 @@ public static class MortuoriumTheme
         Borde(r, borde, t);
     }
 
+    // Rellena TODA la pantalla (incluye lo que queda FUERA del área segura: notch,
+    // Dynamic Island, home indicator) con un color sólido. Se dibuja en px crudos
+    // (resetea la GUI.matrix de UIScale y la restaura), así que sirve para tapar el
+    // fondo 3D detrás de un menú opaco. Llamalo al principio del OnGUI.
+    public static void FillScreen(Color c)
+    {
+        var m = GUI.matrix;
+        GUI.matrix = Matrix4x4.identity;
+        Fill(new Rect(0, 0, Screen.width, Screen.height), c);
+        GUI.matrix = m;
+    }
+
+    // Rellena SÓLO las franjas fuera del área segura (arriba/abajo/laterales) con un
+    // color sólido, dejando el área segura intacta — para pantallas sobre la cámara
+    // AR (escáner / sincronización): la cámara sigue visible dentro del área segura
+    // y las franjas del notch / home indicator quedan en negro en vez de mostrar
+    // cámara "cortada" junto al degradado de la UI.
+    public static void FillOutsideSafeArea(Color c)
+    {
+        var sg = Scanner.SafeArea.GuiRect;   // px crudos, origen arriba-izq
+        float sw = Screen.width, sh = Screen.height;
+        var m = GUI.matrix;
+        GUI.matrix = Matrix4x4.identity;
+        if (sg.y > 0f)     Fill(new Rect(0f, 0f, sw, sg.y), c);                          // arriba
+        if (sg.yMax < sh)  Fill(new Rect(0f, sg.yMax, sw, sh - sg.yMax), c);             // abajo
+        if (sg.x > 0f)     Fill(new Rect(0f, sg.y, sg.x, sg.height), c);                 // izquierda
+        if (sg.xMax < sw)  Fill(new Rect(sg.xMax, sg.y, sw - sg.xMax, sg.height), c);    // derecha
+        GUI.matrix = m;
+    }
+
     // Franja con gradiente (negro -> transparente). haciaAbajo=true para la
     // franja superior (opaca arriba), false para la inferior (opaca abajo).
     public static void Gradiente(Rect r, float alpha, bool haciaAbajo)

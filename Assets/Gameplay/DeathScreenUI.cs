@@ -30,10 +30,9 @@ namespace Gameplay
 
             float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
 
-            // Overlay oscuro que bloquea la escena.
-            var full = new Rect(0, 0, vw, vh);
-            T.Fill(full, new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.9f));
-            UIBlocker.AddVirtualRect(full);
+            // Overlay oscuro en toda la pantalla (incluye fuera del área segura).
+            T.FillScreen(new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.92f));
+            UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
 
             // Título "MORISTE" (rojo, con leve glitch cromático).
             var titRect = new Rect(0, vh * 0.28f, vw, 90f);

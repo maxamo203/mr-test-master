@@ -61,6 +61,9 @@ public class ARLobbyUI : MonoBehaviour
 
         float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
 
+        // Franjas fuera del área segura en negro (cámara visible sólo dentro).
+        T.FillOutsideSafeArea(T.Bg);
+
         if (_lobby.State == ARLobbyManager.LobbyState.GameStarted)
         {
             if (!_briefingDone) DrawBriefing(vw, vh);

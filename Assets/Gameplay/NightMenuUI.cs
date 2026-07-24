@@ -106,9 +106,10 @@ namespace Gameplay
             _nav.Begin();
 
             float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
-            var full = new Rect(0, 0, vw, vh);
-            T.Fill(full, T.Bg);
-            UIBlocker.AddVirtualRect(full);
+            // Fondo opaco en TODA la pantalla (incluye fuera del área segura), para
+            // que no se cuele la escena 3D detrás por el notch / home indicator.
+            T.FillScreen(T.Bg);
+            UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
 
             if (_confirmarBorrar != null)
             {
