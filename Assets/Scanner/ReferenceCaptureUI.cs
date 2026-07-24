@@ -1,25 +1,28 @@
 using System.Collections;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.EnhancedTouch;
 using ETouch = UnityEngine.InputSystem.EnhancedTouch.Touch;
+using T = MortuoriumTheme;
 
 namespace Scanner
 {
-    // UI de captura de la imagen de referencia. Se muestra mientras la FSM está
-    // en Calibrating (antes de colocar objetos). El usuario:
-    //   1) Ajusta un rectángulo en pantalla (lo mueve arrastrando el interior y
-    //      lo redimensiona arrastrando la esquina inferior derecha).
-    //   2) Toca "Capturar": se toma una foto de lo que enfoca la cámara, se
-    //      recorta el fragmento dentro del rectángulo y se estima su tamaño físico.
-    //   3) Confirma/ajusta el tamaño (en cm) y toca "Confirmar": el fragmento se
-    //      registra como imagen de referencia (ARImageAnchor.AddReferenceImage) y
-    //      queda guardado para persistirse con el escaneo (CapturedReference).
+    // UI de captura de la imagen de referencia, con la estética Mortuorium. Se muestra
+    // mientras la FSM está en Calibrating (antes de colocar objetos). El usuario:
+    //   1) Ajusta un rectángulo en pantalla (lo mueve arrastrando el interior y lo
+    //      redimensiona arrastrando la esquina inferior derecha).
+    //   2) Toca "CAPTURAR": se toma una foto de lo que enfoca la cámara, se recorta el
+    //      fragmento dentro del rectángulo y se estima su ancho físico.
+    //   3) Ajusta el ANCHO REAL (slider deslizable + input numérico tipeable, sin
+    //      botones +/−) y toca "CONFIRMAR": el fragmento se registra como imagen de
+    //      referencia (ARImageAnchor.AddReferenceImage) y se guarda con el escaneo
+    //      (CapturedReference). "RECAPTURAR" vuelve al paso 1.
     //
-    // Todo el overlay se dibuja en píxeles reales (GUI.matrix identidad) para que
-    // el recorte mapee 1:1 con el rectángulo en pantalla. Igual que
-    // RecalibrateButton, el input se maneja con EnhancedTouch (+ Mouse en editor)
-    // y hacemos el hit-test contra los rects nosotros mismos.
+    // Todo el overlay se dibuja en píxeles reales (GUI.matrix identidad) para que el
+    // recorte mapee 1:1 con el rectángulo en pantalla. El input se maneja con
+    // EnhancedTouch (+ Mouse en editor) y hacemos el hit-test contra los rects
+    // nosotros mismos (GUI.Button no dispara confiable en iOS).
     public class ReferenceCaptureUI : MonoBehaviour
     {
         [SerializeField] private ARImageAnchor _imageAnchor;
@@ -28,8 +31,12 @@ namespace Scanner
         [Tooltip("Distancia (m) usada para estimar el tamaño si el raycast no toca nada.")]
         [SerializeField] private float _fallbackDistance = 1.5f;
 
+        // Rango del ancho real, en cm. El SLIDER llega hasta SliderMaxCm (lo común);
+        // por TEXTO se puede ingresar hasta MaxCm (más grande) si hiciera falta.
+        private const float MinCm = 2f, SliderMaxCm = 100f, MaxCm = 300f;
+
         private enum Phase { Adjust, Confirm, Waiting }
-        private enum Drag  { None, Move, ResizeBR }
+        private enum Drag  { None, Move, ResizeBR, Slider }
 
         private Phase _phase = Phase.Adjust;
         private Drag  _drag  = Drag.None;
@@ -42,8 +49,10 @@ namespace Scanner
         private float     _widthMeters;
         private bool      _selInit;
 
-        private static Texture2D _white;
-        private GUIStyle _btnStyle, _labelStyle;
+        // Edición numérica del ancho (teclado nativo en device / TextField en editor).
+        private bool  _editing;
+        private string _editText = "";
+        private TouchScreenKeyboard _kb;
 
         private bool Active =>
             _imageAnchor != null &&
@@ -70,6 +79,16 @@ namespace Scanner
         // ── Input ──────────────────────────────────────────────────────────────
         private void Update()
         {
+            // Reflejar el teclado nativo aunque estemos "busy".
+            if (_editing && _kb != null)
+            {
+                _editText = _kb.text;
+                var st = _kb.status;
+                if (st == TouchScreenKeyboard.Status.Done) CommitEdit();
+                else if (st == TouchScreenKeyboard.Status.Canceled ||
+                         st == TouchScreenKeyboard.Status.LostFocus) CancelEdit();
+            }
+
             if (!Active || _busy) return;
             EnsureSelInit();
             if (!GetPointer(out var p, out var down, out var up)) return;
@@ -80,6 +99,11 @@ namespace Scanner
                 {
                     if (HandleRect().Contains(p)) _drag = Drag.ResizeBR;
                     else if (_sel.Contains(p))    _drag = Drag.Move;
+                    else                          _drag = Drag.None;
+                }
+                else if (_phase == Phase.Confirm)
+                {
+                    if (SliderRow().Contains(p)) { _drag = Drag.Slider; SetWidthFromSlider(p.x); }
                     else                          _drag = Drag.None;
                 }
                 _lastPointer = p;
@@ -104,12 +128,16 @@ namespace Scanner
                     _sel.x += d.x;
                     _sel.y += d.y;
                 }
-                else // ResizeBR
+                else if (_drag == Drag.ResizeBR)
                 {
                     _sel.width  = Mathf.Max(60f, _sel.width  + d.x);
                     _sel.height = Mathf.Max(60f, _sel.height + d.y);
                 }
                 ClampSel();
+            }
+            else if (_phase == Phase.Confirm && _drag == Drag.Slider)
+            {
+                SetWidthFromSlider(p.x);
             }
         }
 
@@ -147,11 +175,18 @@ namespace Scanner
             }
             else if (_phase == Phase.Confirm)
             {
-                if (MinusBtn().Contains(p))        _widthMeters = Mathf.Max(0.02f, _widthMeters - 0.01f);
-                else if (PlusBtn().Contains(p))    _widthMeters += 0.01f;
-                else if (RecaptureBtn().Contains(p)) BackToAdjust();
-                else if (ConfirmBtn().Contains(p)) Confirm();
+                if (NumBox().Contains(p))            BeginEdit();
+                else if (RecaptureBtn().Contains(p)) { CommitEdit(); BackToAdjust(); }
+                else if (ConfirmBtn().Contains(p))   { CommitEdit(); Confirm(); }
+                else if (_editing)                   CommitEdit();   // tap afuera confirma
             }
+        }
+
+        private void SetWidthFromSlider(float px)
+        {
+            var row = SliderRow();
+            float t = Mathf.Clamp01((px - row.x) / row.width);
+            _widthMeters = Mathf.Lerp(MinCm, SliderMaxCm, t) / 100f;
         }
 
         private void ClampSel()
@@ -160,6 +195,33 @@ namespace Scanner
             _sel.height = Mathf.Min(_sel.height, Screen.height);
             _sel.x = Mathf.Clamp(_sel.x, 0f, Screen.width  - _sel.width);
             _sel.y = Mathf.Clamp(_sel.y, 0f, Screen.height - _sel.height);
+        }
+
+        // ── Edición numérica del ancho ───────────────────────────────────────────
+        private void BeginEdit()
+        {
+            if (_editing) return;
+            _editing = true;
+            _editText = (_widthMeters * 100f).ToString("0", CultureInfo.InvariantCulture);
+            if (TouchScreenKeyboard.isSupported)
+                _kb = TouchScreenKeyboard.Open(_editText, TouchScreenKeyboardType.NumberPad,
+                                               autocorrection: false, multiline: false,
+                                               secure: false, alert: false, textPlaceholder: "");
+        }
+
+        private void CommitEdit()
+        {
+            if (!_editing) return;
+            if (float.TryParse(_editText, NumberStyles.Float, CultureInfo.InvariantCulture, out var cm))
+                _widthMeters = Mathf.Clamp(cm, MinCm, MaxCm) / 100f;
+            CancelEdit();
+        }
+
+        private void CancelEdit()
+        {
+            _editing = false;
+            _editText = "";
+            if (_kb != null) { _kb.active = false; _kb = null; }
         }
 
         // ── Captura ──────────────────────────────────────────────────────────────
@@ -219,7 +281,7 @@ namespace Scanner
             float hFov = 2f * Mathf.Atan(Mathf.Tan(vFov * 0.5f) * aspect);
             float fullWidthAtDist = 2f * dist * Mathf.Tan(hFov * 0.5f);
             float meters = fullWidthAtDist * (rectWidthPx / (float)Screen.width);
-            return Mathf.Clamp(meters, 0.02f, 5f);
+            return Mathf.Clamp(meters, MinCm / 100f, MaxCm / 100f);
         }
 
         private void BackToAdjust()
@@ -241,45 +303,110 @@ namespace Scanner
         private void OnGUI()
         {
             if (!Active || _hideOverlay) return;
-            EnsureStyles();
-            EnsureSelInit();
 
             // Overlay en px reales (sin la matriz de UIScale) para que coincida con el recorte.
             var prev = GUI.matrix;
             GUI.matrix = Matrix4x4.identity;
+
+            // Franjas fuera del área segura en negro (cámara visible sólo adentro).
+            T.FillOutsideSafeArea(T.Bg);
 
             DrawCaptureUI();
 
             GUI.matrix = prev;
         }
 
+        private int FsBtn   => Mathf.RoundToInt(Screen.height * 0.024f);
+        private int FsLabel => Mathf.RoundToInt(Screen.height * 0.017f);
+        private int FsNum    => Mathf.RoundToInt(Screen.height * 0.026f);
+
         private void DrawCaptureUI()
         {
+            float sw = Screen.width, sh = Screen.height;
+
             if (_phase == Phase.Waiting)
             {
-                DrawCenteredLabel("Buscando la zona en el entorno…");
+                var r = new Rect(0, sh * 0.45f, sw, sh * 0.1f);
+                T.Fill(r, new Color(0f, 0f, 0f, 0.6f));
+                GUI.Label(r, "buscando la zona en el entorno…",
+                          T.Estilo(T.FElite, FsBtn, T.Cream, TextAnchor.MiddleCenter));
                 return;
             }
 
             // Rectángulo (selección o preview del fragmento).
             if (_phase == Phase.Confirm && _fragment != null)
                 GUI.DrawTexture(_sel, _fragment, ScaleMode.StretchToFill);
-            DrawBorder(_sel, Mathf.Max(3f, Screen.height * 0.004f), Color.white);
+            T.Borde(_sel, T.Cream, Mathf.Max(3f, sh * 0.004f));
 
             if (_phase == Phase.Adjust)
             {
-                DrawSolid(HandleRect(), new Color(1f, 0.8f, 0.1f, 0.9f)); // esquina para redimensionar
-                DrawTopLabel("Ajustá el recuadro sobre una zona con detalle y tocá Capturar");
-                GUI.Button(CaptureBtn(), "Capturar", _btnStyle);
+                // Esquina para redimensionar (tan) + guía de las 4 esquinas.
+                T.Fill(HandleRect(), T.Tan);
+
+                DrawTopLabel("ajustá el recuadro sobre una zona con detalle y tocá CAPTURAR");
+                DrawBtn(CaptureBtn(), "CAPTURAR", primario: true);
             }
             else // Confirm
             {
-                float cm = _widthMeters * 100f;
-                GUI.Button(MinusBtn(), "−", _btnStyle);
-                GUI.Label(WidthLabel(), $"Ancho ≈ {cm:0} cm", _labelStyle);
-                GUI.Button(PlusBtn(), "+", _btnStyle);
-                GUI.Button(RecaptureBtn(), "Re-capturar", _btnStyle);
-                GUI.Button(ConfirmBtn(), "Confirmar", _btnStyle);
+                DrawTopLabel("ajustá el ancho real de la imagen y confirmá");
+
+                // Panel inferior para leer los controles sobre la cámara/preview.
+                float panelTop = SliderRow().y - sh * 0.05f;
+                T.Fill(new Rect(0, panelTop, sw, sh - panelTop), new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.82f));
+
+                // Etiqueta + slider + input numérico (sin botones +/−).
+                var row = SliderRow();
+                GUI.Label(new Rect(row.x, row.y - sh * 0.032f, sw - row.x * 2f, sh * 0.03f),
+                          "ANCHO REAL DE LA IMAGEN",
+                          T.Estilo(T.FMono, FsLabel, T.Muted, TextAnchor.LowerLeft));
+
+                DrawSlider(row);
+                DrawNumBox(NumBox());
+
+                DrawBtn(RecaptureBtn(), "RECAPTURAR", primario: false);
+                DrawBtn(ConfirmBtn(),   "CONFIRMAR",  primario: true);
+            }
+        }
+
+        // Slider deslizable (dibujo; el drag lo maneja Update por EnhancedTouch).
+        private void DrawSlider(Rect row)
+        {
+            // El thumb se clampea al final si el valor (por texto) supera el máx del slider.
+            float t = Mathf.InverseLerp(MinCm, SliderMaxCm, _widthMeters * 100f);
+            var track = new Rect(row.x, row.y + row.height * 0.5f - 3f, row.width, 6f);
+            T.Fill(track, T.BorderDim);
+            T.Fill(new Rect(track.x, track.y, track.width * t, track.height), T.Red);
+
+            var thumb = new Rect(row.x + row.width * t - 9f, row.y + row.height * 0.5f - 16f, 18f, 32f);
+            T.Fill(thumb, T.Cream);
+            T.Borde(thumb, T.Red, 2f);
+        }
+
+        private void DrawNumBox(Rect box)
+        {
+            T.Fill(box, T.BgField);
+            T.Borde(box, _editing ? T.Tan : T.Border);
+            var inner = new Rect(box.x + 10f, box.y, box.width - 20f, box.height);
+            var st = T.Estilo(T.FMono, FsNum, T.Cream, TextAnchor.MiddleCenter);
+
+            if (_editing)
+            {
+#if UNITY_EDITOR
+                // En editor se tipea con el teclado físico vía TextField.
+                GUI.SetNextControlName("wcm");
+                _editText = GUI.TextField(inner, _editText, st);
+                GUI.FocusControl("wcm");
+                if (Event.current.type == EventType.KeyDown &&
+                    (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter))
+                    CommitEdit();
+#else
+                // En device el texto lo llena el teclado nativo (TouchScreenKeyboard).
+                GUI.Label(inner, $"{_editText} cm", st);
+#endif
+            }
+            else
+            {
+                GUI.Label(inner, $"{_widthMeters * 100f:0} cm", st);
             }
         }
 
@@ -291,68 +418,37 @@ namespace Scanner
             return new Rect(_sel.xMax - s, _sel.yMax - s, s, s);
         }
 
-        private float BW => Screen.width  * 0.30f;
-        private float BH => Screen.height * 0.07f;
-        private float BY => Screen.height - BH - Screen.height * 0.05f;
+        private float BtnH => Mathf.Max(52f, Screen.height * 0.07f);
+        private float BtnY => Screen.height - BtnH - Screen.height * 0.05f;
 
-        private Rect CaptureBtn()  => new Rect((Screen.width - BW) * 0.5f, BY, BW, BH);
+        // Adjust: un botón CAPTURAR centrado.
+        private Rect CaptureBtn() => new Rect(Screen.width * 0.25f, BtnY, Screen.width * 0.5f, BtnH);
 
-        private Rect RecaptureBtn() => new Rect(Screen.width * 0.06f, BY, BW, BH);
-        private Rect ConfirmBtn()   => new Rect(Screen.width * 0.94f - BW, BY, BW, BH);
+        // Confirm: RECAPTURAR (izq) + CONFIRMAR (der).
+        private Rect RecaptureBtn() => new Rect(Screen.width * 0.06f, BtnY, Screen.width * 0.42f, BtnH);
+        private Rect ConfirmBtn()   => new Rect(Screen.width * 0.52f, BtnY, Screen.width * 0.42f, BtnH);
 
-        private float RowY => BY - BH - Screen.height * 0.015f;
-        private Rect MinusBtn()   => new Rect(Screen.width * 0.20f - BH, RowY, BH, BH);
-        private Rect PlusBtn()    => new Rect(Screen.width * 0.80f,      RowY, BH, BH);
-        private Rect WidthLabel() => new Rect(Screen.width * 0.20f, RowY, Screen.width * 0.60f, BH);
+        // Fila del ancho: slider (izq) + input numérico (der), arriba de los botones.
+        private float RowH => Mathf.Max(48f, Screen.height * 0.06f);
+        private float RowY => BtnY - RowH - Screen.height * 0.03f;
+        private Rect SliderRow() => new Rect(Screen.width * 0.06f, RowY, Screen.width * 0.56f, RowH);
+        private Rect NumBox()    => new Rect(Screen.width * 0.66f, RowY, Screen.width * 0.28f, RowH);
 
         // ── Dibujo helpers ────────────────────────────────────────────────────────
-        private void EnsureStyles()
+        // Botón temático (solo visual; el tap lo dispara HandleButtonTap por EnhancedTouch).
+        private void DrawBtn(Rect r, string label, bool primario)
         {
-            int fs = Mathf.RoundToInt(Screen.height * 0.024f);
-            if (_btnStyle == null || _btnStyle.fontSize != fs)
-            {
-                _btnStyle = new GUIStyle(GUI.skin.button) { fontSize = fs, alignment = TextAnchor.MiddleCenter };
-                _labelStyle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = fs, alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = Color.white }
-                };
-            }
-        }
-
-        private static Texture2D White()
-        {
-            if (_white == null) { _white = new Texture2D(1, 1); _white.SetPixel(0, 0, Color.white); _white.Apply(); }
-            return _white;
-        }
-
-        private static void DrawSolid(Rect r, Color c)
-        {
-            var prev = GUI.color; GUI.color = c;
-            GUI.DrawTexture(r, White());
-            GUI.color = prev;
-        }
-
-        private static void DrawBorder(Rect r, float t, Color c)
-        {
-            DrawSolid(new Rect(r.x, r.y, r.width, t), c);                 // arriba
-            DrawSolid(new Rect(r.x, r.yMax - t, r.width, t), c);          // abajo
-            DrawSolid(new Rect(r.x, r.y, t, r.height), c);               // izq
-            DrawSolid(new Rect(r.xMax - t, r.y, t, r.height), c);        // der
+            T.Fill(r, primario ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.20f)
+                               : new Color(0f, 0f, 0f, 0.5f));
+            T.Borde(r, primario ? T.Red : T.Border);
+            GUI.Label(r, label, T.Estilo(T.FBebas, FsBtn, T.Cream, TextAnchor.MiddleCenter));
         }
 
         private void DrawTopLabel(string msg)
         {
-            var r = new Rect(0, Screen.height * 0.06f, Screen.width, Screen.height * 0.06f);
-            DrawSolid(r, new Color(0, 0, 0, 0.5f));
-            GUI.Label(r, msg, _labelStyle);
-        }
-
-        private void DrawCenteredLabel(string msg)
-        {
-            var r = new Rect(0, Screen.height * 0.45f, Screen.width, Screen.height * 0.1f);
-            DrawSolid(r, new Color(0, 0, 0, 0.6f));
-            GUI.Label(r, msg, _labelStyle);
+            var r = new Rect(0, Scanner.SafeArea.Top + Screen.height * 0.02f, Screen.width, Screen.height * 0.05f);
+            T.Fill(r, new Color(0f, 0f, 0f, 0.5f));
+            GUI.Label(r, msg, T.Estilo(T.FElite, FsLabel, T.CreamDim, TextAnchor.MiddleCenter));
         }
     }
 }
