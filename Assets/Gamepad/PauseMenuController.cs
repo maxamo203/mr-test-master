@@ -28,7 +28,11 @@ namespace Gamepad
         // en development build — Linterna (tuning) y el toggle del Debug HUD.
         private enum Page { Main, Options, Control, Cardboard, Flashlight }
 
+        public static PauseMenuController Instance { get; private set; }
+
         private bool _open;
+        public static bool IsOpen => Instance != null && Instance._open;
+
         private Page _page = Page.Main;
         // "Salir al menú" pide una segunda pulsación de confirmación (corta la partida).
         private bool _confirmSalir;
@@ -73,6 +77,8 @@ namespace Gamepad
 
         private void Awake()
         {
+            if (Instance != null && Instance != this) { Destroy(this); return; }
+            Instance = this;
             if (!EnhancedTouchSupport.enabled) EnhancedTouchSupport.Enable();
         }
 
@@ -440,6 +446,12 @@ namespace Gamepad
             if (gp != null && gp.startButton.wasPressedThisFrame)
                 Toggle();
 
+            // VR Box Mouse: right button abre el menú (solo si está cerrado; si está abierto
+            // lo maneja el bloque de navegación más abajo para no hacer toggle+back en el mismo frame).
+            if (GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput &&
+                !_open && VRBoxInput.CancelDown)
+                Toggle();
+
             // Tap (dedos/mouse): botón de pausa siempre; ítems si está abierto.
             if (TryGetTapRelease(out var tapPx))
             {
@@ -497,6 +509,38 @@ namespace Gamepad
 
             // Volver/cerrar con East (B/○).
             if (gp != null && gp.buttonEast.wasPressedThisFrame) { Back(); return; }
+
+            // VR Box Mouse: navegación con VRBoxInput (ya procesado por GamepadManager.Update).
+            if (GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput)
+            {
+                if (_items.Count > 0)
+                {
+                    if (VRBoxInput.CancelDown)  { Back(); return; }
+                    if (VRBoxInput.ConfirmDown) Activate(_items[_focus].id);
+
+                    var delta = VRBoxInput.Delta;
+
+                    _navCooldown -= Time.unscaledDeltaTime;
+                    if (Mathf.Abs(delta.y) > 3f)
+                    {
+                        if (_navCooldown <= 0f)
+                        {
+                            _focus = (_focus + (delta.y > 0 ? -1 : 1) + _items.Count) % _items.Count;
+                            _navCooldown = 0.18f;
+                        }
+                    }
+                    else _navCooldown = 0f;
+
+                    _adjCooldown -= Time.unscaledDeltaTime;
+                    string focusId = _items[_focus].id;
+                    if (IsSlider(focusId) && Mathf.Abs(delta.x) > 3f)
+                    {
+                        if (_adjCooldown <= 0f) { Adjust(focusId, delta.x > 0 ? 1f : -1f); _adjCooldown = 0.12f; }
+                    }
+                    else if (Mathf.Abs(delta.x) <= 3f) _adjCooldown = 0f;
+                }
+                return; // no procesar el bloque de gamepad en modo mouse
+            }
 
             // Navegación de foco con dpad / stick izquierdo (con auto-repeat).
             if (gp != null && _items.Count > 0)
@@ -641,23 +685,24 @@ namespace Gamepad
             }
             if (_btn != null) return;
 
-            _icon = new GUIStyle { fontSize = 24, alignment = TextAnchor.MiddleCenter, font = T.FBebas };
+            bool android = Application.platform == RuntimePlatform.Android;
+
+            _icon = new GUIStyle(GUI.skin.label) { fontSize = 24, alignment = TextAnchor.MiddleCenter, font = android ? null : T.FBebas };
             _icon.normal.textColor = T.Cream;
 
-            // Bebas Neue es caps-only: los labels salen en mayúsculas solos.
-            _btn = new GUIStyle { fontSize = 22, alignment = TextAnchor.MiddleCenter, font = T.FBebas };
+            _btn = new GUIStyle(GUI.skin.label) { fontSize = 22, alignment = TextAnchor.MiddleCenter, font = android ? null : T.FBebas };
             _btn.normal.textColor = T.Cream;
 
-            _title = new GUIStyle { fontSize = 32, alignment = TextAnchor.MiddleLeft, font = T.FBebas };
+            _title = new GUIStyle(GUI.skin.label) { fontSize = 32, alignment = TextAnchor.MiddleLeft, font = android ? null : T.FBebas };
             _title.normal.textColor = T.Cream;
 
-            _status = new GUIStyle { fontSize = 16, alignment = TextAnchor.UpperLeft, wordWrap = true, font = T.FMono };
+            _status = new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.UpperLeft, wordWrap = true, font = android ? null : T.FMono };
             _status.normal.textColor = T.CreamDim;
 
-            _battTxt = new GUIStyle { fontSize = 18, alignment = TextAnchor.MiddleLeft, font = T.FMono };
+            _battTxt = new GUIStyle(GUI.skin.label) { fontSize = 18, alignment = TextAnchor.MiddleLeft, font = android ? null : T.FMono };
             _battTxt.normal.textColor = T.Cream;
 
-            _toggleLbl = new GUIStyle { fontSize = 16, alignment = TextAnchor.MiddleLeft, wordWrap = true, font = T.FMono };
+            _toggleLbl = new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.MiddleLeft, wordWrap = true, font = android ? null : T.FMono };
             _toggleLbl.normal.textColor = T.CreamDim;
         }
 

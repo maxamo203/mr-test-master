@@ -30,7 +30,7 @@ namespace Gameplay
         [Tooltip("Escena del lobby/gameplay a cargar al continuar.")]
         [SerializeField] private string _lobbyScene = "SampleScene";
 
-        private enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones }
+        private enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control }
 
         private Pantalla _pantalla = Pantalla.Menu;
 
@@ -126,6 +126,7 @@ namespace Gameplay
                     case Pantalla.Entorno:     DrawEntorno(vw, vh);     break;
                     case Pantalla.Escaneos:    DrawEscaneos(vw, vh);    break;
                     case Pantalla.Opciones:    DrawOpciones(vw, vh);    break;
+                    case Pantalla.Control:     DrawControl(vw, vh);     break;
                 }
             }
 
@@ -475,21 +476,49 @@ namespace Gameplay
             if (!Mathf.Approximately(nuevoVol, GameOptions.Volumen)) GameOptions.Volumen = nuevoVol;
             y += 54f;
 
-            // Estado del mando.
-            var caja = new Rect(Pad, y, vw - Pad * 2f, 70f);
-            T.Borde(caja, T.Border);
+            // Estado del mando + botón para ir al visualizador.
             var gm = Gamepad.GamepadManager.Instance;
             string estado = (gm != null && gm.IsConnected)
                 ? $"joystick: {gm.DisplayName}\nestado: conectado"
                 : "joystick: ninguno\nconectá un mando por Bluetooth desde el sistema";
-            GUI.Label(new Rect(caja.x + 14f, caja.y + 10f, caja.width - 28f, caja.height - 20f),
-                      estado, T.Estilo(T.FMono, 12, T.Muted, TextAnchor.UpperLeft, wrap: true));
-            y += 90f;
+            var caja = new Rect(Pad, y, vw - Pad * 2f, 56f);
+            T.Borde(caja, T.Border);
+            GUI.Label(new Rect(caja.x + 14f, caja.y + 8f, caja.width - 28f, caja.height - 16f),
+                      estado, T.Estilo(T.FMono, 12, gm != null && gm.IsConnected ? T.CreamDim : T.Muted, TextAnchor.UpperLeft, wrap: true));
+            y += 68f;
+            T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 52f), "CONTROL (MANDO)", false,
+                    () => _pantalla = Pantalla.Control);
+        }
 
-            GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 60f),
-                      "más opciones (mando, cardboard y linterna) en el menú de pausa, " +
-                      "con el botón II de arriba a la derecha.",
-                      T.Estilo(T.FElite, 12, T.Dim, TextAnchor.UpperLeft, wrap: true));
+        private void DrawControl(float vw, float vh)
+        {
+            T.BotonVolver(_nav, () => _pantalla = Pantalla.Opciones);
+
+            GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "CONTROL",
+                      T.Estilo(T.FBebas, 28, T.Cream));
+
+            var gm = Gamepad.GamepadManager.Instance;
+            string status = (gm != null && gm.IsConnected)
+                ? $"joystick: {gm.DisplayName}  ·  {gm.Brand}"
+                : "ningún mando conectado";
+            GUI.Label(new Rect(Pad, 136f, vw - Pad * 2f, 24f), status,
+                      T.Estilo(T.FMono, 12, gm != null && gm.IsConnected ? T.Green : T.Muted));
+
+            float y = 168f;
+            if (gm != null && gm.IsConnected)
+            {
+                bool present = gm.TryGetBattery(out float lvl);
+                string bat = present ? $"batería: {Mathf.RoundToInt(lvl * 100f)}%" : "batería: N/D";
+                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), bat,
+                          T.Estilo(T.FMono, 12, T.Muted));
+                y += 30f;
+            }
+
+            float gpH = (vw - Pad * 2f) * 0.62f;
+            var gpArea = new Rect(Pad, y, vw - Pad * 2f, gpH);
+            T.Fill(gpArea, new Color(0.06f, 0.06f, 0.07f, 1f));
+            var st = gm != null ? gm.ReadState() : default;
+            Gamepad.GamepadVisualizer.Draw(gpArea, gm != null ? gm.Brand : Gamepad.GamepadBrand.None, st);
         }
     }
 }

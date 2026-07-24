@@ -19,6 +19,7 @@ namespace Gamepad
         public float l2, r2;                     // triggers analógicos
         public bool l3, r3;                      // clicks de los sticks
         public bool start, select;
+        public bool middle;                      // botón central / rueda (solo en modo mouse)
     }
 
     // Singleton global que detecta gamepads conectados por Bluetooth (emparejados a
@@ -37,6 +38,10 @@ namespace Gamepad
         // El gamepad activo (null si no hay ninguno).
         public UnityEngine.InputSystem.Gamepad Current { get; private set; }
         public bool IsConnected => Current != null && Current.added;
+        // True cuando el control conectado reporta "Mouse" en el nombre (ej: VR BOX Mouse).
+        // En ese modo el stick manda delta de mouse en vez de eje analógico.
+        public bool UsesMouseInput => IsConnected &&
+            DisplayName.IndexOf("Mouse", System.StringComparison.OrdinalIgnoreCase) >= 0;
         public GamepadBrand Brand { get; private set; } = GamepadBrand.None;
         public string DisplayName { get; private set; } = "";
 
@@ -98,6 +103,9 @@ namespace Gamepad
                 RefreshBattery();
             }
 
+            // Lectura del pendorcho: siempre, Tick se auto-limpia si no aplica.
+            VRBoxInput.Tick();
+
             // Navegación con gamepad de los menús IMGUI (foco global compartido). Ver
             // ImguiGamepadMenu: GamepadManager es el driver (BeginPass en OnGUI + Tick acá).
             ImguiGamepadMenu.Tick();
@@ -153,7 +161,15 @@ namespace Gamepad
             if (!wasConnected)
             {
                 Debug.Log($"[GamepadManager] Conectado: {DisplayName} ({Brand})");
-                RefreshBattery();                 // primera lectura sin esperar al timer
+                RefreshBattery();
+                // En modo mouse el pendorcho mueve un cursor en Android; lo ocultamos y
+                // lo centramos para que tarde más en llegar al borde de pantalla.
+                if (UsesMouseInput)
+                {
+                    Cursor.visible = false;
+                    var m = Mouse.current;
+                    if (m != null) m.WarpCursorPosition(new Vector2(Screen.width * 0.5f, Screen.height * 0.5f));
+                }
                 OnConnected?.Invoke();
             }
         }
@@ -166,6 +182,7 @@ namespace Gamepad
             DisplayName = "";
             _batteryPresent = false;
             _batteryLevel = 0f;
+            Cursor.visible = true;
             Debug.Log($"[GamepadManager] Desconectado: {prev}");
             OnDisconnected?.Invoke();
         }
@@ -220,12 +237,23 @@ namespace Gamepad
         }
 
         // Snapshot de las pulsaciones actuales. Default (todo en cero) si no hay
-        // gamepad conectado.
+        // gamepad conectado. En modo mouse el pendorcho manda eventos de ratón, así
+        // que los mapeamos a las entradas equivalentes del gamepad virtual.
         public GamepadState ReadState()
         {
             var s = new GamepadState();
             var g = Current;
             if (g == null || !g.added) return s;
+
+            if (UsesMouseInput)
+            {
+                s.leftStick = VRBoxInput.SmoothedStick;
+                var m  = Mouse.current;
+                var kb = Keyboard.current;
+                if (m != null) s.east = m.backButton.isPressed;  // botón B
+                // A = back de Android, C = vol+, D = vol- → interceptados por el SO, siempre false
+                return s;
+            }
 
             s.leftStick  = g.leftStick.ReadValue();
             s.rightStick = g.rightStick.ReadValue();
