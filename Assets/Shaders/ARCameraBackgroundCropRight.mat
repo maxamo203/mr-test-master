@@ -41,8 +41,10 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _CropOffsetX: 0.183
+    - _CropOffsetX: 0.13300005
+    - _CropOffsetY: -0.26999998
     - _CropScaleX: 0.77
+    - _CropScaleY: 1.54
     m_Colors: []
   m_BuildTextureStacks: []
   m_AllowLocking: 1

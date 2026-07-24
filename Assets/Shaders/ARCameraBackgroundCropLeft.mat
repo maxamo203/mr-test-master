@@ -42,7 +42,9 @@ Material:
     m_Ints: []
     m_Floats:
     - _CropOffsetX: 0.064
+    - _CropOffsetY: -0.26999998
     - _CropScaleX: 0.77
+    - _CropScaleY: 1.54
     m_Colors: []
   m_BuildTextureStacks: []
   m_AllowLocking: 1

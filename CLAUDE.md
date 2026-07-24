@@ -16,6 +16,7 @@ There is **no CLI build, lint, or test setup** — this is a GUI-driven Unity pr
 - **Android:** File > Build Settings > Android, IL2CPP / ARM64, min API 29. `Build And Run` to a connected device, or `adb install -r <apk>`. Requires ARCore + camera permission.
 - **iOS:** export the Xcode project; `Assets/Editor/IOSBuildPostProcessor.cs` runs automatically on export to inject local-network Info.plist keys (needed for the LAN discovery in `Assets/Network`). Keep its `DiscoveryPort` in sync with `LanDiscovery.DiscoveryPort`.
 - `Assembly-CSharp.csproj` / `.sln` are Unity-generated and gitignored; don't hand-edit them.
+- **Splash screen**: the MORTUORIUM wordmark (`Assets/Splash/mortuorium_splash.png`, Bebas + the menu's red/teal chromatic glitch) is wired into Player Settings by the editor menu **Mortuorium > Configurar splash** (`Assets/Editor/MortuoriumSplashSetup.cs`) — run it once; it sets the dark theme background and shows the logo above the mandatory "Made with Unity" watermark (Personal license can't remove the Unity logo, only add above it via `DrawMode.UnityLogoBelow`).
 
 Saved scans live at `Application.persistentDataPath/scans/<name>.json` (plus a sibling `<name>.png` reference image) — app-private storage on device.
 

@@ -242,8 +242,11 @@ public static class MortuoriumTheme
     {
         var rojo = new Color(1f, 0.12f, 0.20f, 0.55f);
         var teal = new Color(0f, 0.86f, 0.78f, 0.35f);
-        GUI.Label(new Rect(r.x + 2f, r.y, r.width, r.height), texto, Estilo(FBebas, size, rojo, TextAnchor.MiddleCenter));
-        GUI.Label(new Rect(r.x - 2f, r.y, r.width, r.height), texto, Estilo(FBebas, size, teal, TextAnchor.MiddleCenter));
+        // El desplazamiento del glitch escala con el tamaño (para que se vea igual
+        // de "corrido" con títulos grandes o chicos).
+        float off = Mathf.Max(2f, size * 0.03f);
+        GUI.Label(new Rect(r.x + off, r.y, r.width, r.height), texto, Estilo(FBebas, size, rojo, TextAnchor.MiddleCenter));
+        GUI.Label(new Rect(r.x - off, r.y, r.width, r.height), texto, Estilo(FBebas, size, teal, TextAnchor.MiddleCenter));
         GUI.Label(r, texto, Estilo(FBebas, size, Cream, TextAnchor.MiddleCenter));
     }
 
