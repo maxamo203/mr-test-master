@@ -641,23 +641,22 @@ namespace Gamepad
             }
             if (_btn != null) return;
 
-            _icon = new GUIStyle { fontSize = 24, alignment = TextAnchor.MiddleCenter, font = T.FBebas };
+            _icon = new GUIStyle(GUI.skin.label) { fontSize = 24, alignment = TextAnchor.MiddleCenter, font = null };
             _icon.normal.textColor = T.Cream;
 
-            // Bebas Neue es caps-only: los labels salen en mayúsculas solos.
-            _btn = new GUIStyle { fontSize = 22, alignment = TextAnchor.MiddleCenter, font = T.FBebas };
+            _btn = new GUIStyle(GUI.skin.label) { fontSize = 22, alignment = TextAnchor.MiddleCenter, font = null };
             _btn.normal.textColor = T.Cream;
 
-            _title = new GUIStyle { fontSize = 32, alignment = TextAnchor.MiddleLeft, font = T.FBebas };
+            _title = new GUIStyle(GUI.skin.label) { fontSize = 32, alignment = TextAnchor.MiddleLeft, font = null };
             _title.normal.textColor = T.Cream;
 
-            _status = new GUIStyle { fontSize = 16, alignment = TextAnchor.UpperLeft, wordWrap = true, font = T.FMono };
+            _status = new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.UpperLeft, wordWrap = true, font = null };
             _status.normal.textColor = T.CreamDim;
 
-            _battTxt = new GUIStyle { fontSize = 18, alignment = TextAnchor.MiddleLeft, font = T.FMono };
+            _battTxt = new GUIStyle(GUI.skin.label) { fontSize = 18, alignment = TextAnchor.MiddleLeft, font = null };
             _battTxt.normal.textColor = T.Cream;
 
-            _toggleLbl = new GUIStyle { fontSize = 16, alignment = TextAnchor.MiddleLeft, wordWrap = true, font = T.FMono };
+            _toggleLbl = new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.MiddleLeft, wordWrap = true, font = null };
             _toggleLbl.normal.textColor = T.CreamDim;
         }
 

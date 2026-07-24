@@ -63,9 +63,9 @@ public static class MortuoriumTheme
     {
         string key = $"{(font != null ? font.name : "def")}|{size}|{ColorUtility.ToHtmlStringRGBA(color)}|{(int)anchor}|{wrap}";
         if (_styles.TryGetValue(key, out var st)) return st;
-        st = new GUIStyle
+        st = new GUIStyle(GUI.skin.label)
         {
-            font      = font,           // null => font por defecto del skin
+            font      = null,           // fuentes custom no renderizan en Android — usa la del skin
             fontSize  = size,
             alignment = anchor,
             wordWrap  = wrap,
@@ -77,7 +77,7 @@ public static class MortuoriumTheme
     }
 
     // ── Texturas base ─────────────────────────────────────────────────────
-    private static Texture2D _white, _gradDown, _gradUp;
+    private static Texture2D _white, _gradDown, _gradUp, _scanlines;
 
     private static Texture2D White()
     {
@@ -148,6 +148,24 @@ public static class MortuoriumTheme
         var m = GUI.matrix;
         GUI.matrix = Matrix4x4.identity;
         Fill(new Rect(0, 0, Screen.width, Screen.height), c);
+        // Overlay de scanlines (efecto CRT del prototipo HTML: cada 3px oscurece una fila).
+        if (_scanlines == null)
+        {
+            _scanlines = new Texture2D(1, 3, TextureFormat.RGBA32, false);
+            _scanlines.filterMode = FilterMode.Point;
+            _scanlines.wrapMode   = TextureWrapMode.Repeat;
+            _scanlines.SetPixel(0, 0, new Color(0f, 0f, 0f, 0f));
+            _scanlines.SetPixel(0, 1, new Color(0f, 0f, 0f, 0f));
+            _scanlines.SetPixel(0, 2, new Color(0f, 0f, 0f, 0.22f));
+            _scanlines.Apply();
+            _scanlines.hideFlags = HideFlags.HideAndDontSave;
+        }
+        var prev = GUI.color;
+        GUI.color = Color.white;
+        GUI.DrawTextureWithTexCoords(new Rect(0, 0, Screen.width, Screen.height),
+                                     _scanlines,
+                                     new Rect(0, 0, 1f, Screen.height / 3f));
+        GUI.color = prev;
         GUI.matrix = m;
     }
 
@@ -267,15 +285,19 @@ public static class MortuoriumTheme
 
         bool prevEnabled = GUI.enabled;
         GUI.enabled = enabled;
+        // GUI.Button no renderiza texto en este entorno — separamos click-detection
+        // (botón invisible) del texto (GUI.Label encima).
+        var invisible = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
         bool clicked;
         if (nav != null)
-            clicked = nav.Button(r, label, st, () => { if (enabled) onClick?.Invoke(); });
+            clicked = nav.Button(r, "", invisible, () => { if (enabled) onClick?.Invoke(); });
         else
         {
-            clicked = GUI.Button(r, label, st);
+            clicked = GUI.Button(r, "", invisible);
             if (clicked && enabled) onClick?.Invoke();
         }
         GUI.enabled = prevEnabled;
+        GUI.Label(r, label, st);
         return clicked;
     }
 
@@ -286,8 +308,10 @@ public static class MortuoriumTheme
         bool foco = nav != null && ImguiGamepadMenu.NextHasFocus;
         if (foco) { Fill(r, new Color(Tan.r, Tan.g, Tan.b, 0.14f)); Borde(r, Tan); }
         var st = Estilo(FBebas, 26, foco ? Cream : Muted, TextAnchor.MiddleCenter);
-        if (nav != null) nav.Button(r, "<", st, onClick);
-        else if (GUI.Button(r, "<", st)) onClick?.Invoke();
+        var invisible = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
+        if (nav != null) nav.Button(r, "", invisible, onClick);
+        else if (GUI.Button(r, "", invisible)) onClick?.Invoke();
+        GUI.Label(r, "<", st);
     }
 
     // Celda/fila navegable con dibujo custom: pinta fondo+borde (con foco) y un
