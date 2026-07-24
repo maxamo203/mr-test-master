@@ -65,7 +65,7 @@ public static class MortuoriumTheme
         if (_styles.TryGetValue(key, out var st)) return st;
         st = new GUIStyle(GUI.skin.label)
         {
-            font      = null,           // fuentes custom no renderizan en Android — usa la del skin
+            font      = Application.platform == RuntimePlatform.Android ? null : font,
             fontSize  = size,
             alignment = anchor,
             wordWrap  = wrap,

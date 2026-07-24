@@ -685,22 +685,24 @@ namespace Gamepad
             }
             if (_btn != null) return;
 
-            _icon = new GUIStyle(GUI.skin.label) { fontSize = 24, alignment = TextAnchor.MiddleCenter, font = null };
+            bool android = Application.platform == RuntimePlatform.Android;
+
+            _icon = new GUIStyle(GUI.skin.label) { fontSize = 24, alignment = TextAnchor.MiddleCenter, font = android ? null : T.FBebas };
             _icon.normal.textColor = T.Cream;
 
-            _btn = new GUIStyle(GUI.skin.label) { fontSize = 22, alignment = TextAnchor.MiddleCenter, font = null };
+            _btn = new GUIStyle(GUI.skin.label) { fontSize = 22, alignment = TextAnchor.MiddleCenter, font = android ? null : T.FBebas };
             _btn.normal.textColor = T.Cream;
 
-            _title = new GUIStyle(GUI.skin.label) { fontSize = 32, alignment = TextAnchor.MiddleLeft, font = null };
+            _title = new GUIStyle(GUI.skin.label) { fontSize = 32, alignment = TextAnchor.MiddleLeft, font = android ? null : T.FBebas };
             _title.normal.textColor = T.Cream;
 
-            _status = new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.UpperLeft, wordWrap = true, font = null };
+            _status = new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.UpperLeft, wordWrap = true, font = android ? null : T.FMono };
             _status.normal.textColor = T.CreamDim;
 
-            _battTxt = new GUIStyle(GUI.skin.label) { fontSize = 18, alignment = TextAnchor.MiddleLeft, font = null };
+            _battTxt = new GUIStyle(GUI.skin.label) { fontSize = 18, alignment = TextAnchor.MiddleLeft, font = android ? null : T.FMono };
             _battTxt.normal.textColor = T.Cream;
 
-            _toggleLbl = new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.MiddleLeft, wordWrap = true, font = null };
+            _toggleLbl = new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.MiddleLeft, wordWrap = true, font = android ? null : T.FMono };
             _toggleLbl.normal.textColor = T.CreamDim;
         }
 
