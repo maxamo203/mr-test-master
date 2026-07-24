@@ -30,11 +30,16 @@ namespace Gamepad
         public static void Draw(Rect area, GamepadBrand brand, in GamepadState s)
         {
             EnsureAssets();
-
             var prev = GUI.color;
-
-            // Cuerpo.
             DrawRect(area, Panel);
+
+            // Layout especial para el pendorcho (VR BOX en modo mouse).
+            if (GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput)
+            {
+                DrawVRBox(area, s);
+                GUI.color = prev;
+                return;
+            }
 
             float W = area.width, H = area.height;
             Vector2 P(float fx, float fy) => new Vector2(area.x + fx * W, area.y + fy * H);
@@ -184,6 +189,45 @@ namespace Gamepad
             if (fill > 0.01f)
                 DrawRect(new Rect(r.x + 1, r.y + 1, (r.width - 2) * fill, r.height - 2), Press);
             DrawLabel(r, label, Mathf.RoundToInt(r.height * 0.6f), TextCol);
+        }
+
+        // ---- Layout VR BOX (pendorcho) ------------------------------------------
+
+        private static void DrawVRBox(Rect area, in GamepadState s)
+        {
+            float W = area.width, H = area.height;
+            Vector2 P(float fx, float fy) => new Vector2(area.x + fx * W, area.y + fy * H);
+            float U = Mathf.Min(W, H);
+
+            // Ruedita (stick izquierdo) — arriba, centrada.
+            DrawStick(P(0.50f, 0.26f), 0.17f * U, s.leftStick, false);
+
+            float btnR = 0.10f * U;
+            var dimCol = new Color(0.38f, 0.38f, 0.40f);
+            int  lblSz = Mathf.RoundToInt(btnR * 0.7f);
+
+            // Fila 1: A (atrás del SO, no detectable) y B (detectable).
+            DrawVRBoxBtn(P(0.28f, 0.62f), btnR, "A", pressed: false, dim: true);
+            DrawVRBoxBtn(P(0.72f, 0.62f), btnR, "B", s.east,         dim: false);
+            DrawLabel(new Rect(P(0.28f, 0.62f).x - btnR * 2f, P(0.28f, 0.62f).y + btnR + 2f, btnR * 4f, btnR), "atras", lblSz, dimCol);
+
+            // Fila 2: C y D — interceptados por el SO como volumen, no detectables.
+            DrawVRBoxBtn(P(0.28f, 0.86f), btnR, "C", pressed: false, dim: true);
+            DrawVRBoxBtn(P(0.72f, 0.86f), btnR, "D", pressed: false, dim: true);
+            DrawLabel(new Rect(P(0.28f, 0.86f).x - btnR * 2f, P(0.28f, 0.86f).y + btnR + 2f, btnR * 4f, btnR), "vol+", lblSz, dimCol);
+            DrawLabel(new Rect(P(0.72f, 0.86f).x - btnR * 2f, P(0.72f, 0.86f).y + btnR + 2f, btnR * 4f, btnR), "vol-", lblSz, dimCol);
+        }
+
+        private static void DrawVRBoxBtn(Vector2 center, float r, string label, bool pressed, bool dim)
+        {
+            Color body = dim   ? new Color(0.18f, 0.18f, 0.20f)
+                       : pressed ? Press : Idle;
+            Color text = dim   ? new Color(0.35f, 0.35f, 0.38f)
+                       : pressed ? Color.black : TextCol;
+            DrawCircle(center, r,          Outline);
+            DrawCircle(center, r * 0.85f,  body);
+            DrawLabel(new Rect(center.x - r, center.y - r, r * 2f, r * 2f),
+                      label, Mathf.RoundToInt(r * 1.1f), text);
         }
 
         // ---- Primitivas ---------------------------------------------------------

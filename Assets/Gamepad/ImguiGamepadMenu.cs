@@ -91,11 +91,29 @@ namespace Gamepad
             if (_frame.Count != _lastCount) { _focus = 0; _lastCount = _frame.Count; }  // cambió el set
             if (_frame.Count > 0) _focus = Mathf.Clamp(_focus, 0, _frame.Count - 1);
 
-            var gp = GamepadManager.Instance != null ? GamepadManager.Instance.Current : null;
-            if (gp == null || _frame.Count == 0) return;
+            var gm = GamepadManager.Instance;
+            var gp = gm != null ? gm.Current : null;
+            bool useMouse = gm != null && gm.UsesMouseInput;
 
-            float dy = gp.dpad.ReadValue().y;
-            if (Mathf.Abs(dy) < 0.5f) dy = gp.leftStick.ReadValue().y;
+            if ((gp == null && !useMouse) || _frame.Count == 0) return;
+
+            float dy;
+            bool confirm;
+
+            if (useMouse)
+            {
+                // VR BOX en modo mouse: delta.y del stick → navegación vertical.
+                // Umbral 3 px/frame, escala 12 px/frame = eje completo.
+                float rawY = VRBoxInput.Delta.y;
+                dy      = Mathf.Abs(rawY) > 3f ? Mathf.Clamp(rawY / 12f, -1f, 1f) : 0f;
+                confirm = VRBoxInput.ConfirmDown;
+            }
+            else
+            {
+                dy = gp.dpad.ReadValue().y;
+                if (Mathf.Abs(dy) < 0.5f) dy = gp.leftStick.ReadValue().y;
+                confirm = gp.buttonSouth.wasPressedThisFrame;
+            }
 
             _navCd -= Time.unscaledDeltaTime;
             if (Mathf.Abs(dy) > 0.5f)
@@ -104,8 +122,7 @@ namespace Gamepad
             }
             else _navCd = 0f;
 
-            if (gp.buttonSouth.wasPressedThisFrame &&
-                _focus >= 0 && _focus < _frame.Count && _frame[_focus].enabled)
+            if (confirm && _focus >= 0 && _focus < _frame.Count && _frame[_focus].enabled)
                 _frame[_focus].action?.Invoke();
         }
 

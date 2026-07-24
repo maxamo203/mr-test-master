@@ -98,10 +98,20 @@ namespace Bateries
             }
         }
 
-        // Botón primario: A del gamepad (edge-detect) o tecla E en editor.
+        // Botón primario: cara del gamepad, left click en modo VR Box Mouse, o E en editor.
         private bool PrimaryPressed()
         {
-            bool south   = GamepadManager.Instance != null && GamepadManager.Instance.ReadState().south;
+            var g = GamepadManager.Instance?.Current;
+            bool south = g != null && (g.buttonSouth.isPressed || g.buttonEast.isPressed ||
+                                       g.buttonNorth.isPressed || g.buttonWest.isPressed);
+
+            // VR Box Mouse: el botón A/trigger manda left click de mouse.
+            if (GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput)
+            {
+                var mouse = Mouse.current;
+                if (mouse != null) south |= mouse.leftButton.isPressed;
+            }
+
             bool pressed = south && !_prevSouth;
             _prevSouth   = south;
 #if UNITY_EDITOR

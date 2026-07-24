@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using T = MortuoriumTheme;
+using UnityEngine.InputSystem;
 
 namespace Scanner
 {
@@ -67,6 +68,11 @@ namespace Scanner
             if (_fsm == null || RaycastResolver.Instance == null) return;
             if (!IsPlacingMode(_fsm.Current)) return;
             _lastHit = RaycastResolver.Instance.ResolveFromScreenCenter();
+
+            // Botón A del VR Box (click izquierdo) → Colocar, solo si el menú de pausa está cerrado.
+            var mouse = Mouse.current;
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame && !Gamepad.PauseMenuController.IsOpen)
+                OnPlace();
         }
 
         private bool IsPlacingMode(ScannerMode m) =>
