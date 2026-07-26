@@ -104,6 +104,25 @@ namespace Gameplay
             else               NetworkManager.Instance.ServerSendSanity(clientId, s, max);
         }
 
+        // ── API server para otros sistemas (Arbmos) ───────────────────────────
+
+        // True si la cordura de ese jugador ya llego a cero (gatillo de la fase letal
+        // del Arbmos). Si aun no se registro, se asume que no (arranca en el maximo).
+        public bool IsAtZero(uint clientId) =>
+            _sanity.TryGetValue(clientId, out var s) && s <= 0f;
+
+        // Drena cordura de un jugador (no recuperable). La usa el ArbmosDirector cuando
+        // el jugador se mueve con el Arbmos presente. El valor nuevo se envia al jugador
+        // en el proximo ciclo de envio.
+        public void ServerDrain(uint clientId, float amount)
+        {
+            var net = NetworkManager.Instance;
+            if (net == null || !net.IsServer) return;
+            float max = Night != null ? Night.sanityMax : 100f;
+            if (!_sanity.ContainsKey(clientId)) { _sanity[clientId] = max; _offTimer[clientId] = 0f; }
+            _sanity[clientId] = Mathf.Max(0f, _sanity[clientId] - Mathf.Max(0f, amount));
+        }
+
         private bool HostFlashlightOn()
         {
             if (_hostFlashlight == null) _hostFlashlight = FindFirstObjectByType<Flashlight>();

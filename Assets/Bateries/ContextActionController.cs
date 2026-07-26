@@ -31,9 +31,6 @@ namespace Bateries
         private bool           _prevSouth;
         private Flashlight     _flashlight;
 
-        private GUIStyle _btnStyle;
-        private bool     _stylesReady;
-
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(this); return; }
@@ -140,18 +137,17 @@ namespace Bateries
             if (!showActionButton || _current == null || !_current.ShowActionButton ||
                 string.IsNullOrEmpty(_currentLabel)) return;
 
-            EnsureStyles();
             bool pad = GamepadManager.Instance != null && GamepadManager.Instance.IsConnected;
             string hint = pad ? $"{_currentLabel} (A)" : _currentLabel;
-            var btn = new Rect(Screen.width * 0.5f - 110, Screen.height * 0.62f, 220, 54);
-            if (GUI.Button(btn, hint, _btnStyle)) _current.Execute();
-        }
 
-        private void EnsureStyles()
-        {
-            if (_stylesReady) return;
-            _btnStyle    = new GUIStyle(GUI.skin.button) { fontSize = 20 };
-            _stylesReady = true;
+            // Estilo Mortuorium (mismo look que el resto de la UII), dentro de la matriz de
+            // area segura de UIScale para que quede bien ubicado en todos los dispositivos.
+            Scanner.UIScale.Begin();
+            float vw = Scanner.UIScale.VirtualWidth, vh = Scanner.UIScale.VirtualHeight;
+            const float w = 320f, h = 68f;
+            var btn = new Rect(vw * 0.5f - w * 0.5f, vh * 0.62f, w, h);
+            MortuoriumTheme.Boton(null, btn, hint, primario: true,
+                                  onClick: () => _current?.Execute(), fontSize: 24);
         }
     }
 }

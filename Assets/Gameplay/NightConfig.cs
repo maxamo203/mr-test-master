@@ -47,6 +47,37 @@ namespace Gameplay
         public float flashlightOffThreshold = 5f;
         public float sanityDrainPerSecond = 4f;
 
+        [Header("Arbmos (alucinacion de cordura — individual por jugador)")]
+        [Tooltip("Master switch: activar SOLO en las noches donde aparece el Arbmos (doc: noche 4+).")]
+        public bool arbmosActive = false;
+        [Tooltip("Segundos quieto que invocan al Arbmos (inaccion => aparece).")]
+        public float arbmosStillInvokeSeconds = 5f;
+        [Tooltip("Radio (m) bajo el cual se considera que el jugador esta 'quieto' (tolera el jitter AR).")]
+        public float arbmosStillRadius = 0.15f;
+        [Tooltip("Cuanto permanece la alucinacion no letal (s).")]
+        public float arbmosPresentSeconds = 6f;
+        [Tooltip("Velocidad (m/s) con la que el Arbmos deriva hacia el jugador mientras drena (anim running).")]
+        public float arbmosPresentFollowSpeed = 1.2f;
+        [Tooltip("Espera (s) entre alucinaciones del MISMO jugador (rango, al azar).")]
+        public float arbmosCooldownMin = 20f;
+        public float arbmosCooldownMax = 40f;
+        [Tooltip("A que distancia (m) del jugador, hacia donde mira, aparece el Arbmos.")]
+        public float arbmosSpawnDistance = 2.5f;
+        [Tooltip("Cordura por segundo que drena si el jugador se MUEVE mientras el Arbmos esta presente.")]
+        public float arbmosSanityDrainPerSecond = 6f;
+        [Tooltip("Probabilidad base [0..1] de que aparezca al cumplirse el gatillo de quietud.")]
+        public float arbmosSpawnChancePerAttempt = 0.6f;
+        [Tooltip("Multiplicador de esa probabilidad cuando la linterna esta apagada.")]
+        public float arbmosFlashlightOffChanceMul = 2f;
+
+        [Header("Arbmos letal (cordura en cero)")]
+        [Tooltip("Segundos inmovil (sin aura, distorsion en escalada) antes de embestir.")]
+        public float arbmosLethalStalkSeconds = 3f;
+        [Tooltip("Velocidad (m/s) de la embestida letal.")]
+        public float arbmosLethalChaseSpeed = 3.5f;
+        [Tooltip("Distancia (m) a la que el Arbmos letal atrapa al jugador.")]
+        public float arbmosGrabRange = 1.2f;
+
         [Header("Cono de linterna (repeler — server-authoritative)")]
         [Tooltip("Semi-angulo del cono (grados) para contar que la linterna ilumina un objetivo.")]
         public float flashlightConeAngleDeg = 30f;

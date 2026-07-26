@@ -1,0 +1,288 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2099096041104655265
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4298544328505004084}
+  - component: {fileID: 5881103922846319746}
+  m_Layer: 0
+  m_Name: Eye2
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4298544328505004084
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2099096041104655265}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.0145, y: 0.185, z: 0.018}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6407828396458089295}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5881103922846319746
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2099096041104655265}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ArbmosEye
+  color: {r: 1, g: 0.95, b: 0, a: 1}
+  size: 0.04
+  glow: 2.2
+  billboard: 1
+  emitLight: 1
+  lightRange: 2.2
+  lightIntensity: 1.4
+--- !u!1 &6927890475629581795
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7838522407080213639}
+  - component: {fileID: 7469013997661423921}
+  m_Layer: 0
+  m_Name: Eye1
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7838522407080213639
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6927890475629581795}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0.41641542, y: 5.5233407e-10, z: -6.5921e-10, w: 0.90917456}
+  m_LocalPosition: {x: 0.024000026, y: 0.18506145, z: 0.017934376}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6407828396458089295}
+  m_LocalEulerAnglesHint: {x: -49.217, y: 0, z: 0}
+--- !u!114 &7469013997661423921
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6927890475629581795}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ArbmosEye
+  color: {r: 1, g: 0.95, b: 0, a: 1}
+  size: 0.04
+  glow: 2.2
+  billboard: 1
+  emitLight: 1
+  lightRange: 2.2
+  lightIntensity: 1.4
+--- !u!1001 &2794147525294808523
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      propertyPath: m_Name
+      value: Arbmos
+      objectReference: {fileID: 0}
+    - target: {fileID: 8111781155169087978, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 78a7c2d066fa1f840baed6e9dd84296a, type: 2}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: -131761456609737084, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7838522407080213639}
+    - targetCorrespondingSourceObject: {fileID: -131761456609737084, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4298544328505004084}
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 80409753050058017}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: -8781505775312561993}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7605124617447009998}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: -2696263778344491597}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1122334455667788990}
+  m_SourcePrefab: {fileID: 100100000, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+--- !u!1 &3028573507642908826 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+  m_PrefabInstance: {fileID: 2794147525294808523}
+  m_PrefabAsset: {fileID: 0}
+--- !u!95 &80409753050058017
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3028573507642908826}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 0}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &-8781505775312561993
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3028573507642908826}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ArbmosAnimator
+  idleClip: {fileID: 2848929404039405562, guid: 500f317537fa14b419e03e156e5cccfc, type: 3}
+  runningClip: {fileID: 404911972674807791, guid: 0e8871aedd44d4e4780dfbeab96d69ec, type: 3}
+  chaseClip: {fileID: -9094147372417307050, guid: 54c43eb9a9c30f84f8fb793a6738df01, type: 3}
+  _blendSpeed: 6
+--- !u!114 &7605124617447009998
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3028573507642908826}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ArbmosEntity
+  TurnSpeed: 180
+  ModelRotationOffset: {x: 0, y: 0, z: 0}
+  distortion:
+    enabled: 1
+    baseIntensity: 0.215
+    intensityScale: 0.902
+    regionScale: 1.47
+    tintColor: {r: 0, g: 0, b: 0, a: 1}
+    tintStrength: 0.3
+    chromatic: 14
+    scanlines: 14
+    lethalBurst: 1
+    lethalColor: {r: 0.05, g: 0, b: 0, a: 1}
+--- !u!114 &-2696263778344491597
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3028573507642908826}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ArbmosNetwork
+--- !u!114 &1122334455667788990
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3028573507642908826}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ArbmosSmokeAura
+  _bodyHeight: 1.7
+  _smokeRadius: 0.35
+  _smokeColor: {r: 0.02, g: 0.02, b: 0.03, a: 1}
+  _smokeRate: 55
+  _smokeMaxParticles: 320
+--- !u!4 &6407828396458089295 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -131761456609737084, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}
+  m_PrefabInstance: {fileID: 2794147525294808523}
+  m_PrefabAsset: {fileID: 0}

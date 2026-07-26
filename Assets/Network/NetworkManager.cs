@@ -198,16 +198,47 @@ public class NetworkManager : MonoBehaviour
             TypeId        = typeId,
             OwnerClientId = ownerClientId,
             Position      = WorldOrigin.Instance.ToRelative(worldPosition), // anchor-relativo
+            VisibleTo     = NetworkEntity.Everyone,                          // compartida
         };
         _srv.Broadcast(MsgHelper.Frame(MessageType.SpawnEntity, msg.Serialize()));
         SpawnLocally(msg);
         return id;
     }
 
+    // Spawn DIRIGIDO: la entidad la ve UNICAMENTE targetClientId (Arbmos = alucinacion
+    // individual). Si el dueño es un cliente, el spawn/estado/despawn viajan solo a el;
+    // el host siempre crea la copia local (la propia se dibuja, las de otros se simulan
+    // ocultas — ver SpawnLocally). ownerClientId queda en 0 (server-authoritative).
+    public uint ServerSpawnFor(uint targetClientId, byte typeId, Vector3 worldPosition)
+    {
+        uint id  = _nextNetId++;
+        var  msg = new SpawnEntityMsg
+        {
+            NetworkId     = id,
+            TypeId        = typeId,
+            OwnerClientId = 0,
+            Position      = WorldOrigin.Instance.ToRelative(worldPosition),
+            VisibleTo     = targetClientId,
+        };
+        if (targetClientId != 0)
+            _srv.Send(targetClientId, MsgHelper.Frame(MessageType.SpawnEntity, msg.Serialize()));
+        SpawnLocally(msg);
+        return id;
+    }
+
     public void ServerDespawn(uint networkId)
     {
-        var msg = new DespawnEntityMsg { NetworkId = networkId };
-        _srv.Broadcast(MsgHelper.Frame(MessageType.DespawnEntity, msg.Serialize()));
+        var framed = MsgHelper.Frame(MessageType.DespawnEntity,
+            new DespawnEntityMsg { NetworkId = networkId }.Serialize());
+
+        uint visibleTo = NetworkEntity.Everyone;
+        if (EntityRegistry.Instance != null && EntityRegistry.Instance.TryGet(networkId, out var e))
+            visibleTo = e.VisibleTo;
+
+        if (visibleTo == NetworkEntity.Everyone) _srv.Broadcast(framed);
+        else if (visibleTo != 0)                 _srv.Send(visibleTo, framed); // dirigida a un cliente
+        // visibleTo == 0 (host-only): no se envia a ningun cliente.
+
         DespawnLocally(networkId);
     }
 
@@ -312,15 +343,18 @@ public class NetworkManager : MonoBehaviour
             _srv.Send(clientId, MsgHelper.Frame(MessageType.MapData,
                 new MapDataMsg { Bytes = _mapBytes }.Serialize()));
 
-        // Enviar catch-up de entidades ya existentes (en espacio anchor-relativo)
+        // Enviar catch-up de entidades ya existentes (en espacio anchor-relativo). Se
+        // omiten las DIRIGIDAS a otro jugador (alucinaciones de Arbmos ajenas).
         foreach (var entity in EntityRegistry.Instance.All)
         {
+            if (entity.VisibleTo != NetworkEntity.Everyone && entity.VisibleTo != clientId) continue;
             var catchup = new SpawnEntityMsg
             {
                 NetworkId     = entity.NetworkId,
                 TypeId        = entity.EntityTypeId,
                 OwnerClientId = entity.OwnerClientId,
                 Position      = WorldOrigin.Instance.ToRelative(entity.transform.position),
+                VisibleTo     = entity.VisibleTo,
             };
             _srv.Send(clientId, MsgHelper.Frame(MessageType.SpawnEntity, catchup.Serialize()));
         }
@@ -392,19 +426,32 @@ public class NetworkManager : MonoBehaviour
         }
     }
 
+    private readonly List<(NetworkEntity ent, byte[] payload)> _stateScratch = new();
+
     private void BroadcastWorldState()
     {
-        var world = new WorldStateMsg { Tick = CurrentTick };
+        // Serializar cada entidad una sola vez.
+        _stateScratch.Clear();
         foreach (var entity in EntityRegistry.Instance.All)
+            _stateScratch.Add((entity, entity.SerializeState(CurrentTick)));
+
+        // Un WorldState por cliente: entidades compartidas para todos + las DIRIGIDAS a
+        // ese cliente (su alucinacion de Arbmos). Asi cada jugador ve solo lo suyo.
+        foreach (var clientId in _connectedClients)
         {
-            world.Entries.Add(new WorldStateMsg.Entry
+            var world = new WorldStateMsg { Tick = CurrentTick };
+            foreach (var (ent, payload) in _stateScratch)
             {
-                NetworkId = entity.NetworkId,
-                TypeId    = entity.EntityTypeId,
-                Payload   = entity.SerializeState(CurrentTick),
-            });
+                if (ent.VisibleTo != NetworkEntity.Everyone && ent.VisibleTo != clientId) continue;
+                world.Entries.Add(new WorldStateMsg.Entry
+                {
+                    NetworkId = ent.NetworkId,
+                    TypeId    = ent.EntityTypeId,
+                    Payload   = payload,
+                });
+            }
+            _srv.Send(clientId, MsgHelper.Frame(MessageType.WorldState, world.Serialize()));
         }
-        _srv.Broadcast(MsgHelper.Frame(MessageType.WorldState, world.Serialize()));
     }
 
     // ── Client tick ───────────────────────────────────────────────────────
@@ -521,6 +568,7 @@ public class NetworkManager : MonoBehaviour
         bool isOwned = !IsServer && msg.OwnerClientId == LocalClientId;
 
         net.Initialize(msg.NetworkId, isOwned, msg.OwnerClientId);
+        net.SetVisibleTo(msg.VisibleTo);
         EntityRegistry.Instance.Register(net);
 
         // iOS/Metal: los SkinnedMeshRenderer importados a veces traen bounds en bind-pose
@@ -536,6 +584,20 @@ public class NetworkManager : MonoBehaviour
         {
             var ai = go.GetComponent<SorkerAI>();
             if (ai != null) ai.enabled = false;
+        }
+
+        // Copia DIRIGIDA a otro jugador: el host la simula pero NO la dibuja (es la
+        // alucinacion de ESE jugador). Se marca ArbmosEntity.Rendered=false antes de
+        // OnNetworkSpawn (para que no cree aura/luz ni se registre como Active) y se
+        // apagan renderers y luces.
+        bool hideOnServer = IsServer &&
+                            msg.VisibleTo != NetworkEntity.Everyone && msg.VisibleTo != 0;
+        if (hideOnServer)
+        {
+            var arb = go.GetComponent<ArbmosEntity>();
+            if (arb != null) arb.Rendered = false;
+            foreach (var rend in go.GetComponentsInChildren<Renderer>(true)) rend.enabled = false;
+            foreach (var lt   in go.GetComponentsInChildren<Light>(true))    lt.enabled = false;
         }
 
         net.OnNetworkSpawn();

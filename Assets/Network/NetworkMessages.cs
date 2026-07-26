@@ -44,6 +44,8 @@ public class SpawnEntityMsg
     public byte    TypeId;
     public uint    OwnerClientId;
     public Vector3 Position;
+    // Everyone (0xFFFFFFFF) = compartida; un clientId = dirigida (solo la ve ese jugador).
+    public uint    VisibleTo = NetworkEntity.Everyone;
 
     public byte[] Serialize()
     {
@@ -51,6 +53,7 @@ public class SpawnEntityMsg
         using var w  = new BinaryWriter(ms);
         w.Write(NetworkId); w.Write(TypeId); w.Write(OwnerClientId);
         MsgHelper.WriteV3(w, Position);
+        w.Write(VisibleTo);
         return ms.ToArray();
     }
 
@@ -63,6 +66,7 @@ public class SpawnEntityMsg
             TypeId        = r.ReadByte(),
             OwnerClientId = r.ReadUInt32(),
             Position      = MsgHelper.ReadV3(r),
+            VisibleTo     = r.ReadUInt32(),
         };
     }
 }

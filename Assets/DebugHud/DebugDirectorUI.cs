@@ -7,13 +7,18 @@ public class DebugDirectorUI : MonoBehaviour
     private void OnGUI()
     {
         var director = Gameplay.GameDirector.Instance;
-        if (director == null) return;
+        var arbmos   = ArbmosDirector.Instance;
 
-        string txt = director.DebugSnapshot();
-        if (string.IsNullOrEmpty(txt)) return;
+        string txt  = director != null ? director.DebugSnapshot()   : null;
+        string atxt = arbmos   != null ? arbmos.DebugSnapshot()      : null;
+        if (string.IsNullOrEmpty(txt) && string.IsNullOrEmpty(atxt)) return;
 
         var sa = Scanner.SafeArea.GuiRect;
-        GUI.Label(new Rect(sa.x + 10, sa.y + 300, 560, 110), txt,
-                  DebugHudEstilos.Label(Color.white, 18));
+        if (!string.IsNullOrEmpty(txt))
+            GUI.Label(new Rect(sa.x + 10, sa.y + 300, 560, 110), txt,
+                      DebugHudEstilos.Label(Color.white, 18));
+        if (!string.IsNullOrEmpty(atxt))
+            GUI.Label(new Rect(sa.x + 10, sa.y + 420, 560, 140), atxt,
+                      DebugHudEstilos.Label(new Color(0.85f, 0.8f, 1f), 18));
     }
 }

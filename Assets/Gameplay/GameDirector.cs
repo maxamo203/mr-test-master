@@ -50,8 +50,8 @@ namespace Gameplay
         // Retirada: direccion (horizontal) hacia la que huye tras ser repelido.
         private Vector3 _retreatDir;
 
-        // Jugadores muertos por clientId (0 = host).
-        private readonly HashSet<uint> _dead = new();
+        // El estado de muerte de los jugadores vive en Gameplay.ServerDeaths (compartido
+        // con el ArbmosDirector, para no perseguir a un jugador ya muerto).
 
         private void Awake()
         {
@@ -80,10 +80,11 @@ namespace Gameplay
                 _night = ScriptableObject.CreateInstance<NightConfig>();
             }
 
-            _dead.Clear();
+            ServerDeaths.Reset();
             _phase = Phase.Idle;
             _attemptTimer = _night.initialAttemptDelay;
             SorkerNav.Ensure();
+            ArbmosDirector.Ensure().StartRun();   // alucinacion de cordura (individual por jugador)
             _running = true;
         }
 
@@ -116,7 +117,7 @@ namespace Gameplay
             if (markers == null || markers.Count == 0 || !AnyAlivePlayer())
             {
                 Debug.Log($"[GameDirector] No spawn: markers={(markers != null ? markers.Count : 0)} " +
-                          $"alivePlayers={CountAlivePlayers()} (dead={_dead.Count}). Reintento en 2s.");
+                          $"alivePlayers={CountAlivePlayers()} (dead={ServerDeaths.Count}). Reintento en 2s.");
                 _attemptTimer = 2f;   // sin puntos o sin jugadores vivos: reintentar pronto
                 return;
             }
@@ -259,18 +260,16 @@ namespace Gameplay
         private void KillPlayer(uint clientId)
         {
             if (_practiceMode) { Debug.Log($"[GameDirector] (practica) grab {clientId}, no muere."); return; }
-            if (!_dead.Add(clientId)) return;            // ya estaba muerto
-            if (clientId == 0) LocalDeath.Ensure().Die();                       // host
-            else               NetworkManager.Instance.ServerSendPlayerDied(clientId); // cliente
+            ServerDeaths.Kill(clientId);   // marca + avisa (host local / cliente por red) una sola vez
         }
 
         // --- Jugadores vivos ---
         private bool AnyAlivePlayer()
         {
             var net = NetworkManager.Instance;
-            if (Camera.main != null && !_dead.Contains(0)) return true;
+            if (Camera.main != null && ServerDeaths.IsAlive(0)) return true;
             foreach (var cid in net.ConnectedClients)
-                if (!_dead.Contains(cid) && net.TryGetClientWorldPosition(cid, out _)) return true;
+                if (ServerDeaths.IsAlive(cid) && net.TryGetClientWorldPosition(cid, out _)) return true;
             return false;
         }
 
@@ -288,7 +287,7 @@ namespace Gameplay
             float best = float.MaxValue; bool found = false;
             var net = NetworkManager.Instance;
 
-            if (Camera.main != null && !_dead.Contains(0))
+            if (Camera.main != null && ServerDeaths.IsAlive(0))
             {
                 best  = (Camera.main.transform.position - from).sqrMagnitude;
                 pos   = Camera.main.transform.position;
@@ -296,7 +295,7 @@ namespace Gameplay
             }
             foreach (var cid in net.ConnectedClients)
             {
-                if (_dead.Contains(cid)) continue;
+                if (ServerDeaths.IsDead(cid)) continue;
                 if (!net.TryGetClientWorldPosition(cid, out var p)) continue;
                 float d = (p - from).sqrMagnitude;
                 if (d < best) { best = d; pos = p; clientId = cid; found = true; }
@@ -307,9 +306,9 @@ namespace Gameplay
         private IEnumerable<Vector3> AlivePlayerPositions()
         {
             var net = NetworkManager.Instance;
-            if (Camera.main != null && !_dead.Contains(0)) yield return Camera.main.transform.position;
+            if (Camera.main != null && ServerDeaths.IsAlive(0)) yield return Camera.main.transform.position;
             foreach (var cid in net.ConnectedClients)
-                if (!_dead.Contains(cid) && net.TryGetClientWorldPosition(cid, out var p)) yield return p;
+                if (ServerDeaths.IsAlive(cid) && net.TryGetClientWorldPosition(cid, out var p)) yield return p;
         }
 
         // --- Repel: hay algun jugador iluminando el objetivo con su linterna? ---
@@ -318,13 +317,13 @@ namespace Gameplay
             var net = NetworkManager.Instance;
             float ang = _night.flashlightConeAngleDeg, range = _night.flashlightRange;
 
-            if (Camera.main != null && !_dead.Contains(0) && net.LocalFlashlightOn() &&
+            if (Camera.main != null && ServerDeaths.IsAlive(0) && net.LocalFlashlightOn() &&
                 InCone(Camera.main.transform.position, Camera.main.transform.forward, target, ang, range))
                 return true;
 
             foreach (var cid in net.ConnectedClients)
             {
-                if (_dead.Contains(cid)) continue;
+                if (ServerDeaths.IsDead(cid)) continue;
                 if (!net.TryGetClientFlashlightOn(cid, out var on) || !on) continue;
                 if (!net.TryGetClientWorldPosition(cid, out var pos)) continue;
                 if (!net.TryGetClientForward(cid, out var fwd)) continue;
@@ -403,7 +402,7 @@ namespace Gameplay
                 $"[GameDirector]  phase={_phase}\n" +
                 $"attemptTimer={_attemptTimer:F1}  repel={_repel:F1}  grace={_grace:F1}\n" +
                 $"sorken={(_sorken != null ? _sorken.State.ToString() : "null")}  netId={_sorkenNetId}\n" +
-                $"markers={markers}  alivePlayers={CountAlivePlayers()}  dead={_dead.Count}";
+                $"markers={markers}  alivePlayers={CountAlivePlayers()}  dead={ServerDeaths.Count}";
         }
     }
 }
