@@ -243,12 +243,12 @@ MonoBehaviour:
   ModelRotationOffset: {x: 0, y: 0, z: 0}
   distortion:
     enabled: 1
-    baseIntensity: 0.215
-    intensityScale: 0.902
-    regionScale: 1.47
+    baseIntensity: 0.354
+    intensityScale: 0.826
+    regionScale: 0.75
     tintColor: {r: 0, g: 0, b: 0, a: 1}
-    tintStrength: 0.3
-    chromatic: 14
+    tintStrength: 0.734
+    chromatic: 4.1
     scanlines: 14
     lethalBurst: 1
     lethalColor: {r: 0.05, g: 0, b: 0, a: 1}
@@ -276,11 +276,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArbmosSmokeAura
-  _bodyHeight: 1.7
-  _smokeRadius: 0.35
-  _smokeColor: {r: 0.02, g: 0.02, b: 0.03, a: 1}
-  _smokeRate: 55
-  _smokeMaxParticles: 320
+  _bodyHeight: 1.54
+  _smokeRadius: 0.45
+  _coneAngle: 18
+  _smokeColor: {r: 0.2924528, g: 0.2924528, b: 0.2924528, a: 1}
+  _smokeRate: 19.7
+  _smokeMaxParticles: 178
+  _sizeMin: 0.4
+  _sizeMax: 0.9
+  _growth: 2
+  _opacity: 0.4
+  _softness: 1
+  _fallSpeed: 0.009
+  _startSpeed: 0.04
+  _lifetime: 6
+  _turbulence: 0
+  _turbulenceScale: 0.4
+  _floorDepth: 0.1
+  _floorDampen: 0
+  _prewarmSeconds: 7
 --- !u!4 &6407828396458089295 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -131761456609737084, guid: 58d2735151cc1a54a8ca92f97921866f, type: 3}

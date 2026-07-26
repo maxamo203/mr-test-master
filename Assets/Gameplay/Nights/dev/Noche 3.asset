@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
+  m_Name: Noche 3
+  m_EditorClassIdentifier:
+  displayName: Noche 3 (DEV)
+  briefing: (DEV) Sorken rapido para probar.
+  sorkenActive: 1
+  attemptIntervalMin: 2
+  attemptIntervalMax: 5
+  entryRepelSeconds: 2
+  entryGraceSeconds: 4
+  entryTriggerDistance: 3
+  chaseRepelSeconds: 3
+  sorkenChaseSpeed: 2.5
+  sorkenRetreatSpeed: 3.5
+  grabRange: 1.2
+  flashlightMaxCharge: 200
+  flashlightDrainPerSecond: 1
+  sanityMax: 100
+  flashlightOffThreshold: 3
+  sanityDrainPerSecond: 8
+  arbmosActive: 0
+  flashlightConeAngleDeg: 30
+  flashlightRange: 8
+  initialAttemptDelay: 2
+  emergeTimeoutSeconds: 15
+  retreatSeconds: 1.5
+  grabHoldSeconds: 1.5
+  flickerAimAngle: 18
+  flickerDistance: 6
+  batterySpawnRateMultiplier: 1.5
+  batteryChanceMods: []

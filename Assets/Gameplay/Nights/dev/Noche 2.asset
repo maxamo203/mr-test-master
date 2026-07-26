@@ -10,30 +10,33 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
-  m_Name: Noche 1
-  m_EditorClassIdentifier: 
-  displayName: Noche 1
-  attemptIntervalMin: 1
+  m_Name: Noche 2
+  m_EditorClassIdentifier:
+  displayName: Noche 2 (DEV)
+  briefing: (DEV) Sorken rapido para probar.
+  sorkenActive: 1
+  attemptIntervalMin: 2
   attemptIntervalMax: 5
-  entryRepelSeconds: 3
-  entryGraceSeconds: 6
+  entryRepelSeconds: 2
+  entryGraceSeconds: 4
   entryTriggerDistance: 3
-  chaseRepelSeconds: 5
-  sorkenChaseSpeed: 2.2
+  chaseRepelSeconds: 3
+  sorkenChaseSpeed: 2.5
   sorkenRetreatSpeed: 3.5
   grabRange: 1.2
-  flashlightMaxCharge: 120
-  flashlightDrainPerSecond: 1.8
+  flashlightMaxCharge: 200
+  flashlightDrainPerSecond: 1
   sanityMax: 100
-  flashlightOffThreshold: 6
-  sanityDrainPerSecond: 3
+  flashlightOffThreshold: 3
+  sanityDrainPerSecond: 8
+  arbmosActive: 0
   flashlightConeAngleDeg: 30
   flashlightRange: 8
-  initialAttemptDelay: 4
+  initialAttemptDelay: 2
   emergeTimeoutSeconds: 15
   retreatSeconds: 1.5
   grabHoldSeconds: 1.5
-  flickerAimAngle: 20
+  flickerAimAngle: 18
   flickerDistance: 6
-  batterySpawnRateMultiplier: 1.2
+  batterySpawnRateMultiplier: 1.5
   batteryChanceMods: []

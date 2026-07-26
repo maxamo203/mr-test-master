@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
+  m_Name: Noche 5
+  m_EditorClassIdentifier:
+  displayName: Noche 5
+  briefing: La cordura se desangra. El Arbmos acecha mas seguido.
+  sorkenActive: 1
+  attemptIntervalMin: 10
+  attemptIntervalMax: 20
+  entryRepelSeconds: 3
+  entryGraceSeconds: 4.5
+  entryTriggerDistance: 3
+  chaseRepelSeconds: 6
+  sorkenChaseSpeed: 3.3
+  sorkenRetreatSpeed: 3.5
+  grabRange: 1.3
+  flashlightMaxCharge: 75
+  flashlightDrainPerSecond: 2.8
+  sanityMax: 100
+  flashlightOffThreshold: 4
+  sanityDrainPerSecond: 6.5
+  arbmosActive: 1
+  arbmosStillInvokeSeconds: 5
+  arbmosStillRadius: 0.15
+  arbmosPresentSeconds: 6
+  arbmosPresentFollowSpeed: 1.3
+  arbmosCooldownMin: 24
+  arbmosCooldownMax: 42
+  arbmosSpawnDistance: 2.5
+  arbmosSanityDrainPerSecond: 6.5
+  arbmosSpawnChancePerAttempt: 0.6
+  arbmosFlashlightOffChanceMul: 2
+  arbmosLethalStalkSeconds: 3
+  arbmosLethalChaseSpeed: 3.8
+  arbmosGrabRange: 1.2
+  flashlightConeAngleDeg: 30
+  flashlightRange: 8
+  initialAttemptDelay: 4
+  flickerAimAngle: 14
+  flickerDistance: 5
+  batterySpawnRateMultiplier: 0.75
+  batteryChanceMods: []

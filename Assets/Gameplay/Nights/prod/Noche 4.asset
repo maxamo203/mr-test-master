@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
+  m_Name: Noche 4
+  m_EditorClassIdentifier:
+  displayName: Noche 4
+  briefing: Algo mas te observa. Quedarte quieto lo invoca.
+  sorkenActive: 1
+  attemptIntervalMin: 13
+  attemptIntervalMax: 24
+  entryRepelSeconds: 3
+  entryGraceSeconds: 5
+  entryTriggerDistance: 3
+  chaseRepelSeconds: 5.5
+  sorkenChaseSpeed: 3
+  sorkenRetreatSpeed: 3.5
+  grabRange: 1.3
+  flashlightMaxCharge: 85
+  flashlightDrainPerSecond: 2.5
+  sanityMax: 100
+  flashlightOffThreshold: 4.5
+  sanityDrainPerSecond: 5.5
+  arbmosActive: 1
+  arbmosStillInvokeSeconds: 6
+  arbmosStillRadius: 0.15
+  arbmosPresentSeconds: 6
+  arbmosPresentFollowSpeed: 1.2
+  arbmosCooldownMin: 30
+  arbmosCooldownMax: 50
+  arbmosSpawnDistance: 2.5
+  arbmosSanityDrainPerSecond: 5
+  arbmosSpawnChancePerAttempt: 0.5
+  arbmosFlashlightOffChanceMul: 2
+  arbmosLethalStalkSeconds: 3.5
+  arbmosLethalChaseSpeed: 3.5
+  arbmosGrabRange: 1.2
+  flashlightConeAngleDeg: 30
+  flashlightRange: 8
+  initialAttemptDelay: 4
+  flickerAimAngle: 16
+  flickerDistance: 5
+  batterySpawnRateMultiplier: 0.85
+  batteryChanceMods: []

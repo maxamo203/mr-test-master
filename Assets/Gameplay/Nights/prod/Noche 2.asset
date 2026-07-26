@@ -13,20 +13,27 @@ MonoBehaviour:
   m_Name: Noche 2
   m_EditorClassIdentifier:
   displayName: Noche 2
-  attemptIntervalMin: 14
-  attemptIntervalMax: 26
+  briefing: El Sorken insiste. Menos bateria, menos margen.
+  sorkenActive: 1
+  attemptIntervalMin: 20
+  attemptIntervalMax: 34
   entryRepelSeconds: 3
-  entryGraceSeconds: 5
+  entryGraceSeconds: 6
   entryTriggerDistance: 3
-  chaseRepelSeconds: 5
-  sorkenChaseSpeed: 2.6
+  chaseRepelSeconds: 4.5
+  sorkenChaseSpeed: 2.4
+  sorkenRetreatSpeed: 3.5
   grabRange: 1.2
-  flashlightMaxCharge: 100
-  flashlightDrainPerSecond: 2
+  flashlightMaxCharge: 105
+  flashlightDrainPerSecond: 1.9
   sanityMax: 100
-  flashlightOffThreshold: 5
-  sanityDrainPerSecond: 4
+  flashlightOffThreshold: 6
+  sanityDrainPerSecond: 3.5
+  arbmosActive: 0
+  flashlightConeAngleDeg: 30
+  flashlightRange: 8
+  initialAttemptDelay: 4
   flickerAimAngle: 18
   flickerDistance: 6
-  batterySpawnRateMultiplier: 1
+  batterySpawnRateMultiplier: 1.1
   batteryChanceMods: []

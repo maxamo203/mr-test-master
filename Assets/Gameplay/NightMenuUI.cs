@@ -25,10 +25,18 @@ namespace Gameplay
     // NightConfig arrastrados a _nights. Las 3 escenas deben estar en Build Settings.
     public class NightMenuUI : MonoBehaviour
     {
-        [Tooltip("Noches disponibles (arrastra los assets NightConfig).")]
+        [Tooltip("Noches de PROD (arrastra los assets de Nights/prod). Se usan en release.")]
         [SerializeField] private NightConfig[] _nights;
+        [Tooltip("Noches de DEV (Nights/dev). SOLO se usan en development build; en release " +
+                 "se ignoran y se usan las de prod.")]
+        [SerializeField] private NightConfig[] _devNights;
         [Tooltip("Escena del lobby/gameplay a cargar al continuar.")]
         [SerializeField] private string _lobbyScene = "SampleScene";
+
+        // Set de noches activo: en development build usa las DEV (si hay); en release,
+        // siempre las de prod. Asi las noches dev nunca llegan a una build de release.
+        private NightConfig[] Nights =>
+            (Debug.isDebugBuild && _devNights != null && _devNights.Length > 0) ? _devNights : _nights;
 
         private enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control }
 
@@ -232,10 +240,11 @@ namespace Gameplay
         {
             T.BotonVolver(_nav, VolverDeSubflujo);
 
+            var nights = Nights;
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "ELEGÍ LA NOCHE",
                       T.Estilo(T.FBebas, 28, T.Cream));
 
-            int total = Mathf.Max(6, _nights != null ? _nights.Length : 0);
+            int total = Mathf.Max(6, nights != null ? nights.Length : 0);
             float gap = 12f;
             float cw = (vw - Pad * 2f - gap) / 2f;
             float ch = 86f;
@@ -246,7 +255,7 @@ namespace Gameplay
                 int col = i % 2, fila = i / 2;
                 var r = new Rect(Pad + col * (cw + gap), y0 + fila * (ch + gap), cw, ch);
 
-                bool existe = _nights != null && i < _nights.Length && _nights[i] != null;
+                bool existe = nights != null && i < nights.Length && nights[i] != null;
                 if (!existe)
                 {
                     // Celda "bloqueada": decorativa, sin interacción (paridad visual
@@ -271,12 +280,12 @@ namespace Gameplay
                           T.Estilo(T.FMono, 10, sel ? T.Tan : T.Dim, TextAnchor.MiddleCenter));
             }
 
-            bool haySel = _nocheSel >= 0 && _nights != null && _nocheSel < _nights.Length &&
-                          _nights[_nocheSel] != null;
+            bool haySel = _nocheSel >= 0 && nights != null && _nocheSel < nights.Length &&
+                          nights[_nocheSel] != null;
             if (haySel)
             {
-                string nombre = string.IsNullOrEmpty(_nights[_nocheSel].displayName)
-                    ? $"NOCHE {_nocheSel + 1}" : _nights[_nocheSel].displayName;
+                string nombre = string.IsNullOrEmpty(nights[_nocheSel].displayName)
+                    ? $"NOCHE {_nocheSel + 1}" : nights[_nocheSel].displayName;
                 GUI.Label(new Rect(Pad, vh - 44f - 58f - 30f, vw - Pad * 2f, 24f), nombre,
                           T.Estilo(T.FElite, 13, T.Muted, TextAnchor.MiddleCenter));
                 T.Boton(_nav, new Rect(Pad, vh - 44f - 58f, vw - Pad * 2f, 58f),
@@ -375,7 +384,7 @@ namespace Gameplay
             if (string.IsNullOrEmpty(_mapSel)) return;
             var s = GameSession.Ensure();
             s.Mode          = _pendingMode;
-            s.SelectedNight = _nights[_nocheSel];
+            s.SelectedNight = Nights[_nocheSel];
             s.SelectedMap   = _mapSel;
             s.HostPort      = _pendingMode == GameSession.SessionMode.MultiHost
                 ? PuertoElegido() : NetworkConfig.DefaultPort;

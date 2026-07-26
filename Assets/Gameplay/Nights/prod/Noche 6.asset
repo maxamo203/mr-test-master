@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
+  m_Name: Noche 6
+  m_EditorClassIdentifier:
+  displayName: Noche 6
+  briefing: La ultima noche. Sorken y Arbmos sin tregua.
+  sorkenActive: 1
+  attemptIntervalMin: 8
+  attemptIntervalMax: 16
+  entryRepelSeconds: 3
+  entryGraceSeconds: 4
+  entryTriggerDistance: 3
+  chaseRepelSeconds: 6.5
+  sorkenChaseSpeed: 3.6
+  sorkenRetreatSpeed: 4
+  grabRange: 1.3
+  flashlightMaxCharge: 65
+  flashlightDrainPerSecond: 3.2
+  sanityMax: 100
+  flashlightOffThreshold: 3.5
+  sanityDrainPerSecond: 8
+  arbmosActive: 1
+  arbmosStillInvokeSeconds: 4
+  arbmosStillRadius: 0.15
+  arbmosPresentSeconds: 6
+  arbmosPresentFollowSpeed: 1.4
+  arbmosCooldownMin: 18
+  arbmosCooldownMax: 34
+  arbmosSpawnDistance: 2.5
+  arbmosSanityDrainPerSecond: 8
+  arbmosSpawnChancePerAttempt: 0.75
+  arbmosFlashlightOffChanceMul: 2
+  arbmosLethalStalkSeconds: 2.5
+  arbmosLethalChaseSpeed: 4.2
+  arbmosGrabRange: 1.2
+  flashlightConeAngleDeg: 30
+  flashlightRange: 8
+  initialAttemptDelay: 4
+  flickerAimAngle: 14
+  flickerDistance: 5
+  batterySpawnRateMultiplier: 0.65
+  batteryChanceMods: []

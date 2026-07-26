@@ -18,6 +18,9 @@ namespace Gameplay
         [TextArea] public string briefing = "";
 
         [Header("Entradas del Sorken")]
+        [Tooltip("Master switch del Sorken. Desactivar (solo dev/testing) para probar SIN " +
+                 "Sorken — util para aislar el Arbmos u otras mecanicas. En prod: siempre activo.")]
+        public bool sorkenActive = true;
         [Tooltip("Segundos entre intentos de entrada (rango, se elige al azar).")]
         public float attemptIntervalMin = 20f;
         public float attemptIntervalMax = 35f;

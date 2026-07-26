@@ -71,6 +71,16 @@ Every on-screen diagnostic lives under a single runtime-created `DebugHud` GameO
 
 Tick-based authoritative-server model over a hand-rolled TCP transport (`TcpTransportServer/Client`, `MessageFramer`, `MessageType`/`NetworkMessages`) with UDP `LanDiscovery`. `NetworkManager` is the singleton orchestrator (server spawns players/Sorkers, broadcasts a cloud-anchor id, gates `GameStarted`). Entities (`PlayerEntity`, `Sorker`/`SorkerAI`) split into a sim component + a `*Network` sync component. This is wired to `SampleScene`, not the scanner — treat it as a separate subsystem unless explicitly bridging the two.
 
+## Performance & build tiers (IMPORTANT)
+
+This is a stereoscopic AR game on mid-range phones — **runtime performance is a hard requirement** (sub-60fps causes motion sickness; see the risk section of the design doc). **Anything that exists to help development must NOT cost resources in the shipped (release/prod) build.** Before adding any diagnostic, tuning knob, logging, or convenience, decide which of these three tiers it belongs to and gate it accordingly — always pick the *strictest* tier that still serves the purpose:
+
+- **Editor-only** — wrap in `#if UNITY_EDITOR` so it is compiled out of *every* build (dev and prod). Use for pure authoring/tuning aids that only make sense while iterating in the Unity Editor and have a per-frame cost: e.g. `ArbmosSmokeAura`'s live particle tuning (`PushParams` in `Update`), editor menu tools (`Assets/Editor/`), gizmos. In a build the values are applied once at spawn instead.
+- **Development build** — gate on `Debug.isDebugBuild` (true in Editor + Development Build, false in release). Use for in-game dev options that a tester on-device may want to toggle: the whole `DebugHud` (only created when `Debug.isDebugBuild`), the pause-menu flashlight sliders and Debug-HUD toggle, the **dev NightConfigs** (`NightMenuUI._devNights` — release always uses `_nights`/prod), and per-night testing switches like `NightConfig.sorkenActive` / `GameDirector._practiceMode` (set only in the `Nights/dev` assets). Data sources expose read-only `DebugSnapshot()`-style methods so the release path never builds the strings.
+- **Release / prod** — the default. No debug UI, no per-frame dev code, no dev content. Anything not gated by one of the above must earn its cost in the real game. Night assets live in `Assets/Gameplay/Nights/prod` (`_nights`) vs `Assets/Gameplay/Nights/dev` (`_devNights`); the menu picks the set with `Debug.isDebugBuild`, so dev nights never reach a release build.
+
+Rule of thumb: a helper that only informs *you* while coding → `#if UNITY_EDITOR`; a helper a *tester* toggles on a real device → `Debug.isDebugBuild`; neither → it ships and must be justified on performance grounds. Never leave a per-frame `Debug.Log`, `OnGUI` diagnostic, or `FindObjectByType` scan running in release.
+
 ## Conventions
 
 - Singletons follow the `Instance` + `Awake` self-destruct-on-duplicate pattern; init order matters and is set with `[DefaultExecutionOrder]` (bootstrap -100, FSM -50, registry -40).

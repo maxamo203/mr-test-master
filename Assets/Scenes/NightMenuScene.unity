@@ -152,6 +152,16 @@ MonoBehaviour:
   - {fileID: 11400000, guid: c1d2e3f4a5b6471829304a5b6c7d8e91, type: 2}
   - {fileID: 11400000, guid: c2d3e4f5a6b7481920314b5c6d7e8f92, type: 2}
   - {fileID: 11400000, guid: c3d4e5f6a7b8491021324c5d6e7f9093, type: 2}
+  - {fileID: 11400000, guid: c4d5e6f7a8b941102233445d6e7f8091, type: 2}
+  - {fileID: 11400000, guid: c5d6e7f8a9b041102233445d6e7f8092, type: 2}
+  - {fileID: 11400000, guid: c6d7e8f9a0b141102233445d6e7f8093, type: 2}
+  _devNights:
+  - {fileID: 11400000, guid: d1e2f3a4b5c641102233445d6e7f8091, type: 2}
+  - {fileID: 11400000, guid: d2e3f4a5b6c741102233445d6e7f8092, type: 2}
+  - {fileID: 11400000, guid: d3e4f5a6b7c841102233445d6e7f8093, type: 2}
+  - {fileID: 11400000, guid: d4e5f6a7b8c941102233445d6e7f8094, type: 2}
+  - {fileID: 11400000, guid: d5e6f7a8b9c041102233445d6e7f8095, type: 2}
+  - {fileID: 11400000, guid: d6e7f8a9b0c141102233445d6e7f8096, type: 2}
   _lobbyScene: SampleScene
 --- !u!4 &654216062
 Transform:

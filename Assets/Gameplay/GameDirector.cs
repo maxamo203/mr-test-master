@@ -113,6 +113,13 @@ namespace Gameplay
 
         private void StartAttempt()
         {
+            // Sorken desactivado en esta noche (dev/testing): no spawnear nunca.
+            if (_night != null && !_night.sorkenActive)
+            {
+                _attemptTimer = 5f;
+                return;
+            }
+
             var markers = SceneRegistry.Instance != null ? SceneRegistry.Instance.Markers : null;
             if (markers == null || markers.Count == 0 || !AnyAlivePlayer())
             {
