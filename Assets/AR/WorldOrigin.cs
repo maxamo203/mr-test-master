@@ -9,6 +9,10 @@ public class WorldOrigin : MonoBehaviour
 
     public bool IsReady { get; private set; }
 
+    // Anchor del que colgamos ahora mismo (el de la imagen o uno de los anchor
+    // points extra). Null si algo nos desparentó (ver ARImageAnchor.RestartTracking).
+    public Transform CurrentAnchor => transform.parent;
+
     private Transform _anchorTransform;
 
     private void Awake()
@@ -56,6 +60,28 @@ public class WorldOrigin : MonoBehaviour
             transform.localPosition = Vector3.zero;
             transform.localRotation = Quaternion.identity;
         }
+
+        IsReady = true;
+    }
+
+    // Reparenta a un anchor con una pose local EXPLÍCITA: la que quedó guardada
+    // cuando se colocó ese anchor point (ver AnchorPointManager). SetOrigin no
+    // sirve para esto: su rama normal fuerza localPosition/localRotation a cero y
+    // la de keepVisualPosition deriva la local de la pose actual del mundo.
+    //
+    // Igual que SetOrigin, quedamos parentados: las correcciones de pose que la
+    // plataforma le haga al ARAnchor siguen propagando solas a toda la escena.
+    public void SetOriginLocal(Transform anchorTransform, Vector3 localPos, Quaternion localRot)
+    {
+        if (anchorTransform == null)
+        {
+            Debug.LogWarning("[WorldOrigin] SetOriginLocal recibió un anchor null; se ignora la llamada.");
+            return;
+        }
+
+        transform.SetParent(anchorTransform, worldPositionStays: false);
+        transform.localPosition = localPos;
+        transform.localRotation = localRot;
 
         IsReady = true;
     }

@@ -485,6 +485,14 @@ namespace Gameplay
             if (!Mathf.Approximately(nuevoVol, GameOptions.Volumen)) GameOptions.Volumen = nuevoVol;
             y += 54f;
 
+            // Anchor points extra: opción por dispositivo (ver AnchorPointManager).
+            T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
+                         "PUNTOS DE ANCLAJE",
+                         "colocá anclas en tu cuarto antes de empezar (menos deriva)",
+                         GameOptions.PuntosAncla,
+                         () => GameOptions.PuntosAncla = !GameOptions.PuntosAncla);
+            y += 68f;
+
             // Estado del mando + botón para ir al visualizador.
             var gm = Gamepad.GamepadManager.Instance;
             string estado = (gm != null && gm.IsConnected)

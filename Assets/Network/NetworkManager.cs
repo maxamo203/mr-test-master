@@ -44,6 +44,9 @@ public class NetworkManager : MonoBehaviour
     // Server: ultimo forward (aim) anchor-relativo reportado por cada cliente. Lo usa el
     // GameDirector para el test de cono del repel.
     private readonly Dictionary<uint, Vector3> _clientForward  = new();
+    // Server: estado de los anchor points extra de cada cliente. Gatea el arranque de
+    // la noche (ver ARLobbyManager.CanStartGame).
+    private readonly Dictionary<uint, AnchorPointsStatusMsg> _clientAnchorStatus = new();
     // Cache de la linterna local (para adjuntar su estado al PlayerPose que enviamos).
     private Flashlight _localFlashlight;
 
@@ -54,6 +57,7 @@ public class NetworkManager : MonoBehaviour
     public event Action<uint>   OnClientJoined;       // server: nuevo cliente
     public event Action<uint>   OnClientLeft;          // server: cliente desconectado
     public event Action<uint>   OnClientResolved;      // server: cliente resolvió anchor
+    public event Action<uint>   OnClientAnchorStatus;  // server: cliente reportó sus anchor points
     public event Action<string> OnAnchorIdReceived;    // client: recibió anchor ID
     public event Action         OnGameStarted;         // todos: partida arrancó
     public event Action<byte[]> OnMapReceived;         // client: recibió el .mscn del mapa
@@ -80,6 +84,24 @@ public class NetworkManager : MonoBehaviour
             return true;
         }
         return false;
+    }
+
+    // Server: ¿este cliente todavía impide arrancar la noche por sus anchor points?
+    // Un cliente que TODAVÍA NO REPORTÓ bloquea: es más seguro que asumir que no usa
+    // anclas. El estado se manda apenas se conecta, así que el bloqueo dura un tick.
+    public bool ClientBlocksStart(uint clientId)
+    {
+        if (!_clientAnchorStatus.TryGetValue(clientId, out var st)) return true;
+        return st.Enabled && !st.Done;
+    }
+
+    // Server: estado reportado por un cliente (para la UI del host).
+    public bool TryGetClientAnchorStatus(uint clientId, out bool enabled, out int count, out bool done)
+    {
+        enabled = false; count = 0; done = false;
+        if (!_clientAnchorStatus.TryGetValue(clientId, out var st)) return false;
+        enabled = st.Enabled; count = st.Count; done = st.Done;
+        return true;
     }
 
     // Server → cliente puntual: fue atrapado (muestra pantalla de muerte).
@@ -154,6 +176,20 @@ public class NetworkManager : MonoBehaviour
     {
         _cli.Send(MsgHelper.Frame(MessageType.AnchorResolved, Array.Empty<byte>()));
         Debug.Log("[Client] AnchorResolved enviado al servidor");
+    }
+
+    // Client: informar al servidor el estado de sus anchor points extra. Se manda al
+    // conectarse y cada vez que cambia (colocar / deshacer / LISTO).
+    public void ClientSendAnchorPointsStatus(bool enabled, int count, bool done)
+    {
+        if (_cli == null) return;
+        var body = new AnchorPointsStatusMsg
+        {
+            Enabled = enabled,
+            Count   = (ushort)Mathf.Clamp(count, 0, ushort.MaxValue),
+            Done    = done,
+        }.Serialize();
+        _cli.Send(MsgHelper.Frame(MessageType.AnchorPointsStatus, body));
     }
 
     // Client: pedir al servidor recoger una pila apuntada (el server valida cercanía).
@@ -378,6 +414,7 @@ public class NetworkManager : MonoBehaviour
         _clientRelPos.Remove(clientId);
         _clientFlashOn.Remove(clientId);
         _clientForward.Remove(clientId);
+        _clientAnchorStatus.Remove(clientId);
 
         if (_clientToPlayer.TryGetValue(clientId, out var playerId))
         {
@@ -406,6 +443,12 @@ public class NetworkManager : MonoBehaviour
                 _resolvedClients.Add(incoming.ClientId);
                 OnClientResolved?.Invoke(incoming.ClientId);
                 Debug.Log($"[Server] Cliente {incoming.ClientId} resolvió el anchor ({_resolvedClients.Count}/{_connectedClients.Count})");
+                break;
+            }
+            case MessageType.AnchorPointsStatus:
+            {
+                _clientAnchorStatus[incoming.ClientId] = AnchorPointsStatusMsg.Deserialize(incoming.Body);
+                OnClientAnchorStatus?.Invoke(incoming.ClientId);
                 break;
             }
             case MessageType.PlayerPose:

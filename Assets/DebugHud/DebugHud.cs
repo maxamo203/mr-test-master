@@ -19,6 +19,7 @@ using UnityEngine;
 //   Baterias          (DebugBateriasUI)   estado del spawner de pilas (solo host)
 //   Lidar             (DebugLidarUI)      chunks/verts/tris de la malla LiDAR
 //   BenchmarkTracking (DebugBenchmarkUI)  reporte del ARTrackingBenchmark
+//   Anclas            (DebugAnclasUI)     anchor points extra + correcciones de deriva
 public class DebugHud : MonoBehaviour
 {
     private const string KeyVisible = "debughud_visible";
@@ -46,6 +47,7 @@ public class DebugHud : MonoBehaviour
         Crear<DebugBateriasUI>(root, "Baterias");
         Crear<DebugLidarUI>(root, "Lidar");
         Crear<DebugBenchmarkUI>(root, "BenchmarkTracking");
+        Crear<DebugAnclasUI>(root, "Anclas");
 
         root.SetActive(PlayerPrefs.GetInt(KeyVisible, 1) == 1);
     }

@@ -23,7 +23,9 @@
       "Bash(curl -sL -o IBMPlexMono-Regular.ttf \"https://github.com/google/fonts/raw/main/ofl/ibmplexmono/IBMPlexMono-Regular.ttf\")",
       "Bash(file *.ttf)",
       "Read(//tmp/**)",
-      "Bash(dotnet exec *)"
+      "Bash(dotnet exec *)",
+      "Read(//c/Program Files/Unity/Hub/Editor/6000.4.4f1/Editor/Data/DotNetSdkRoslyn/**)",
+      "Read(//c/Program Files/Unity/Hub/Editor/**)"
     ]
   }
 }

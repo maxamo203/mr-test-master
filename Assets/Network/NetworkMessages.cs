@@ -270,4 +270,35 @@ public class MapDataMsg
     }
 }
 
+// Client → server: si este dispositivo usa anchor points extra, cuántos colocó y si
+// ya cerró la colocación. El host no puede arrancar la noche mientras algún jugador
+// tenga la opción activada y no haya terminado. Ver AnchorPointManager.
+public class AnchorPointsStatusMsg
+{
+    public bool   Enabled;   // el jugador tiene la opción activada
+    public ushort Count;     // anclas colocadas (informativo, para la UI del host)
+    public bool   Done;      // ya pulsó LISTO (u OMITIR) — deja de bloquear
+
+    public byte[] Serialize()
+    {
+        using var ms = new MemoryStream(4);
+        using var w  = new BinaryWriter(ms);
+        w.Write(Enabled);
+        w.Write(Count);
+        w.Write(Done);
+        return ms.ToArray();
+    }
+
+    public static AnchorPointsStatusMsg Deserialize(byte[] d)
+    {
+        using var r = new BinaryReader(new MemoryStream(d));
+        return new()
+        {
+            Enabled = r.ReadBoolean(),
+            Count   = r.ReadUInt16(),
+            Done    = r.ReadBoolean(),
+        };
+    }
+}
+
 // AnchorResolved y StartGame no llevan payload — body vacío es suficiente

@@ -11,7 +11,14 @@ public class ARImageAnchor : MonoBehaviour
     public event Action OnImageReacquired;  // cada vez que se (re)detecta la imagen, incluida la primera
 
     public bool IsFound { get; private set; }
+#if UNITY_EDITOR
+    // El stub de editor no crea un ARAnchor (no hay subsistema), así que guardamos su
+    // transform aparte para que CurrentAnchor sirva igual en play mode.
+    private Transform _editorAnchor;
+    public Transform CurrentAnchor => _anchor != null ? _anchor.transform : _editorAnchor;
+#else
     public Transform CurrentAnchor => _anchor != null ? _anchor.transform : null;
+#endif
 
     [SerializeField] private ARAnchorManager _anchorManager;
 
@@ -169,6 +176,12 @@ public class ARImageAnchor : MonoBehaviour
         // el rumbo horizontal (ya viene promediado desde Update — ver UprightFromYaw).
         anchorGO.transform.SetPositionAndRotation(position, rotation);
         _anchor = anchorGO.AddComponent<ARAnchor>();
+        // ARTrackable.destroyOnRemoval arranca en TRUE y ARTrackableManager hace
+        // Destroy(removed.gameObject) cuando la plataforma reporta el trackable como
+        // removido. WorldOrigin es HIJO de este GameObject: sin esto, una remoción
+        // del lado nativo se lleva puesta toda la escena escaneada. RestartTracking
+        // lo destruye explícitamente, así que no queda nada colgado.
+        _anchor.destroyOnRemoval = false;
 
         if (_planeManager != null) _planeManager.enabled = true;
 
@@ -337,44 +350,10 @@ public class ARImageAnchor : MonoBehaviour
         _anchorVisual.transform.localPosition = Vector3.up * 0.05f;
         _anchorVisual.transform.localRotation = Quaternion.identity;
 
-        // Esfera principal (blanca) + satélite (rojo). Las construimos con la malla
-        // built-in y MeshRenderer en vez de GameObject.CreatePrimitive: este último
-        // intenta agregar un SphereCollider y, si el módulo Physics está stripeado
-        // en el build (IL2CPP), tira "class SphereCollider doesn't exist" y rompía
-        // la confirmación del anchor. El visual no necesita colliders.
-        var main = MakeSphere(_anchorVisual.transform, Vector3.zero, 0.1f, Color.white);
-        if (main != null) MakeSphere(main.transform, new Vector3(0.7f, 0f, 0f), 0.35f, Color.red);
-    }
-
-    private static Mesh _sphereMesh;
-    private static GameObject MakeSphere(Transform parent, Vector3 localPos, float scale, Color color)
-    {
-        if (_sphereMesh == null) _sphereMesh = Resources.GetBuiltinResource<Mesh>("Sphere.fbx");
-        if (_sphereMesh == null)
-        {
-            Debug.LogWarning("[ARImageAnchor] No se pudo obtener la malla built-in 'Sphere.fbx'.");
-            return null;
-        }
-
-        var go = new GameObject("VisualSphere");
-        go.transform.SetParent(parent, worldPositionStays: false);
-        go.transform.localPosition = localPos;
-        go.transform.localScale    = Vector3.one * scale;
-
-        go.AddComponent<MeshFilter>().sharedMesh = _sphereMesh;
-        var mr = go.AddComponent<MeshRenderer>();
-
-        // Custom/LitMarker (lit, committeado y en Always Included Shaders): la esfera
-        // queda iluminada (no plana) y NO sale magenta en el celular. Antes usaba
-        // URP/Lit→Standard: el proyecto es Built-in y 'Standard' no esta incluido en
-        // el build => se stripeaba => magenta. LitMarker es de una sola variante, por
-        // eso es seguro en device. Ver [[builtin-pipeline-shader-stripping]].
-        var shader = Shader.Find("Custom/LitMarker") ?? Shader.Find("Unlit/Color");
-        var mat = new Material(shader);
-        if (mat.HasProperty("_Color"))     mat.color = color;
-        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
-        mr.material = mat;
-        return go;
+        // Esfera principal (blanca) + satélite (rojo). Ver AnchorVisuals para el
+        // porqué de no usar GameObject.CreatePrimitive.
+        var main = AnchorVisuals.MakeSphere(_anchorVisual.transform, Vector3.zero, 0.1f, Color.white);
+        if (main != null) AnchorVisuals.MakeSphere(main.transform, new Vector3(0.7f, 0f, 0f), 0.35f, Color.red);
     }
 
 #if UNITY_EDITOR
@@ -384,6 +363,7 @@ public class ARImageAnchor : MonoBehaviour
 
         var go = new GameObject("EditorAnchor");
         go.transform.position = new Vector3(0f, 0f, 1f);
+        _editorAnchor = go.transform;
         WorldOrigin.Instance.SetOrigin(go.transform, _pendingKeepVisual);
 
         try { SpawnVisual(go.transform); }
