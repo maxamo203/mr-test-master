@@ -67,7 +67,12 @@ namespace Scanner
         {
             if (_fsm == null || RaycastResolver.Instance == null) return;
             if (!IsPlacingMode(_fsm.Current)) return;
-            _lastHit = RaycastResolver.Instance.ResolveFromScreenCenter();
+
+            // En modo anclas el hit lo resuelve AnchorPointManager (además mide la
+            // calidad del punto); reusamos el suyo para no raycastear dos veces.
+            _lastHit = _fsm.Current == ScannerMode.Anchor_Place && AnchorPointManager.Instance != null
+                ? AnchorPointManager.Instance.UltimoHit
+                : RaycastResolver.Instance.ResolveFromScreenCenter();
 
             // Botón A del VR Box (click izquierdo) → Colocar, solo si el menú de pausa está cerrado.
             var mouse = Mouse.current;
@@ -79,7 +84,8 @@ namespace Scanner
             m == ScannerMode.Wall_V1 || m == ScannerMode.Wall_Height || m == ScannerMode.Wall_Vn ||
             m == ScannerMode.Door_V1 || m == ScannerMode.Door_V2 ||
             m == ScannerMode.Cube_V1 || m == ScannerMode.Cube_V2 || m == ScannerMode.Cube_V3 ||
-            m == ScannerMode.Floor_Place || m == ScannerMode.Marker_Place || m == ScannerMode.EditMoveTarget;
+            m == ScannerMode.Floor_Place || m == ScannerMode.Marker_Place || m == ScannerMode.EditMoveTarget ||
+            m == ScannerMode.Anchor_Place;
 
         // ------------------------------------------------------------- OnGUI
         private void OnGUI()
@@ -124,12 +130,19 @@ namespace Scanner
                 },
             };
 
+            // Colocando anclas la mira se tiñe por la CALIDAD del punto (que es el dato
+            // que importa ahí), no por la fuente del raycast.
+            var calidad = _fsm.Current == ScannerMode.Anchor_Place ? AnchorQuality.Instance : null;
+            if (calidad != null) color = calidad.Color;
+
             const float r = 24f, tick = 14f, g = 2f;   // radio, largo del tick, grosor/2
             T.Fill(new Rect(cx - g, cy - r - tick, g * 2f, tick), color);   // arriba
             T.Fill(new Rect(cx - g, cy + r, g * 2f, tick), color);          // abajo
             T.Fill(new Rect(cx - r - tick, cy - g, tick, g * 2f), color);   // izq
             T.Fill(new Rect(cx + r, cy - g, tick, g * 2f), color);          // der
             T.Fill(new Rect(cx - g, cy - g, g * 2f, g * 2f), color);        // centro
+
+            if (calidad != null) calidad.DibujarBajoLaMira(cx, cy);
         }
 
         private void DrawBarraSuperior(float vw)
@@ -227,6 +240,7 @@ namespace Scanner
             bool enPuerta = modo == ScannerMode.DoorPickWall || modo == ScannerMode.Door_V1 || modo == ScannerMode.Door_V2;
             bool enMarker = modo == ScannerMode.Marker_Place;
             bool enPiso   = modo == ScannerMode.Floor_Place;
+            bool enAncla  = modo == ScannerMode.Anchor_Place;
 
             // Entradas de la botonera (en orden).
             var items = new (string label, MortuoriumIcons.Icon icon, bool activo, bool enabled, Action onTap)[]
@@ -238,6 +252,7 @@ namespace Scanner
                                  () => _markerSubmenuOpen = !_markerSubmenuOpen),
                 (FloorPoint.Instance != null ? "PISO\n(REUBICAR)" : "PISO", MortuoriumIcons.Icon.Piso, enPiso, idle,
                                  () => _fsm.SetMode(ScannerMode.Floor_Place)),
+                ("ANCLAS",       MortuoriumIcons.Icon.Ancla,  enAncla,  idle, AbrirColocacionAnclas),
                 ("RECALIBRAR\n(fijo)", MortuoriumIcons.Icon.RecalFijo, false, puedeRecal, () => Recalibrar(true)),
                 ("RECALIBRAR\n(+mover)", MortuoriumIcons.Icon.RecalMover, false, puedeRecal, () => Recalibrar(false)),
             };
@@ -329,6 +344,16 @@ namespace Scanner
                 onTap?.Invoke();
         }
 
+        // Herramienta ANCLAS: reabre la colocación (agregar más anclas después de haber
+        // cerrado). Mientras esté abierta el loop de corrección queda en pausa, así el
+        // mapa no se mueve bajo los pies del jugador justo cuando está apuntando.
+        private void AbrirColocacionAnclas()
+        {
+            _markerSubmenuOpen = false;
+            AnchorPointManager.Ensure().AbrirColocacion();
+            _fsm.SetMode(ScannerMode.Anchor_Place);
+        }
+
         private void Recalibrar(bool keepVisualPosition)
         {
             if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
@@ -383,6 +408,9 @@ namespace Scanner
         private void DrawContextual(float vw, float yBase)
         {
             var modo = _fsm.Current;
+
+            // El flujo de anclas tiene su propio panel (contador + LISTO / OMITIR).
+            if (modo == ScannerMode.Anchor_Place) { DrawContextualAnclas(vw, yBase); return; }
 
             bool enPared = modo == ScannerMode.Wall_V1 || modo == ScannerMode.Wall_Height || modo == ScannerMode.Wall_Vn;
             bool enCubo  = modo == ScannerMode.Cube_V1 || modo == ScannerMode.Cube_V2 || modo == ScannerMode.Cube_V3;
@@ -463,6 +491,60 @@ namespace Scanner
                     textColor: T.Muted);
         }
 
+        // Panel del flujo de anclas: contador, motivo del último rechazo y los dos
+        // cierres (LISTO con el mínimo, OMITIR siempre — un cuarto sin superficies
+        // trackeables no puede dejar al jugador sin poder escanear).
+        private string _errorAnclas;
+
+        private void DrawContextualAnclas(float vw, float yBase)
+        {
+            var mgr = AnchorPointManager.Ensure();
+
+            const float hPanel = 30f + 26f + 48f + 40f + 24f;
+            var panel = new Rect(Pad, yBase - hPanel, vw - Pad * 2f, hPanel);
+            UIBlocker.AddVirtualRect(panel);
+            T.Fill(panel, new Color(0f, 0f, 0f, 0.65f));
+            T.Borde(panel, T.BorderDim);
+
+            float x = panel.x + 12f, w = panel.width - 24f;
+            float y = panel.y + 10f;
+
+            GUI.Label(new Rect(x, y, w, 30f),
+                      "colocá anclas repartidas por el cuarto y tocá COLOCAR; " +
+                      "sirven para que el escaneo no se corra al alejarte",
+                      T.Estilo(T.FElite, 12, T.Tan, TextAnchor.UpperLeft, wrap: true));
+            y += 32f;
+
+            string estado = mgr.Count < AnchorPointManager.MinAnclas
+                ? $"anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
+                : $"anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
+            GUI.Label(new Rect(x, y, w * 0.6f, 22f), estado,
+                      T.Estilo(T.FMono, 12, mgr.PuedeCerrar ? T.Green : T.Tan));
+            if (!string.IsNullOrEmpty(_errorAnclas))
+                GUI.Label(new Rect(x + w * 0.6f, y, w * 0.4f, 22f), _errorAnclas,
+                          T.Estilo(T.FMono, 10, T.Red, TextAnchor.MiddleRight));
+            y += 26f;
+
+            float bw = (w - 10f) * 0.5f;
+            T.Boton(null, new Rect(x, y, bw, 40f), "DESHACER", primario: false,
+                    () => { mgr.DeshacerUltima(); _errorAnclas = null; },
+                    enabled: mgr.Count > 0, fontSize: 14);
+            T.Boton(null, new Rect(x + bw + 10f, y, bw, 40f), "LISTO", primario: false,
+                    () => CerrarAnclas(cerrar: true), enabled: mgr.PuedeCerrar, fontSize: 14);
+            y += 48f;
+
+            T.Boton(null, new Rect(x, y, w, 32f), "OMITIR ANCLAS", primario: false,
+                    () => CerrarAnclas(cerrar: false), fontSize: 12, textColor: T.Muted);
+        }
+
+        private void CerrarAnclas(bool cerrar)
+        {
+            var mgr = AnchorPointManager.Ensure();
+            if (cerrar) mgr.MarcarListo(); else mgr.Omitir();
+            _errorAnclas = null;
+            _fsm.SetMode(ScannerMode.Idle);
+        }
+
         // -------------------------------------------------------- acciones
         private void OnPlace()
         {
@@ -490,6 +572,9 @@ namespace Scanner
                     break;
                 case ScannerMode.EditMoveTarget:
                     MoveTargetToCurrentReticle();
+                    break;
+                case ScannerMode.Anchor_Place:
+                    _errorAnclas = AnchorPointManager.Ensure().TryColocar(out var err) ? null : err;
                     break;
             }
         }

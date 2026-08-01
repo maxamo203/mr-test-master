@@ -20,6 +20,7 @@ namespace Scanner
         Cube_V3,          // esperando tercer punto de referencia para la rotacion (yaw) del cubo
         Floor_Place,      // esperando colocar (o reubicar) el punto de piso
         Marker_Place,     // esperando colocar un marcador (puerta/ventana/...) sobre una pared
+        Anchor_Place,     // colocando anchor points extra (anti-deriva) — ver AnchorPointManager
         Selected,         // hay un objeto seleccionado (panel de edicion visible)
         EditMoveTarget,   // moviendo un objeto/vertice ya colocado
     }
