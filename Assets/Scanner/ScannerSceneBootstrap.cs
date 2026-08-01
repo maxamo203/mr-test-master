@@ -68,7 +68,23 @@ namespace Scanner
         {
             var fsm = ScanStateMachine.Instance;
             if (fsm == null) return;
-            if (fsm.Current == ScannerMode.Calibrating) fsm.SetMode(ScannerMode.Idle);
+            if (fsm.Current != ScannerMode.Calibrating) return;
+
+            // Con la opción de anchor points activada, apenas sincroniza con la imagen
+            // se entra DIRECTO a colocarlas: es el momento en que la alineación está
+            // fresca, que es justo lo que el ancla #1 tiene que capturar. Recién
+            // después (LISTO / OMITIR) se habilita el resto del escáner.
+            if (GameOptions.PuntosAncla)
+            {
+                var anclas = AnchorPointManager.Ensure();
+                if (!anclas.Listo)
+                {
+                    anclas.AbrirColocacion();
+                    fsm.SetMode(ScannerMode.Anchor_Place);
+                    return;
+                }
+            }
+            fsm.SetMode(ScannerMode.Idle);
         }
 
         private void OnDestroy()

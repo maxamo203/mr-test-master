@@ -172,7 +172,7 @@ public class ARLobbyManager : MonoBehaviour
         // que sigue lo dispara el botón LISTO (ver AnchorPlacementDone).
         if (GameOptions.PuntosAncla)
         {
-            AnchorPointManager.Ensure();
+            AnchorPointManager.Ensure().AbrirColocacion();
             State = LobbyState.PlacingAnchors;
             ReportarAnclas();
             return;

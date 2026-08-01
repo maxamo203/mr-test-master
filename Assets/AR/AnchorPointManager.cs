@@ -53,6 +53,7 @@ public class AnchorPointManager : MonoBehaviour
         public Vector3      WoLocalPos;    // T(aN←WO) cacheado (constante entre re-derivaciones)
         public Quaternion   WoLocalRot;
         public RaycastSource Fuente;
+        public float        Calidad;       // score 0..1 en el momento de colocarla
         public GameObject   Visual;
 
         // En editor no hay ARAnchor: el stub se considera siempre trackeando.
@@ -100,6 +101,17 @@ public class AnchorPointManager : MonoBehaviour
     // con lo que ve ninguno de los dos ojos (ver MRCardboardController), así que no
     // se puede apuntar. Colocar queda bloqueado mientras tanto.
     public bool CardboardBloquea => _cardboard != null && _cardboard.CardboardActive;
+
+    // ¿Hay una UI de colocación abierta? Mientras sea true medimos calidad del punto
+    // y NO corregimos: mover el mapa bajo los pies del jugador justo cuando está
+    // apuntando sería desorientador. Es un flag propio y no `!Listo` porque la
+    // herramienta ANCLAS del escáner puede abrir la colocación aunque la opción del
+    // menú esté apagada.
+    public bool Colocando { get; private set; }
+
+    // Hit vivo bajo la mira mientras se coloca (lo dibujan ReticleController /
+    // ARLobbyUI en vez de resolver el raycast por su cuenta otra vez).
+    public ResolvedHit UltimoHit { get; private set; }
 
     // ── Ciclo de vida ─────────────────────────────────────────────────────
 
@@ -175,7 +187,9 @@ public class AnchorPointManager : MonoBehaviour
         var resolver = EnsureResolver();
         if (resolver == null) { error = "raycast no disponible"; return false; }
 
-        var hit = resolver.ResolveFromScreenCenter();
+        // Reusamos el hit que Update ya resolvió para la vista previa (es el mismo
+        // frame y el mismo punto que el jugador está viendo bajo la mira).
+        var hit = UltimoHit.Hit ? UltimoHit : resolver.ResolveFromScreenCenter();
         if (!hit.Hit) { error = "apuntá a una superficie"; return false; }
 
 #if !UNITY_EDITOR
@@ -219,8 +233,15 @@ public class AnchorPointManager : MonoBehaviour
         ar.destroyOnRemoval = false;
 #endif
 
-        var ancla = new Ancla { Id = _nextId++, Go = go, Ar = ar, Fuente = hit.Source };
-        var raiz  = RaizValida();
+        var ancla = new Ancla
+        {
+            Id      = _nextId++,
+            Go      = go,
+            Ar      = ar,
+            Fuente  = hit.Source,
+            Calidad = AnchorQuality.Instance != null ? AnchorQuality.Instance.Score01 : 0f,
+        };
+        var raiz = RaizValida();
 
         if (raiz == null)
         {
@@ -259,11 +280,23 @@ public class AnchorPointManager : MonoBehaviour
         if (_activaId == a.Id) _activaId = 0;
     }
 
+    // Abre (o reabre) la colocación: lobby al sincronizar con la imagen, escáner al
+    // sincronizar o al tocar la herramienta ANCLAS. Mientras esté abierta el loop de
+    // corrección queda en pausa.
+    public void AbrirColocacion()
+    {
+        Colocando = true;
+        Listo     = false;
+        Omitido   = false;
+    }
+
     // El jugador cerró la colocación: a partir de acá el loop corrige.
     public void MarcarListo()
     {
-        Listo = true;
+        Colocando = false;
+        Listo     = true;
         _ultimoCambio = Time.time;
+        AnchorQuality.Instance?.SetActivo(false);
     }
 
     // Escape: en un cuarto sin superficies trackeables el jugador no llega al mínimo
@@ -277,8 +310,39 @@ public class AnchorPointManager : MonoBehaviour
             if (_anclas[i].Go != null) Destroy(_anclas[i].Go);
         _anclas.Clear();
         _activaId = 0;
+        Colocando = false;
         Omitido   = true;
         Listo     = true;
+        AnchorQuality.Instance?.SetActivo(false);
+    }
+
+    // ── Vista previa bajo la mira mientras se coloca ──────────────────────
+
+    private void Update()
+    {
+#if UNITY_EDITOR
+        NudgeCamaraEditor();
+#endif
+        bool colocando = Colocando
+                         && _imageAnchor != null && _imageAnchor.IsFound
+                         && !CardboardBloquea;
+
+        var calidad = AnchorQuality.Instance;
+        if (!colocando)
+        {
+            if (calidad != null) calidad.SetActivo(false);
+            UltimoHit = ResolvedHit.Miss;
+            return;
+        }
+
+        if (calidad == null) calidad = AnchorQuality.Ensure();
+        calidad.SetActivo(true);
+
+        var resolver = EnsureResolver();
+        if (resolver == null) return;
+
+        UltimoHit = resolver.ResolveFromScreenCenter();
+        calidad.Evaluar(UltimoHit);
     }
 
     // Al arrancar la noche las esferas sobran (inmersión + costo). El loop de
@@ -320,6 +384,11 @@ public class AnchorPointManager : MonoBehaviour
 
         // Tras una relocalización (app resume) las poses se mueven en bloque.
         if (!SesionEstable()) return;
+
+        // En el escáner: nunca re-enraizar en medio de un flujo multi-paso. Una pared
+        // cuyo 1er vértice se colocó antes del salto y el 2º después quedaría torcida.
+        var fsm = ScanStateMachine.Instance;
+        if (fsm != null && EnFlujoMultiPaso(fsm.Current)) return;
 
         var actual = wo.CurrentAnchor;
         bool parentPerdido = actual == null;
@@ -458,6 +527,16 @@ public class AnchorPointManager : MonoBehaviour
         _anclas.Remove(nueva);
         _anclas.Insert(0, nueva);
     }
+
+    // Modos del escáner en los que hay una colocación a medio terminar (o el anchor
+    // de la imagen todavía no está). Sólo aplica en ScannerScene: en SampleScene no
+    // hay ScanStateMachine y el chequeo se saltea.
+    private static bool EnFlujoMultiPaso(ScannerMode m) =>
+        m == ScannerMode.Calibrating   || m == ScannerMode.Anchor_Place ||
+        m == ScannerMode.Wall_V1       || m == ScannerMode.Wall_Height  || m == ScannerMode.Wall_Vn ||
+        m == ScannerMode.DoorPickWall  || m == ScannerMode.Door_V1      || m == ScannerMode.Door_V2 ||
+        m == ScannerMode.Cube_V1       || m == ScannerMode.Cube_V2      || m == ScannerMode.Cube_V3 ||
+        m == ScannerMode.Marker_Place  || m == ScannerMode.EditMoveTarget;
 
     private Ancla PrimeraTrackeando()
     {
@@ -626,6 +705,12 @@ public class AnchorPointManager : MonoBehaviour
         if (_ultimoResetImagen > 0f)
             sb.Append("   reset imagen hace ").Append((Time.time - _ultimoResetImagen).ToString("0")).Append(" s");
 
+        var cal = AnchorQuality.Instance;
+        if (Colocando && cal != null)
+            sb.Append("\npunto: ").Append(cal.Etiqueta)
+              .Append(" (").Append((cal.Score01 * 100f).ToString("0")).Append("%, ")
+              .Append(cal.PuntosCerca).Append(" feats, ").Append(UltimoHit.Source).Append(')');
+
         var camT = CamaraT();
         for (int i = 0; i < _anclas.Count; i++)
         {
@@ -633,7 +718,7 @@ public class AnchorPointManager : MonoBehaviour
             sb.Append("\n #").Append(a.Id).Append(' ').Append(a.Estado);
             if (camT != null && a.Go != null)
                 sb.Append("  ").Append(Vector3.Distance(a.Go.transform.position, camT.position).ToString("0.0")).Append(" m");
-            sb.Append("  ").Append(a.Fuente);
+            sb.Append("  ").Append(a.Fuente).Append("  cal ").Append((a.Calidad * 100f).ToString("0")).Append('%');
             if (a.Go != null)
             {
                 float inclin = Vector3.Angle(a.Go.transform.up, Vector3.up);
@@ -647,7 +732,7 @@ public class AnchorPointManager : MonoBehaviour
     // Ayudas de editor: sin device no hay forma de caminar por el cuarto, así que
     // movemos la cámara con el teclado para ejercitar el cambio de ancla, y podemos
     // desplazar un stub a mano para ver disparar el clamp.
-    private void Update()
+    private void NudgeCamaraEditor()
     {
         if (!Listo) return;   // no pisar el teclado mientras se navega el lobby
 

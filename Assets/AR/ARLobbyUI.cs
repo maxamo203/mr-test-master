@@ -163,14 +163,19 @@ public class ARLobbyUI : MonoBehaviour
         // quedarse sin UI acá dejaría al jugador sin poder arrancar la partida.
         if (mgr == null) { AnchorPointManager.Ensure(); return; }
 
-        // Retícula: cruz fina en el centro de la pantalla virtual.
+        // Retícula: cruz fina en el centro, teñida por la calidad del punto.
+        var calidad = AnchorQuality.Instance;
         const float R = 20f, G = 6f, W = 2f;
         float cx = vw * 0.5f, cy = vh * 0.5f;
-        var reticColor = mgr.CardboardBloquea ? T.Dim : T.Cream;
+        var reticColor = mgr.CardboardBloquea ? T.Dim
+                       : calidad != null      ? calidad.Color
+                                              : T.Cream;
         T.Fill(new Rect(cx - R, cy - W * 0.5f, R - G, W), reticColor);
         T.Fill(new Rect(cx + G, cy - W * 0.5f, R - G, W), reticColor);
         T.Fill(new Rect(cx - W * 0.5f, cy - R, W, R - G), reticColor);
         T.Fill(new Rect(cx - W * 0.5f, cy + G, W, R - G), reticColor);
+
+        if (calidad != null && !mgr.CardboardBloquea) calidad.DibujarBajoLaMira(cx, cy);
 
         T.Gradiente(new Rect(0, vh - 400f, vw, 400f), 0.9f, haciaAbajo: false);
         UIBlocker.AddVirtualRect(new Rect(0, vh - 400f, vw, 400f));

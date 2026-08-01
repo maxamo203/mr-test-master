@@ -10,7 +10,7 @@ using UnityEngine;
 // y verificaron en un preview aparte; acá se replica ese rasterizado.
 public static class MortuoriumIcons
 {
-    public enum Icon { Pared, Cubo, Puerta, Marca, Piso, RecalFijo, RecalMover }
+    public enum Icon { Pared, Cubo, Puerta, Marca, Piso, RecalFijo, RecalMover, Ancla }
 
     private const int N = 128;
     private static readonly Dictionary<Icon, Texture2D> _cache = new();
@@ -177,6 +177,15 @@ public static class MortuoriumIcons
                 RectU(0.10f, 0.5f - 0.045f, 0.16f, 0.09f, tan);
                 RectU(0.74f, 0.5f - 0.045f, 0.16f, 0.09f, tan);
                 Disc(0.5f, 0.5f, 0.07f, tan);
+                break;
+            // Baliza: plato isométrico en el piso + poste + esfera emisora con onda.
+            // Se distingue de Marca (pin azul) por el poste y el anillo de señal.
+            case Icon.Ancla:
+                Ring(0.5f, 0.28f, 0.30f, 0.255f, Shade(green, 0.45f));   // onda
+                IsoBox(0.5f, 0.80f, 0.20f, 0.20f, 0.045f, Shade(green, 0.75f));
+                RectU(0.5f - 0.035f, 0.32f, 0.07f, 0.40f, Shade(green, 0.9f));
+                Disc(0.5f, 0.27f, 0.125f, green);
+                Disc(0.455f, 0.228f, 0.042f, Shade(green, 1.4f));        // brillo
                 break;
             case Icon.RecalMover:
                 Ring(0.5f, 0.5f, 0.24f, 0.155f, tan);
