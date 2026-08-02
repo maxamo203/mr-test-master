@@ -60,6 +60,9 @@ public class NetworkManager : MonoBehaviour
     public event Action<uint>   OnClientAnchorStatus;  // server: cliente reportó sus anchor points
     public event Action<string> OnAnchorIdReceived;    // client: recibió anchor ID
     public event Action         OnGameStarted;         // todos: partida arrancó
+    public event Action         OnNightReset;          // client: el host cortó la noche
+    public event Action         OnNightSurvived;       // todos: amaneció, noche ganada
+    public event Action<int,int> OnNightClock;         // client: (restantes, totales) del amanecer
     public event Action<byte[]> OnMapReceived;         // client: recibió el .mscn del mapa
     public event Action<byte, float> OnBatteryCollected; // client: recogió pila (rarityIndex, charge)
     public event Action<float, float> OnSanityUpdated;    // client: cordura autoritativa (valor, max)
@@ -190,6 +193,62 @@ public class NetworkManager : MonoBehaviour
             Done    = done,
         }.Serialize();
         _cli.Send(MsgHelper.Frame(MessageType.AnchorPointsStatus, body));
+    }
+
+    // Server: cortar la noche SIN cerrar la sesión (ni la escena, ni la sesión AR).
+    // Despawnea todo, baja GameStarted y avisa a los clientes para que vuelvan a la
+    // pantalla de sincronización. Los sistemas de gameplay se re-inicializan solos en
+    // el próximo ServerStartGame (todos escuchan OnGameStarted).
+    public void ServerResetNight()
+    {
+        if (_srv == null) return;
+
+        ServerDespawnAll();
+        GameStarted = false;
+        _resolvedClients.Clear();   // cada cliente vuelve a reportar tras re-sincronizar
+
+        _srv.Broadcast(MsgHelper.Frame(MessageType.ResetNight, Array.Empty<byte>()));
+        Debug.Log("[Server] Noche reiniciada (misma sesión).");
+    }
+
+    // Server: amaneció. Igual que ServerResetNight en cuanto a limpieza, pero NO manda
+    // a nadie de vuelta a sincronizar: cada jugador se queda en la pantalla de fin de
+    // noche hasta elegir qué hacer (ver DeathScreenUI / NightTransition).
+    public void ServerNightSurvived()
+    {
+        if (_srv == null) return;
+
+        ServerDespawnAll();
+        GameStarted = false;
+
+        _srv.Broadcast(MsgHelper.Frame(MessageType.NightSurvived, Array.Empty<byte>()));
+        OnNightSurvived?.Invoke();
+        Debug.Log("[Server] Noche superada (amaneció).");
+    }
+
+    // Server → all (1 Hz): cuánto falta para el amanecer.
+    public void ServerSendNightClock(int restantes, int totales)
+    {
+        if (_srv == null) return;
+        var body = new NightClockMsg
+        {
+            Restantes = (ushort)Mathf.Clamp(restantes, 0, ushort.MaxValue),
+            Totales   = (ushort)Mathf.Clamp(totales,   0, ushort.MaxValue),
+        }.Serialize();
+        _srv.Broadcast(MsgHelper.Frame(MessageType.NightClock, body));
+    }
+
+    private readonly List<uint> _despawnScratch = new();
+
+    private void ServerDespawnAll()
+    {
+        if (EntityRegistry.Instance == null) return;
+
+        // Copiamos los ids primero: ServerDespawn muta el registro.
+        _despawnScratch.Clear();
+        foreach (var e in EntityRegistry.Instance.All) _despawnScratch.Add(e.NetworkId);
+        for (int i = 0; i < _despawnScratch.Count; i++) ServerDespawn(_despawnScratch[i]);
+        _despawnScratch.Clear();
     }
 
     // Client: pedir al servidor recoger una pila apuntada (el server valida cercanía).
@@ -568,6 +627,26 @@ public class NetworkManager : MonoBehaviour
                 GameStarted = true;
                 OnGameStarted?.Invoke();
                 Debug.Log("[Client] Partida arrancada");
+                break;
+            }
+            case MessageType.ResetNight:
+            {
+                GameStarted = false;
+                OnNightReset?.Invoke();
+                Debug.Log("[Client] Noche reiniciada por el host");
+                break;
+            }
+            case MessageType.NightSurvived:
+            {
+                GameStarted = false;
+                OnNightSurvived?.Invoke();
+                Debug.Log("[Client] Amaneció: noche superada");
+                break;
+            }
+            case MessageType.NightClock:
+            {
+                var clock = NightClockMsg.Deserialize(msg.Body);
+                OnNightClock?.Invoke(clock.Restantes, clock.Totales);
                 break;
             }
             case MessageType.MapData:

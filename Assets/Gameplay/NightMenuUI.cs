@@ -256,6 +256,18 @@ namespace Gameplay
                 var r = new Rect(Pad + col * (cw + gap), y0 + fila * (ch + gap), cw, ch);
 
                 bool existe = nights != null && i < nights.Length && nights[i] != null;
+                if (existe && !NightProgress.Desbloqueada(i))
+                {
+                    // Configurada pero todavía no ganada la anterior: candado real.
+                    T.Fill(r, new Color(1f, 1f, 1f, 0.02f));
+                    T.Borde(r, T.BorderDim);
+                    GUI.Label(new Rect(r.x, r.y + 12f, r.width, 34f), (i + 1).ToString(),
+                              T.Estilo(T.FBebas, 26, T.Disabled, TextAnchor.MiddleCenter));
+                    T.Candado(new Rect(r.center.x - 8f, r.y + 46f, 16f, 18f), T.Disabled);
+                    GUI.Label(new Rect(r.x, r.y + 66f, r.width, 16f), "bloqueada",
+                              T.Estilo(T.FMono, 9, T.Disabled, TextAnchor.MiddleCenter));
+                    continue;
+                }
                 if (!existe)
                 {
                     // Celda "bloqueada": decorativa, sin interacción (paridad visual
@@ -281,7 +293,7 @@ namespace Gameplay
             }
 
             bool haySel = _nocheSel >= 0 && nights != null && _nocheSel < nights.Length &&
-                          nights[_nocheSel] != null;
+                          nights[_nocheSel] != null && NightProgress.Desbloqueada(_nocheSel);
             if (haySel)
             {
                 string nombre = string.IsNullOrEmpty(nights[_nocheSel].displayName)
@@ -386,6 +398,10 @@ namespace Gameplay
             s.Mode          = _pendingMode;
             s.SelectedNight = Nights[_nocheSel];
             s.SelectedMap   = _mapSel;
+            // Catálogo + índice: dejan pasar a la siguiente noche desde la partida,
+            // sin volver acá (ver Gameplay.NightTransition).
+            s.Nights        = Nights;
+            s.NightIndex    = _nocheSel;
             s.HostPort      = _pendingMode == GameSession.SessionMode.MultiHost
                 ? PuertoElegido() : NetworkConfig.DefaultPort;
             SceneFlow.GoTo(_lobbyScene);
@@ -505,6 +521,28 @@ namespace Gameplay
             y += 68f;
             T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 52f), "CONTROL (MANDO)", false,
                     () => _pantalla = Pantalla.Control);
+            y += 64f;
+
+            // ── Herramientas de desarrollo ────────────────────────────────────
+            // Sólo en development build (en release ni se dibujan ni se compilan las
+            // llamadas): tocar la progresión a mano no puede llegar al jugador.
+            if (!Debug.isDebugBuild) return;
+
+            var nights = Nights;
+            int total  = nights != null ? nights.Length : 0;
+
+            GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f), "DESARROLLO", T.Estilo(T.FMono, 11, T.Red));
+            y += 22f;
+            GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f),
+                      $"progreso: {NightProgress.Desbloqueadas} de {total} noches desbloqueadas",
+                      T.Estilo(T.FMono, 11, T.CreamDim));
+            y += 26f;
+
+            float bw = (vw - Pad * 2f - 10f) * 0.5f;
+            T.Boton(_nav, new Rect(Pad, y, bw, 46f), "DESBLOQUEAR TODAS", primario: false,
+                    () => NightProgress.DesbloquearTodas(total), enabled: total > 0, fontSize: 13);
+            T.Boton(_nav, new Rect(Pad + bw + 10f, y, bw, 46f), "BORRAR PROGRESO", primario: false,
+                    NightProgress.BorrarProgreso, fontSize: 13, textColor: T.Red);
         }
 
         private void DrawControl(float vw, float vh)

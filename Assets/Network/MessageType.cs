@@ -15,4 +15,7 @@ public enum MessageType : ushort
     PlayerSanity    = 13,  // server → client: cordura autoritativa del jugador (por dispositivo)
     PlayerDied      = 14,  // server → client: este jugador fue atrapado (pantalla de muerte)
     AnchorPointsStatus = 15, // client → server: estado de los anchor points extra de ese dispositivo
+    ResetNight      = 16,  // server → all: se corta la noche y se vuelve a sincronizar (misma sesión AR)
+    NightSurvived   = 17,  // server → all: amaneció, la noche está ganada
+    NightClock      = 18,  // server → all: segundos que faltan para el amanecer (1 Hz)
 }

@@ -45,11 +45,18 @@ public class ARLobbyManager : MonoBehaviour
         net.OnClientResolved    += HandleClientResolved;
         net.OnClientAnchorStatus += HandleClientAnchorStatus;
         net.OnMapReceived       += HandleMapReceived;
-        net.OnGameStarted       += () => State = LobbyState.GameStarted;
+        net.OnNightReset        += HandleNightReset;
+        net.OnNightSurvived     += Gameplay.NightTransition.NocheSuperada;
+        net.OnNightClock        += HandleNightClock;
+        net.OnGameStarted       += HandleGameStarted;
 
         if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
         if (_imageAnchor != null)
-            _imageAnchor.OnImageFound += OnImageFound;
+            // OnImageReacquired, NO OnImageFound: éste último dispara UNA sola vez en
+            // toda la sesión, así que al reiniciar la noche (RestartTracking) el lobby
+            // se quedaba pegado en Scanning para siempre. OnImageReacquired incluye la
+            // primera detección, así que cubre los dos casos.
+            _imageAnchor.OnImageReacquired += OnImageFound;
 
         // Si este dispositivo va a colocar anclas, el manager tiene que existir antes
         // de que aparezca la imagen (se suscribe a OnImageReacquired).
@@ -168,16 +175,61 @@ public class ARLobbyManager : MonoBehaviour
 
     private void OnImageFound()
     {
+        // Sólo nos interesa la detección mientras estamos sincronizando. Si la partida
+        // ya arrancó, una re-detección no puede tirarnos de vuelta al lobby.
+        if (State != LobbyState.Scanning) return;
+
         // Con la opción activada, primero se colocan las anclas: el paso de la FSM
         // que sigue lo dispara el botón LISTO (ver AnchorPlacementDone).
+        //
+        // Si ya están colocadas (reinicio de noche en la MISMA sesión AR) se saltea:
+        // los ARAnchor siguen vivos, así que sólo hacía falta recalibrar la imagen.
         if (GameOptions.PuntosAncla)
         {
-            AnchorPointManager.Ensure().AbrirColocacion();
-            State = LobbyState.PlacingAnchors;
-            ReportarAnclas();
-            return;
+            var anclas = AnchorPointManager.Ensure();
+            if (!anclas.Listo)
+            {
+                anclas.AbrirColocacion();
+                State = LobbyState.PlacingAnchors;
+                ReportarAnclas();
+                return;
+            }
         }
         AvanzarTrasSincronizar();
+    }
+
+    // ── Reinicio de noche sin cerrar la sesión (ver Gameplay.NightTransition) ──
+
+    // Vuelve a la pantalla de sincronización y re-lanza la búsqueda de la imagen. NO
+    // toca los anchor points: viven en la sesión AR, que no se reinicia.
+    public void ReiniciarSincronizacion()
+    {
+        _resolvedClients.Clear();
+        ResolvedCount = 0;
+        State = LobbyState.Scanning;
+
+        // keepVisualPosition: false → la escena se mueve con el anchor nuevo, que es
+        // la semántica de "recalibrar contra la imagen".
+        _imageAnchor?.RestartTracking(keepVisualPosition: false);
+    }
+
+    // Cliente: el host cortó la noche.
+    private void HandleNightReset()
+    {
+        Gameplay.NightTransition.ResetLocal();
+        ReiniciarSincronizacion();
+    }
+
+    // Cliente: reloj del amanecer (el host lo escribe directo en GameDirector).
+    private static void HandleNightClock(int restantes, int totales) =>
+        Gameplay.NightResult.SetReloj(restantes, totales);
+
+    private void HandleGameStarted()
+    {
+        // NightResult es estático y sobrevive el cambio de escena: limpiarlo acá cubre
+        // también el arranque "en frío" (menú → partida), no sólo los reinicios.
+        Gameplay.NightResult.LimpiarResultado();
+        State = LobbyState.GameStarted;
     }
 
     // El jugador cerró la colocación de anclas (LISTO u OMITIR).
@@ -241,6 +293,8 @@ public class ARLobbyManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (_imageAnchor != null) _imageAnchor.OnImageReacquired -= OnImageFound;
+
         var net = NetworkManager.Instance;
         if (net == null) return;
         net.OnClientJoined      -= HandleClientJoined;
@@ -248,5 +302,9 @@ public class ARLobbyManager : MonoBehaviour
         net.OnClientResolved    -= HandleClientResolved;
         net.OnClientAnchorStatus -= HandleClientAnchorStatus;
         net.OnMapReceived       -= HandleMapReceived;
+        net.OnNightReset        -= HandleNightReset;
+        net.OnNightSurvived     -= Gameplay.NightTransition.NocheSuperada;
+        net.OnNightClock        -= HandleNightClock;
+        net.OnGameStarted       -= HandleGameStarted;
     }
 }

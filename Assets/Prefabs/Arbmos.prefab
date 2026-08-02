@@ -243,13 +243,13 @@ MonoBehaviour:
   ModelRotationOffset: {x: 0, y: 0, z: 0}
   distortion:
     enabled: 1
-    baseIntensity: 0.354
-    intensityScale: 0.826
-    regionScale: 0.75
-    tintColor: {r: 0, g: 0, b: 0, a: 1}
-    tintStrength: 0.734
-    chromatic: 4.1
-    scanlines: 14
+    baseIntensity: 0
+    intensityScale: 0.077
+    regionScale: 0.73
+    tintColor: {r: 0.084905684, g: 0.07801989, b: 0.06367926, a: 0.015686275}
+    tintStrength: 0
+    chromatic: 7
+    scanlines: 12
     lethalBurst: 1
     lethalColor: {r: 0.05, g: 0, b: 0, a: 1}
 --- !u!114 &-2696263778344491597

@@ -301,4 +301,27 @@ public class AnchorPointsStatusMsg
     }
 }
 
-// AnchorResolved y StartGame no llevan payload — body vacío es suficiente
+// Server → all, 1 Hz: reloj de la noche. Los clientes no conocen la NightConfig del
+// host, así que no pueden contar los segundos por su cuenta.
+public class NightClockMsg
+{
+    public ushort Restantes;
+    public ushort Totales;
+
+    public byte[] Serialize()
+    {
+        using var ms = new MemoryStream(4);
+        using var w  = new BinaryWriter(ms);
+        w.Write(Restantes);
+        w.Write(Totales);
+        return ms.ToArray();
+    }
+
+    public static NightClockMsg Deserialize(byte[] d)
+    {
+        using var r = new BinaryReader(new MemoryStream(d));
+        return new() { Restantes = r.ReadUInt16(), Totales = r.ReadUInt16() };
+    }
+}
+
+// AnchorResolved, StartGame, ResetNight y NightSurvived no llevan payload — body vacío

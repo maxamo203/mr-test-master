@@ -31,6 +31,11 @@ namespace Gameplay
         private bool  _running;
         private Phase _phase = Phase.Idle;
 
+        // Reloj de la noche (condicion de victoria). 0 = noche sin limite de tiempo.
+        private float _nightDuration;
+        private float _nightTimer;
+        private float _clockTimer;     // cada cuanto publicamos el reloj (1 Hz)
+
         // Timers.
         private float _attemptTimer;   // Idle: cuenta al proximo intento
         private float _repel;          // segundos continuos de iluminacion sobre el objetivo
@@ -83,9 +88,40 @@ namespace Gameplay
             ServerDeaths.Reset();
             _phase = Phase.Idle;
             _attemptTimer = _night.initialAttemptDelay;
+
+            // Reloj de la noche: sobrevivir hasta que llegue a 0 la gana.
+            _nightDuration = Mathf.Max(0f, _night.nightDurationSeconds);
+            _nightTimer    = _nightDuration;
+            _clockTimer    = 0f;
+            PublicarReloj();
             SorkerNav.Ensure();
             ArbmosDirector.Ensure().StartRun();   // alucinacion de cordura (individual por jugador)
             _running = true;
+        }
+
+        // El reloj local (host) + el broadcast a los clientes, que no conocen la
+        // NightConfig y por eso no pueden contarlo por su cuenta.
+        private void PublicarReloj()
+        {
+            int restantes = Mathf.CeilToInt(Mathf.Max(0f, _nightTimer));
+            int totales   = Mathf.CeilToInt(_nightDuration);
+            NightResult.SetReloj(restantes, totales);
+            NetworkManager.Instance?.ServerSendNightClock(restantes, totales);
+        }
+
+        // Corta la noche sin cerrar la sesión (ver Gameplay.NightTransition). Las
+        // entidades ya las despawnea NetworkManager.ServerResetNight; acá sólo
+        // soltamos las referencias y frenamos. El próximo OnGameStarted re-inicializa.
+        public void StopRun()
+        {
+            _running      = false;
+            _phase        = Phase.Idle;
+            _sorken       = null;
+            _sorkenNetId  = 0;
+            _marker       = null;
+            _path.Clear();
+            _pathIndex    = 0;
+            _repel = _grace = _phaseTimer = 0f;
         }
 
         private void Update()
@@ -93,6 +129,24 @@ namespace Gameplay
             if (!_running) return;
             if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return;
             float dt = Time.deltaTime;
+
+            // Amanecer: si el reloj llega a 0 la noche está ganada y se corta acá.
+            if (_nightDuration > 0f)
+            {
+                _nightTimer -= dt;
+
+                _clockTimer -= dt;
+                if (_clockTimer <= 0f) { _clockTimer = 1f; PublicarReloj(); }
+
+                if (_nightTimer <= 0f)
+                {
+                    _nightTimer = 0f;
+                    PublicarReloj();
+                    StopRun();
+                    NetworkManager.Instance.ServerNightSurvived();
+                    return;
+                }
+            }
 
             switch (_phase)
             {

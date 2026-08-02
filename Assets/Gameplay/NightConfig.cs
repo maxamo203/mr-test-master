@@ -17,6 +17,12 @@ namespace Gameplay
         [Tooltip("Texto del briefing que se muestra al arrancar la noche (ARLobbyUI).")]
         [TextArea] public string briefing = "";
 
+        [Header("Duración")]
+        [Tooltip("Segundos que hay que sobrevivir para que amanezca. Al llegar a 0 la " +
+                 "noche se gana y se desbloquea la siguiente (ver NightProgress). " +
+                 "Poner 0 = noche sin límite de tiempo (no se puede ganar).")]
+        public float nightDurationSeconds = 300f;
+
         [Header("Entradas del Sorken")]
         [Tooltip("Master switch del Sorken. Desactivar (solo dev/testing) para probar SIN " +
                  "Sorken — util para aislar el Arbmos u otras mecanicas. En prod: siempre activo.")]

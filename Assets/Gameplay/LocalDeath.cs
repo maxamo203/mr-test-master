@@ -36,6 +36,10 @@ namespace Gameplay
 
         public void Die() => IsDead = true;
 
+        // Vuelta a la vida al reiniciar la noche sin cerrar la sesión (ver
+        // NightTransition): saca la pantalla de muerte.
+        public void Revive() => IsDead = false;
+
         public static LocalDeath Ensure()
         {
             if (Instance == null)

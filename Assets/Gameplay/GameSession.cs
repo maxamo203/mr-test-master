@@ -23,6 +23,38 @@ namespace Gameplay
         public SessionMode Mode          { get; set; } = SessionMode.SinglePlayer;
         public NightConfig SelectedNight { get; set; }
         public string      SelectedMap   { get; set; }
+
+        // Catálogo ordenado de noches + índice de la actual, para poder pasar a la
+        // SIGUIENTE sin volver al menú (NightTransition). Lo llena NightMenuUI al
+        // confirmar, ya resuelto entre el set prod y el dev.
+        public NightConfig[] Nights     { get; set; }
+        public int           NightIndex { get; set; } = -1;
+
+        // ¿Hay catálogo para poder elegir otra noche desde la partida?
+        public bool HayCatalogoDeNoches
+        {
+            get
+            {
+                if (Nights == null) return false;
+                for (int i = 0; i < Nights.Length; i++)
+                    if (Nights[i] != null) return true;
+                return false;
+            }
+        }
+
+        // ¿Esa posición del catálogo es una noche jugable? (las que faltan se dibujan
+        // como celdas bloqueadas, igual que en el menú principal).
+        public bool NocheDisponible(int index) =>
+            Nights != null && index >= 0 && index < Nights.Length && Nights[index] != null;
+
+        // Deja esa noche como la activa. False si el índice no es jugable.
+        public bool SeleccionarNoche(int index)
+        {
+            if (!NocheDisponible(index)) return false;
+            NightIndex    = index;
+            SelectedNight = Nights[index];
+            return true;
+        }
         // Puerto TCP a hostear (elegido en "Avanzado" del menú, o el por defecto).
         public int         HostPort      { get; set; } = NetworkConfig.DefaultPort;
 

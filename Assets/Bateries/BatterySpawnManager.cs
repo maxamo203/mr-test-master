@@ -121,8 +121,19 @@ namespace Bateries
 
             BuildSpawnPoints();
             _started = true;
+
             _status  = $"{_points.Count} puntos derivados del escaneo.";
             Debug.Log($"[Bateries] {_points.Count} puntos de spawn derivados del escaneo.");
+        }
+
+        // Corta la noche sin cerrar la sesión (ver Gameplay.NightTransition). Las pilas
+        // vivas ya las despawnea NetworkManager.ServerResetNight; los puntos se
+        // reconstruyen desde cero en el próximo HandleGameStarted.
+        public void StopRun()
+        {
+            _started = false;
+            _points.Clear();
+            _status = "detenido entre noches.";
         }
 
         // Chequea que cada rareza tenga un prefab registrado en el PrefabRegistry bajo su

@@ -30,9 +30,17 @@ namespace Gameplay
 
             // ── Barra (fila 1: encima de la batería) ──────────────────────────
             UIScale.Begin();
-            var r = T.HudBarRect(UIScale.VirtualWidth, UIScale.VirtualHeight, fila: 1);
+            float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
+            var r = T.HudBarRect(vw, vh, fila: 1);
             Color fill = Color.Lerp(T.Red, T.Blue, pct);
             T.Barra(r, pct, fill, "CORDURA", $"{Mathf.RoundToInt(pct * 100f)}%");
+
+            // ── Amanecer (fila 2): cuánto falta para ganar la noche ───────────
+            // Sin esto la condición de victoria es invisible. Las noches con
+            // nightDurationSeconds = 0 no tienen reloj y la barra no se dibuja.
+            if (NightResult.HayReloj)
+                T.Barra(T.HudBarRect(vw, vh, fila: 2), NightResult.Progreso01, T.Tan,
+                        "AMANECE", NightResult.RestanteMmSs);
         }
 
         // Distorsion IMGUI sin shader: tinte rojo-oscuro pulsante + bandas de glitch.

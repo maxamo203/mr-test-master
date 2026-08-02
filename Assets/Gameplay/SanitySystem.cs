@@ -55,6 +55,14 @@ namespace Gameplay
             LocalSanity.Ensure();
         }
 
+        // Corta la noche sin cerrar la sesión (ver Gameplay.NightTransition).
+        public void StopRun()
+        {
+            _running = false;
+            _sanity.Clear();
+            _offTimer.Clear();
+        }
+
         private void Update()
         {
             if (!_running) return;

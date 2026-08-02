@@ -83,6 +83,14 @@ public class ArbmosDirector : MonoBehaviour
         _running = true;
     }
 
+    // Corta la corrida sin cerrar la sesión (ver Gameplay.NightTransition). Los Arbmos
+    // vivos ya los despawnea NetworkManager.ServerResetNight.
+    public void StopRun()
+    {
+        _running = false;
+        _haunts.Clear();
+    }
+
     private void HandleClientLeft(uint clientId)
     {
         if (_haunts.TryGetValue(clientId, out var h))

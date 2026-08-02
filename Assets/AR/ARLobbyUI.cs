@@ -41,9 +41,21 @@ public class ARLobbyUI : MonoBehaviour
     {
         _nav.Update();
 
+        if (_lobby == null) return;
+
+        // Al salir de GameStarted (reinicio de noche sin cerrar la sesión) rearmamos el
+        // briefing: si no, el cartel de la noche siguiente no volvía a mostrarse nunca.
+        if (_lobby.State != ARLobbyManager.LobbyState.GameStarted)
+        {
+            _briefingArmado = false;
+            _briefingDone   = false;
+            _briefingT      = 0f;
+            return;
+        }
+
         // Timer del briefing (en Update para no depender de los múltiples pasos de
         // OnGUI por frame). Arranca al entrar a GameStarted.
-        if (_lobby != null && _lobby.State == ARLobbyManager.LobbyState.GameStarted && !_briefingDone)
+        if (!_briefingDone)
         {
             if (!_briefingArmado) { _briefingArmado = true; _briefingT = 0f; }
             _briefingT += Time.deltaTime;
