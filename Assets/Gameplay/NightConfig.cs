@@ -87,6 +87,24 @@ namespace Gameplay
         [Tooltip("Distancia (m) a la que el Arbmos letal atrapa al jugador.")]
         public float arbmosGrabRange = 1.2f;
 
+        [Header("Libro ritual (se cierra solo — hay que alumbrarlo)")]
+        [Tooltip("Master switch del libro. Desactivar (dev/testing) para probar SIN la " +
+                 "mecánica del libro. En prod: siempre activo.")]
+        public bool bookActive = true;
+        [Tooltip("Segundos que tarda en cerrarse del todo, desde abierto, si NADIE lo " +
+                 "alumbra. Si se cierra: game over para todos.")]
+        public float bookCloseSeconds = 180f;
+        [Tooltip("Segundos que tarda UN jugador alumbrándolo en abrirlo del todo, de cerrado " +
+                 "a abierto (sin descontar el cierre). El efecto se ACUMULA: con N jugadores " +
+                 "alumbrando tarda N veces menos. Tiene que ser MENOR que bookCloseSeconds, " +
+                 "si no un jugador solo nunca le gana al cierre.")]
+        public float bookOpenSecondsPerPlayer = 30f;
+
+        // Los dos de arriba están en segundos porque es lo que se piensa al diseñar la
+        // noche; la simulación necesita el ritmo (apertura por segundo).
+        public float BookCloseRate         => bookCloseSeconds         > 0f ? 1f / bookCloseSeconds         : 0f;
+        public float BookOpenRatePerPlayer => bookOpenSecondsPerPlayer > 0f ? 1f / bookOpenSecondsPerPlayer : 0f;
+
         [Header("Cono de linterna (repeler — server-authoritative)")]
         [Tooltip("Semi-angulo del cono (grados) para contar que la linterna ilumina un objetivo.")]
         public float flashlightConeAngleDeg = 30f;

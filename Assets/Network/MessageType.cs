@@ -18,4 +18,5 @@ public enum MessageType : ushort
     ResetNight      = 16,  // server → all: se corta la noche y se vuelve a sincronizar (misma sesión AR)
     NightSurvived   = 17,  // server → all: amaneció, la noche está ganada
     NightClock      = 18,  // server → all: segundos que faltan para el amanecer (1 Hz)
+    RitualBook      = 19,  // server → all: apertura del libro ritual (0..1, ~5 Hz)
 }

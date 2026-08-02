@@ -345,6 +345,12 @@ public class ARImageAnchor : MonoBehaviour
 
     private void SpawnVisual(Transform anchorTransform)
     {
+        // EN PARTIDA el visual del anchor es el LIBRO RITUAL: no es un marcador sino una
+        // mecánica (se cierra solo y hay que alumbrarlo). Fuera de partida —escáner,
+        // calibración— siguen las esferas de siempre, que es cuando sirven de referencia.
+        _anchorVisual = Gameplay.RitualBookView.TrySpawn(anchorTransform);
+        if (_anchorVisual != null) return;
+
         _anchorVisual = new GameObject("AnchorVisual");
         _anchorVisual.transform.SetParent(anchorTransform, worldPositionStays: false);
         _anchorVisual.transform.localPosition = Vector3.up * 0.05f;

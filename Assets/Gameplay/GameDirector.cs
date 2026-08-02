@@ -95,7 +95,8 @@ namespace Gameplay
             _clockTimer    = 0f;
             PublicarReloj();
             SorkerNav.Ensure();
-            ArbmosDirector.Ensure().StartRun();   // alucinacion de cordura (individual por jugador)
+            ArbmosDirector.Ensure().StartRun();      // alucinacion de cordura (individual por jugador)
+            RitualBookDirector.Ensure().StartRun();  // libro sobre la imagen: se cierra si no lo alumbran
             _running = true;
         }
 
@@ -373,35 +374,15 @@ namespace Gameplay
         }
 
         // --- Repel: hay algun jugador iluminando el objetivo con su linterna? ---
-        private bool AnyIlluminating(Vector3 target)
-        {
-            var net = NetworkManager.Instance;
-            float ang = _night.flashlightConeAngleDeg, range = _night.flashlightRange;
-
-            if (Camera.main != null && ServerDeaths.IsAlive(0) && net.LocalFlashlightOn() &&
-                InCone(Camera.main.transform.position, Camera.main.transform.forward, target, ang, range))
-                return true;
-
-            foreach (var cid in net.ConnectedClients)
-            {
-                if (ServerDeaths.IsDead(cid)) continue;
-                if (!net.TryGetClientFlashlightOn(cid, out var on) || !on) continue;
-                if (!net.TryGetClientWorldPosition(cid, out var pos)) continue;
-                if (!net.TryGetClientForward(cid, out var fwd)) continue;
-                if (InCone(pos, fwd, target, ang, range)) return true;
-            }
-            return false;
-        }
-
-        private static bool InCone(Vector3 pos, Vector3 forward, Vector3 target, float angleDeg, float range)
-        {
-            var to = target - pos;
-            float d = to.magnitude;
-            if (d > range) return false;
-            if (d < 1e-3f) return true;
-            float cos = Vector3.Dot(to / d, forward.normalized);
-            return cos >= Mathf.Cos(angleDeg * Mathf.Deg2Rad);
-        }
+        // El test vive en Gameplay.PlayerLights, compartido con el libro ritual.
+        //
+        // OJO: el cono de la NightConfig (30° / 8 m) es MUCHO mas ancho que el haz real de
+        // la linterna (7.2° / 4.2 m en el prefab), asi que aca se repele apuntando bastante
+        // afuera del Sorken. El libro ya usa el cono real; esto sigue con el de la noche
+        // para no cambiar la dificultad del Sorken sin querer — cuando se decida, es
+        // pasarle PlayerLights.TryConoReal como hace RitualBookDirector.
+        private bool AnyIlluminating(Vector3 target) =>
+            PlayerLights.AnyIlluminating(target, _night.flashlightConeAngleDeg, _night.flashlightRange);
 
         private static float HorizDist(Vector3 a, Vector3 b) { a.y = 0f; b.y = 0f; return Vector3.Distance(a, b); }
 
@@ -459,11 +440,13 @@ namespace Gameplay
             if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return null;
 
             int markers = SceneRegistry.Instance != null ? SceneRegistry.Instance.Markers.Count : 0;
+            string libro = RitualBookDirector.Instance != null ? RitualBookDirector.Instance.DebugLine() : null;
             return
                 $"[GameDirector]  phase={_phase}\n" +
                 $"attemptTimer={_attemptTimer:F1}  repel={_repel:F1}  grace={_grace:F1}\n" +
                 $"sorken={(_sorken != null ? _sorken.State.ToString() : "null")}  netId={_sorkenNetId}\n" +
-                $"markers={markers}  alivePlayers={CountAlivePlayers()}  dead={ServerDeaths.Count}";
+                $"markers={markers}  alivePlayers={CountAlivePlayers()}  dead={ServerDeaths.Count}" +
+                (libro != null ? $"\n{libro}" : "");
         }
     }
 }

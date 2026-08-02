@@ -66,6 +66,7 @@ namespace Gameplay
             ServerDeaths.Reset();
             LocalDeath.Instance?.Revive();
             NightResult.Limpiar();
+            RitualBookDirector.Instance?.Reiniciar();   // el libro se vuelve a ver abierto
 
             // Salir de Cardboard: la pantalla de sincronización es monoscópica y hay que
             // volver a apuntar a la imagen, cosa imposible con la vista estéreo (el
@@ -83,6 +84,7 @@ namespace Gameplay
         {
             GameDirector.Instance?.StopRun();
             ArbmosDirector.Instance?.StopRun();
+            RitualBookDirector.Instance?.StopRun();
             SanitySystem.Instance?.StopRun();
             Bateries.BatterySpawnManager.Instance?.StopRun();
         }

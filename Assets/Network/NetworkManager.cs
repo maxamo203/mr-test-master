@@ -63,6 +63,7 @@ public class NetworkManager : MonoBehaviour
     public event Action         OnNightReset;          // client: el host cortó la noche
     public event Action         OnNightSurvived;       // todos: amaneció, noche ganada
     public event Action<int,int> OnNightClock;         // client: (restantes, totales) del amanecer
+    public event Action<float>  OnRitualBook;          // client: apertura del libro ritual (0..1)
     public event Action<byte[]> OnMapReceived;         // client: recibió el .mscn del mapa
     public event Action<byte, float> OnBatteryCollected; // client: recogió pila (rarityIndex, charge)
     public event Action<float, float> OnSanityUpdated;    // client: cordura autoritativa (valor, max)
@@ -236,6 +237,15 @@ public class NetworkManager : MonoBehaviour
             Totales   = (ushort)Mathf.Clamp(totales,   0, ushort.MaxValue),
         }.Serialize();
         _srv.Broadcast(MsgHelper.Frame(MessageType.NightClock, body));
+    }
+
+    // Server → all (~5 Hz): apertura del LIBRO RITUAL. Los clientes no pueden calcularla
+    // (depende de las linternas de todos los jugadores), así que la reciben resuelta.
+    public void ServerSendRitualBook(float apertura01)
+    {
+        if (_srv == null) return;
+        var body = new RitualBookMsg { Apertura = Mathf.Clamp01(apertura01) }.Serialize();
+        _srv.Broadcast(MsgHelper.Frame(MessageType.RitualBook, body));
     }
 
     private readonly List<uint> _despawnScratch = new();
@@ -647,6 +657,12 @@ public class NetworkManager : MonoBehaviour
             {
                 var clock = NightClockMsg.Deserialize(msg.Body);
                 OnNightClock?.Invoke(clock.Restantes, clock.Totales);
+                break;
+            }
+            case MessageType.RitualBook:
+            {
+                var m = RitualBookMsg.Deserialize(msg.Body);
+                OnRitualBook?.Invoke(m.Apertura);
                 break;
             }
             case MessageType.MapData:

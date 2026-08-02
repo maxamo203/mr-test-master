@@ -24,6 +24,21 @@ namespace Gameplay
             return true;
         }
 
+        // Mata a TODOS los jugadores vivos de una: game over compartido, no la muerte
+        // individual de siempre (lo usa el libro ritual al cerrarse). Devuelve cuántos
+        // murieron en esta llamada.
+        public static int KillAll()
+        {
+            int n = Kill(0) ? 1 : 0;   // host
+
+            var net = NetworkManager.Instance;
+            if (net != null)
+                foreach (var cid in net.ConnectedClients)
+                    if (Kill(cid)) n++;
+
+            return n;
+        }
+
         public static void Reset() => _dead.Clear();
     }
 }

@@ -324,4 +324,27 @@ public class NightClockMsg
     }
 }
 
+// Server → all (~5 Hz): apertura del LIBRO RITUAL (0 = cerrado, 1 = abierto). Sólo el
+// host puede calcularla —depende de las linternas de TODOS los jugadores— así que los
+// clientes la reciben ya resuelta. Cambia del orden de 1/bookCloseSeconds por segundo:
+// a este ritmo el salto entre paquetes no se nota y no hace falta interpolar.
+public class RitualBookMsg
+{
+    public float Apertura;
+
+    public byte[] Serialize()
+    {
+        using var ms = new MemoryStream(4);
+        using var w  = new BinaryWriter(ms);
+        w.Write(Apertura);
+        return ms.ToArray();
+    }
+
+    public static RitualBookMsg Deserialize(byte[] d)
+    {
+        using var r = new BinaryReader(new MemoryStream(d));
+        return new() { Apertura = r.ReadSingle() };
+    }
+}
+
 // AnchorResolved, StartGame, ResetNight y NightSurvived no llevan payload — body vacío
