@@ -77,6 +77,9 @@ public class TcpTransportServer
             try
             {
                 var  tcp      = _listener.AcceptTcpClient();
+                // Sin NoDelay, Nagle agrupa los paquetes chicos y le mete hasta ~200 ms
+                // de retardo al chat de voz (frames de 30 ms) y al input.
+                tcp.NoDelay   = true;
                 uint clientId = _nextClientId++;
                 _clients[clientId] = tcp;
                 _streams[clientId] = tcp.GetStream();

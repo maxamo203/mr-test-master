@@ -68,9 +68,16 @@ public class NetworkManager : MonoBehaviour
     public event Action<byte, float> OnBatteryCollected; // client: recogió pila (rarityIndex, charge)
     public event Action<float, float> OnSanityUpdated;    // client: cordura autoritativa (valor, max)
     public event Action               OnPlayerDied;        // client: fui atrapado (pantalla de muerte)
+    public event Action<uint, byte[]> OnVoiceData;         // todos: frame de voz de (emisor, adpcm)
+    public event Action               OnRosterChanged;     // todos: cambió quién está en la sala
 
     // Server: clientes remotos conectados (no incluye al host, que es clientId 0).
     public IReadOnlyCollection<uint> ConnectedClients => _connectedClients;
+
+    // Quiénes están en la sala, host incluido (clientId 0). En el server se arma solo;
+    // en el cliente llega por PlayerRoster. Lo usa el chat de voz para listar jugadores.
+    private readonly List<uint> _roster = new();
+    public IReadOnlyList<uint> Roster => _roster;
 
     // Server: ultimo estado de linterna reportado por un cliente. false si nunca reportó
     // (el llamador decide el default; el SanitySystem asume "encendida" = no drena).
@@ -138,6 +145,7 @@ public class NetworkManager : MonoBehaviour
         InSession = true;
         _srv      = new TcpTransportServer();
         _srv.Start(port);
+        ServerRebuildRoster();   // la sala arranca con el host solo
     }
 
     public void StartClient(string host, int port)
@@ -246,6 +254,56 @@ public class NetworkManager : MonoBehaviour
         if (_srv == null) return;
         var body = new RitualBookMsg { Apertura = Mathf.Clamp01(apertura01) }.Serialize();
         _srv.Broadcast(MsgHelper.Frame(MessageType.RitualBook, body));
+    }
+
+    // ── Chat de voz y sala ────────────────────────────────────────────────
+
+    // Server: rearma la lista de la sala y se la manda a todos. Se llama al arrancar y
+    // cada vez que alguien entra o sale.
+    private void ServerRebuildRoster()
+    {
+        _roster.Clear();
+        _roster.Add(0);                                  // el host
+        foreach (var id in _connectedClients) _roster.Add(id);
+        _roster.Sort();
+
+        if (_srv != null)
+        {
+            var body = new PlayerRosterMsg { Ids = new List<uint>(_roster) }.Serialize();
+            _srv.Broadcast(MsgHelper.Frame(MessageType.PlayerRoster, body));
+        }
+        OnRosterChanged?.Invoke();
+    }
+
+    // Server: reenvía un frame de voz a todos MENOS al que lo mandó. Si vino de un
+    // cliente, el host además lo reproduce localmente (OnVoiceData).
+    // 'datos' es un buffer reutilizado por el codificador: sólo valen los primeros
+    // 'largo' bytes y hay que serializarlo en el acto.
+    public void ServerSendVoice(uint senderId, byte[] datos, int largo)
+    {
+        if (_srv == null || datos == null || largo <= 0) return;
+
+        var body   = new VoiceDataMsg { SenderId = senderId, Adpcm = datos, Largo = largo }.Serialize();
+        var framed = MsgHelper.Frame(MessageType.VoiceData, body);
+
+        foreach (var id in _connectedClients)
+            if (id != senderId) _srv.Send(id, framed);
+
+        // El host escucha a los clientes, pero no su propia voz.
+        if (senderId != 0)
+        {
+            var eco = new byte[largo];
+            Array.Copy(datos, eco, largo);
+            OnVoiceData?.Invoke(senderId, eco);
+        }
+    }
+
+    // Client → server: un frame de la voz de este jugador (el server lo reparte).
+    public void ClientSendVoice(byte[] datos, int largo)
+    {
+        if (_cli == null || datos == null || largo <= 0) return;
+        var body = new VoiceDataMsg { SenderId = LocalClientId, Adpcm = datos, Largo = largo }.Serialize();
+        _cli.Send(MsgHelper.Frame(MessageType.VoiceData, body));
     }
 
     private readonly List<uint> _despawnScratch = new();
@@ -441,6 +499,12 @@ public class NetworkManager : MonoBehaviour
         Debug.Log($"[Server] Cliente {clientId} conectado");
         _connectedClients.Add(clientId);
 
+        // Decirle su propio id. Sin esto el cliente se queda con LocalClientId = 0 (el
+        // del host) y no puede distinguirse del resto de la sala — lo necesita el chat
+        // de voz para no listarse a sí mismo ni reproducir su propio eco.
+        _srv.Send(clientId, MsgHelper.Frame(MessageType.ClientConnected,
+            new ClientConnectedMsg { ClientId = clientId, PlayerNetworkId = 0 }.Serialize()));
+
         // Enviar el mapa PRIMERO: el cliente necesita el .mscn (mapa + imagen de
         // referencia) para reconstruir el entorno y calibrar su anchor contra la misma
         // imagen física que el host. Sin esto los Sorkens no caen en el mismo lugar.
@@ -472,6 +536,7 @@ public class NetworkManager : MonoBehaviour
             _srv.Send(clientId, anchorMsg);
         }
 
+        ServerRebuildRoster();
         OnClientJoined?.Invoke(clientId);
     }
 
@@ -491,6 +556,7 @@ public class NetworkManager : MonoBehaviour
             _clientToPlayer.Remove(clientId);
         }
         _srv.RemoveClient(clientId);
+        ServerRebuildRoster();
         OnClientLeft?.Invoke(clientId);
     }
 
@@ -533,6 +599,14 @@ public class NetworkManager : MonoBehaviour
                 if (!GameStarted) return;
                 var pick = Bateries.BatteryPickupMsg.Deserialize(incoming.Body);
                 Bateries.BatterySpawnManager.Instance?.ServerHandlePickup(incoming.ClientId, pick.NetworkId);
+                break;
+            }
+            case MessageType.VoiceData:
+            {
+                // Reenviar al resto de la sala poniendo el emisor REAL (el cliente no
+                // puede hacerse pasar por otro) y reproducirlo en el host.
+                var v = VoiceDataMsg.Deserialize(incoming.Body);
+                ServerSendVoice(incoming.ClientId, v.Adpcm, v.Largo);
                 break;
             }
         }
@@ -687,6 +761,20 @@ public class NetworkManager : MonoBehaviour
             case MessageType.PlayerDied:
             {
                 OnPlayerDied?.Invoke();
+                break;
+            }
+            case MessageType.VoiceData:
+            {
+                var v = VoiceDataMsg.Deserialize(msg.Body);
+                OnVoiceData?.Invoke(v.SenderId, v.Adpcm);
+                break;
+            }
+            case MessageType.PlayerRoster:
+            {
+                var m = PlayerRosterMsg.Deserialize(msg.Body);
+                _roster.Clear();
+                _roster.AddRange(m.Ids);
+                OnRosterChanged?.Invoke();
                 break;
             }
         }

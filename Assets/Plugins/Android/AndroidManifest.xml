@@ -14,6 +14,13 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Chat de voz (Voice/VoiceChatManager). Unity suele agregar RECORD_AUDIO solo al
+         detectar la API Microphone, pero como este manifest reemplaza al generado lo
+         declaramos explicitamente. El permiso se pide en runtime (Android 6+). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
     <application>
 
         <activity

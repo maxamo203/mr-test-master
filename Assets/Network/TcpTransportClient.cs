@@ -21,7 +21,10 @@ public class TcpTransportClient
 
     public void Connect(string host, int port)
     {
-        _tcp    = new TcpClient();
+        _tcp = new TcpClient();
+        // Ver TcpTransportServer: Nagle agruparía los frames de voz (30 ms) y sumaría
+        // retardo perceptible a la conversación.
+        _tcp.NoDelay = true;
         _tcp.Connect(host, port);
         _stream    = _tcp.GetStream();
         _connected = true;

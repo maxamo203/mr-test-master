@@ -24,9 +24,10 @@ namespace Gamepad
     public class PauseMenuController : MonoBehaviour
     {
         // Main → Opciones/Salir/Reanudar. Opciones es un hub con el volumen y las
-        // subcategorías: Control (mando), Cardboard (calibración estéreo) y — SOLO
-        // en development build — Linterna (tuning) y el toggle del Debug HUD.
-        private enum Page { Main, Options, Control, Cardboard, Flashlight }
+        // subcategorías: Control (mando), Cardboard (calibración estéreo), Voz (chat de
+        // voz, sólo en sesiones multijugador) y — SOLO en development build — Linterna
+        // (tuning) y el toggle del Debug HUD.
+        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice }
 
         public static PauseMenuController Instance { get; private set; }
 
@@ -106,13 +107,13 @@ namespace Gamepad
             DrawRect(full, new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.8f));
             UIBlocker.AddVirtualRect(full);
 
+            // El chat de voz sólo existe en una sesión multijugador: si no hay sala, ni
+            // se ofrece la subcategoría (y el panel de Opciones queda más bajo).
+            bool hayVoz = Voice.VoiceChatManager.SesionConVoz;
+
             // Panel centrado. La altura depende de la página (cada submenú tiene su alto).
             float pw = Mathf.Min(vw - 40f, 560f);
-            float ph = Mathf.Min(vh - 120f,
-                _page == Page.Control    ? 820f :
-                _page == Page.Flashlight ? 660f :
-                _page == Page.Cardboard  ? 460f :
-                _page == Page.Options    ? (Debug.isDebugBuild ? 620f : 480f) : 400f);
+            float ph = Mathf.Min(vh - 120f, AltoPagina(hayVoz));
             var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
             DrawRect(panel, new Color(T.BgPanel.r, T.BgPanel.g, T.BgPanel.b, 0.98f));
             T.Borde(panel, T.Border);
@@ -138,6 +139,7 @@ namespace Gamepad
                           GameOptions.Volumen * 100f, 0f, 100f, "{0:0}%"); y += 72f;
                 AddButton("control",   new Rect(x, y, w, 64f), "CONTROL (MANDO)"); y += 76f;
                 AddButton("cardboard", new Rect(x, y, w, 64f), "CARDBOARD");       y += 76f;
+                if (hayVoz) { AddButton("voz", new Rect(x, y, w, 64f), "CHAT DE VOZ"); y += 76f; }
                 if (Debug.isDebugBuild)
                 {
                     AddButton("linterna", new Rect(x, y, w, 64f), "LINTERNA (DEV)"); y += 76f;
@@ -193,6 +195,52 @@ namespace Gamepad
                               0f, cb.MaxOffset, "{0:0.000}"); y += 68f;
                     AddSlider("cb_offR", new Rect(x, y, w, 60f), "Distancia ojo der", cb.OffsetR,
                               0f, cb.MaxOffset, "{0:0.000}"); y += 68f;
+                }
+
+                y += 6f;
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+            }
+            else if (_page == Page.Voice)
+            {
+                // Chat de voz de la sala: mute propio, volumen general y un slider de
+                // volumen POR JUGADOR (los ajustes por jugador viven sólo en memoria,
+                // ver GameOptions — los clientId se reasignan en cada sala).
+                GUI.Label(new Rect(x, y, w, 50f), "CHAT DE VOZ", _title); y += 62f;
+
+                var vc = Voice.VoiceChatManager.Instance;
+
+                AddToggle("vozmic", new Rect(x, y, w, 52f),
+                          "Micrófono (transmitir)", GameOptions.VozMic); y += 58f;
+
+                // Barra de nivel del micrófono con la marca del umbral: sin esto el
+                // slider de sensibilidad se ajusta a ciegas.
+                DrawNivelMic(new Rect(x + 14f, y, w - 28f, 16f), vc); y += 30f;
+
+                AddSlider("voz_vol", new Rect(x, y, w, 60f), "Volumen voces",
+                          GameOptions.VozVolumen * 100f, 0f, 100f, "{0:0}%"); y += 68f;
+                AddSlider("voz_sens", new Rect(x, y, w, 60f), "Sensibilidad mic",
+                          GameOptions.VozSensibilidad * 100f, 0f, 100f, "{0:0}%"); y += 68f;
+
+                GUI.Label(new Rect(x + 14f, y, w - 28f, 24f), "VOLUMEN POR JUGADOR", _status);
+                y += 30f;
+
+                if (vc == null || vc.Otros.Count == 0)
+                {
+                    GUI.Label(new Rect(x + 14f, y, w - 28f, 36f),
+                              "No hay otros jugadores en la sala.", _status);
+                    y += 40f;
+                }
+                else
+                {
+                    for (int i = 0; i < vc.Otros.Count; i++)
+                    {
+                        uint   id     = vc.Otros[i];
+                        string nombre = Voice.VoiceChatManager.NombreDe(id);
+                        if (vc.EstaHablando(id)) nombre += "  ●";   // marca de "está hablando"
+                        AddSlider("voz_p" + id, new Rect(x, y, w, 60f), nombre,
+                                  vc.VolumenDe(id) * 100f, 0f, 100f, "{0:0}%");
+                        y += 68f;
+                    }
                 }
 
                 y += 6f;
@@ -334,16 +382,67 @@ namespace Gamepad
             if (cb != null) cb.Save();
         }
 
-        // Los sliders llevan prefijo por familia: fl_ (linterna), cb_ (cardboard)
-        // y opt_ (opciones de usuario).
+        // Alto del panel según la página. La de voz crece con la cantidad de jugadores
+        // (un slider por cada uno).
+        private float AltoPagina(bool hayVoz)
+        {
+            switch (_page)
+            {
+                case Page.Control:    return 820f;
+                case Page.Flashlight: return 660f;
+                case Page.Cardboard:  return 460f;
+                case Page.Options:    return (Debug.isDebugBuild ? 620f : 480f) + (hayVoz ? 76f : 0f);
+                case Page.Voice:
+                {
+                    var vc = Voice.VoiceChatManager.Instance;
+                    int n  = vc != null ? vc.Otros.Count : 0;
+                    return 428f + (n > 0 ? n * 68f : 40f);
+                }
+                default: return 400f;
+            }
+        }
+
+        // Barra de nivel del micrófono propio + marca roja del umbral de la VAD: si el
+        // nivel no pasa la marca, el micro no transmite.
+        private void DrawNivelMic(Rect r, Voice.VoiceChatManager vc)
+        {
+            DrawRect(r, new Color(1f, 1f, 1f, 0.10f));
+            if (vc == null || !vc.MicAbierto) return;
+
+            // El RMS de la voz vive en la parte baja del rango: se escala para que la
+            // barra se mueva de forma legible (x6 ≈ voz normal llenando la barra).
+            const float Escala = 6f;
+            float umbral = Voice.VoiceChatManager.UmbralActual();
+            float nivel  = Mathf.Clamp01(vc.NivelMic * Escala);
+
+            DrawRect(new Rect(r.x, r.y, r.width * nivel, r.height),
+                     vc.NivelMic >= umbral ? T.Tan : new Color(1f, 1f, 1f, 0.35f));
+            DrawRect(new Rect(r.x + r.width * Mathf.Clamp01(umbral * Escala) - 1f,
+                              r.y - 2f, 2f, r.height + 4f), T.Red);
+        }
+
+        // Los sliders llevan prefijo por familia: fl_ (linterna), cb_ (cardboard),
+        // opt_ (opciones de usuario) y voz_ (chat de voz; "vozmic" es un toggle, no
+        // lleva guion bajo justamente para no caer acá).
         private static bool IsSlider(string id) =>
-            id != null && (id.StartsWith("fl_") || id.StartsWith("cb_") || id.StartsWith("opt_"));
+            id != null && (id.StartsWith("fl_") || id.StartsWith("cb_") ||
+                           id.StartsWith("opt_") || id.StartsWith("voz_"));
+
+        // "voz_p3" → el slider de volumen del cliente 3. Los ids se arman en la página
+        // de voz a partir del roster, así que son dinámicos.
+        private static bool TryClientIdVoz(string id, out uint clientId)
+        {
+            clientId = 0;
+            return id != null && id.StartsWith("voz_p") &&
+                   uint.TryParse(id.Substring(5), out clientId);
+        }
 
         // Ajusta un parámetro (dir = ±1). Paso por parámetro (grados/metros/factor).
         private void Adjust(string id, float dir)
         {
             float step;
-            switch (id)
+            if (id != null && id.StartsWith("voz_")) { step = 5f; }   // todos en %
+            else switch (id)
             {
                 case "fl_range":     step = 1f;     break;
                 case "fl_intensity": step = 0.5f;   break;
@@ -358,8 +457,16 @@ namespace Gamepad
 
         private float CurrentValue(string id)
         {
+            if (TryClientIdVoz(id, out var cidGet))
+            {
+                var vc = Voice.VoiceChatManager.Instance;
+                return vc != null ? vc.VolumenDe(cidGet) * 100f : 100f;
+            }
+
             switch (id)
             {
+                case "voz_vol":  return GameOptions.VozVolumen      * 100f;
+                case "voz_sens": return GameOptions.VozSensibilidad * 100f;
                 case "fl_range":     { var fl = GetFlashlight(); return fl != null ? fl.range         : 0f; }
                 case "fl_outer":     { var fl = GetFlashlight(); return fl != null ? fl.outerAngleDeg : 0f; }
                 case "fl_inner":     { var fl = GetFlashlight(); return fl != null ? fl.innerAngleDeg : 0f; }
@@ -376,8 +483,16 @@ namespace Gamepad
         // Los cb_ clampean dentro de CardboardCalibrationUI (setters).
         private void SetSliderValue(string id, float value)
         {
+            if (TryClientIdVoz(id, out var cidSet))
+            {
+                Voice.VoiceChatManager.Instance?.SetVolumenDe(cidSet, Mathf.Clamp(value, 0f, 100f) / 100f);
+                return;
+            }
+
             switch (id)
             {
+                case "voz_vol":  GameOptions.VozVolumen      = Mathf.Clamp(value, 0f, 100f) / 100f; break;
+                case "voz_sens": GameOptions.VozSensibilidad = Mathf.Clamp(value, 0f, 100f) / 100f; break;
                 case "fl_range":     { var fl = GetFlashlight(); if (fl != null) fl.range         = Mathf.Clamp(value, 0.5f, 30f); break; }
                 case "fl_outer":     { var fl = GetFlashlight(); if (fl != null) fl.outerAngleDeg = Mathf.Clamp(value, 2f,   89f); break; }
                 case "fl_inner":     { var fl = GetFlashlight(); if (fl != null) fl.innerAngleDeg = Mathf.Clamp(value, 0f, fl.outerAngleDeg - 1f); break; }
@@ -610,6 +725,7 @@ namespace Gamepad
                     _page = Page.Options; _focus = 0; _focusLast = true; break;
                 case Page.Control:
                 case Page.Flashlight:
+                case Page.Voice:
                     _page = Page.Options; _focus = 0; _focusLast = true; break;
                 default: // Main
                     _open = false; break;
@@ -626,6 +742,8 @@ namespace Gamepad
                 case "opciones":  _page = Page.Options;    _focus = 0; _focusLast = true; break;
                 case "control":   _page = Page.Control;    _focus = 0; _focusLast = true; break;
                 case "cardboard": _page = Page.Cardboard;  _focus = 0; _focusLast = true; break;
+                case "voz":       _page = Page.Voice;      _focus = 0; _focusLast = true; break;
+                case "vozmic":    GameOptions.VozMic = !GameOptions.VozMic; break;
                 case "linterna":
                     if (Debug.isDebugBuild) { _page = Page.Flashlight; _focus = 0; _focusLast = true; }
                     break;

@@ -18,6 +18,11 @@ public static class IOSBuildPostProcessor
     private const string LocalNetworkUsage =
         "Esta app usa la red local para encontrar otros jugadores en la misma red Wi-Fi.";
 
+    // Popup del microfono (chat de voz de la sala — ver Voice/VoiceChatManager).
+    // Sin esta clave iOS mata la app al primer Microphone.Start.
+    private const string MicrophoneUsage =
+        "Esta app usa el microfono para el chat de voz con los otros jugadores de la sala.";
+
     [PostProcessBuild(45)]
     public static void OnPostProcessBuild(BuildTarget target, string pathToBuiltProject)
     {
@@ -31,6 +36,7 @@ public static class IOSBuildPostProcessor
 
         // 1) Mensaje del popup de permiso (iOS 14+).
         root.SetString("NSLocalNetworkUsageDescription", LocalNetworkUsage);
+        root.SetString("NSMicrophoneUsageDescription",   MicrophoneUsage);
 
         // 2) NSBonjourServices: registra los servicios que la app va a usar en la LAN.
         //    Aunque usemos broadcast UDP plano (no Bonjour), declararlos hace que iOS

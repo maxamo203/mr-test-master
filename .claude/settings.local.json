@@ -25,7 +25,9 @@
       "Read(//tmp/**)",
       "Bash(dotnet exec *)",
       "Read(//c/Program Files/Unity/Hub/Editor/6000.4.4f1/Editor/Data/DotNetSdkRoslyn/**)",
-      "Read(//c/Program Files/Unity/Hub/Editor/**)"
+      "Read(//c/Program Files/Unity/Hub/Editor/**)",
+      "mcp__claude_ai_Trello__trelloSearch",
+      "mcp__claude_ai_Trello__trelloReadList"
     ]
   }
 }

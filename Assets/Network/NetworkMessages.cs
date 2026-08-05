@@ -347,4 +347,62 @@ public class RitualBookMsg
     }
 }
 
+// Un frame de voz (~30 ms) codificado en IMA ADPCM. Viaja cliente → server y el server
+// lo reenvía al resto poniendo el SenderId real (ver NetworkManager.ServerSendVoice).
+//
+// Serialize toma (buffer, largo) en vez de un byte[] exacto porque el codificador
+// REUTILIZA su buffer de salida en cada frame: así se evita una copia por paquete.
+public class VoiceDataMsg
+{
+    public uint   SenderId;
+    public byte[] Adpcm;
+    public int    Largo;
+
+    public byte[] Serialize()
+    {
+        int n = Adpcm != null ? Mathf.Clamp(Largo, 0, Adpcm.Length) : 0;
+        using var ms = new MemoryStream(8 + n);
+        using var w  = new BinaryWriter(ms);
+        w.Write(SenderId);
+        w.Write(n);
+        if (n > 0) w.Write(Adpcm, 0, n);
+        return ms.ToArray();
+    }
+
+    public static VoiceDataMsg Deserialize(byte[] d)
+    {
+        using var r   = new BinaryReader(new MemoryStream(d));
+        uint      id  = r.ReadUInt32();
+        int       len = r.ReadInt32();
+        var       buf = len > 0 ? r.ReadBytes(len) : System.Array.Empty<byte>();
+        return new() { SenderId = id, Adpcm = buf, Largo = buf.Length };
+    }
+}
+
+// Server → all: los clientId que están en la sala (el host es siempre el 0). Los
+// clientes no se conocen entre sí de otra forma, y el chat de voz necesita la lista
+// para mostrar un slider de volumen por jugador.
+public class PlayerRosterMsg
+{
+    public List<uint> Ids = new();
+
+    public byte[] Serialize()
+    {
+        using var ms = new MemoryStream(2 + Ids.Count * 4);
+        using var w  = new BinaryWriter(ms);
+        w.Write((ushort)Ids.Count);
+        for (int i = 0; i < Ids.Count; i++) w.Write(Ids[i]);
+        return ms.ToArray();
+    }
+
+    public static PlayerRosterMsg Deserialize(byte[] d)
+    {
+        using var r   = new BinaryReader(new MemoryStream(d));
+        var       msg = new PlayerRosterMsg();
+        int       n   = r.ReadUInt16();
+        for (int i = 0; i < n; i++) msg.Ids.Add(r.ReadUInt32());
+        return msg;
+    }
+}
+
 // AnchorResolved, StartGame, ResetNight y NightSurvived no llevan payload — body vacío
