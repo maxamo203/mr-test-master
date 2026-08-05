@@ -11,9 +11,10 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
   m_Name: Noche 6
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   displayName: Noche 6 (DEV)
   briefing: (DEV) Solo Arbmos (Sorken OFF) para probarlo aislado.
+  nightDurationSeconds: 300
   sorkenActive: 0
   attemptIntervalMin: 2
   attemptIntervalMax: 5
@@ -29,7 +30,7 @@ MonoBehaviour:
   sanityMax: 100
   flashlightOffThreshold: 2
   sanityDrainPerSecond: 12
-  arbmosActive: 1
+  arbmosActive: 0
   arbmosStillInvokeSeconds: 3
   arbmosStillRadius: 0.15
   arbmosPresentSeconds: 6
@@ -43,6 +44,9 @@ MonoBehaviour:
   arbmosLethalStalkSeconds: 2.5
   arbmosLethalChaseSpeed: 3.5
   arbmosGrabRange: 1.2
+  bookActive: 1
+  bookCloseSeconds: 180
+  bookOpenSecondsPerPlayer: 30
   flashlightConeAngleDeg: 30
   flashlightRange: 8
   initialAttemptDelay: 2

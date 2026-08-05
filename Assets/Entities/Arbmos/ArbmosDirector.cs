@@ -27,7 +27,8 @@ public class ArbmosDirector : MonoBehaviour
         public Phase phase = Phase.Dormant;
         public float cooldown;          // Dormant: espera hasta el proximo intento
         public float stillTimer;        // segundos que el jugador lleva quieto
-        public Vector3 anchor;          // referencia para medir quietud/movimiento
+        public Vector3 anchor;          // referencia para medir quietud/movimiento (PIVOTE, no camara)
+        public float anchorYaw;         // rumbo al fijar el ancla (tolera el error del brazo al girar)
         public bool  hasAnchor;
         public float moveHold;          // >0 => "en movimiento" (con decaimiento anti-jitter)
 
@@ -141,7 +142,11 @@ public class ArbmosDirector : MonoBehaviour
     private void TickPlayer(uint cid, Haunt h, float dt)
     {
         if (!TryGetPlayerPos(cid, out var ppos)) return;
-        UpdateMotion(h, ppos, dt);
+
+        // La quietud se mide sobre el PIVOTE del cuerpo, no sobre la camara (ver
+        // UpdateMotion). El resto de las fases sigue usando ppos: es donde esta el jugador.
+        Vector3 fwd = PlayerForward(cid);
+        UpdateMotion(h, Pivote(ppos, fwd), Yaw(fwd), dt);
 
         switch (h.phase)
         {
@@ -315,20 +320,66 @@ public class ArbmosDirector : MonoBehaviour
     }
 
     // ── Movimiento / quietud del jugador (robusto al jitter de la camara AR) ──
-    private void UpdateMotion(Haunt h, Vector3 ppos, float dt)
-    {
-        float radius = _night.arbmosStillRadius;
-        if (!h.hasAnchor) { h.anchor = ppos; h.hasAnchor = true; h.stillTimer = 0f; h.moveHold = 0f; return; }
+    //
+    // "Quieto" es que el JUGADOR no se desplazo, no que la camara no se haya movido: la
+    // camara AR es el TELEFONO, que se sostiene por delante del cuerpo. Girar en el lugar
+    // —mirar alrededor, lo mas normal del mundo— lo pasea por un arco de medio metro con
+    // los pies clavados: un giro de 90° con el brazo estirado mueve la camara ~55 cm,
+    // contra un radio de 15 cm. Asi, el gatillo de quietud casi no se cumplia nunca.
+    //
+    // Dos correcciones sobre el mismo hecho fisico:
+    //  1) Medimos el PIVOTE (la camara corrida hacia atras un brazo, ~el eje del cuerpo)
+    //     en vez de la camara: al girar en el lugar el pivote se queda donde esta.
+    //  2) El brazo real cambia con la persona y con como agarre el telefono, asi que al
+    //     pivote le queda un error proporcional a cuanto giro. El radio lleva una
+    //     tolerancia extra que crece con el giro acumulado desde el ancla (con tope).
+    //
+    // Caminar de verdad mueve el pivote igual que la camara, asi que se sigue detectando.
 
-        if (HorizDist(ppos, h.anchor) > radius)
+    // Distancia camara → eje de giro del cuerpo.
+    private const float BrazoMetros = 0.4f;
+    // Incertidumbre de ese brazo, por radian girado (residuo que deja la correccion 1).
+    private const float BrazoError  = 0.25f;
+    // Tope de la tolerancia extra: girar mucho no puede habilitar caminar.
+    private const float TolMaxExtra = 0.35f;
+
+    private void UpdateMotion(Haunt h, Vector3 pivote, float yaw, float dt)
+    {
+        if (!h.hasAnchor)
         {
-            h.anchor     = ppos;
+            h.anchor    = pivote; h.anchorYaw = yaw; h.hasAnchor = true;
+            h.stillTimer = 0f;    h.moveHold  = 0f;
+            return;
+        }
+
+        float giroRad = Mathf.Abs(Mathf.DeltaAngle(yaw, h.anchorYaw)) * Mathf.Deg2Rad;
+        float tol     = _night.arbmosStillRadius + Mathf.Min(giroRad * BrazoError, TolMaxExtra);
+
+        if (HorizDist(pivote, h.anchor) > tol)
+        {
+            h.anchor     = pivote;
+            h.anchorYaw  = yaw;
             h.stillTimer = 0f;
             h.moveHold   = 0.35f;   // se lo considera "en movimiento" un ratito
         }
         else h.stillTimer += dt;
 
         h.moveHold = Mathf.Max(0f, h.moveHold - dt);
+    }
+
+    // Eje de giro aproximado del jugador: la camara llevada hacia atras un brazo.
+    private static Vector3 Pivote(Vector3 camPos, Vector3 camFwd)
+    {
+        camFwd.y = 0f;
+        if (camFwd.sqrMagnitude < 1e-6f) return camPos;   // mirando a pique: sin rumbo util
+        return camPos - camFwd.normalized * BrazoMetros;
+    }
+
+    // Rumbo horizontal (grados) de una direccion de mirada.
+    private static float Yaw(Vector3 fwd)
+    {
+        fwd.y = 0f;
+        return fwd.sqrMagnitude < 1e-6f ? 0f : Mathf.Atan2(fwd.x, fwd.z) * Mathf.Rad2Deg;
     }
 
     // ── Consultas de jugadores ─────────────────────────────────────────────

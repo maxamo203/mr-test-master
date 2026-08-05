@@ -61,7 +61,9 @@ namespace Gameplay
         public bool arbmosActive = false;
         [Tooltip("Segundos quieto que invocan al Arbmos (inaccion => aparece).")]
         public float arbmosStillInvokeSeconds = 5f;
-        [Tooltip("Radio (m) bajo el cual se considera que el jugador esta 'quieto' (tolera el jitter AR).")]
+        [Tooltip("Radio (m) bajo el cual se considera que el jugador esta 'quieto' (tolera el jitter AR). " +
+                 "Se mide sobre el eje del CUERPO, no sobre la camara, asi girar en el lugar para mirar " +
+                 "alrededor no cuenta como caminar; ademas se tolera mas cuanto mas gire. Ver ArbmosDirector.UpdateMotion.")]
         public float arbmosStillRadius = 0.15f;
         [Tooltip("Cuanto permanece la alucinacion no letal (s).")]
         public float arbmosPresentSeconds = 6f;
