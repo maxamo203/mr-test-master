@@ -604,7 +604,7 @@ PlayerSettings:
   enableCrashReportAPI: 0
   cameraUsageDescription: Necesario para AR
   locationUsageDescription: 
-  microphoneUsageDescription: 
+  microphoneUsageDescription: Necesario para el chat de voz
   bluetoothUsageDescription: 
   macOSTargetOSVersion: 12.0
   switchNMETAOverride: 
