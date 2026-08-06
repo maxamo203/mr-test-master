@@ -27,7 +27,7 @@ namespace Gamepad
         // subcategorías: Control (mando), Cardboard (calibración estéreo), Voz (chat de
         // voz, sólo en sesiones multijugador) y — SOLO en development build — Linterna
         // (tuning) y el toggle del Debug HUD.
-        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice }
+        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels }
 
         public static PauseMenuController Instance { get; private set; }
 
@@ -145,6 +145,7 @@ namespace Gamepad
                     AddButton("linterna", new Rect(x, y, w, 64f), "LINTERNA (DEV)"); y += 76f;
                     AddToggle("debughud", new Rect(x, y, w, 52f), "Debug HUD (dev)",
                               DebugHud.Visible); y += 64f;
+                    AddButton("dbgpaneles", new Rect(x, y, w, 64f), "PANELES DEBUG (DEV)"); y += 76f;
                 }
                 AddButton("volver", new Rect(x, y, w, 60f), "VOLVER");
             }
@@ -240,6 +241,35 @@ namespace Gamepad
                         AddSlider("voz_p" + id, new Rect(x, y, w, 60f), nombre,
                                   vc.VolumenDe(id) * 100f, 0f, 100f, "{0:0}%");
                         y += 68f;
+                    }
+                }
+
+                y += 6f;
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+            }
+            else if (_page == Page.DebugPanels)
+            {
+                // Un check por panel del DebugHud: mostrarlos todos juntos no entra en
+                // pantalla. El estado lo persiste DebugHud en PlayerPrefs.
+                if (!Debug.isDebugBuild) { _page = Page.Options; return; }
+
+                GUI.Label(new Rect(x, y, w, 50f), "PANELES DEBUG", _title); y += 62f;
+
+                var paneles = DebugHud.Paneles;
+                if (paneles.Count == 0)
+                {
+                    GUI.Label(new Rect(x + 14f, y, w - 28f, 60f),
+                              "El Debug HUD no está creado en esta sesión.", _status);
+                    y += 66f;
+                }
+                else
+                {
+                    for (int i = 0; i < paneles.Count; i++)
+                    {
+                        var p = paneles[i];
+                        if (p == null) continue;
+                        AddToggle("dbgp_" + i, new Rect(x, y, w, 52f), p.name, p.activeSelf);
+                        y += 58f;
                     }
                 }
 
@@ -391,12 +421,17 @@ namespace Gamepad
                 case Page.Control:    return 820f;
                 case Page.Flashlight: return 660f;
                 case Page.Cardboard:  return 460f;
-                case Page.Options:    return (Debug.isDebugBuild ? 620f : 480f) + (hayVoz ? 76f : 0f);
+                case Page.Options:    return (Debug.isDebugBuild ? 696f : 480f) + (hayVoz ? 76f : 0f);
                 case Page.Voice:
                 {
                     var vc = Voice.VoiceChatManager.Instance;
                     int n  = vc != null ? vc.Otros.Count : 0;
                     return 428f + (n > 0 ? n * 68f : 40f);
+                }
+                case Page.DebugPanels:
+                {
+                    int n = DebugHud.Paneles.Count;
+                    return 176f + (n > 0 ? n * 58f : 66f);
                 }
                 default: return 400f;
             }
@@ -726,6 +761,7 @@ namespace Gamepad
                 case Page.Control:
                 case Page.Flashlight:
                 case Page.Voice:
+                case Page.DebugPanels:
                     _page = Page.Options; _focus = 0; _focusLast = true; break;
                 default: // Main
                     _open = false; break;
@@ -736,6 +772,17 @@ namespace Gamepad
         {
             // Cualquier acción que no sea "salir" cancela la confirmación pendiente.
             if (id != "salir") _confirmSalir = false;
+
+            // Toggles dinámicos de los paneles del DebugHud ("dbgp_<índice>"). Ojo: el
+            // botón que abre la página es "dbgpaneles", que NO matchea el prefijo con
+            // guion bajo.
+            if (id != null && id.StartsWith("dbgp_") && int.TryParse(id.Substring(5), out int iPanel))
+            {
+                var paneles = DebugHud.Paneles;
+                if (iPanel >= 0 && iPanel < paneles.Count && paneles[iPanel] != null)
+                    DebugHud.SetPanelVisible(paneles[iPanel], !paneles[iPanel].activeSelf);
+                return;
+            }
 
             switch (id)
             {
@@ -757,6 +804,9 @@ namespace Gamepad
                     break;
                 case "volver":    Back(); break;
                 case "debughud":  DebugHud.SetVisible(!DebugHud.Visible); break;
+                case "dbgpaneles":
+                    if (Debug.isDebugBuild) { _page = Page.DebugPanels; _focus = 0; _focusLast = true; }
+                    break;
                 case "envlight":  EnvironmentLightingController.Enabled = !EnvironmentLightingController.Enabled; break;
                 case "meshlight": FlashlightMeshLighting.Enabled       = !FlashlightMeshLighting.Enabled;       break;
             }

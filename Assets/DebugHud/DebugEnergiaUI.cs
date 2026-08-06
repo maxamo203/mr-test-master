@@ -14,6 +14,8 @@ public class DebugEnergiaUI : MonoBehaviour
 {
     private PowerProbe _probe;
     private static Texture2D _blanco;
+    // Reutilizado para medir/dibujar el texto (CalcHeight pide un GUIContent).
+    private readonly GUIContent _contenido = new();
 
     private void OnGUI()
     {
@@ -23,18 +25,23 @@ public class DebugEnergiaUI : MonoBehaviour
             if (_probe == null) return;
         }
 
-        // Franja inferior-CENTRO: la columna izquierda ya la ocupan Director/Baterías/
-        // Anclas (hasta y+790) y la derecha Red/LiDAR. Acá no pisa a nadie.
+        // Anclado ARRIBA y con el alto calculado del texto real: con una caja de alto
+        // fijo las últimas líneas (los subsistemas AR, que son las importantes) se
+        // cortaban fuera de pantalla.
         var sa = Scanner.SafeArea.GuiRect;
-        float w = Mathf.Min(sa.width * 0.40f, 600f);
-        float h = 380f;
-        var caja = new Rect(sa.x + sa.width * 0.30f, sa.yMax - h - 20f, w, h);
+        float w = Mathf.Min(sa.width * 0.42f, 620f);
 
-        GUI.Label(caja, _probe.Texto,
-                  DebugHudEstilos.Label(PowerProbe.ColorTermico(_probe.Termico),
-                                        Mathf.RoundToInt(Screen.height * 0.021f)));
+        var estilo = DebugHudEstilos.Label(PowerProbe.ColorTermico(_probe.Termico),
+                                           Mathf.RoundToInt(Screen.height * 0.021f));
 
-        DibujarGrafico(new Rect(caja.x + 10f, caja.yMax - 96f, caja.width - 20f, 86f));
+        _contenido.text = _probe.Texto;
+        float hTexto = estilo.CalcHeight(_contenido, w);
+        const float HGrafico = 96f;
+
+        var caja = new Rect(sa.x + sa.width * 0.30f, sa.y + 20f, w, hTexto + HGrafico);
+
+        GUI.Label(new Rect(caja.x, caja.y, w, hTexto), _contenido, estilo);
+        DibujarGrafico(new Rect(caja.x + 10f, caja.y + hTexto + 4f, w - 20f, HGrafico - 12f));
     }
 
     // Gráfico de barras del ring buffer, dibujado de más viejo (izq) a más nuevo (der).

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // HUD de debug centralizado. TODOS los datos de diagnóstico en pantalla viven
@@ -9,6 +10,10 @@ using UnityEngine;
 // release el GameObject directamente no se crea. La visibilidad se puede
 // togglear en runtime desde el menú de pausa (Opciones -> Debug HUD) y persiste
 // en PlayerPrefs.
+//
+// Además, CADA panel se prende y apaga por separado desde
+// Opciones -> Paneles debug: mostrarlos todos a la vez no entra en pantalla.
+// Cada uno recuerda su estado en PlayerPrefs (arrancan todos visibles).
 //
 // Hijos creados:
 //   Red               (DebugRedUI)        estado de red / world origin / entidades
@@ -25,11 +30,26 @@ using UnityEngine;
 public class DebugHud : MonoBehaviour
 {
     private const string KeyVisible = "debughud_visible";
+    private const string KeyPanel   = "debughud_panel_";
 
     public static DebugHud Instance { get; private set; }
 
     // ¿El HUD de debug está activo? (siempre false en builds release)
     public static bool Visible => Instance != null && Instance.gameObject.activeInHierarchy;
+
+    // Paneles registrados, en el orden en que se crean. Los consume el menú de pausa
+    // para dibujar un check por panel.
+    private readonly List<GameObject> _paneles = new();
+    public static IReadOnlyList<GameObject> Paneles =>
+        Instance != null ? Instance._paneles : (IReadOnlyList<GameObject>)System.Array.Empty<GameObject>();
+
+    public static void SetPanelVisible(GameObject panel, bool v)
+    {
+        if (panel == null) return;
+        panel.SetActive(v);
+        PlayerPrefs.SetInt(KeyPanel + panel.name, v ? 1 : 0);
+        PlayerPrefs.Save();
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -59,18 +79,33 @@ public class DebugHud : MonoBehaviour
 
     private static void Crear<TComp>(GameObject root, string nombre) where TComp : Component
     {
-        var go = new GameObject(nombre);
-        go.transform.SetParent(root.transform, false);
+        var go = NuevoPanel(root, nombre);
         go.AddComponent<TComp>();
+        Registrar(go);
     }
 
     private static void Crear<TA, TB>(GameObject root, string nombre)
         where TA : Component where TB : Component
     {
-        var go = new GameObject(nombre);
-        go.transform.SetParent(root.transform, false);
+        var go = NuevoPanel(root, nombre);
         go.AddComponent<TA>();
         go.AddComponent<TB>();
+        Registrar(go);
+    }
+
+    private static GameObject NuevoPanel(GameObject root, string nombre)
+    {
+        var go = new GameObject(nombre);
+        go.transform.SetParent(root.transform, false);
+        return go;
+    }
+
+    // Se registra DESPUÉS de agregar los componentes: SetActive(false) sobre un GO sin
+    // componentes no dispararía sus Awake al reactivarlo con el estado ya correcto.
+    private static void Registrar(GameObject go)
+    {
+        Instance._paneles.Add(go);
+        go.SetActive(PlayerPrefs.GetInt(KeyPanel + go.name, 1) == 1);
     }
 
     public static void SetVisible(bool v)
