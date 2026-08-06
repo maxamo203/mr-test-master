@@ -20,6 +20,8 @@ using UnityEngine;
 //   Lidar             (DebugLidarUI)      chunks/verts/tris de la malla LiDAR
 //   BenchmarkTracking (DebugBenchmarkUI)  reporte del ARTrackingBenchmark
 //   Anclas            (DebugAnclasUI)     anchor points extra + correcciones de deriva
+//   Energia           (PowerProbe +
+//                      DebugEnergiaUI)    batería, térmico, CPU vs GPU, subsistemas AR
 public class DebugHud : MonoBehaviour
 {
     private const string KeyVisible = "debughud_visible";
@@ -48,6 +50,9 @@ public class DebugHud : MonoBehaviour
         Crear<DebugLidarUI>(root, "Lidar");
         Crear<DebugBenchmarkUI>(root, "BenchmarkTracking");
         Crear<DebugAnclasUI>(root, "Anclas");
+        // Energía lleva DOS componentes en el mismo GO: la sonda que mide y la UI
+        // que dibuja (DebugEnergiaUI busca su PowerProbe con GetComponent).
+        Crear<PowerProbe, DebugEnergiaUI>(root, "Energia");
 
         root.SetActive(PlayerPrefs.GetInt(KeyVisible, 1) == 1);
     }
@@ -57,6 +62,15 @@ public class DebugHud : MonoBehaviour
         var go = new GameObject(nombre);
         go.transform.SetParent(root.transform, false);
         go.AddComponent<TComp>();
+    }
+
+    private static void Crear<TA, TB>(GameObject root, string nombre)
+        where TA : Component where TB : Component
+    {
+        var go = new GameObject(nombre);
+        go.transform.SetParent(root.transform, false);
+        go.AddComponent<TA>();
+        go.AddComponent<TB>();
     }
 
     public static void SetVisible(bool v)
