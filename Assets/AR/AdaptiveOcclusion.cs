@@ -35,15 +35,11 @@ public class AdaptiveOcclusion : MonoBehaviour
     [Header("Mesh occluder (LiDAR)")]
     [Tooltip("Material para chunks de malla. Si null, usa AR/Occluder.")]
     [SerializeField] private Material _meshOccluderMaterial;
-    [Tooltip("Densidad de la malla. Más alto = mejor calidad, más CPU/GPU. LiDAR rinde bien en 1.0.")]
-    [Range(0f, 1f)]
-    [SerializeField] private float _meshDensity = 1f;
+    // La densidad ya no se configura acá: sale de ARQuality (opción del jugador).
 
     [Header("Preferencias")]
     [Tooltip("Si true, prioriza ARMeshManager (LiDAR). Si false, solo usa EnvDepth aunque haya LiDAR.")]
     [SerializeField] private bool _preferMeshWhenLidar = true;
-    [Tooltip("Mostrar HUD con la estrategia elegida.")]
-    [SerializeField] private bool _showHUD = true;
 
     public Strategy ChosenStrategy { get; private set; } = Strategy.Unknown;
     public string DiagnosticInfo { get; private set; } = "Inicializando...";
@@ -129,19 +125,23 @@ public class AdaptiveOcclusion : MonoBehaviour
 
     private void ApplyMeshStrategy()
     {
-        // EnvDepth pixel-perfect para integración con virtual content.
+        // Densidad de malla y modo de profundidad salen de ARQuality, no de constantes:
+        // prender las dos al máximo a la vez era el grueso del consumo de batería.
+        // En "Rendimiento" la profundidad se apaga entera — con malla real de LiDAR la
+        // oclusión ya la da la geometría.
         if (_occlusionManager != null)
         {
-            _occlusionManager.requestedEnvironmentDepthMode    = EnvironmentDepthMode.Best;
+            var modo = ARQuality.DepthMode;
+            _occlusionManager.requestedEnvironmentDepthMode    = modo;
             _occlusionManager.requestedOcclusionPreferenceMode = OcclusionPreferenceMode.PreferEnvironmentOcclusion;
-            _occlusionManager.enabled = true;
+            _occlusionManager.enabled = modo != EnvironmentDepthMode.Disabled;
         }
 
         // Mesh real del ambiente (LiDAR).
         EnsureMeshManager();
         if (_meshManager != null)
         {
-            _meshManager.density = _meshDensity;
+            _meshManager.density = ARQuality.MeshDensity;
             _meshManager.enabled = true;
         }
 
@@ -153,9 +153,13 @@ public class AdaptiveOcclusion : MonoBehaviour
     private void ApplyEnvDepthStrategy()
     {
         // EnvDepth: ARCameraBackground lo integra al pipeline automáticamente.
+        // Sin malla de LiDAR la profundidad es la ÚNICA oclusión que hay, así que acá
+        // nunca se apaga del todo: en Rendimiento baja a Fastest en vez de Disabled.
         if (_occlusionManager != null)
         {
-            _occlusionManager.requestedEnvironmentDepthMode    = EnvironmentDepthMode.Best;
+            var modo = ARQuality.DepthMode;
+            if (modo == EnvironmentDepthMode.Disabled) modo = EnvironmentDepthMode.Fastest;
+            _occlusionManager.requestedEnvironmentDepthMode    = modo;
             _occlusionManager.requestedOcclusionPreferenceMode = OcclusionPreferenceMode.PreferEnvironmentOcclusion;
             _occlusionManager.enabled = true;
         }
@@ -212,35 +216,22 @@ public class AdaptiveOcclusion : MonoBehaviour
         }
     }
 
-    // ── HUD ──────────────────────────────────────────────────────────────
+    // ── Reacción a cambios de calidad ────────────────────────────────────
 
-    static Texture2D _hudBgTex;
-    static Texture2D GetHudBg()
+    // El jugador puede cambiar el nivel desde el menú de pausa en plena partida.
+    private void OnEnable()  => ARQuality.OnCambio += Reaplicar;
+    private void OnDisable() => ARQuality.OnCambio -= Reaplicar;
+
+    private void Reaplicar()
     {
-        if (_hudBgTex == null)
+        switch (ChosenStrategy)
         {
-            _hudBgTex = new Texture2D(1, 1);
-            _hudBgTex.SetPixel(0, 0, new Color(0f, 0f, 0f, 0.85f));
-            _hudBgTex.Apply();
+            case Strategy.Mesh:             ApplyMeshStrategy();     break;
+            case Strategy.EnvironmentDepth: ApplyEnvDepthStrategy(); break;
         }
-        return _hudBgTex;
     }
 
-    void OnGUI()
-    {
-        if (!_showHUD) return;
-
-        var style = new GUIStyle
-        {
-            fontSize = 26,
-            alignment = TextAnchor.UpperRight,
-            wordWrap = true,
-            padding = new RectOffset(12, 12, 12, 12)
-        };
-        style.normal.textColor = new Color(0.4f, 1f, 0.6f, 1f);
-        style.normal.background = GetHudBg();
-
-        GUI.Label(new Rect(Screen.width - 520, 10, 500, 200),
-                  $"[AdaptiveOcclusion]\n{DiagnosticInfo}", style);
-    }
+    // El diagnóstico ya NO se dibuja acá: el OnGUI propio corría en release y armaba
+    // un GUIStyle nuevo en cada evento. DiagnosticInfo lo muestra el panel de energía
+    // del DebugHud (PowerProbe), que solo existe en development build.
 }

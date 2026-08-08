@@ -50,6 +50,12 @@ public class ARTrackingBenchmark : MonoBehaviour
     {
         if (_done) return;
 
+        // Herramienta de medición pura: su único consumidor es DebugBenchmarkUI, que
+        // solo existe en development build. En release no debe costar nada — antes
+        // armaba un string interpolado TODOS los frames, y cuando no había tracking
+        // lo hacía para siempre (sin tracking _elapsed no avanza y nunca termina).
+        if (!Debug.isDebugBuild) return;
+
         _totalFrames++;
 
         ARTrackedImage img = null;

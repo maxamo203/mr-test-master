@@ -27,7 +27,7 @@ namespace Gamepad
         // subcategorías: Control (mando), Cardboard (calibración estéreo), Voz (chat de
         // voz, sólo en sesiones multijugador) y — SOLO en development build — Linterna
         // (tuning) y el toggle del Debug HUD.
-        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels }
+        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad }
 
         public static PauseMenuController Instance { get; private set; }
 
@@ -139,6 +139,7 @@ namespace Gamepad
                           GameOptions.Volumen * 100f, 0f, 100f, "{0:0}%"); y += 72f;
                 AddButton("control",   new Rect(x, y, w, 64f), "CONTROL (MANDO)"); y += 76f;
                 AddButton("cardboard", new Rect(x, y, w, 64f), "CARDBOARD");       y += 76f;
+                AddButton("arcalidad", new Rect(x, y, w, 64f), "CALIDAD AR");      y += 76f;
                 if (hayVoz) { AddButton("voz", new Rect(x, y, w, 64f), "CHAT DE VOZ"); y += 76f; }
                 if (Debug.isDebugBuild)
                 {
@@ -190,12 +191,33 @@ namespace Gamepad
                 }
                 else
                 {
+                    // Óptica del visor: alinea las dos mitades con las lentes. No hace 3D.
                     AddSlider("cb_zoom", new Rect(x, y, w, 60f), "Zoom feed", cb.Scale,
                               CardboardCalibrationUI.ScaleMin, CardboardCalibrationUI.ScaleMax, "{0:0.00}");   y += 68f;
                     AddSlider("cb_offL", new Rect(x, y, w, 60f), "Distancia ojo izq", cb.OffsetL,
                               0f, cb.MaxOffset, "{0:0.000}"); y += 68f;
                     AddSlider("cb_offR", new Rect(x, y, w, 60f), "Distancia ojo der", cb.OffsetR,
                               0f, cb.MaxOffset, "{0:0.000}"); y += 68f;
+
+                    // Estéreo real: rendea la escena dos veces, una por ojo. El passthrough
+                    // sigue siendo mono (el celular tiene una sola cámara); lo que gana
+                    // profundidad son los objetos virtuales.
+                    y += 6f;
+                    AddToggle("estereo3d", new Rect(x, y, w, 52f), "Visión 3D (estéreo)", cb.Estereo3D);
+                    y += 58f;
+
+                    if (cb.Estereo3D)
+                    {
+                        AddSlider("cb_ipd", new Rect(x, y, w, 60f), "Separación de ojos",
+                                  cb.Ipd * 1000f, CardboardCalibrationUI.IpdMin * 1000f,
+                                  CardboardCalibrationUI.IpdMax * 1000f, "{0:0} mm"); y += 68f;
+                        // Distancia de paralaje cero: lo que esté a esta distancia cae en el
+                        // mismo punto de pantalla en los dos ojos (se ve igual que en mono);
+                        // lo más cerca sale hacia el jugador y lo más lejos se hunde.
+                        AddSlider("cb_conv", new Rect(x, y, w, 60f), "Distancia de foco 3D",
+                                  cb.Convergencia, CardboardCalibrationUI.ConvMin,
+                                  CardboardCalibrationUI.ConvMax, "{0:0.0} m"); y += 68f;
+                    }
                 }
 
                 y += 6f;
@@ -242,6 +264,31 @@ namespace Gamepad
                                   vc.VolumenDe(id) * 100f, 0f, 100f, "{0:0}%");
                         y += 68f;
                     }
+                }
+
+                y += 6f;
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+            }
+            else if (_page == Page.ARCalidad)
+            {
+                // Es la opción que más pesa en batería y temperatura del teléfono.
+                GUI.Label(new Rect(x, y, w, 50f), "CALIDAD AR", _title); y += 58f;
+
+                GUI.Label(new Rect(x + 14f, y, w - 28f, 46f),
+                          "Define cuánto trabaja el AR (malla del cuarto y profundidad). " +
+                          "Los 60 fps no cambian: bajar de ahí marea.", _status);
+                y += 54f;
+
+                var actual = ARQuality.Actual;
+                for (int i = 0; i <= 2; i++)
+                {
+                    var niv = (ARQuality.Nivel)i;
+                    bool sel = niv == actual;
+                    AddButton("arq_" + i, new Rect(x, y, w, 56f),
+                              (sel ? "> " : "") + ARQuality.Nombre(niv));
+                    y += 60f;
+                    GUI.Label(new Rect(x + 22f, y, w - 44f, 40f), ARQuality.Descripcion(niv), _status);
+                    y += 44f;
                 }
 
                 y += 6f;
@@ -420,8 +467,15 @@ namespace Gamepad
             {
                 case Page.Control:    return 820f;
                 case Page.Flashlight: return 660f;
-                case Page.Cardboard:  return 460f;
-                case Page.Options:    return (Debug.isDebugBuild ? 696f : 480f) + (hayVoz ? 76f : 0f);
+                case Page.Cardboard:
+                {
+                    // 3 sliders de óptica + el toggle de estéreo; con el estéreo prendido
+                    // aparecen además los sliders de IPD y convergencia.
+                    var cbAlto = GetCardboard();
+                    return 524f + (cbAlto != null && cbAlto.Estereo3D ? 136f : 0f);
+                }
+                case Page.Options:    return (Debug.isDebugBuild ? 772f : 556f) + (hayVoz ? 76f : 0f);
+                case Page.ARCalidad:  return 490f;
                 case Page.Voice:
                 {
                     var vc = Voice.VoiceChatManager.Instance;
@@ -484,6 +538,8 @@ namespace Gamepad
                 case "cb_zoom":      step = 0.02f;  break;
                 case "cb_offL":
                 case "cb_offR":      step = 0.005f; break;
+                case "cb_ipd":       step = 1f;     break;   // milímetros
+                case "cb_conv":      step = 0.25f;  break;   // metros
                 case "opt_vol":      step = 5f;     break;   // porcentaje
                 default:             step = 2f;     break;   // fl_outer / fl_inner (grados)
             }
@@ -509,6 +565,8 @@ namespace Gamepad
                 case "cb_zoom":      { var cb = GetCardboard();  return cb != null ? cb.Scale   : 0f; }
                 case "cb_offL":      { var cb = GetCardboard();  return cb != null ? cb.OffsetL : 0f; }
                 case "cb_offR":      { var cb = GetCardboard();  return cb != null ? cb.OffsetR : 0f; }
+                case "cb_ipd":       { var cb = GetCardboard();  return cb != null ? cb.Ipd * 1000f  : 0f; }
+                case "cb_conv":      { var cb = GetCardboard();  return cb != null ? cb.Convergencia : 0f; }
                 case "opt_vol":      return GameOptions.Volumen * 100f;
             }
             return 0f;
@@ -535,6 +593,8 @@ namespace Gamepad
                 case "cb_zoom":      { var cb = GetCardboard(); if (cb != null) cb.Scale   = value; break; }
                 case "cb_offL":      { var cb = GetCardboard(); if (cb != null) cb.OffsetL = value; break; }
                 case "cb_offR":      { var cb = GetCardboard(); if (cb != null) cb.OffsetR = value; break; }
+                case "cb_ipd":       { var cb = GetCardboard(); if (cb != null) cb.Ipd = value / 1000f; break; }
+                case "cb_conv":      { var cb = GetCardboard(); if (cb != null) cb.Convergencia = value; break; }
                 case "opt_vol":      GameOptions.Volumen = Mathf.Clamp(value, 0f, 100f) / 100f; break;
             }
         }
@@ -762,6 +822,7 @@ namespace Gamepad
                 case Page.Flashlight:
                 case Page.Voice:
                 case Page.DebugPanels:
+                case Page.ARCalidad:
                     _page = Page.Options; _focus = 0; _focusLast = true; break;
                 default: // Main
                     _open = false; break;
@@ -789,8 +850,13 @@ namespace Gamepad
                 case "opciones":  _page = Page.Options;    _focus = 0; _focusLast = true; break;
                 case "control":   _page = Page.Control;    _focus = 0; _focusLast = true; break;
                 case "cardboard": _page = Page.Cardboard;  _focus = 0; _focusLast = true; break;
+                case "arcalidad": _page = Page.ARCalidad;  _focus = 0; _focusLast = true; break;
+                case "arq_0":     ARQuality.Actual = ARQuality.Nivel.Rendimiento; break;
+                case "arq_1":     ARQuality.Actual = ARQuality.Nivel.Equilibrado; break;
+                case "arq_2":     ARQuality.Actual = ARQuality.Nivel.Calidad;     break;
                 case "voz":       _page = Page.Voice;      _focus = 0; _focusLast = true; break;
                 case "vozmic":    GameOptions.VozMic = !GameOptions.VozMic; break;
+                case "estereo3d": { var cb = GetCardboard(); if (cb != null) cb.Estereo3D = !cb.Estereo3D; break; }
                 case "linterna":
                     if (Debug.isDebugBuild) { _page = Page.Flashlight; _focus = 0; _focusLast = true; }
                     break;

@@ -60,6 +60,9 @@ public class PowerProbe : MonoBehaviour
     private ARMeshManager         _mesh;
     private ARPlaneManager        _planes;
     private ARTrackedImageManager _img;
+    // AdaptiveOcclusion ya no dibuja su propio HUD (corría en release): su diagnóstico
+    // se muestra acá.
+    private AdaptiveOcclusion _occlusionStrategy;
     private float _proximaBusqueda;
 
     public string Texto => _texto;
@@ -138,6 +141,7 @@ public class PowerProbe : MonoBehaviour
         if (_mesh   == null) _mesh   = FindFirstObjectByType<ARMeshManager>();
         if (_planes == null) _planes = FindFirstObjectByType<ARPlaneManager>();
         if (_img    == null) _img    = FindFirstObjectByType<ARTrackedImageManager>();
+        if (_occlusionStrategy == null) _occlusionStrategy = FindFirstObjectByType<AdaptiveOcclusion>();
     }
 
     // ── Texto ─────────────────────────────────────────────────────────────
@@ -199,6 +203,10 @@ public class PowerProbe : MonoBehaviour
 
         // ── Subsistemas AR: lo que no aparece en CPU/GPU pero sí en la batería ──
         _sb.Append("\n== SUBSISTEMAS AR ==\n");
+        _sb.Append("Calidad: ").Append(ARQuality.Nombre(ARQuality.Actual))
+           .Append("  (render x").Append(ARQuality.RenderScale.ToString("0.00")).Append(")\n");
+        if (_occlusionStrategy != null)
+            _sb.Append("Estrategia: ").Append(_occlusionStrategy.ChosenStrategy).Append('\n');
 
         if (_occ != null && _occ.enabled)
             _sb.Append("Occlusion: ON  envDepth=").Append(_occ.currentEnvironmentDepthMode).Append('\n');

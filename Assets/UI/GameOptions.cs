@@ -10,6 +10,7 @@ public static class GameOptions
     private const string KeyVozMic      = "opt_voz_mic";
     private const string KeyVozVolumen  = "opt_voz_volumen";
     private const string KeyVozSens     = "opt_voz_sensibilidad";
+    private const string KeyCalidadAR   = "opt_calidad_ar";
 
     // Volumen maestro 0..1 (AudioListener.volume). Persiste entre sesiones.
     public static float Volumen
@@ -69,6 +70,19 @@ public static class GameOptions
     {
         get => PlayerPrefs.GetFloat(KeyVozSens, 0.6f);
         set => PlayerPrefs.SetFloat(KeyVozSens, Mathf.Clamp01(value));
+    }
+
+    // Nivel de calidad de los subsistemas AR (0=Rendimiento, 1=Equilibrado, 2=Calidad).
+    // Ver ARQuality: es la opción que más pesa en batería y temperatura. Default
+    // Equilibrado — el máximo (lo que hacía el proyecto antes) drena demasiado.
+    public static int CalidadAR
+    {
+        get => PlayerPrefs.GetInt(KeyCalidadAR, 1);
+        set
+        {
+            PlayerPrefs.SetInt(KeyCalidadAR, Mathf.Clamp(value, 0, 2));
+            PlayerPrefs.Save();
+        }
     }
 
     // Aplica lo persistido al arrancar la app (cualquier escena).
