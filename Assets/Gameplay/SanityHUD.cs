@@ -13,7 +13,12 @@ namespace Gameplay
     {
         private static readonly int ID_DISTORT = Shader.PropertyToID("_SanityDistort");
 
-        private void Awake() => LocalSanity.Ensure();
+        private void Awake()
+        {
+            LocalSanity.Ensure();
+            TensionSystem.Ensure();
+            TensionDistortionOverlay.Ensure();
+        }
 
         private void OnGUI()
         {
