@@ -54,6 +54,10 @@ namespace Gameplay
         private string _confirmarBorrar;       // nombre del escaneo a borrar (overlay Escaneos)
         private Vector2 _scroll;
 
+        // US-1.5: aviso (una sola vez) de que iOS trackea con mucho menos drift que
+        // Android. Ver Riesgos Identificados en la documentación.
+        private bool _mostrarAvisoIos;
+
         // Sección "Avanzado" (puerto) de la pantalla de entorno, sólo para host multi.
         private bool _avanzadoOpen;
         private string _portText = NetworkConfig.DefaultPort.ToString();
@@ -63,7 +67,12 @@ namespace Gameplay
 
         private const float Pad = 28f;
 
-        private void Awake() => GameSession.Ensure();
+        private void Awake()
+        {
+            GameSession.Ensure();
+            _mostrarAvisoIos = Application.platform == RuntimePlatform.Android && !GameOptions.AvisoIosVisto;
+            //_mostrarAvisoIos = true;
+        }
 
         private void Update() => _nav.Update();
 
@@ -119,7 +128,11 @@ namespace Gameplay
             T.FillScreen(T.Bg);
             UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
 
-            if (_confirmarBorrar != null)
+            if (_mostrarAvisoIos)
+            {
+                DrawAvisoIos(vw, vh);
+            }
+            else if (_confirmarBorrar != null)
             {
                 DrawConfirmarBorrar(vw, vh);
             }
@@ -478,6 +491,36 @@ namespace Gameplay
                         _confirmarBorrar = null;
                         RefrescarScans();
                     }, fontSize: 16);
+        }
+
+        // US-1.5: aviso de compatibilidad, una sola vez por dispositivo Android (la
+        // deriva/re-localización del entorno escaneado es mucho menor en iOS; ver
+        // "Riesgos Identificados" en la documentación). No bloquea seguir en Android.
+        private void DrawAvisoIos(float vw, float vh)
+        {
+            T.Fill(new Rect(0, 0, vw, vh), new Color(0f, 0f, 0f, 0.7f));
+
+            float pw = vw - 56f, ph = 250f;
+            var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
+            T.Panel(panel, T.BgPanel, T.Tan);
+
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 20f, pw - 44f, 30f),
+                      "MEJOR EXPERIENCIA EN iOS", T.Estilo(T.FBebas, 20, T.Cream));
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 56f, pw - 44f, 130f),
+                      "en dispositivos iOS el seguimiento de realidad aumentada es más estable " +
+                      "y sufre mucho menos deriva espacial que en Android. podés seguir jugando " +
+                      "en este dispositivo sin problema, pero si tenés un iPhone a mano vas a " +
+                      "tener la mejor experiencia posible.",
+                      T.Estilo(T.FElite, 13, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
+
+            T.Boton(_nav, new Rect(panel.x + 22f, panel.yMax - 62f, pw - 44f, 46f),
+                    "ENTENDIDO", true, CerrarAvisoIos, fontSize: 16);
+        }
+
+        private void CerrarAvisoIos()
+        {
+            _mostrarAvisoIos = false;
+            GameOptions.AvisoIosVisto = true;
         }
 
         private void DrawOpciones(float vw, float vh)

@@ -11,6 +11,7 @@ public static class GameOptions
     private const string KeyVozVolumen  = "opt_voz_volumen";
     private const string KeyVozSens     = "opt_voz_sensibilidad";
     private const string KeyCalidadAR   = "opt_calidad_ar";
+    private const string KeyAvisoIos    = "opt_aviso_ios_visto";
 
     // Volumen maestro 0..1 (AudioListener.volume). Persiste entre sesiones.
     public static float Volumen
@@ -81,6 +82,19 @@ public static class GameOptions
         set
         {
             PlayerPrefs.SetInt(KeyCalidadAR, Mathf.Clamp(value, 0, 2));
+            PlayerPrefs.Save();
+        }
+    }
+
+    // US-1.5: ¿ya se le mostró al jugador el aviso de que iOS tiene mucho menos
+    // drift de tracking AR que Android (ver "Riesgos Identificados" en la
+    // documentación)? Se muestra una sola vez, en el primer Android detectado.
+    public static bool AvisoIosVisto
+    {
+        get => PlayerPrefs.GetInt(KeyAvisoIos, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeyAvisoIos, value ? 1 : 0);
             PlayerPrefs.Save();
         }
     }
