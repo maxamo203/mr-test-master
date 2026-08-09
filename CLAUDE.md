@@ -8,6 +8,12 @@ Mixed-reality horror game built in **Unity 6000.4.4f1** (Unity 6.4) with **AR Fo
 
 Comments and identifiers are predominantly in Spanish; match that when editing existing files.
 
+## Source of Truth
+
+**`Assets/Documentacion Mortuorium v9.0.md`** is the single source of truth for all project decisions, architecture, requirements, and specifications. All code changes, features, and technical decisions must respect and comply with what is documented there.
+
+**When a request conflicts with the documentation:** If asked to implement something that contradicts or deviates from what is specified in `Documentacion Mortuorium v9.0.md`, I will ask for clarification and confirmation before proceeding. This ensures alignment with the official project specification and prevents unintended design drift.
+
 ## Build & run
 
 There is **no CLI build, lint, or test setup** — this is a GUI-driven Unity project. Iterate through the Unity Editor and on-device builds.
