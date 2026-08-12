@@ -10,7 +10,7 @@ using UnityEngine;
 // y verificaron en un preview aparte; acá se replica ese rasterizado.
 public static class MortuoriumIcons
 {
-    public enum Icon { Pared, Cubo, Puerta, Marca, Piso, RecalFijo, RecalMover, Ancla }
+    public enum Icon { Pared, Cubo, Puerta, Marca, Piso, RecalFijo, RecalMover, Ancla, AutoScan }
 
     private const int N = 128;
     private static readonly Dictionary<Icon, Texture2D> _cache = new();
@@ -132,6 +132,17 @@ public static class MortuoriumIcons
 
         switch (icon)
         {
+            case Icon.AutoScan:
+                // Radar/cámara: retícula central y ondas de exploración.
+                Ring(0.5f, 0.52f, 0.30f, 0.275f, green);
+                Ring(0.5f, 0.52f, 0.21f, 0.185f, Shade(green, 0.82f));
+                Ring(0.5f, 0.52f, 0.12f, 0.095f, Shade(green, 1.2f));
+                Disc(0.5f, 0.52f, 0.045f, cream);
+                RectU(0.47f, 0.08f, 0.06f, 0.16f, tan);
+                RectU(0.47f, 0.80f, 0.06f, 0.16f, tan);
+                RectU(0.06f, 0.49f, 0.16f, 0.06f, tan);
+                RectU(0.78f, 0.49f, 0.16f, 0.06f, tan);
+                break;
             case Icon.Pared:
             {
                 IsoBox(0.5f, 0.64f, 0.16f, 0.34f, 0.40f, cream);
