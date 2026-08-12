@@ -27,7 +27,7 @@ namespace Gamepad
         // subcategorías: Control (mando), Cardboard (calibración estéreo), Voz (chat de
         // voz, sólo en sesiones multijugador) y — SOLO en development build — Linterna
         // (tuning) y el toggle del Debug HUD.
-        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad }
+        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, VHS }
 
         public static PauseMenuController Instance { get; private set; }
 
@@ -141,8 +141,13 @@ namespace Gamepad
                 AddButton("cardboard", new Rect(x, y, w, 64f), "CARDBOARD");       y += 76f;
                 AddButton("arcalidad", new Rect(x, y, w, 64f), "CALIDAD AR");      y += 76f;
                 if (hayVoz) { AddButton("voz", new Rect(x, y, w, 64f), "CHAT DE VOZ"); y += 76f; }
+                // US-11.1: el filtro VHS de la partida no se apaga (es atmósfera); lo
+                // que el jugador decide es si además cubre los menús.
+                AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS en menús",
+                          GameOptions.VhsEnMenus); y += 64f;
                 if (Debug.isDebugBuild)
                 {
+                    AddButton("vhs",      new Rect(x, y, w, 64f), "VHS (DEV)");      y += 76f;
                     AddButton("linterna", new Rect(x, y, w, 64f), "LINTERNA (DEV)"); y += 76f;
                     AddToggle("debughud", new Rect(x, y, w, 52f), "Debug HUD (dev)",
                               DebugHud.Visible); y += 64f;
@@ -290,6 +295,42 @@ namespace Gamepad
                     GUI.Label(new Rect(x + 22f, y, w - 44f, 40f), ARQuality.Descripcion(niv), _status);
                     y += 44f;
                 }
+
+                y += 6f;
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+            }
+            else if (_page == Page.VHS)
+            {
+                // US-11.1 — ingredientes del filtro VHS por separado, para comparar en el
+                // dispositivo cuál combinación queda mejor. SOLO development build: en
+                // release el filtro va con los valores fijos de VHSSettings.
+                if (!Debug.isDebugBuild) { _page = Page.Options; return; }
+
+                GUI.Label(new Rect(x, y, w, 50f), "VHS (DEV)", _title); y += 58f;
+                GUI.Label(new Rect(x + 14f, y, w - 28f, 40f),
+                          "Se ven en partida (shader) y en menús (IMGUI, sin warp).", _status);
+                y += 46f;
+
+                // Un slider por ingrediente (0% = apagado) para poder calibrar la mezcla
+                // en el dispositivo, más el multiplicador global. Ojo: el prefijo "vhs_"
+                // marca slider (ver IsSlider), por eso el toggle del REC va sin guion
+                // bajo, igual que "vozmic" en la página de voz.
+                AddSlider("vhs_int",    new Rect(x, y, w, 60f), "Intensidad global",
+                          Gameplay.VHSSettings.Intensidad * 100f, 0f, 100f, "{0:0}%"); y += 68f;
+                AddSlider("vhs_scan",   new Rect(x, y, w, 60f), "Scanlines",
+                          Gameplay.VHSSettings.Scanlines  * 100f, 0f, 100f, "{0:0}%"); y += 68f;
+                AddSlider("vhs_grano",  new Rect(x, y, w, 60f), "Grano de cinta",
+                          Gameplay.VHSSettings.Grano      * 100f, 0f, 100f, "{0:0}%"); y += 68f;
+                AddSlider("vhs_bandas", new Rect(x, y, w, 60f), "Bandas de tracking",
+                          Gameplay.VHSSettings.Bandas     * 100f, 0f, 100f, "{0:0}%"); y += 68f;
+                AddSlider("vhs_jit",    new Rect(x, y, w, 60f), "Jitter de línea",
+                          Gameplay.VHSSettings.Jitter     * 100f, 0f, 100f, "{0:0}%"); y += 68f;
+                AddSlider("vhs_vin",    new Rect(x, y, w, 60f), "Viñeta",
+                          Gameplay.VHSSettings.Vineta     * 100f, 0f, 100f, "{0:0}%"); y += 68f;
+                AddSlider("vhs_tinte",  new Rect(x, y, w, 60f), "Tinte / desaturado",
+                          Gameplay.VHSSettings.Tinte      * 100f, 0f, 100f, "{0:0}%"); y += 68f;
+                AddToggle("vhsrec",     new Rect(x, y, w, 52f), "REC + fecha",
+                          Gameplay.VHSSettings.Rec); y += 58f;
 
                 y += 6f;
                 AddButton("volver", new Rect(x, y, w, 60f), "Volver");
@@ -474,8 +515,11 @@ namespace Gamepad
                     var cbAlto = GetCardboard();
                     return 524f + (cbAlto != null && cbAlto.Estereo3D ? 136f : 0f);
                 }
-                case Page.Options:    return (Debug.isDebugBuild ? 772f : 556f) + (hayVoz ? 76f : 0f);
+                // +64 por el toggle "Filtro VHS en menús" (prod) y +76 por "VHS (DEV)".
+                case Page.Options:    return (Debug.isDebugBuild ? 912f : 620f) + (hayVoz ? 76f : 0f);
                 case Page.ARCalidad:  return 490f;
+                // 7 sliders (global + 6 ingredientes) + el toggle del REC.
+                case Page.VHS:        return 760f;
                 case Page.Voice:
                 {
                     var vc = Voice.VoiceChatManager.Instance;
@@ -515,7 +559,8 @@ namespace Gamepad
         // lleva guion bajo justamente para no caer acá).
         private static bool IsSlider(string id) =>
             id != null && (id.StartsWith("fl_") || id.StartsWith("cb_") ||
-                           id.StartsWith("opt_") || id.StartsWith("voz_"));
+                           id.StartsWith("opt_") || id.StartsWith("voz_") ||
+                           id.StartsWith("vhs_"));
 
         // "voz_p3" → el slider de volumen del cliente 3. Los ids se arman en la página
         // de voz a partir del roster, así que son dinámicos.
@@ -531,6 +576,7 @@ namespace Gamepad
         {
             float step;
             if (id != null && id.StartsWith("voz_")) { step = 5f; }   // todos en %
+            else if (id != null && id.StartsWith("vhs_")) { step = 5f; }   // todos en %
             else switch (id)
             {
                 case "fl_range":     step = 1f;     break;
@@ -568,6 +614,13 @@ namespace Gamepad
                 case "cb_ipd":       { var cb = GetCardboard();  return cb != null ? cb.Ipd * 1000f  : 0f; }
                 case "cb_conv":      { var cb = GetCardboard();  return cb != null ? cb.Convergencia : 0f; }
                 case "opt_vol":      return GameOptions.Volumen * 100f;
+                case "vhs_int":      return Gameplay.VHSSettings.Intensidad * 100f;
+                case "vhs_scan":     return Gameplay.VHSSettings.Scanlines  * 100f;
+                case "vhs_grano":    return Gameplay.VHSSettings.Grano      * 100f;
+                case "vhs_bandas":   return Gameplay.VHSSettings.Bandas     * 100f;
+                case "vhs_jit":      return Gameplay.VHSSettings.Jitter     * 100f;
+                case "vhs_vin":      return Gameplay.VHSSettings.Vineta     * 100f;
+                case "vhs_tinte":    return Gameplay.VHSSettings.Tinte      * 100f;
             }
             return 0f;
         }
@@ -596,6 +649,13 @@ namespace Gamepad
                 case "cb_ipd":       { var cb = GetCardboard(); if (cb != null) cb.Ipd = value / 1000f; break; }
                 case "cb_conv":      { var cb = GetCardboard(); if (cb != null) cb.Convergencia = value; break; }
                 case "opt_vol":      GameOptions.Volumen = Mathf.Clamp(value, 0f, 100f) / 100f; break;
+                case "vhs_int":      Gameplay.VHSSettings.Intensidad = Mathf.Clamp(value, 0f, 100f) / 100f; break;
+                case "vhs_scan":     Gameplay.VHSSettings.Scanlines  = Mathf.Clamp(value, 0f, 100f) / 100f; break;
+                case "vhs_grano":    Gameplay.VHSSettings.Grano      = Mathf.Clamp(value, 0f, 100f) / 100f; break;
+                case "vhs_bandas":   Gameplay.VHSSettings.Bandas     = Mathf.Clamp(value, 0f, 100f) / 100f; break;
+                case "vhs_jit":      Gameplay.VHSSettings.Jitter     = Mathf.Clamp(value, 0f, 100f) / 100f; break;
+                case "vhs_vin":      Gameplay.VHSSettings.Vineta     = Mathf.Clamp(value, 0f, 100f) / 100f; break;
+                case "vhs_tinte":    Gameplay.VHSSettings.Tinte      = Mathf.Clamp(value, 0f, 100f) / 100f; break;
             }
         }
 
@@ -823,6 +883,7 @@ namespace Gamepad
                 case Page.Voice:
                 case Page.DebugPanels:
                 case Page.ARCalidad:
+                case Page.VHS:
                     _page = Page.Options; _focus = 0; _focusLast = true; break;
                 default: // Main
                     _open = false; break;
@@ -875,6 +936,13 @@ namespace Gamepad
                     break;
                 case "envlight":  EnvironmentLightingController.Enabled = !EnvironmentLightingController.Enabled; break;
                 case "meshlight": FlashlightMeshLighting.Enabled       = !FlashlightMeshLighting.Enabled;       break;
+
+                // ── US-11.1 (VHS) ────────────────────────────────────────────
+                case "vhsmenus":  GameOptions.VhsEnMenus = !GameOptions.VhsEnMenus; break;
+                case "vhs":
+                    if (Debug.isDebugBuild) { _page = Page.VHS; _focus = 0; _focusLast = true; }
+                    break;
+                case "vhsrec":    Gameplay.VHSSettings.Rec = !Gameplay.VHSSettings.Rec; break;
             }
         }
 

@@ -552,6 +552,15 @@ namespace Gameplay
                          () => GameOptions.PuntosAncla = !GameOptions.PuntosAncla);
             y += 68f;
 
+            // US-11.1: el filtro VHS en la PARTIDA es parte de la atmósfera y no se
+            // apaga; sobre los menús es opcional (gusto y legibilidad).
+            T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
+                         "FILTRO VHS EN MENÚS",
+                         "el grano y las líneas de cinta también sobre esta pantalla",
+                         GameOptions.VhsEnMenus,
+                         () => GameOptions.VhsEnMenus = !GameOptions.VhsEnMenus);
+            y += 68f;
+
             // Estado del mando + botón para ir al visualizador.
             var gm = Gamepad.GamepadManager.Instance;
             string estado = (gm != null && gm.IsConnected)
