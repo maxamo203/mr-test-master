@@ -1,4 +1,5 @@
 using UnityEngine;
+using Scanner.AutoScan;
 
 namespace Scanner
 {
@@ -24,7 +25,12 @@ namespace Scanner
             // DynamicsManager.asset. Para que los SphereColliders de las
             // esferas-handle se ubiquen donde el transform los puso (sin esperar
             // un FixedUpdate), forzamos autoSync = true en runtime.
+            // Unity 6.4 marco la propiedad como obsoleta, pero no ofrece un reemplazo
+            // persistente equivalente. Se mantiene por compatibilidad con los colliders
+            // de edicion; los raycasts criticos ademas llaman Physics.SyncTransforms().
+#pragma warning disable CS0618
             Physics.autoSyncTransforms = true;
+#pragma warning restore CS0618
 
             // WorldOrigin es singleton — si la escena no lo tiene, lo creamos.
             // El que tenia la SampleScene vivia en ARLobbyRoot (escena vieja del
@@ -39,7 +45,11 @@ namespace Scanner
             // Receptor de archivos .MSCN ("abrir con"): importa y carga el escaneo.
             MscnReceiver.Ensure();
 
-            if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
+            // AutoScan es aditivo y se configura solo: vive en el mismo root pero
+            // materializa objetos mediante las fábricas/registro existentes.
+            AutoScanController.Ensure(gameObject);
+
+            if (_imageAnchor == null) _imageAnchor = FindAnyObjectByType<ARImageAnchor>();
             if (_imageAnchor == null)
             {
                 Debug.LogError("[ScannerSceneBootstrap] No hay ARImageAnchor en la escena.");
