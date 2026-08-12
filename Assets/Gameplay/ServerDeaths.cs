@@ -25,7 +25,8 @@ namespace Gameplay
         }
 
         // Mata a TODOS los jugadores vivos de una: game over compartido, no la muerte
-        // individual de siempre (lo usa el libro ritual al cerrarse). Devuelve cuántos
+        // individual de siempre (fallback del libro consumido hasta tener el chase de
+        // Veleth). Devuelve cuántos
         // murieron en esta llamada.
         public static int KillAll()
         {

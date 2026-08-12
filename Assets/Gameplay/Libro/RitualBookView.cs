@@ -1,71 +1,57 @@
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Gameplay
 {
-    // Visual del LIBRO RITUAL: el objeto que descansa sobre la imagen de referencia (el
-    // mismo punto físico que ancla toda la escena escaneada). Reemplaza al marcador de
-    // esferas del anchor mientras hay partida.
-    //
-    // La apertura NO es una animación ni un clip: son dos rotaciones sobre el eje de la
-    // bisagra (el lomo), así que puede quedar en cualquier valor intermedio y responder en
-    // vivo a las linternas. El modelo se importa ABIERTO — esa es la pose de reposo
-    // (apertura 1) y se captura tal cual viene; lo único que se configura es cuánto rota
-    // cada tapa AL CERRARSE.
-    //
-    // Sin Update propio: la apertura sólo se recalcula cuando el director la cambia.
-    //
-    // Va en el prefab Assets/Resources/LibroRitual.prefab, que arma el menú
-    // "Mortuorium > Crear prefab del Libro Ritual" (Assets/Editor/RitualBookPrefabSetup.cs).
+    // Vista del libro anclado a la imagen de referencia. El modelo permanece abierto:
+    // la amenaza se representa unicamente oscureciendo sus propias mallas desde el centro.
+    // El porcentaje controla AREA cubierta: 50% logico equivale a media superficie negra.
     public class RitualBookView : MonoBehaviour
     {
         public const string ResourceName = "LibroRitual";
+        private const string DarknessShaderResource = "RitualBookDarkness";
 
-        // El libro vivo de este dispositivo (uno solo: cuelga del anchor de la imagen).
         public static RitualBookView Active { get; private set; }
 
-        [Header("Partes del modelo (origen en la bisagra)")]
-        [Tooltip("Tapa que gira hacia un lado. Su transform tiene que tener el origen en el lomo.")]
-        [SerializeField] private Transform _tapaA;
-        [Tooltip("La otra tapa. Idem: origen en el lomo.")]
-        [SerializeField] private Transform _tapaB;
-        [Tooltip("El lomo (no rota; es la referencia de la bisagra).")]
-        [SerializeField] private Transform _lomo;
+        // Se conservan para que el prefab y su herramienta de autoria sigan siendo
+        // compatibles, aunque las tapas ya no se animan al ocurrir la amenaza.
+        [SerializeField, HideInInspector] private Transform _tapaA;
+        [SerializeField, HideInInspector] private Transform _tapaB;
+        [SerializeField, HideInInspector] private Transform _lomo;
 
-        [Header("Cierre")]
-        [Tooltip("Eje de la bisagra, en el espacio del PADRE de las tapas (no en el de cada " +
-                 "tapa: así las dos giran sobre el mismo eje físico aunque el modelo traiga " +
-                 "una de ellas espejada). Lo calcula el menú que arma el prefab.")]
-        [SerializeField] private Vector3 _ejeBisagra = Vector3.forward;
-        [Tooltip("Grados que rota la tapa A desde la pose ABIERTA del modelo hasta quedar " +
-                 "cerrada. 90 = las dos tapas suben y se juntan en el medio; 180 en una y 0 " +
-                 "en la otra = una tapa se da vuelta sobre la otra.")]
-        [SerializeField] private float _cierreTapaA = 90f;
-        [Tooltip("Idem para la tapa B.")]
-        [SerializeField] private float _cierreTapaB = 90f;
+        [Header("Oscuridad radial")]
+        [SerializeField] private Color _colorOscuridad = Color.black;
+        [Range(0f, 1f)] [SerializeField] private float _opacidadMaxima = 0.96f;
+        [Tooltip("Ancho en metros del borde suave de la oscuridad.")]
+        [Min(0.001f)] [SerializeField] private float _suavidadMetros = 0.018f;
 
-        // Pose ABIERTA del modelo. Serializada (y no leída en Awake a secas) para que el
-        // preview del inspector pueda mover las tapas sin perder la referencia.
-        [SerializeField, HideInInspector] private bool       _reposoCapturado;
-        [SerializeField, HideInInspector] private Quaternion _reposoA = Quaternion.identity;
-        [SerializeField, HideInInspector] private Quaternion _reposoB = Quaternion.identity;
-
-        // Centro visual del libro (no su pivote, que puede caer en un borde): es el punto
-        // que hay que alumbrar. Se calcula una sola vez.
+        private readonly List<Renderer> _capasOscuridad = new();
+        private readonly List<Renderer> _renderersLibro = new();
+        private Material _materialOscuridad;
+        private MaterialPropertyBlock _props;
         private Vector3 _centroLocal;
-        private float   _radio;
+        private Vector2 _medioTamanoLocal;
+        private float _radioLuz;
+        private float _radioOscuridad;
+        private float _oscuridad01;
+
+        public Vector3 PuntoDeLuz => transform.TransformPoint(_centroLocal);
+        public float RadioAproximado => _radioLuz;
+        public bool Disponible { get; private set; } = true;
 
         private void Awake()
         {
-            if (!_reposoCapturado) CapturarReposo();   // prefab armado a mano
             MedirGeometria();
+            CrearCapasDeOscuridad();
         }
 
         private void OnEnable()
         {
             Active = this;
-            // El visual se destruye y se recrea en cada recalibración del anchor; la
-            // apertura vive en el director, así que la recuperamos de ahí.
-            Aplicar(RitualBookDirector.Instance != null ? RitualBookDirector.Instance.Apertura01 : 1f);
+            AplicarOscuridad(RitualBookDirector.Instance != null
+                ? RitualBookDirector.Instance.Oscuridad01
+                : 0f);
         }
 
         private void OnDisable()
@@ -73,105 +59,197 @@ namespace Gameplay
             if (Active == this) Active = null;
         }
 
-        // Punto al que hay que apuntar con la linterna para que cuente.
-        public Vector3 PuntoDeLuz => transform.TransformPoint(_centroLocal);
-
-        // Radio horizontal aproximado (m): alumbrarle el BORDE al libro también tiene que
-        // contar, no sólo pegarle justo al centro.
-        public float RadioAproximado => _radio;
-
-        // 0 = cerrado (game over), 1 = abierto del todo.
-        public void Aplicar(float apertura01)
+        private void OnDestroy()
         {
-            float cierre = 1f - Mathf.Clamp01(apertura01);
-            var   eje    = _ejeBisagra.sqrMagnitude > 1e-6f ? _ejeBisagra.normalized : Vector3.forward;
-
-            // Pre-multiplicamos: el eje se interpreta en el espacio del PADRE, así que las
-            // dos tapas giran sobre la misma bisagra física aunque sus ejes locales no
-            // coincidan (el modelo trae una tapa rotada 180°). Como localRotation gira
-            // sobre el origen del propio transform —que está en la bisagra— la tapa abre y
-            // cierra por donde corresponde sin tocar la posición.
-            if (_tapaA != null) _tapaA.localRotation = Quaternion.AngleAxis(_cierreTapaA * cierre, eje) * _reposoA;
-            if (_tapaB != null) _tapaB.localRotation = Quaternion.AngleAxis(_cierreTapaB * cierre, eje) * _reposoB;
+            if (_materialOscuridad != null) Destroy(_materialOscuridad);
         }
 
-        // Guarda la pose actual de las tapas como "libro abierto". La llama el menú que
-        // arma el prefab, con el modelo recién importado (que viene abierto).
-        [ContextMenu("Capturar pose abierta")]
-        public void CapturarReposo()
+        private void LateUpdate()
         {
-            if (_tapaA != null) _reposoA = _tapaA.localRotation;
-            if (_tapaB != null) _reposoB = _tapaB.localRotation;
-            _reposoCapturado = true;
+            // El anchor puede corregir su pose en cualquier frame. Los parametros estan
+            // en mundo, por eso se refrescan para que el circulo siga pegado al libro.
+            ActualizarShader();
         }
+
+        public void AplicarOscuridad(float oscuridad01)
+        {
+            _oscuridad01 = Mathf.Clamp01(oscuridad01);
+            SetDisponible(_oscuridad01 < 1f - 1e-5f);
+            ActualizarShader();
+        }
+
+        public void SetDisponible(bool disponible)
+        {
+            Disponible = disponible;
+            foreach (var renderer in _renderersLibro)
+                if (renderer != null) renderer.enabled = disponible;
+            foreach (var renderer in _capasOscuridad)
+                if (renderer != null) renderer.enabled = disponible;
+        }
+
+        // API anterior mantenida para herramientas o escenas aun no reimportadas.
+        public void Aplicar(float apertura01) => AplicarOscuridad(1f - apertura01);
 
         private void MedirGeometria()
         {
-            var rends = GetComponentsInChildren<Renderer>();
-            if (rends.Length == 0) { _centroLocal = Vector3.zero; _radio = 0f; return; }
+            var rends = GetComponentsInChildren<Renderer>(true);
+            if (rends.Length == 0)
+            {
+                _centroLocal = Vector3.zero;
+                _radioLuz = 0f;
+                _radioOscuridad = 0.2f;
+                _medioTamanoLocal = Vector2.one * 0.2f;
+                return;
+            }
 
-            var b = rends[0].bounds;
-            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+            Bounds localBounds = default;
+            bool first = true;
+            foreach (var renderer in rends)
+            {
+                Bounds world = renderer.bounds;
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    Vector3 point = world.center + Vector3.Scale(world.extents, new Vector3(
+                        (corner & 1) == 0 ? -1f : 1f,
+                        (corner & 2) == 0 ? -1f : 1f,
+                        (corner & 4) == 0 ? -1f : 1f));
+                    Vector3 local = transform.InverseTransformPoint(point);
+                    if (first) { localBounds = new Bounds(local, Vector3.zero); first = false; }
+                    else localBounds.Encapsulate(local);
+                }
+            }
 
-            _centroLocal = transform.InverseTransformPoint(b.center);
-            _radio       = Mathf.Max(b.extents.x, b.extents.z);
+            _centroLocal = localBounds.center;
+            _medioTamanoLocal = new Vector2(
+                Mathf.Max(0.001f, localBounds.extents.x),
+                Mathf.Max(0.001f, localBounds.extents.z));
+            float escalaX = Mathf.Abs(transform.lossyScale.x);
+            float escalaZ = Mathf.Abs(transform.lossyScale.z);
+            _radioLuz = Mathf.Max(_medioTamanoLocal.x * escalaX,
+                                  _medioTamanoLocal.y * escalaZ);
+            _radioOscuridad = _medioTamanoLocal.magnitude;
         }
 
-        // ── Spawn ─────────────────────────────────────────────────────────────
+        private void CrearCapasDeOscuridad()
+        {
+            var shader = Resources.Load<Shader>(DarknessShaderResource);
+            if (shader == null) shader = Shader.Find("AR/RitualBookDarkness");
+            if (shader == null)
+            {
+                Debug.LogError("[LibroRitual] No se encontro el shader RitualBookDarkness.");
+                return;
+            }
 
-        // Crea el libro colgando del anchor de la imagen. Devuelve null si no corresponde
-        // (fuera de partida) o si falta el prefab; ahí ARImageAnchor cae al marcador de
-        // esferas de siempre.
+            _materialOscuridad = new Material(shader)
+            {
+                name = "Oscuridad del libro (runtime)",
+                hideFlags = HideFlags.DontSave,
+            };
+            _materialOscuridad.SetColor("_DarknessColor", _colorOscuridad);
+            _props = new MaterialPropertyBlock();
+
+            var filtros = GetComponentsInChildren<MeshFilter>(true);
+            foreach (var filtro in filtros)
+            {
+                if (filtro.sharedMesh == null) continue;
+                var original = filtro.GetComponent<MeshRenderer>();
+                if (original == null) continue;
+                if (!_renderersLibro.Contains(original)) _renderersLibro.Add(original);
+
+                var capa = new GameObject("__OscuridadRitual")
+                {
+                    layer = original.gameObject.layer,
+                    hideFlags = HideFlags.DontSave,
+                };
+                capa.transform.SetParent(filtro.transform, false);
+
+                var copiaFiltro = capa.AddComponent<MeshFilter>();
+                copiaFiltro.sharedMesh = filtro.sharedMesh;
+
+                var copiaRenderer = capa.AddComponent<MeshRenderer>();
+                int materiales = Mathf.Max(1, filtro.sharedMesh.subMeshCount);
+                var mats = new Material[materiales];
+                for (int i = 0; i < mats.Length; i++) mats[i] = _materialOscuridad;
+                copiaRenderer.sharedMaterials = mats;
+                copiaRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                copiaRenderer.receiveShadows = false;
+                copiaRenderer.lightProbeUsage = LightProbeUsage.Off;
+                copiaRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+                copiaRenderer.sortingLayerID = original.sortingLayerID;
+                copiaRenderer.sortingOrder = original.sortingOrder + 1;
+                _capasOscuridad.Add(copiaRenderer);
+            }
+
+            ActualizarShader();
+        }
+
+        private void ActualizarShader()
+        {
+            if (_props == null || _capasOscuridad.Count == 0) return;
+
+            float escala = Mathf.Max(Mathf.Abs(transform.lossyScale.x),
+                                     Mathf.Max(Mathf.Abs(transform.lossyScale.y),
+                                               Mathf.Abs(transform.lossyScale.z)));
+            _props.SetFloat("_DarknessAmount", _oscuridad01);
+            _props.SetFloat("_DarknessMaxRadius", _radioOscuridad * escala);
+            _props.SetFloat("_DarknessSoftness", _suavidadMetros * escala);
+            _props.SetFloat("_DarknessOpacity", _opacidadMaxima);
+            _props.SetVector("_DarknessCenterWorld", PuntoDeLuz);
+            _props.SetVector("_DarknessAxisXWorld", transform.right.normalized);
+            _props.SetVector("_DarknessAxisZWorld", transform.forward.normalized);
+            _props.SetVector("_DarknessHalfSizeWorld", new Vector4(
+                _medioTamanoLocal.x * Mathf.Abs(transform.lossyScale.x),
+                _medioTamanoLocal.y * Mathf.Abs(transform.lossyScale.z), 0f, 0f));
+
+            foreach (var renderer in _capasOscuridad)
+                if (renderer != null) renderer.SetPropertyBlock(_props);
+        }
+
         public static GameObject TrySpawn(Transform anchor)
         {
-            // Fuera de partida (escáner, calibración) el visual del anchor sigue siendo el
-            // marcador: el libro es una mecánica de gameplay, no una ayuda de escaneo.
             var net = NetworkManager.Instance;
-            if (anchor == null || net == null || !net.InSession) return null;
+            if (!PuedeAparecer(anchor != null, net != null && net.InSession)) return null;
 
             var prefab = Resources.Load<GameObject>(ResourceName);
             if (prefab == null)
             {
-                Debug.LogWarning($"[LibroRitual] Falta Assets/Resources/{ResourceName}.prefab — corré " +
-                                 "el menú 'Mortuorium > Crear prefab del Libro Ritual'. Mientras tanto " +
-                                 "el anchor muestra las esferas.");
+                Debug.LogWarning($"[LibroRitual] Falta Assets/Resources/{ResourceName}.prefab.");
                 return null;
             }
 
-            // Antes de instanciar: la vista lee la apertura del director en su OnEnable.
             RitualBookDirector.Ensure();
-
-            // false = conserva la pose LOCAL del prefab: queda pegado al anchor.
-            var go = Instantiate<GameObject>(prefab, anchor, false);
+            var go = Instantiate(prefab, anchor, false);
             go.name = "LibroRitual";
             go.transform.localPosition = Vector3.zero;
             go.transform.localRotation = Quaternion.identity;
             return go;
         }
 
+        // La vista nunca inventa una ubicacion: necesita simultaneamente una partida
+        // activa y el ancla fisica que ARImageAnchor valido/reconocio.
+        public static bool PuedeAparecer(bool hayAnclaValida, bool enSesion)
+            => hayAnclaValida && enSesion;
+
+        // Una region que crece en X y Z cubre escala^2 de la superficie. La raiz
+        // cuadrada convierte el porcentaje de gameplay en porcentaje visual de area.
+        public static float EscalaParaCobertura(float cobertura01)
+            => Mathf.Sqrt(Mathf.Clamp01(cobertura01));
+
 #if UNITY_EDITOR
-        // Deja el componente listo de una. Lo llama el menú que arma el prefab, con el
-        // modelo recién importado (o sea, con el libro abierto).
         public void EditorConfigurar(Transform tapaA, Transform tapaB, Transform lomo,
                                      Vector3 ejeBisagra, float cierreA, float cierreB)
         {
-            _tapaA = tapaA; _tapaB = tapaB; _lomo = lomo;
-            _ejeBisagra  = ejeBisagra;
-            _cierreTapaA = cierreA;
-            _cierreTapaB = cierreB;
-            CapturarReposo();
+            _tapaA = tapaA;
+            _tapaB = tapaB;
+            _lomo = lomo;
         }
 
-        // Ayuda de autoría: mover este slider en el inspector abre/cierra el libro en la
-        // escena para ajustar el eje y los ángulos. Compilado fuera de TODO build.
-        [Header("Sólo editor")]
-        [Tooltip("Preview de la apertura para ajustar eje y ángulos. No existe en el build.")]
-        [Range(0f, 1f)] [SerializeField] private float _aperturaPreview = 1f;
+        [Header("Solo editor")]
+        [Range(0f, 1f)] [SerializeField] private float _oscuridadPreview;
 
         private void OnValidate()
         {
-            if (!_reposoCapturado) return;
-            Aplicar(_aperturaPreview);
+            if (Application.isPlaying) AplicarOscuridad(_oscuridadPreview);
         }
 #endif
     }

@@ -96,7 +96,7 @@ namespace Gameplay
             PublicarReloj();
             SorkerNav.Ensure();
             ArbmosDirector.Ensure().StartRun();      // alucinacion de cordura (individual por jugador)
-            RitualBookDirector.Ensure().StartRun();  // libro sobre la imagen: se cierra si no lo alumbran
+            RitualBookDirector.Ensure().StartRun();  // libro sobre la imagen: eventos de oscuridad
             _running = true;
         }
 
@@ -441,12 +441,14 @@ namespace Gameplay
 
             int markers = SceneRegistry.Instance != null ? SceneRegistry.Instance.Markers.Count : 0;
             string libro = RitualBookDirector.Instance != null ? RitualBookDirector.Instance.DebugLine() : null;
+            string veleth = VelethDirector.Instance != null ? VelethDirector.Instance.DebugLine() : null;
             return
                 $"[GameDirector]  phase={_phase}\n" +
                 $"attemptTimer={_attemptTimer:F1}  repel={_repel:F1}  grace={_grace:F1}\n" +
                 $"sorken={(_sorken != null ? _sorken.State.ToString() : "null")}  netId={_sorkenNetId}\n" +
                 $"markers={markers}  alivePlayers={CountAlivePlayers()}  dead={ServerDeaths.Count}" +
-                (libro != null ? $"\n{libro}" : "");
+                (libro != null ? $"\n{libro}" : "") +
+                (veleth != null ? $"\n{veleth}" : "");
         }
     }
 }

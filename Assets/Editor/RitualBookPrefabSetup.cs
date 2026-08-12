@@ -4,14 +4,12 @@ using UnityEditor;
 using UnityEngine;
 
 // Arma el prefab del LIBRO RITUAL a partir del FBX de 3 piezas (tapa, tapa, lomo), con el
-// RitualBookView ya cableado: qué pieza es cada una, el eje de la bisagra y hacia dónde
-// cierra cada tapa. También normaliza el tamaño a metros y apoya el libro sobre el origen
-// (que es donde está la imagen de referencia física).
+// RitualBookView ya cableado y listo para el oscurecimiento radial. También normaliza el
+// tamaño a metros y apoya el libro sobre el origen (la imagen de referencia física).
 //
 // Uso: menú  Mortuorium > Crear prefab del Libro Ritual  (re-ejecutable: pisa el prefab).
-// Después conviene abrir el prefab y mover el slider "Apertura Preview" del inspector para
-// verificar que las tapas cierren para el lado correcto — el modelo puede venir exportado
-// con cualquier convención de ejes y ahí se termina de ajustar a ojo.
+// El modelo permanece abierto: la amenaza se dibuja sobre sus propias mallas y nace en el
+// centro, sin animar las tapas ni crear un objeto de oscuridad separado.
 //
 // El prefab va a Assets/Resources porque se instancia en runtime (Resources.Load desde
 // RitualBookView.TrySpawn) y así entra seguro al build con sus materiales.
@@ -104,9 +102,7 @@ public static class RitualBookPrefabSetup
             Debug.Log($"[LibroRitual] Prefab creado en {PrefabPath}.\n" +
                       $"  tapas = '{nA}' ({cierreA:+0;-0}°) y '{nB}' ({cierreB:+0;-0}°)\n" +
                       $"  lomo  = '{nLomo}'   eje de bisagra = {ejeLocal}\n" +
-                      "  Abrí el prefab y mové 'Apertura Preview' en el inspector para verificar " +
-                      "que cierre bien; si alguna tapa gira para el lado que no es, cambiale el " +
-                      "signo a su ángulo de cierre.");
+                      "  El oscurecimiento radial se genera en runtime sobre las mallas.");
         }
         finally
         {

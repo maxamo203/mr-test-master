@@ -63,7 +63,7 @@ public class NetworkManager : MonoBehaviour
     public event Action         OnNightReset;          // client: el host cortó la noche
     public event Action         OnNightSurvived;       // todos: amaneció, noche ganada
     public event Action<int,int> OnNightClock;         // client: (restantes, totales) del amanecer
-    public event Action<float>  OnRitualBook;          // client: apertura del libro ritual (0..1)
+    public event Action<float>  OnRitualBook;          // client: oscuridad del libro ritual (0..1)
     public event Action<byte[]> OnMapReceived;         // client: recibió el .mscn del mapa
     public event Action<byte, float> OnBatteryCollected; // client: recogió pila (rarityIndex, charge)
     public event Action<float, float> OnSanityUpdated;    // client: cordura autoritativa (valor, max)
@@ -133,7 +133,7 @@ public class NetworkManager : MonoBehaviour
     // Estado de la linterna local de este dispositivo (para reportarla al server).
     public bool LocalFlashlightOn()
     {
-        if (_localFlashlight == null) _localFlashlight = FindFirstObjectByType<Flashlight>();
+        if (_localFlashlight == null) _localFlashlight = FindAnyObjectByType<Flashlight>();
         return _localFlashlight != null && _localFlashlight.isOn;
     }
 
@@ -249,10 +249,10 @@ public class NetworkManager : MonoBehaviour
 
     // Server → all (~5 Hz): apertura del LIBRO RITUAL. Los clientes no pueden calcularla
     // (depende de las linternas de todos los jugadores), así que la reciben resuelta.
-    public void ServerSendRitualBook(float apertura01)
+    public void ServerSendRitualBook(float oscuridad01)
     {
         if (_srv == null) return;
-        var body = new RitualBookMsg { Apertura = Mathf.Clamp01(apertura01) }.Serialize();
+        var body = new RitualBookMsg { Oscuridad = Mathf.Clamp01(oscuridad01) }.Serialize();
         _srv.Broadcast(MsgHelper.Frame(MessageType.RitualBook, body));
     }
 
@@ -736,7 +736,7 @@ public class NetworkManager : MonoBehaviour
             case MessageType.RitualBook:
             {
                 var m = RitualBookMsg.Deserialize(msg.Body);
-                OnRitualBook?.Invoke(m.Apertura);
+                OnRitualBook?.Invoke(m.Oscuridad);
                 break;
             }
             case MessageType.MapData:

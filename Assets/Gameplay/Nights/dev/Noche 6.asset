@@ -45,8 +45,10 @@ MonoBehaviour:
   arbmosLethalChaseSpeed: 3.5
   arbmosGrabRange: 1.2
   bookActive: 1
-  bookCloseSeconds: 180
-  bookOpenSecondsPerPlayer: 30
+  bookEventDelayMin: 30
+  bookEventDelayMax: 50
+  bookConsumeSeconds: 6
+  bookDefenseSeconds: 4
   flashlightConeAngleDeg: 30
   flashlightRange: 8
   initialAttemptDelay: 2
