@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using T = MortuoriumTheme;
 using UnityEngine.InputSystem;
+using Scanner.ScanV2;
 
 namespace Scanner
 {
@@ -22,6 +23,7 @@ namespace Scanner
         [SerializeField] private CubeBuilder _cubeBuilder;
         [SerializeField] private MarkerBuilder _markerBuilder;
         [SerializeField] private ARImageAnchor _imageAnchor;
+        [SerializeField] private ScanV2Controller _scanV2;
 
         private ScanStateMachine _fsm;
         private ResolvedHit _lastHit;
@@ -52,11 +54,12 @@ namespace Scanner
         {
             _fsm = ScanStateMachine.Instance;
             _camera = Camera.main;
-            if (_wallBuilder == null) _wallBuilder = FindFirstObjectByType<WallBuilder>();
-            if (_doorBuilder == null) _doorBuilder = FindFirstObjectByType<DoorBuilder>();
-            if (_cubeBuilder == null) _cubeBuilder = FindFirstObjectByType<CubeBuilder>();
-            if (_markerBuilder == null) _markerBuilder = FindFirstObjectByType<MarkerBuilder>();
-            if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
+            if (_wallBuilder == null) _wallBuilder = FindAnyObjectByType<WallBuilder>();
+            if (_doorBuilder == null) _doorBuilder = FindAnyObjectByType<DoorBuilder>();
+            if (_cubeBuilder == null) _cubeBuilder = FindAnyObjectByType<CubeBuilder>();
+            if (_markerBuilder == null) _markerBuilder = FindAnyObjectByType<MarkerBuilder>();
+            if (_imageAnchor == null) _imageAnchor = FindAnyObjectByType<ARImageAnchor>();
+            if (_scanV2 == null) _scanV2 = ScanV2Controller.Ensure(gameObject);
 
             // Fantasma en vivo de lo que se va a colocar. Lo instanciamos acá para no
             // tener que cablearlo en la escena (encuentra los builders por su cuenta).
@@ -193,7 +196,9 @@ namespace Scanner
 
             // COLOCAR + GUARDAR ESCANEO.
             float bw = (vw - Pad * 2f - 10f) / 2f;
-            bool puedeColocar = IsPlacingMode(modo);
+            bool enScanV2 = modo == ScannerMode.ScanV2_Capturing;
+            bool puedeColocar = IsPlacingMode(modo) ||
+                                (enScanV2 && _scanV2 != null && _scanV2.CanFinish);
             bool puedeGuardar = (modo == ScannerMode.Idle || modo == ScannerMode.Selected) && HayContenido();
 
             var rColocar = new Rect(Pad, yBotones, bw, botonesH);
@@ -201,10 +206,14 @@ namespace Scanner
             T.Fill(rColocar, focoColocar ? new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.18f)
                                          : new Color(0f, 0f, 0f, 0.4f));
             T.Borde(rColocar, puedeColocar ? T.Tan : T.BorderDim);
-            if (GUI.Button(rColocar, "COLOCAR",
+            string textoAccion = enScanV2 ? "FINALIZAR" : "COLOCAR";
+            if (GUI.Button(rColocar, textoAccion,
                            T.Estilo(T.FBebas, 18, puedeColocar ? T.Cream : T.Disabled, TextAnchor.MiddleCenter))
                 && puedeColocar)
-                OnPlace();
+            {
+                if (enScanV2) _scanV2?.FinishCapture();
+                else OnPlace();
+            }
 
             var rGuardar = new Rect(Pad + bw + 10f, yBotones, bw, botonesH);
             T.Fill(rGuardar, puedeGuardar ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.20f)
@@ -233,7 +242,8 @@ namespace Scanner
         {
             var modo = _fsm.Current;
             bool idle = modo == ScannerMode.Idle;
-            bool puedeRecal = !IsPlacingMode(modo);   // recalibrar salvo mientras se coloca
+            bool enScanV2 = modo == ScannerMode.ScanV2_Capturing;
+            bool puedeRecal = !IsPlacingMode(modo) && !enScanV2;
 
             bool enPared  = modo == ScannerMode.Wall_V1 || modo == ScannerMode.Wall_Height || modo == ScannerMode.Wall_Vn;
             bool enCubo   = modo == ScannerMode.Cube_V1 || modo == ScannerMode.Cube_V2 || modo == ScannerMode.Cube_V3;
@@ -245,6 +255,7 @@ namespace Scanner
             // Entradas de la botonera (en orden).
             var items = new (string label, MortuoriumIcons.Icon icon, bool activo, bool enabled, Action onTap)[]
             {
+                ("SCAN\nV2", MortuoriumIcons.Icon.AutoScan, enScanV2, idle, StartScanV2),
                 ("PARED",        MortuoriumIcons.Icon.Pared,  enPared,  idle, () => _wallBuilder?.StartPolyline()),
                 ("CUBO",         MortuoriumIcons.Icon.Cubo,   enCubo,   idle, () => _cubeBuilder?.StartCube()),
                 ("AGUJERO\nPUERTA", MortuoriumIcons.Icon.Puerta, enPuerta, idle, () => _doorBuilder?.StartDoor()),
@@ -265,7 +276,7 @@ namespace Scanner
             _toolScroll = Mathf.Clamp(_toolScroll, 0f, maxScroll);
 
             // Índice de "Identificar" para colgar el submenú (4º item).
-            const int identIdx = 3;
+            const int identIdx = 4;
             _identScreenX = viewport.x + identIdx * (ToolW + ToolGap) - _toolScroll;
             _identVisible = _identScreenX + ToolW > viewport.x && _identScreenX < viewport.xMax;
 
@@ -356,7 +367,7 @@ namespace Scanner
 
         private void Recalibrar(bool keepVisualPosition)
         {
-            if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
+            if (_imageAnchor == null) _imageAnchor = FindAnyObjectByType<ARImageAnchor>();
             if (_imageAnchor == null) return;
             _markerSubmenuOpen = false;
             ScanStateMachine.Instance?.SetMode(ScannerMode.Calibrating);
@@ -411,6 +422,7 @@ namespace Scanner
 
             // El flujo de anclas tiene su propio panel (contador + LISTO / OMITIR).
             if (modo == ScannerMode.Anchor_Place) { DrawContextualAnclas(vw, yBase); return; }
+            if (modo == ScannerMode.ScanV2_Capturing) { DrawContextualScanV2(vw, yBase); return; }
 
             bool enPared = modo == ScannerMode.Wall_V1 || modo == ScannerMode.Wall_Height || modo == ScannerMode.Wall_Vn;
             bool enCubo  = modo == ScannerMode.Cube_V1 || modo == ScannerMode.Cube_V2 || modo == ScannerMode.Cube_V3;
@@ -496,6 +508,40 @@ namespace Scanner
         // trackeables no puede dejar al jugador sin poder escanear).
         private string _errorAnclas;
 
+        private void DrawContextualScanV2(float vw, float yBase)
+        {
+            var scan = _scanV2 ?? ScanV2Controller.Instance;
+#if UNITY_EDITOR
+            const float hPanel = 184f;
+#else
+            const float hPanel = 142f;
+#endif
+            var panel = new Rect(Pad, yBase - hPanel, vw - Pad * 2f, hPanel);
+            UIBlocker.AddVirtualRect(panel);
+            T.Fill(panel, new Color(0f, 0f, 0f, 0.76f));
+            T.Borde(panel, T.BorderDim);
+            float x = panel.x + 12f, w = panel.width - 24f;
+            GUI.Label(new Rect(x, panel.y + 10f, w, 38f),
+                      "recorre cada pared lateralmente y desde dos angulos; los keyframes se fusionan antes de crear objetos",
+                      T.Estilo(T.FElite, 12, T.Tan, TextAnchor.UpperLeft, wrap: true));
+            string status = scan == null ? "Scan V2 no disponible" :
+                $"keyframes: {scan.KeyframeCount}  ·  fuente: {scan.LastSource}  ·  " +
+                $"voxels: {scan.FusedVoxelCount}{(scan.VolumeIsFull ? " (LIMITE)" : "")}  ·  " +
+                $"estables: {scan.StableSurfelCount}  ·  listos: {scan.MaterializableObjectCount}";
+            GUI.Label(new Rect(x, panel.y + 52f, w, 38f), status,
+                      T.Estilo(T.FMono, 10, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
+#if UNITY_EDITOR
+            T.Boton(null, new Rect(x, panel.y + 96f, w, 34f), "SIMULAR HABITACION MULTIVISTA",
+                    primario: false, () => scan?.AddSyntheticRoomForEditor(), fontSize: 13);
+            float cancelY = panel.y + 138f;
+#else
+            float cancelY = panel.y + 96f;
+#endif
+            T.Boton(null, new Rect(x, cancelY, w, 34f), "CANCELAR SIN CREAR",
+                    primario: false, () => scan?.CancelCapture(), fontSize: 13,
+                    textColor: T.Muted);
+        }
+
         private void DrawContextualAnclas(float vw, float yBase)
         {
             var mgr = AnchorPointManager.Ensure();
@@ -543,6 +589,13 @@ namespace Scanner
             if (cerrar) mgr.MarcarListo(); else mgr.Omitir();
             _errorAnclas = null;
             _fsm.SetMode(ScannerMode.Idle);
+        }
+
+        private void StartScanV2()
+        {
+            _markerSubmenuOpen = false;
+            if (_scanV2 == null) _scanV2 = ScanV2Controller.Ensure(gameObject);
+            _scanV2.StartCapture();
         }
 
         // -------------------------------------------------------- acciones
