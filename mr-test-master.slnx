@@ -1,4 +1,6 @@
 ﻿<Solution>
   <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="Mortuorium.Compatibility.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="Mortuorium.Tests.EditMode.csproj" />
 </Solution>

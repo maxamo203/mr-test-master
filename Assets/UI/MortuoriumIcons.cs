@@ -10,7 +10,7 @@ using UnityEngine;
 // y verificaron en un preview aparte; acá se replica ese rasterizado.
 public static class MortuoriumIcons
 {
-    public enum Icon { Pared, Cubo, Puerta, Marca, Piso, RecalFijo, RecalMover, Ancla }
+    public enum Icon { Pared, Cubo, Puerta, Marca, Piso, RecalFijo, RecalMover, Ancla, Pentagrama }
 
     private const int N = 128;
     private static readonly Dictionary<Icon, Texture2D> _cache = new();
@@ -100,6 +100,32 @@ public static class MortuoriumIcons
         int w = Mathf.RoundToInt(uw * N), h = Mathf.RoundToInt(uh * N);
         for (int j = 0; j < h; j++)
             for (int i = 0; i < w; i++) Px(x0 + i, y0 + j, col);
+    }
+
+    // Segmento de línea de ancho fijo (quad), en coords unitarias [0,1].
+    private static void Line(Vector2 a, Vector2 b, float width, Color32 col)
+    {
+        Vector2 dir = (b - a).normalized;
+        Vector2 n = new Vector2(-dir.y, dir.x) * (width * 0.5f);
+        Poly(col, a + n, b + n, b - n, a - n);
+    }
+
+    // Pentagrama real: polígono estrellado {5/2} — 5 vértices de un pentágono
+    // regular, unidos salteando uno (0-2-4-1-3-0), que es lo que genera las
+    // líneas cruzadas típicas del símbolo (no una silueta de estrella "inflada").
+    // Invertido (una punta hacia abajo) = el sello "satánico"/Baphomet, como ⛧.
+    // Coords unitarias [0,1].
+    private static void Pentagram(float cx, float cy, float r, float strokeW, Color32 col)
+    {
+        var v = new Vector2[5];
+        for (int i = 0; i < 5; i++)
+        {
+            float ang = Mathf.PI / 2f + i * 2f * Mathf.PI / 5f;   // punta hacia abajo
+            v[i] = new Vector2(cx + Mathf.Cos(ang) * r, cy + Mathf.Sin(ang) * r);
+        }
+        int[] order = { 0, 2, 4, 1, 3, 0 };
+        for (int i = 0; i < order.Length - 1; i++)
+            Line(v[order[i]], v[order[i + 1]], strokeW, col);
     }
 
     private static Color32 Shade(Color32 c, float f) => new Color32(
@@ -194,6 +220,12 @@ public static class MortuoriumIcons
                 Poly(tan, new Vector2(0.04f, 0.5f), new Vector2(0.17f, 0.42f), new Vector2(0.17f, 0.58f));
                 Poly(tan, new Vector2(0.96f, 0.5f), new Vector2(0.83f, 0.42f), new Vector2(0.83f, 0.58f));
                 Disc(0.5f, 0.5f, 0.05f, tan);
+                break;
+            // Sello de brujería: pentagrama invertido (una punta hacia abajo) dentro
+            // de un círculo, como ⛧.
+            case Icon.Pentagrama:
+                Ring(0.5f, 0.5f, 0.42f, 0.395f, Color.white);
+                Pentagram(0.5f, 0.5f, 0.34f, 0.028f, Color.white);
                 break;
         }
 

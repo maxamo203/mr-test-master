@@ -12,6 +12,8 @@ public static class GameOptions
     private const string KeyVozSens     = "opt_voz_sensibilidad";
     private const string KeyCalidadAR   = "opt_calidad_ar";
     private const string KeyAvisoIos    = "opt_aviso_ios_visto";
+    private const string KeyVhsMenus    = "opt_vhs_menus";
+    private const string KeyAvisoVerDesc = "opt_aviso_version_desconocida_visto";
 
     // Volumen maestro 0..1 (AudioListener.volume). Persiste entre sesiones.
     public static float Volumen
@@ -95,6 +97,34 @@ public static class GameOptions
         set
         {
             PlayerPrefs.SetInt(KeyAvisoIos, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    // US-11.1: ¿el filtro VHS / cámara antigua también se dibuja sobre los MENÚS?
+    // En partida el filtro es parte de la atmósfera y no se apaga acá; sobre los menús
+    // es cuestión de gusto (y de legibilidad), así que el jugador lo decide.
+    // Ver VHSOverlayUI. Default: encendido.
+    public static bool VhsEnMenus
+    {
+        get => PlayerPrefs.GetInt(KeyVhsMenus, 1) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeyVhsMenus, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    // US-1.1: ¿ya se le mostró al jugador el aviso de que no se pudo determinar la
+    // versión de su sistema operativo (DeviceCompatibility.CompatResult.Unknown)?
+    // A diferencia del bloqueo por versión no soportada (que no se persiste, se
+    // re-evalúa siempre), este es un aviso no bloqueante y se muestra una sola vez.
+    public static bool AvisoVersionDesconocidaVisto
+    {
+        get => PlayerPrefs.GetInt(KeyAvisoVerDesc, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeyAvisoVerDesc, value ? 1 : 0);
             PlayerPrefs.Save();
         }
     }

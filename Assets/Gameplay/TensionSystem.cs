@@ -5,7 +5,7 @@ namespace Gameplay
 {
     // Contador de tension del jugador LOCAL (0..1), US-11.2. Resume "que tan critico esta
     // el momento" combinando varias señales; por ahora solo lo consume
-    // TensionDistortionOverlay (camara), pero cualquier sistema futuro (audio, HUD...)
+    // CameraFXOverlay (camara), pero cualquier sistema futuro (audio, HUD...)
     // puede leer Value01 o aportar la suya con SetSource sin tocar este archivo.
     //
     // Fuentes automaticas (recalculadas cada frame):

@@ -18,7 +18,7 @@ public class DebugDirectorUI : MonoBehaviour
             GUI.Label(new Rect(sa.x + 10, sa.y + 300, 560, 110), txt,
                       DebugHudEstilos.Label(Color.white, 18));
         if (!string.IsNullOrEmpty(atxt))
-            GUI.Label(new Rect(sa.x + 10, sa.y + 420, 560, 140), atxt,
+            GUI.Label(new Rect(sa.x + 10, sa.y + 420, 620, 190), atxt,
                       DebugHudEstilos.Label(new Color(0.85f, 0.8f, 1f), 18));
     }
 }

@@ -28,6 +28,13 @@ namespace Gameplay
         private enum Phase { Idle, Entering, Chasing, Grabbed, Retreating }
 
         private NightConfig _night;
+
+        // La noche EFECTIVA de la corrida. No es lo mismo que GameSession.SelectedNight:
+        // si se entra a SampleScene sin pasar por el menu (tipico en el editor) esa es null
+        // y aca queda un NightConfig por defecto. Los sub-directores (ArbmosDirector) leen
+        // de aca para no quedarse sin noche en ese caso.
+        public NightConfig NocheActual => _night;
+
         private bool  _running;
         private Phase _phase = Phase.Idle;
 

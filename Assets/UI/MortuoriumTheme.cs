@@ -167,7 +167,14 @@ public static class MortuoriumTheme
                                      new Rect(0, 0, 1f, Screen.height / 3f));
         GUI.color = prev;
         GUI.matrix = m;
+        ScanlinesYaPintadas = true;
     }
+
+    // ¿Alguna pantalla ya pintó las scanlines del tema en este frame? Lo consulta el
+    // filtro VHS de los menús (US-11.1, VHSOverlayUI) para no dibujar un segundo juego
+    // de líneas encima. Lo limpia ese mismo overlay, que corre último en el frame.
+    public static bool ScanlinesYaPintadas { get; private set; }
+    public static void LimpiarFlagScanlines() => ScanlinesYaPintadas = false;
 
     // Rellena SÓLO las franjas fuera del área segura (arriba/abajo/laterales) con un
     // color sólido, dejando el área segura intacta — para pantallas sobre la cámara

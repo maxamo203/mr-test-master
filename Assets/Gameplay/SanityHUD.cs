@@ -17,7 +17,7 @@ namespace Gameplay
         {
             LocalSanity.Ensure();
             TensionSystem.Ensure();
-            TensionDistortionOverlay.Ensure();
+            CameraFXOverlay.Ensure();
         }
 
         private void OnGUI()
