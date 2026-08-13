@@ -82,13 +82,10 @@ MonoBehaviour:
   _tapaA: {fileID: 3279489527337475124}
   _tapaB: {fileID: 768746702936394167}
   _lomo: {fileID: 7815546970186820628}
-  _ejeBisagra: {x: 0.010719817, y: 0, z: 0.99994254}
-  _cierreTapaA: 90
-  _cierreTapaB: -90
-  _reposoCapturado: 1
-  _reposoA: {x: -0.000000075497894, y: 1, z: -0.000000005962444, w: -0.00000004371139}
-  _reposoB: {x: -0.000000037748947, y: -2.2500126e-15, z: 0.000000059604645, w: 1}
-  _aperturaPreview: 0
+  _colorOscuridad: {r: 0, g: 0, b: 0, a: 1}
+  _opacidadMaxima: 0.96
+  _suavidadMetros: 0.018
+  _oscuridadPreview: 0
 --- !u!1 &4607919270932822500
 GameObject:
   m_ObjectHideFlags: 0
@@ -115,7 +112,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4607919270932822500}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.0075800824, y: 0.000000027142809, z: -0.7070661, w: 0.7071069}
+  m_LocalRotation: {x: -0.000000037748947, y: -2.2500126e-15, z: 0.000000059604645, w: 1}
   m_LocalPosition: {x: -0.03842404, y: 0.06477743, z: -0.002160047}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -207,7 +204,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9009330428003433149}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.70706624, y: 0.70710677, z: 0.007580021, w: -0.0000000261205}
+  m_LocalRotation: {x: -0.000000075497894, y: 1, z: -0.000000005962444, w: -0.00000004371139}
   m_LocalPosition: {x: -0.03652404, y: 0.06477743, z: -0.0037600468}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0

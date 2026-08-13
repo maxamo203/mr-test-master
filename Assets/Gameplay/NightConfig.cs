@@ -96,23 +96,32 @@ namespace Gameplay
         [Tooltip("Distancia (m) a la que el Arbmos letal atrapa al jugador.")]
         public float arbmosGrabRange = 1.2f;
 
-        [Header("Libro ritual (se cierra solo — hay que alumbrarlo)")]
+        [Header("Libro ritual (oscuridad desde el centro)")]
         [Tooltip("Master switch del libro. Desactivar (dev/testing) para probar SIN la " +
                  "mecánica del libro. En prod: siempre activo.")]
         public bool bookActive = true;
-        [Tooltip("Segundos que tarda en cerrarse del todo, desde abierto, si NADIE lo " +
-                 "alumbra. Si se cierra: game over para todos.")]
-        public float bookCloseSeconds = 180f;
-        [Tooltip("Segundos que tarda UN jugador alumbrándolo en abrirlo del todo, de cerrado " +
-                 "a abierto (sin descontar el cierre). El efecto se ACUMULA: con N jugadores " +
-                 "alumbrando tarda N veces menos. Tiene que ser MENOR que bookCloseSeconds, " +
-                 "si no un jugador solo nunca le gana al cierre.")]
-        public float bookOpenSecondsPerPlayer = 30f;
+        [Tooltip("Espera aleatoria minima (s) antes de que la oscuridad ataque el libro.")]
+        [Min(0f)] public float bookEventDelayMin = 30f;
+        [Tooltip("Espera aleatoria maxima (s) antes de que la oscuridad ataque el libro.")]
+        [Min(0f)] public float bookEventDelayMax = 50f;
+        [Tooltip("Ventana completa (s) desde que empieza la oscuridad hasta que consume el libro.")]
+        [Min(0.1f)] public float bookConsumeSeconds = 6f;
+        [Tooltip("Segundos CONTINUOS de linterna sobre el libro necesarios para salvarlo.")]
+        [Min(0.1f)] public float bookDefenseSeconds = 4f;
 
-        // Los dos de arriba están en segundos porque es lo que se piensa al diseñar la
-        // noche; la simulación necesita el ritmo (apertura por segundo).
-        public float BookCloseRate         => bookCloseSeconds         > 0f ? 1f / bookCloseSeconds         : 0f;
-        public float BookOpenRatePerPlayer => bookOpenSecondsPerPlayer > 0f ? 1f / bookOpenSecondsPerPlayer : 0f;
+        public float RandomBookEventDelay() =>
+            UnityEngine.Random.Range(Mathf.Min(bookEventDelayMin, bookEventDelayMax),
+                                     Mathf.Max(bookEventDelayMin, bookEventDelayMax));
+
+        [Header("Veleth (invocada al perder el libro)")]
+        [Tooltip("Velocidad de persecucion. Veleth no puede ser repelida con la linterna.")]
+        [Min(0.1f)] public float velethChaseSpeed = 3.2f;
+        [Tooltip("Distancia horizontal a la que Veleth atrapa al jugador.")]
+        [Min(0.05f)] public float velethGrabRange = 1.1f;
+        [Tooltip("Frecuencia con la que recalcula su ruta hacia el jugador que se mueve.")]
+        [Min(0.05f)] public float velethRepathSeconds = 0.2f;
+        [Tooltip("Pausa del jumpscare antes de continuar hacia otro jugador vivo.")]
+        [Min(0f)] public float velethGrabHoldSeconds = 0.8f;
 
         [Header("Cono de linterna (repeler — server-authoritative)")]
         [Tooltip("Semi-angulo del cono (grados) para contar que la linterna ilumina un objetivo.")]
