@@ -59,12 +59,19 @@ namespace Gameplay
         [Header("Arbmos (alucinacion de cordura — individual por jugador)")]
         [Tooltip("Master switch: activar SOLO en las noches donde aparece el Arbmos (doc: noche 4+).")]
         public bool arbmosActive = false;
-        [Tooltip("Segundos quieto que invocan al Arbmos (inaccion => aparece).")]
+        [Tooltip("Duracion (s) de la VENTANA de quietud. Cada X segundos se abre una esfera nueva " +
+                 "centrada en el jugador; al cerrarse, si no se salio de ella se lo considera quieto " +
+                 "y se intenta invocar al Arbmos. Ver ArbmosDirector.UpdateQuietud.")]
         public float arbmosStillInvokeSeconds = 5f;
-        [Tooltip("Radio (m) bajo el cual se considera que el jugador esta 'quieto' (tolera el jitter AR). " +
-                 "Se mide sobre el eje del CUERPO, no sobre la camara, asi girar en el lugar para mirar " +
-                 "alrededor no cuenta como caminar; ademas se tolera mas cuanto mas gire. Ver ArbmosDirector.UpdateMotion.")]
-        public float arbmosStillRadius = 0.15f;
+        [Tooltip("Radio (m) de esa esfera: cuanto se puede desplazar el jugador dentro de la ventana " +
+                 "sin dejar de estar 'quieto'. Se mide sobre el eje del CUERPO, no sobre la camara, asi " +
+                 "girar en el lugar para mirar alrededor no cuenta como caminar; ademas se tolera mas " +
+                 "cuanto mas gire. En dev se puede pisar desde pausa -> ARBMOS (DEV).")]
+        public float arbmosStillRadius = 0.5f;
+        [Tooltip("Segundos que el jugador puede estar FUERA de la esfera sin invalidar la ventana. " +
+                 "Absorbe los saltos de una correccion de tracking (un frame malo no tiene por que " +
+                 "costar la ventana entera); salir de verdad supera esta gracia enseguida.")]
+        public float arbmosStillOutsideGrace = 0.4f;
         [Tooltip("Cuanto permanece la alucinacion no letal (s).")]
         public float arbmosPresentSeconds = 6f;
         [Tooltip("Velocidad (m/s) con la que el Arbmos deriva hacia el jugador mientras drena (anim running).")]

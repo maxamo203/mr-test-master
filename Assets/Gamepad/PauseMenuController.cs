@@ -27,7 +27,7 @@ namespace Gamepad
         // subcategorías: Control (mando), Cardboard (calibración estéreo), Voz (chat de
         // voz, sólo en sesiones multijugador) y — SOLO en development build — Linterna
         // (tuning) y el toggle del Debug HUD.
-        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, VHS }
+        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, VHS, Arbmos }
 
         public static PauseMenuController Instance { get; private set; }
 
@@ -149,6 +149,7 @@ namespace Gamepad
                 {
                     AddButton("vhs",      new Rect(x, y, w, 64f), "VHS (DEV)");      y += 76f;
                     AddButton("linterna", new Rect(x, y, w, 64f), "LINTERNA (DEV)"); y += 76f;
+                    AddButton("arbmos",   new Rect(x, y, w, 64f), "ARBMOS (DEV)");   y += 76f;
                     AddToggle("debughud", new Rect(x, y, w, 52f), "Debug HUD (dev)",
                               DebugHud.Visible); y += 64f;
                     AddButton("dbgpaneles", new Rect(x, y, w, 64f), "PANELES DEBUG (DEV)"); y += 76f;
@@ -335,6 +336,36 @@ namespace Gamepad
                 y += 6f;
                 AddButton("volver", new Rect(x, y, w, 60f), "Volver");
             }
+            else if (_page == Page.Arbmos)
+            {
+                // Gatillo de quietud del Arbmos: cada X segundos se genera una esfera de
+                // radio R sobre el jugador y, si no se sale de ella, se lo considera quieto
+                // (ver ArbmosDirector.UpdateQuietud). El radio es un número fijo de diseño,
+                // pero solo se puede calibrar probándolo en el celular — de ahí esta página
+                // y el wireframe. SOLO development build: en release manda la NightConfig.
+                if (!Debug.isDebugBuild) { _page = Page.Options; return; }
+
+                GUI.Label(new Rect(x, y, w, 50f), "ARBMOS (DEV)", _title); y += 58f;
+                GUI.Label(new Rect(x + 14f, y, w - 28f, 56f),
+                          "Con los valores de la noche apagado, manda la NightConfig. " +
+                          "El wireframe solo se ve en el host.", _status);
+                y += 62f;
+
+                AddToggle("arbwire", new Rect(x, y, w, 52f), "Wireframe de la esfera",
+                          Gameplay.ArbmosDebug.Wireframe); y += 62f;
+                AddToggle("arbover", new Rect(x, y, w, 52f), "Pisar los valores de la noche",
+                          Gameplay.ArbmosDebug.Activo); y += 66f;
+
+                AddSlider("arb_radio",   new Rect(x, y, w, 60f), "Radio de la esfera",
+                          Gameplay.ArbmosDebug.RadioDev,   0.05f, 3f,  "{0:0.00} m"); y += 68f;
+                AddSlider("arb_ventana", new Rect(x, y, w, 60f), "Ventana (cada cuánto)",
+                          Gameplay.ArbmosDebug.VentanaDev, 0.5f, 30f,  "{0:0.0} s");  y += 68f;
+                AddSlider("arb_gracia",  new Rect(x, y, w, 60f), "Gracia fuera de la esfera",
+                          Gameplay.ArbmosDebug.GraciaDev,  0f,    3f,  "{0:0.00} s"); y += 68f;
+
+                y += 6f;
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+            }
             else if (_page == Page.DebugPanels)
             {
                 // Un check por panel del DebugHud: mostrarlos todos juntos no entra en
@@ -515,11 +546,14 @@ namespace Gamepad
                     var cbAlto = GetCardboard();
                     return 524f + (cbAlto != null && cbAlto.Estereo3D ? 136f : 0f);
                 }
-                // +64 por el toggle "Filtro VHS en menús" (prod) y +76 por "VHS (DEV)".
-                case Page.Options:    return (Debug.isDebugBuild ? 912f : 620f) + (hayVoz ? 76f : 0f);
+                // +64 por el toggle "Filtro VHS en menús" (prod), +76 por "VHS (DEV)" y
+                // +76 por "ARBMOS (DEV)".
+                case Page.Options:    return (Debug.isDebugBuild ? 988f : 620f) + (hayVoz ? 76f : 0f);
                 case Page.ARCalidad:  return 490f;
                 // 7 sliders (global + 6 ingredientes) + el toggle del REC.
                 case Page.VHS:        return 760f;
+                // 2 toggles + 3 sliders + la ayuda de arriba.
+                case Page.Arbmos:     return 620f;
                 case Page.Voice:
                 {
                     var vc = Voice.VoiceChatManager.Instance;
@@ -560,7 +594,7 @@ namespace Gamepad
         private static bool IsSlider(string id) =>
             id != null && (id.StartsWith("fl_") || id.StartsWith("cb_") ||
                            id.StartsWith("opt_") || id.StartsWith("voz_") ||
-                           id.StartsWith("vhs_"));
+                           id.StartsWith("vhs_") || id.StartsWith("arb_"));
 
         // "voz_p3" → el slider de volumen del cliente 3. Los ids se arman en la página
         // de voz a partir del roster, así que son dinámicos.
@@ -586,6 +620,9 @@ namespace Gamepad
                 case "cb_offR":      step = 0.005f; break;
                 case "cb_ipd":       step = 1f;     break;   // milímetros
                 case "cb_conv":      step = 0.25f;  break;   // metros
+                case "arb_radio":    step = 0.05f;  break;   // metros
+                case "arb_ventana":  step = 0.5f;   break;   // segundos
+                case "arb_gracia":   step = 0.05f;  break;   // segundos
                 case "opt_vol":      step = 5f;     break;   // porcentaje
                 default:             step = 2f;     break;   // fl_outer / fl_inner (grados)
             }
@@ -621,6 +658,9 @@ namespace Gamepad
                 case "vhs_jit":      return Gameplay.VHSSettings.Jitter     * 100f;
                 case "vhs_vin":      return Gameplay.VHSSettings.Vineta     * 100f;
                 case "vhs_tinte":    return Gameplay.VHSSettings.Tinte      * 100f;
+                case "arb_radio":    return Gameplay.ArbmosDebug.RadioDev;
+                case "arb_ventana":  return Gameplay.ArbmosDebug.VentanaDev;
+                case "arb_gracia":   return Gameplay.ArbmosDebug.GraciaDev;
             }
             return 0f;
         }
@@ -656,6 +696,10 @@ namespace Gamepad
                 case "vhs_jit":      Gameplay.VHSSettings.Jitter     = Mathf.Clamp(value, 0f, 100f) / 100f; break;
                 case "vhs_vin":      Gameplay.VHSSettings.Vineta     = Mathf.Clamp(value, 0f, 100f) / 100f; break;
                 case "vhs_tinte":    Gameplay.VHSSettings.Tinte      = Mathf.Clamp(value, 0f, 100f) / 100f; break;
+                // Los arb_ clampean adentro de ArbmosDebug (setters).
+                case "arb_radio":    Gameplay.ArbmosDebug.RadioDev   = value; break;
+                case "arb_ventana":  Gameplay.ArbmosDebug.VentanaDev = value; break;
+                case "arb_gracia":   Gameplay.ArbmosDebug.GraciaDev  = value; break;
             }
         }
 
@@ -884,6 +928,7 @@ namespace Gamepad
                 case Page.DebugPanels:
                 case Page.ARCalidad:
                 case Page.VHS:
+                case Page.Arbmos:
                     _page = Page.Options; _focus = 0; _focusLast = true; break;
                 default: // Main
                     _open = false; break;
@@ -943,6 +988,13 @@ namespace Gamepad
                     if (Debug.isDebugBuild) { _page = Page.VHS; _focus = 0; _focusLast = true; }
                     break;
                 case "vhsrec":    Gameplay.VHSSettings.Rec = !Gameplay.VHSSettings.Rec; break;
+
+                // ── Arbmos (DEV) — gatillo de quietud ────────────────────────
+                case "arbmos":
+                    if (Debug.isDebugBuild) { _page = Page.Arbmos; _focus = 0; _focusLast = true; }
+                    break;
+                case "arbwire":   Gameplay.ArbmosDebug.Wireframe = !Gameplay.ArbmosDebug.Wireframe; break;
+                case "arbover":   Gameplay.ArbmosDebug.Activo    = !Gameplay.ArbmosDebug.Activo;    break;
             }
         }
 

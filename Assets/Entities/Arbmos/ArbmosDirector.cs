@@ -26,11 +26,22 @@ public class ArbmosDirector : MonoBehaviour
     {
         public Phase phase = Phase.Dormant;
         public float cooldown;          // Dormant: espera hasta el proximo intento
-        public float stillTimer;        // segundos que el jugador lleva quieto
-        public Vector3 anchor;          // referencia para medir quietud/movimiento (PIVOTE, no camara)
+
+        // Deteccion de movimiento POR FRAME (solo para el drenaje de cordura del Present).
+        public Vector3 anchor;          // referencia que se recentra al detectar movimiento (PIVOTE, no camara)
         public float anchorYaw;         // rumbo al fijar el ancla (tolera el error del brazo al girar)
         public bool  hasAnchor;
         public float moveHold;          // >0 => "en movimiento" (con decaimiento anti-jitter)
+
+        // Ventana de quietud (esfera) — gatillo de invocacion. Ver UpdateQuietud.
+        public Vector3 sphereCenter;    // centro de la esfera vigente
+        public float sphereYaw;         // rumbo al generarla (tolerancia por giro)
+        public bool  hasSphere;
+        public float windowLeft;        // lo que le queda a la ventana actual
+        public float outsideTime;       // tiempo acumulado FUERA de la esfera en esta ventana
+        public bool  quieto;            // veredicto de la ultima ventana cerrada (latcheado)
+        public float lastDist;          // debug: distancia actual al centro
+        public float lastTol;           // debug: radio efectivo (radio + tolerancia por giro)
 
         public uint  netId;             // copia de Arbmos spawneada para este jugador
         public ArbmosEntity ent;
@@ -77,7 +88,10 @@ public class ArbmosDirector : MonoBehaviour
     {
         var net = NetworkManager.Instance;
         if (net == null || !net.IsServer) return;
-        _night = GameSession.Instance != null ? GameSession.Instance.SelectedNight : null;
+        // La noche la manda el GameDirector (que ya resolvio el fallback si se entro a
+        // SampleScene sin GameSession); GameSession queda de respaldo por si acaso.
+        _night = GameDirector.Instance != null ? GameDirector.Instance.NocheActual : null;
+        if (_night == null && GameSession.Instance != null) _night = GameSession.Instance.SelectedNight;
         _haunts.Clear();
         net.OnClientLeft -= HandleClientLeft;
         net.OnClientLeft += HandleClientLeft;
@@ -144,9 +158,17 @@ public class ArbmosDirector : MonoBehaviour
         if (!TryGetPlayerPos(cid, out var ppos)) return;
 
         // La quietud se mide sobre el PIVOTE del cuerpo, no sobre la camara (ver
-        // UpdateMotion). El resto de las fases sigue usando ppos: es donde esta el jugador.
-        Vector3 fwd = PlayerForward(cid);
-        UpdateMotion(h, Pivote(ppos, fwd), Yaw(fwd), dt);
+        // UpdateQuietud). El resto de las fases sigue usando ppos: es donde esta el jugador.
+        Vector3 fwd    = PlayerForward(cid);
+        Vector3 pivote = Pivote(ppos, fwd);
+        float   yaw    = Yaw(fwd);
+        UpdateQuietud(h, pivote, yaw, dt);   // ventana/esfera → gatillo de invocacion
+        UpdateMotion(h, pivote, yaw, dt);    // por frame → drenaje de cordura del Present
+
+        // Wireframe de la esfera (solo host + development build + toggle prendido).
+        if (cid == 0 && ArbmosDebug.Wireframe && h.hasSphere)
+            ArbmosQuietudViz.Dibujar(h.sphereCenter, h.lastTol, pivote,
+                                     FloorWorldY(ppos.y), h.lastDist <= h.lastTol);
 
         switch (h.phase)
         {
@@ -162,7 +184,8 @@ public class ArbmosDirector : MonoBehaviour
     {
         h.cooldown -= dt;
         if (h.cooldown > 0f) return;
-        if (h.stillTimer < _night.arbmosStillInvokeSeconds) return;   // gatillo: quedarse quieto
+        if (!h.quieto) return;   // gatillo: la ultima ventana de quietud se cumplio entera
+        h.quieto = false;        // el veredicto se consume: para reintentar hay que cumplir otra
 
         bool zero = SanitySystem.Instance != null && SanitySystem.Instance.IsAtZero(cid);
         if (zero)
@@ -175,7 +198,7 @@ public class ArbmosDirector : MonoBehaviour
         float chance = _night.arbmosSpawnChancePerAttempt;
         if (IsFlashlightOff(cid)) chance *= _night.arbmosFlashlightOffChanceMul;
         if (Random.value <= Mathf.Clamp01(chance)) InvokePresent(cid, h, ppos);
-        else { h.stillTimer = 0f; h.cooldown = 3f; }   // no salio: reintentar pronto
+        else h.cooldown = 3f;   // no salio: reintentar en cuanto se cumpla otra ventana
     }
 
     private void InvokePresent(uint cid, Haunt h, Vector3 ppos)
@@ -268,7 +291,7 @@ public class ArbmosDirector : MonoBehaviour
         Vector3 spawn = SpawnPositionNear(cid, ppos);
         uint netId = NetworkManager.Instance.ServerSpawnFor(cid, EntityTypeIds.Arbmos, spawn);
         var ent = GetArbmos(netId);
-        if (ent == null) { h.cooldown = 2f; h.stillTimer = 0f; return false; }
+        if (ent == null) { h.cooldown = 2f; return false; }
 
         ent.SetPositionDirectly(spawn);
         FaceWorld(ent, ppos);
@@ -286,10 +309,11 @@ public class ArbmosDirector : MonoBehaviour
     private void EndHaunt(Haunt h)
     {
         DespawnHaunt(h);
-        h.cooldown   = Random.Range(_night.arbmosCooldownMin, _night.arbmosCooldownMax);
-        h.stillTimer = 0f;
-        h.hasAnchor  = false;
-        h.phase      = Phase.Dormant;
+        h.cooldown  = Random.Range(_night.arbmosCooldownMin, _night.arbmosCooldownMax);
+        h.hasAnchor = false;
+        h.hasSphere = false;   // la quietud se vuelve a medir desde cero tras la alucinacion
+        h.quieto    = false;
+        h.phase     = Phase.Dormant;
     }
 
     private void DespawnHaunt(Haunt h)
@@ -324,17 +348,22 @@ public class ArbmosDirector : MonoBehaviour
     // "Quieto" es que el JUGADOR no se desplazo, no que la camara no se haya movido: la
     // camara AR es el TELEFONO, que se sostiene por delante del cuerpo. Girar en el lugar
     // —mirar alrededor, lo mas normal del mundo— lo pasea por un arco de medio metro con
-    // los pies clavados: un giro de 90° con el brazo estirado mueve la camara ~55 cm,
-    // contra un radio de 15 cm. Asi, el gatillo de quietud casi no se cumplia nunca.
+    // los pies clavados: un giro de 90° con el brazo estirado mueve la camara ~55 cm.
     //
-    // Dos correcciones sobre el mismo hecho fisico:
+    // Dos correcciones sobre el mismo hecho fisico, que valen para las dos medidas de abajo:
     //  1) Medimos el PIVOTE (la camara corrida hacia atras un brazo, ~el eje del cuerpo)
     //     en vez de la camara: al girar en el lugar el pivote se queda donde esta.
     //  2) El brazo real cambia con la persona y con como agarre el telefono, asi que al
     //     pivote le queda un error proporcional a cuanto giro. El radio lleva una
-    //     tolerancia extra que crece con el giro acumulado desde el ancla (con tope).
+    //     tolerancia extra que crece con el giro acumulado (con tope).
     //
     // Caminar de verdad mueve el pivote igual que la camara, asi que se sigue detectando.
+    //
+    // Son DOS medidas distintas porque responden dos preguntas distintas:
+    //   UpdateQuietud → "¿estuvo quieto todo este rato?"  (gatillo de invocacion)
+    //   UpdateMotion  → "¿se esta moviendo AHORA?"        (drenaje de cordura en Present)
+    // Con una sola no alcanza: la ventana de quietud deja al jugador "fuera de la esfera"
+    // de forma permanente en cuanto camino un poco, y eso drenaria cordura estando parado.
 
     // Distancia camara → eje de giro del cuerpo.
     private const float BrazoMetros = 0.4f;
@@ -343,26 +372,86 @@ public class ArbmosDirector : MonoBehaviour
     // Tope de la tolerancia extra: girar mucho no puede habilitar caminar.
     private const float TolMaxExtra = 0.35f;
 
+    // Gatillo de invocacion — VENTANA DE QUIETUD.
+    //
+    // Cada X segundos (arbmosStillInvokeSeconds) se genera una esfera de radio R
+    // (arbmosStillRadius) centrada en el jugador. Si llega al final de la ventana sin
+    // haberse salido de ella, se lo considera quieto; el veredicto queda latcheado hasta la
+    // ventana siguiente, para que el cooldown lo pueda consumir cuando vence sin perder una
+    // ventana entera por desfase.
+    //
+    // Salirse de la esfera cuenta como MOVERSE EN EL ACTO, no recien al cerrar la ventana:
+    // apenas se agota la gracia se invalida el veredicto (aunque venga latcheado en true de
+    // la ventana anterior — si esta caminando no puede gatillar) y se abre una esfera nueva
+    // ahi mismo, asi el reloj arranca de donde esta y no queda una ventana muerta corriendo.
+    //
+    // Reemplaza al contador continuo anterior, que se reseteaba a cero en cuanto UN frame
+    // se pasaba del radio: en el celular, entre jitter del tracking y correcciones de drift,
+    // eso pasaba seguido y el contador no llegaba nunca al umbral — el Arbmos no aparecia.
+    // Aca un pico aislado no tira la ventana: hay un presupuesto de tiempo fuera
+    // (arbmosStillOutsideGrace) que un frame malo no alcanza a agotar, pero caminar si.
+    private void UpdateQuietud(Haunt h, Vector3 pivote, float yaw, float dt)
+    {
+        if (!h.hasSphere) { AbrirVentana(h, pivote, yaw); return; }
+
+        float giroRad = Mathf.Abs(Mathf.DeltaAngle(yaw, h.sphereYaw)) * Mathf.Deg2Rad;
+        h.lastTol  = Radio() + Mathf.Min(giroRad * BrazoError, TolMaxExtra);
+        h.lastDist = HorizDist(pivote, h.sphereCenter);
+
+        if (h.lastDist > h.lastTol)
+        {
+            h.outsideTime += dt;
+            if (h.outsideTime > Gracia())     // se fue de la esfera: se movio, punto
+            {
+                h.quieto = false;
+                AbrirVentana(h, pivote, yaw);
+                return;
+            }
+        }
+
+        h.windowLeft -= dt;
+        if (h.windowLeft > 0f) return;
+
+        h.quieto = true;                      // ventana completa sin salirse
+        AbrirVentana(h, pivote, yaw);         // la proxima esfera arranca donde esta ahora
+    }
+
+    private void AbrirVentana(Haunt h, Vector3 pivote, float yaw)
+    {
+        h.sphereCenter = pivote;
+        h.sphereYaw    = yaw;
+        h.hasSphere    = true;
+        h.windowLeft   = Ventana();
+        h.outsideTime  = 0f;
+        h.lastDist     = 0f;
+        h.lastTol      = Radio();
+    }
+
+    // Parametros del gatillo: los de la noche, salvo que dev los este pisando (ArbmosDebug).
+    private float Radio()   => ArbmosDebug.Radio(_night);
+    private float Ventana() => Mathf.Max(0.5f, ArbmosDebug.Ventana(_night));
+    private float Gracia()  => ArbmosDebug.Gracia(_night);
+
+    // "¿Se esta moviendo ahora?" — el ancla se recentra en cuanto se detecta movimiento,
+    // asi que mide desplazamiento RECIENTE, no acumulado. Solo alimenta a moveHold.
     private void UpdateMotion(Haunt h, Vector3 pivote, float yaw, float dt)
     {
         if (!h.hasAnchor)
         {
-            h.anchor    = pivote; h.anchorYaw = yaw; h.hasAnchor = true;
-            h.stillTimer = 0f;    h.moveHold  = 0f;
+            h.anchor   = pivote; h.anchorYaw = yaw; h.hasAnchor = true;
+            h.moveHold = 0f;
             return;
         }
 
         float giroRad = Mathf.Abs(Mathf.DeltaAngle(yaw, h.anchorYaw)) * Mathf.Deg2Rad;
-        float tol     = _night.arbmosStillRadius + Mathf.Min(giroRad * BrazoError, TolMaxExtra);
+        float tol     = Radio() + Mathf.Min(giroRad * BrazoError, TolMaxExtra);
 
         if (HorizDist(pivote, h.anchor) > tol)
         {
-            h.anchor     = pivote;
-            h.anchorYaw  = yaw;
-            h.stillTimer = 0f;
-            h.moveHold   = 0.35f;   // se lo considera "en movimiento" un ratito
+            h.anchor    = pivote;
+            h.anchorYaw = yaw;
+            h.moveHold  = 0.35f;   // se lo considera "en movimiento" un ratito
         }
-        else h.stillTimer += dt;
 
         h.moveHold = Mathf.Max(0f, h.moveHold - dt);
     }
@@ -433,15 +522,31 @@ public class ArbmosDirector : MonoBehaviour
     private static float HorizDist(Vector3 a, Vector3 b) { a.y = 0f; b.y = 0f; return Vector3.Distance(a, b); }
 
     // Snapshot para el DebugHud (solo host).
+    //
+    // Cuando el director NO esta corriendo dice POR QUE: si no, "no aparece el Arbmos" y
+    // "no se ve el wireframe de la esfera" son la misma pantalla en blanco y no hay forma
+    // de distinguir un bug del gatillo de una noche sin Arbmos o de una partida sin arrancar.
     public string DebugSnapshot()
     {
-        if (!_running || NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return null;
+        if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer)
+            return "[Arbmos]  solo corre en el HOST (sos cliente)\n";
+        if (!_running)
+            return "[Arbmos]  director parado: la partida todavia no arranco\n";
+        if (_night == null)
+            return "[Arbmos]  sin NightConfig: entraste a SampleScene sin pasar por el menu\n" +
+                   "          (GameSession.SelectedNight == null => el director no tickea)\n";
+        if (!_night.arbmosActive)
+            return $"[Arbmos]  arbmosActive=0 en '{_night.displayName}': esta noche no tiene Arbmos\n";
+
         var sb = new System.Text.StringBuilder();
-        sb.Append($"[Arbmos]  activo={(_night != null && _night.arbmosActive)}  jugadores={_haunts.Count}\n");
+        sb.Append($"[Arbmos]  noche='{_night.displayName}'  jugadores={_haunts.Count}\n");
+        sb.Append($"  quietud: R={Radio():F2}m  ventana={Ventana():F1}s  gracia={Gracia():F2}s" +
+                  $"{(ArbmosDebug.Activo ? "  (DEV)" : "")}\n");
         foreach (var kv in _haunts)
         {
             var h = kv.Value;
-            sb.Append($"  p{kv.Key}: {h.phase} still={h.stillTimer:F1} cd={h.cooldown:F1}" +
+            sb.Append($"  p{kv.Key}: {h.phase} cd={h.cooldown:F1} quieto={(h.quieto ? "SI" : "no")}" +
+                      $" d={h.lastDist:F2}/{h.lastTol:F2} t={h.windowLeft:F1} fuera={h.outsideTime:F2}" +
                       $"{(h.ent != null ? $" ent={h.ent.State}" : "")}\n");
         }
         return sb.ToString();
