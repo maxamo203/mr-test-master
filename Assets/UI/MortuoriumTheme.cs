@@ -299,12 +299,16 @@ public static class MortuoriumTheme
         // (botón invisible) del texto (GUI.Label encima).
         var invisible = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
         bool clicked;
+        // El sonido va DENTRO de la acción, no al lado del `clicked`: por acá pasan tanto
+        // el tap como la activación con el mando (ImguiGamepadMenu invoca esta misma
+        // Action desde su Tick), así suena una sola vez en los dos caminos.
         if (nav != null)
-            clicked = nav.Button(r, "", invisible, () => { if (enabled) onClick?.Invoke(); });
+            clicked = nav.Button(r, "", invisible,
+                                 () => { if (enabled) { AudioManager.Sonar(c => c.uiConfirmar); onClick?.Invoke(); } });
         else
         {
             clicked = GUI.Button(r, "", invisible);
-            if (clicked && enabled) onClick?.Invoke();
+            if (clicked && enabled) { AudioManager.Sonar(c => c.uiConfirmar); onClick?.Invoke(); }
         }
         GUI.enabled = prevEnabled;
         GUI.Label(r, label, st);
@@ -319,8 +323,9 @@ public static class MortuoriumTheme
         if (foco) { Fill(r, new Color(Tan.r, Tan.g, Tan.b, 0.14f)); Borde(r, Tan); }
         var st = Estilo(FBebas, 26, foco ? Cream : Muted, TextAnchor.MiddleCenter);
         var invisible = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
-        if (nav != null) nav.Button(r, "", invisible, onClick);
-        else if (GUI.Button(r, "", invisible)) onClick?.Invoke();
+        Action volver = () => { AudioManager.Sonar(c => c.uiVolver); onClick?.Invoke(); };
+        if (nav != null) nav.Button(r, "", invisible, volver);
+        else if (GUI.Button(r, "", invisible)) volver();
         GUI.Label(r, "<", st);
     }
 
@@ -340,8 +345,10 @@ public static class MortuoriumTheme
         bool prevEnabled = GUI.enabled;
         GUI.enabled = enabled;
         var st = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
-        if (nav != null) nav.Button(r, "", st, () => { if (enabled) onClick?.Invoke(); });
-        else if (GUI.Button(r, "", st) && enabled) onClick?.Invoke();
+        if (nav != null)
+            nav.Button(r, "", st,
+                       () => { if (enabled) { AudioManager.Sonar(c => c.uiConfirmar); onClick?.Invoke(); } });
+        else if (GUI.Button(r, "", st) && enabled) { AudioManager.Sonar(c => c.uiConfirmar); onClick?.Invoke(); }
         GUI.enabled = prevEnabled;
     }
 

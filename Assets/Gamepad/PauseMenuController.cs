@@ -870,6 +870,7 @@ namespace Gamepad
                         if (_navCooldown <= 0f)
                         {
                             _focus = (_focus + (delta.y > 0 ? -1 : 1) + _items.Count) % _items.Count;
+                            AudioManager.Sonar(c => c.uiNavegar);
                             _navCooldown = 0.18f;
                         }
                     }
@@ -898,6 +899,7 @@ namespace Gamepad
                     if (_navCooldown <= 0f)
                     {
                         _focus = (_focus + (dy < 0 ? 1 : -1) + _items.Count) % _items.Count;
+                        AudioManager.Sonar(c => c.uiNavegar);
                         _navCooldown = 0.18f;
                     }
                 }
@@ -934,6 +936,8 @@ namespace Gamepad
         {
             CommitEdit();
             _open = !_open;
+            if (_open) AudioManager.Sonar(c => c.uiConfirmar);
+            else       AudioManager.Sonar(c => c.uiVolver);
             if (!_open) SaveCardboard();   // al cerrar, persistir la calibración
             _page = Page.Main;
             _confirmSalir = false;
@@ -944,6 +948,7 @@ namespace Gamepad
         private void Back()
         {
             CommitEdit();
+            AudioManager.Sonar(c => c.uiVolver);
             _confirmSalir = false;
             switch (_page)
             {
@@ -968,6 +973,10 @@ namespace Gamepad
 
         private void Activate(string id)
         {
+            // "volver" suena en Back(), que es a donde deriva: si sonara acá también, la
+            // vuelta atrás daría dos sonidos encimados.
+            if (id != "volver") AudioManager.Sonar(c => c.uiConfirmar);
+
             // Cualquier acción que no sea "salir" cancela la confirmación pendiente.
             if (id != "salir") _confirmSalir = false;
 

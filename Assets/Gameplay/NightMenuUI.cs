@@ -126,7 +126,14 @@ namespace Gameplay
         {
             _pendingMode = mode;
             RefrescarScans();
-            if (!HayEntornoJugable()) { _pantalla = Pantalla.SinEntorno; return; }
+            // Falta un entorno escaneado: es un callejón sin salida, se avisa con el
+            // sonido de alerta y no con el de confirmación que ya sonó al tocar el botón.
+            if (!HayEntornoJugable())
+            {
+                AudioManager.Sonar(c => c.uiAlerta);
+                _pantalla = Pantalla.SinEntorno;
+                return;
+            }
             _nocheSel = -1;
             _mapSel = null;
             _pantalla = Pantalla.Noches;
@@ -407,7 +414,7 @@ namespace Gameplay
             if (foco) T.Fill(header, new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.12f));
             _nav.Button(header, $"AVANZADO {(_avanzadoOpen ? "(-)" : "(+)")}",
                         T.Estilo(T.FMono, 12, foco ? T.Cream : T.Muted, TextAnchor.MiddleLeft),
-                        () => _avanzadoOpen = !_avanzadoOpen);
+                        () => { AudioManager.Sonar(c => c.uiConfirmar); _avanzadoOpen = !_avanzadoOpen; });
             y += 32f;
 
             if (!_avanzadoOpen) return;
@@ -480,7 +487,9 @@ namespace Gameplay
                           $"{(_itemCount.TryGetValue(n, out var c) ? c : 0)} elementos · editar",
                           T.Estilo(T.FMono, 11, T.Dim, TextAnchor.MiddleRight));
 
-                T.Celda(_nav, zonaBorrar, primario: false, () => _confirmarBorrar = n,
+                // Pedir confirmación de borrado es destructivo: alerta, no confirmación.
+                T.Celda(_nav, zonaBorrar, primario: false,
+                        () => { AudioManager.Sonar(c2 => c2.uiAlerta); _confirmarBorrar = n; },
                         bordeOverride: T.Red);
                 GUI.Label(zonaBorrar, "borrar", T.Estilo(T.FMono, 11, T.Red, TextAnchor.MiddleCenter));
 
