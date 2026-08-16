@@ -200,6 +200,14 @@ namespace Gameplay
             _sorken = GetSorken(_sorkenNetId);
             if (_sorken == null) { _attemptTimer = 2f; return; }
 
+            // US-4.1: que tipo de punto es (puerta/ventana/...), para que suene distinto.
+            // Se resuelve contra el AudioCatalog y viaja como un byte junto al estado, asi
+            // los clientes tambien lo saben (ver SorkenEntity.MarkerTypeIndex).
+            var catAudio = AudioManager.Catalogo;
+            _sorken.SetMarkerTypeIndex(catAudio != null
+                ? catAudio.IndiceEntrada(_marker.KindId)
+                : AudioCatalog.IndiceDesconocido);
+
             _sorken.SetPositionDirectly(EmergePosition());
             _sorken.FaceDirection(_marker.transform.forward); // mira hacia adentro (normal)
             _sorken.SetState(SorkenState.Emerging);

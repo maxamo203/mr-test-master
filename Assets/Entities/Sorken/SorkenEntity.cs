@@ -24,6 +24,14 @@ public class SorkenEntity : MonoBehaviour
     public Vector3     Position => transform.position;
     public SorkenState State    { get; private set; } = SorkenState.Idle;
 
+    // US-4.1: por que TIPO de punto de entrada esta asomando (indice en el AudioCatalog,
+    // 255 = desconocido). Lo fija el GameDirector al spawnear y se replica junto al estado,
+    // porque el cliente no tiene forma de saberlo: los marcadores se cargan en modo
+    // DisplayOnly y ahi no hay MarkerCatalog que resuelva el tipo.
+    public byte MarkerTypeIndex { get; private set; } = 255;
+
+    public void SetMarkerTypeIndex(byte i) => MarkerTypeIndex = i;
+
     [Tooltip("Velocidad de giro (grados/seg). Mas chico = giro mas suave.")]
     [SerializeField] public float TurnSpeed = 180f;
 

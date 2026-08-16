@@ -139,10 +139,20 @@ public static class VelethPresentation
 {
     private static AudioClip _invocationClip;
 
+    // La invocacion sale del AudioCatalog como cualquier otro sonido del juego. Si ese slot
+    // esta vacio (hoy el proyecto no tiene ni un archivo de audio) se cae al clip
+    // sintetizado por codigo que Veleth ya tenia, para no perder el unico sonido que habia.
     public static void PlayInvocation(Vector3 position)
     {
+        var cat = AudioManager.Catalogo;
+        if (cat != null && cat.velethInvocacion != null && !cat.velethInvocacion.Vacia)
+        {
+            AudioManager.Sonar(c => c.velethInvocacion, position);
+            return;
+        }
+
         if (_invocationClip == null) _invocationClip = BuildInvocationClip();
-        AudioSource.PlayClipAtPoint(_invocationClip, position, 1f);
+        AudioSource.PlayClipAtPoint(_invocationClip, position, GameOptions.VolumenEfectos);
     }
 
     private static AudioClip BuildInvocationClip()

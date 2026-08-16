@@ -27,7 +27,7 @@ namespace Gamepad
         // subcategorías: Control (mando), Cardboard (calibración estéreo), Voz (chat de
         // voz, sólo en sesiones multijugador) y — SOLO en development build — Linterna
         // (tuning) y el toggle del Debug HUD.
-        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, VHS, Arbmos }
+        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, VHS, Arbmos, Audio }
 
         public static PauseMenuController Instance { get; private set; }
 
@@ -135,8 +135,7 @@ namespace Gamepad
                 // Hub de opciones: volumen + subcategorías. Linterna y Debug HUD
                 // solo existen en development build.
                 GUI.Label(new Rect(x, y, w, 50f), "OPCIONES", _title); y += 64f;
-                AddSlider("opt_vol", new Rect(x, y, w, 60f), "Volumen",
-                          GameOptions.Volumen * 100f, 0f, 100f, "{0:0}%"); y += 72f;
+                AddButton("audio", new Rect(x, y, w, 64f), "AUDIO"); y += 76f;
                 AddButton("control",   new Rect(x, y, w, 64f), "CONTROL (MANDO)"); y += 76f;
                 AddButton("cardboard", new Rect(x, y, w, 64f), "CARDBOARD");       y += 76f;
                 AddButton("arcalidad", new Rect(x, y, w, 64f), "CALIDAD AR");      y += 76f;
@@ -155,6 +154,28 @@ namespace Gamepad
                     AddButton("dbgpaneles", new Rect(x, y, w, 64f), "PANELES DEBUG (DEV)"); y += 76f;
                 }
                 AddButton("volver", new Rect(x, y, w, 60f), "VOLVER");
+            }
+            else if (_page == Page.Audio)
+            {
+                // El general multiplica a los otros dos. Se separan música y efectos porque
+                // en un juego de terror los efectos son INFORMACIÓN (de dónde viene el
+                // Sorken, la alerta del libro): hay que poder bajar la música sin perderlos.
+                GUI.Label(new Rect(x, y, w, 50f), "AUDIO", _title); y += 62f;
+
+                AddSlider("opt_vol", new Rect(x, y, w, 60f), "General",
+                          GameOptions.Volumen * 100f, 0f, 100f, "{0:0}%"); y += 72f;
+                AddSlider("opt_musica", new Rect(x, y, w, 60f), "Música",
+                          GameOptions.VolumenMusica * 100f, 0f, 100f, "{0:0}%"); y += 72f;
+                AddSlider("opt_sfx", new Rect(x, y, w, 60f), "Efectos",
+                          GameOptions.VolumenEfectos * 100f, 0f, 100f, "{0:0}%"); y += 72f;
+
+                GUI.Label(new Rect(x + 14f, y, w - 28f, 40f),
+                          hayVoz ? "Las voces de tus compañeros tienen su propio volumen en CHAT DE VOZ."
+                                 : "Las voces de tus compañeros no dependen de estos controles.",
+                          _status);
+                y += 46f;
+
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
             }
             else if (_page == Page.Control)
             {
@@ -547,8 +568,11 @@ namespace Gamepad
                     return 524f + (cbAlto != null && cbAlto.Estereo3D ? 136f : 0f);
                 }
                 // +64 por el toggle "Filtro VHS en menús" (prod), +76 por "VHS (DEV)" y
-                // +76 por "ARBMOS (DEV)".
-                case Page.Options:    return (Debug.isDebugBuild ? 988f : 620f) + (hayVoz ? 76f : 0f);
+                // +76 por "ARBMOS (DEV)". El volumen dejó de ser un slider acá: ahora es el
+                // botón AUDIO (mismo alto que el slider que reemplazó, +4).
+                case Page.Options:    return (Debug.isDebugBuild ? 992f : 624f) + (hayVoz ? 76f : 0f);
+                // 3 sliders + la nota sobre el chat de voz.
+                case Page.Audio:      return 420f;
                 case Page.ARCalidad:  return 490f;
                 // 7 sliders (global + 6 ingredientes) + el toggle del REC.
                 case Page.VHS:        return 760f;
@@ -623,7 +647,9 @@ namespace Gamepad
                 case "arb_radio":    step = 0.05f;  break;   // metros
                 case "arb_ventana":  step = 0.5f;   break;   // segundos
                 case "arb_gracia":   step = 0.05f;  break;   // segundos
-                case "opt_vol":      step = 5f;     break;   // porcentaje
+                case "opt_vol":
+                case "opt_musica":
+                case "opt_sfx":      step = 5f;     break;   // porcentaje
                 default:             step = 2f;     break;   // fl_outer / fl_inner (grados)
             }
             SetSliderValue(id, CurrentValue(id) + dir * step);
@@ -650,7 +676,9 @@ namespace Gamepad
                 case "cb_offR":      { var cb = GetCardboard();  return cb != null ? cb.OffsetR : 0f; }
                 case "cb_ipd":       { var cb = GetCardboard();  return cb != null ? cb.Ipd * 1000f  : 0f; }
                 case "cb_conv":      { var cb = GetCardboard();  return cb != null ? cb.Convergencia : 0f; }
-                case "opt_vol":      return GameOptions.Volumen * 100f;
+                case "opt_vol":      return GameOptions.Volumen        * 100f;
+                case "opt_musica":   return GameOptions.VolumenMusica  * 100f;
+                case "opt_sfx":      return GameOptions.VolumenEfectos * 100f;
                 case "vhs_int":      return Gameplay.VHSSettings.Intensidad * 100f;
                 case "vhs_scan":     return Gameplay.VHSSettings.Scanlines  * 100f;
                 case "vhs_grano":    return Gameplay.VHSSettings.Grano      * 100f;
@@ -688,7 +716,9 @@ namespace Gamepad
                 case "cb_offR":      { var cb = GetCardboard(); if (cb != null) cb.OffsetR = value; break; }
                 case "cb_ipd":       { var cb = GetCardboard(); if (cb != null) cb.Ipd = value / 1000f; break; }
                 case "cb_conv":      { var cb = GetCardboard(); if (cb != null) cb.Convergencia = value; break; }
-                case "opt_vol":      GameOptions.Volumen = Mathf.Clamp(value, 0f, 100f) / 100f; break;
+                case "opt_vol":      GameOptions.Volumen        = Mathf.Clamp(value, 0f, 100f) / 100f; break;
+                case "opt_musica":   GameOptions.VolumenMusica  = Mathf.Clamp(value, 0f, 100f) / 100f; break;
+                case "opt_sfx":      GameOptions.VolumenEfectos = Mathf.Clamp(value, 0f, 100f) / 100f; break;
                 case "vhs_int":      Gameplay.VHSSettings.Intensidad = Mathf.Clamp(value, 0f, 100f) / 100f; break;
                 case "vhs_scan":     Gameplay.VHSSettings.Scanlines  = Mathf.Clamp(value, 0f, 100f) / 100f; break;
                 case "vhs_grano":    Gameplay.VHSSettings.Grano      = Mathf.Clamp(value, 0f, 100f) / 100f; break;
@@ -922,6 +952,7 @@ namespace Gamepad
                 case Page.Cardboard:
                     SaveCardboard();
                     _page = Page.Options; _focus = 0; _focusLast = true; break;
+                case Page.Audio:
                 case Page.Control:
                 case Page.Flashlight:
                 case Page.Voice:
@@ -954,6 +985,7 @@ namespace Gamepad
             switch (id)
             {
                 case "opciones":  _page = Page.Options;    _focus = 0; _focusLast = true; break;
+                case "audio":     _page = Page.Audio;      _focus = 0; _focusLast = true; break;
                 case "control":   _page = Page.Control;    _focus = 0; _focusLast = true; break;
                 case "cardboard": _page = Page.Cardboard;  _focus = 0; _focusLast = true; break;
                 case "arcalidad": _page = Page.ARCalidad;  _focus = 0; _focusLast = true; break;

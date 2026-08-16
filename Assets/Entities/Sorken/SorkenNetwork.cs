@@ -32,6 +32,7 @@ public class SorkenNetwork : NetworkEntity
         MsgHelper.WriteV3(w, relPos);
         w.Write(relRot.x); w.Write(relRot.y); w.Write(relRot.z); w.Write(relRot.w);
         w.Write((byte)_sorken.State);
+        w.Write(_sorken.MarkerTypeIndex);   // US-4.1: tipo del punto de entrada (para el audio)
         return ms.ToArray();
     }
 
@@ -42,8 +43,12 @@ public class SorkenNetwork : NetworkEntity
         var relPos = MsgHelper.ReadV3(r);
         var relRot = new Quaternion(r.ReadSingle(), r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
         var state  = (SorkenState)r.ReadByte();
+        // El byte del tipo de entrada se agrego despues; si viene un paquete viejo/corto
+        // (host y cliente con versiones distintas) se cae a "desconocido" en vez de romper.
+        byte markerType = r.BaseStream.Position < r.BaseStream.Length ? r.ReadByte() : (byte)255;
 
         _sorken.SetState(state); // en clientes: alimenta al SorkenAnimator
+        _sorken.SetMarkerTypeIndex(markerType);
 
         _fromRelPos = _hasState ? _toRelPos : relPos;
         _fromRelRot = _hasState ? _toRelRot : relRot;
