@@ -639,6 +639,15 @@ namespace Gameplay
             if (!Mathf.Approximately(nuevoVol, GameOptions.Volumen)) GameOptions.Volumen = nuevoVol;
             y += 54f;
 
+            // Canales: el maestro de arriba los tapa a los dos. Se separan porque en un
+            // juego de terror los efectos son INFORMACIÓN (de dónde viene el Sorken, la
+            // alerta del libro) y el jugador tiene que poder bajar la música sin perderlos.
+            // La voz no entra acá: tiene su propio volumen en el menú de pausa.
+            y = FilaVolumen(vw, y, "MÚSICA", GameOptions.VolumenMusica,
+                            v => GameOptions.VolumenMusica = v);
+            y = FilaVolumen(vw, y, "EFECTOS", GameOptions.VolumenEfectos,
+                            v => GameOptions.VolumenEfectos = v);
+
             // Anchor points extra: opción por dispositivo (ver AnchorPointManager).
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
                          "PUNTOS DE ANCLAJE",
@@ -690,6 +699,23 @@ namespace Gameplay
                     () => NightProgress.DesbloquearTodas(total), enabled: total > 0, fontSize: 13);
             T.Boton(_nav, new Rect(Pad + bw + 10f, y, bw, 46f), "BORRAR PROGRESO", primario: false,
                     NightProgress.BorrarProgreso, fontSize: 13, textColor: T.Red);
+        }
+
+        // Una fila de volumen (etiqueta + porcentaje + slider), con el mismo look que el
+        // maestro de arriba. Devuelve la Y siguiente. Ocupa 80px, igual que aquél.
+        private float FilaVolumen(float vw, float y, string etiqueta, float valor,
+                                  System.Action<float> set)
+        {
+            GUI.Label(new Rect(Pad, y, vw - Pad * 2f - 70f, 22f), etiqueta,
+                      T.Estilo(T.FMono, 13, T.CreamDim));
+            GUI.Label(new Rect(vw - Pad - 70f, y, 70f, 22f),
+                      $"{Mathf.RoundToInt(valor * 100f)}%",
+                      T.Estilo(T.FMono, 13, T.Tan, TextAnchor.MiddleRight));
+            y += 26f;
+
+            float nuevo = T.Slider(new Rect(Pad, y, vw - Pad * 2f, 30f), valor, 0f, 1f);
+            if (!Mathf.Approximately(nuevo, valor)) set(nuevo);
+            return y + 54f;
         }
 
         private void DrawControl(float vw, float vh)

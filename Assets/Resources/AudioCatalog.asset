@@ -1,0 +1,343 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 84e1c001c4d54c84ab341df8b07cbcb2, type: 3}
+  m_Name: AudioCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::AudioCatalog
+  musicaMenu:
+    clips: []
+    volumen: 0.7
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  ambienteNoche:
+    clips: []
+    volumen: 0.5
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  capaTension:
+    clips: []
+    volumen: 0.6
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  musicaPersecucion:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  victoriaAmanecer:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  derrotaMuerte:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  entradasPorTipo: []
+  entradaGenerica:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 20
+    apertura: 0
+  sorkenPasos:
+    clips: []
+    volumen: 1
+    variacionTono: 0.1
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 12
+    apertura: 0
+  sorkenHuesos:
+    clips: []
+    volumen: 1
+    variacionTono: 0.15
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 12
+    apertura: 0
+  sorkenEntra:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 20
+    apertura: 0
+  sorkenRepelido:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 20
+    apertura: 0
+  sorkenGrab:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 20
+    apertura: 0
+  sorkenApuntado:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 20
+    apertura: 0
+  arbmosAparece:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 12
+    apertura: 0
+  arbmosDrena:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 12
+    apertura: 0
+  arbmosSusurros:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0.5
+    distanciaMin: 1
+    distanciaMax: 12
+    apertura: 0
+  arbmosGritos:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0.5
+    distanciaMin: 1
+    distanciaMax: 12
+    apertura: 0
+  arbmosEmbestida:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 12
+    apertura: 0
+  arbmosJumpscare:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  velethInvocacion:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 25
+    apertura: 0
+  velethPersecucion:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 20
+    apertura: 0
+  velethGrab:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 20
+    apertura: 0
+  libroAtaqueEmpieza:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 25
+    apertura: 0
+  libroDefendiendo:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  libroSalvado:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  libroPerdido:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  linternaOn:
+    clips: []
+    volumen: 0.8
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  linternaOff:
+    clips: []
+    volumen: 0.8
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  linternaVacia:
+    clips: []
+    volumen: 0.8
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  linternaSeAgota:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  bateriaBaja:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  pilaRecogida:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  pilaAparece:
+    clips: []
+    volumen: 0.6
+    variacionTono: 0
+    espacial: 1
+    distanciaMin: 1
+    distanciaMax: 10
+    apertura: 0
+  corduraBaja:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  corduraCero:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  relojFinal:
+    clips: []
+    volumen: 0.7
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  nocheDesbloqueada:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  uiNavegar:
+    clips: []
+    volumen: 0.5
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  uiConfirmar:
+    clips: []
+    volumen: 0.6
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  uiVolver:
+    clips: []
+    volumen: 0.5
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
+  uiAlerta:
+    clips: []
+    volumen: 1
+    variacionTono: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0

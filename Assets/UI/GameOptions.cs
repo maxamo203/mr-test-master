@@ -6,6 +6,8 @@ using UnityEngine;
 public static class GameOptions
 {
     private const string KeyVolumen     = "opt_volumen";
+    private const string KeyVolMusica   = "opt_volumen_musica";
+    private const string KeyVolEfectos  = "opt_volumen_efectos";
     private const string KeyPuntosAncla = "opt_puntos_ancla";
     private const string KeyVozMic      = "opt_voz_mic";
     private const string KeyVozVolumen  = "opt_voz_volumen";
@@ -25,6 +27,32 @@ public static class GameOptions
             PlayerPrefs.SetFloat(KeyVolumen, v);
             AudioListener.volume = v;
         }
+    }
+
+    // ── Canales de audio (aparte del maestro de arriba) ───────────────────────
+    // Volumen maestro = AudioListener.volume (Volumen, arriba). Estos dos son
+    // multiplicadores que aplica AudioManager al reproducir cada sonido, así el
+    // jugador puede bajar la música sin perder las pistas sonoras del juego (que en
+    // un juego de terror son información: de dónde viene el Sorken, la alerta del
+    // libro). El chat de voz queda FUERA de los dos: tiene su propio VozVolumen,
+    // para poder bajar el juego y seguir escuchando a los compañeros.
+
+    // No hace falta avisarle a nadie al cambiarlos: AudioManager los lee en cada Update
+    // (música y capa de tensión) y en cada disparo (efectos), así que mover el slider se
+    // oye en el acto.
+
+    // Volumen de la música y la capa ambiental de tensión (0..1).
+    public static float VolumenMusica
+    {
+        get => PlayerPrefs.GetFloat(KeyVolMusica, 1f);
+        set => PlayerPrefs.SetFloat(KeyVolMusica, Mathf.Clamp01(value));
+    }
+
+    // Volumen de todo lo que no es música ni voz: entidades, linterna, libro, UI (0..1).
+    public static float VolumenEfectos
+    {
+        get => PlayerPrefs.GetFloat(KeyVolEfectos, 1f);
+        set => PlayerPrefs.SetFloat(KeyVolEfectos, Mathf.Clamp01(value));
     }
 
     // ¿Este dispositivo coloca anchor points extra antes de empezar la partida?

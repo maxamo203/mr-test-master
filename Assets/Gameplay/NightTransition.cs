@@ -100,6 +100,7 @@ namespace Gameplay
             if (LocalDeath.Instance != null && LocalDeath.Instance.IsDead) return;
 
             NightResult.MarcarSobrevivida();
+            AudioManager.Musica(c => c.victoriaAmanecer, fade: 0.5f);
 
             // El desbloqueo es por dispositivo y necesita saber QUÉ noche era. Un
             // cliente que se unió por LAN no pasó por el menú de noches (NightIndex

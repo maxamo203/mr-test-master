@@ -75,7 +75,9 @@ namespace Gameplay
                 _flow = null;
             }
 
-            AplicarVista(0f);
+            // Silencioso: arrancar la noche pone la oscuridad en 0, y si la noche anterior
+            // terminó con el libro perdido (oscuridad 1) esa bajada sonaría como "lo salvaste".
+            AplicarVista(0f, silencioso: true);
             net.ServerSendRitualBook(0f);
             _running = true;
         }
@@ -93,7 +95,7 @@ namespace Gameplay
             TodosAlumbrando = false;
             _oscuridadRemota = 0f;
             _flow?.Restart();
-            AplicarVista(0f);
+            AplicarVista(0f, silencioso: true);   // reinicio de noche, no es que lo salvaron
         }
 
         private void Update()
@@ -173,10 +175,10 @@ namespace Gameplay
             AplicarVista(_oscuridadRemota);
         }
 
-        private static void AplicarVista(float oscuridad01)
+        private static void AplicarVista(float oscuridad01, bool silencioso = false)
         {
             if (RitualBookView.Active != null)
-                RitualBookView.Active.AplicarOscuridad(oscuridad01);
+                RitualBookView.Active.AplicarOscuridad(oscuridad01, silencioso);
         }
 
         private static int ContarJugadoresVivos(NetworkManager net)

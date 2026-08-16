@@ -113,12 +113,67 @@ namespace Gameplay
 #endif
         }
 
-        public void AplicarOscuridad(float oscuridad01)
+        // `silencioso` = aplicar el valor sin interpretar la transición como un evento de
+        // juego. Lo usan el arranque y el reinicio de noche, que bajan la oscuridad a 0 de
+        // golpe: sin esto, empezar una noche después de haber perdido el libro sonaría
+        // exactamente igual que salvarlo.
+        public void AplicarOscuridad(float oscuridad01, bool silencioso = false)
         {
+            float antes = _oscuridad01;
             _oscuridad01 = Mathf.Clamp01(oscuridad01);
+
+            if (silencioso)
+            {
+                AudioManager.PararBucle(BucleDefensa);
+                _defendiendoHasta = 0f;
+            }
+            else
+            {
+                SonarSegunOscuridad(antes, _oscuridad01);
+            }
+
             SetDisponible(_oscuridad01 < 1f - 1e-5f);
             ActualizarShader();
         }
+
+        // Los eventos del libro (empieza / salvado / perdido) son flags de
+        // RitualBookTickResult que MUEREN en el host: por red solo viaja el float de
+        // oscuridad. Por eso el audio se deduce acá, de las transiciones de ese float —
+        // este método corre en TODOS los peers, así que host y clientes oyen lo mismo
+        // sin tener que tocar el protocolo.
+        private void SonarSegunOscuridad(float antes, float ahora)
+        {
+            const float Cero = 1e-5f;
+            const float Todo = 1f - 1e-5f;
+
+            if (antes <= Cero && ahora > Cero)
+                AudioManager.Sonar(c => c.libroAtaqueEmpieza, transform.position);
+            else if (antes > Cero && ahora <= Cero)
+                AudioManager.Sonar(c => c.libroSalvado, transform.position);
+
+            // US-7: el libro se perdió. Es el sonido de alerta que invoca a Veleth.
+            if (antes < Todo && ahora >= Todo)
+            {
+                AudioManager.PararBucle(BucleDefensa);
+                AudioManager.Sonar(c => c.libroPerdido);
+                return;
+            }
+
+            // Mientras la oscuridad retrocede es porque alguien lo está alumbrando. Se
+            // sostiene con una ventana de gracia en vez de cortar en cuanto un tick trae el
+            // mismo valor: en el cliente esto llega a ~5 Hz, y sin la gracia el loop
+            // tartamudearía entre paquete y paquete.
+            if (ahora > Cero && ahora < antes) _defendiendoHasta = Time.time + GraciaDefensa;
+
+            if (ahora > Cero && Time.time < _defendiendoHasta)
+                AudioManager.Bucle(BucleDefensa, c => c.libroDefendiendo, transform.position);
+            else
+                AudioManager.PararBucle(BucleDefensa);
+        }
+
+        private const string BucleDefensa   = "libro_defensa";
+        private const float  GraciaDefensa  = 0.35f;
+        private float _defendiendoHasta;
 
         public void SetDisponible(bool disponible)
         {

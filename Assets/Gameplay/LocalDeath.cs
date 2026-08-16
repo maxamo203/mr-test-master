@@ -34,7 +34,14 @@ namespace Gameplay
                 NetworkManager.Instance.OnPlayerDied -= Die;
         }
 
-        public void Die() => IsDead = true;
+        // Punto unico de muerte del jugador de ESTE dispositivo (lo llaman el host directo
+        // y el cliente por red), asi que el sonido va aca y suena una sola vez para todos.
+        public void Die()
+        {
+            if (IsDead) return;      // el server puede reenviar; no repetir el sonido
+            IsDead = true;
+            AudioManager.Musica(c => c.derrotaMuerte, fade: 0.4f);
+        }
 
         // Vuelta a la vida al reiniciar la noche sin cerrar la sesión (ver
         // NightTransition): saca la pantalla de muerte.
