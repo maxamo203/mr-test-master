@@ -17,8 +17,8 @@ using UnityEngine.SceneManagement;
 [DefaultExecutionOrder(-44)]
 public class AudioEventWatcher : MonoBehaviour
 {
-    // Claves de los loops (ver AudioManager.Bucle).
-    private const string BuclePasos      = "sorken_pasos";
+    // Claves de los loops (ver AudioManager.Bucle). Los pasos del Sorken NO estan aca:
+    // son one-shots a intervalo, ver el bloque de Chasing.
     private const string BucleVeleth     = "veleth_persecucion";
     private const string BucleDrena      = "arbmos_drena";
     private const string BucleSusurros   = "arbmos_susurros";
@@ -41,8 +41,12 @@ public class AudioEventWatcher : MonoBehaviour
     private bool   _partidaAnterior;
     private string _escenaActual;
 
-    // Los huesos del Sorken son un one-shot suelto encima del loop de pasos, no un loop:
-    // se dispara cada tanto para que el "movimiento quebrado" no suene mecanico.
+    // Cadencia de los pasos del Sorken (segundos entre pisadas). Se interpola por
+    // cercania: camina "mas rapido" cuanto mas encima tuyo esta.
+    private const float IntervaloPasoLejos = 0.75f;
+    private const float IntervaloPasoCerca = 0.38f;
+
+    private float _proximoPaso;
     private float _proximoHueso;
 
     private void OnEnable()
@@ -118,8 +122,7 @@ public class AudioEventWatcher : MonoBehaviour
         }
 
         _vistos.Clear();
-        bool sorkenPersiguiendo = false;
-        bool velethCazando      = false;
+        bool velethCazando = false;
 
         foreach (var e in reg.All)
         {
@@ -129,7 +132,7 @@ public class AudioEventWatcher : MonoBehaviour
             switch (e.EntityTypeId)
             {
                 case EntityTypeIds.Sorken:
-                    if (Sorken(e, out bool persiguiendo)) sorkenPersiguiendo |= persiguiendo;
+                    Sorken(e);
                     break;
                 case EntityTypeIds.Veleth:
                     if (Veleth(e, out bool cazando)) velethCazando |= cazando;
@@ -144,18 +147,16 @@ public class AudioEventWatcher : MonoBehaviour
         }
 
         // Loops que dependen de que la entidad siga existiendo y en el estado correcto.
-        if (!sorkenPersiguiendo) AudioManager.PararBucle(BuclePasos);
-        if (!velethCazando)      AudioManager.PararBucle(BucleVeleth);
+        if (!velethCazando) AudioManager.PararBucle(BucleVeleth);
 
         BarrerDespawns();
     }
 
     // ─────────────────────────────────────────────────────────── Sorken
-    private bool Sorken(NetworkEntity e, out bool persiguiendo)
+    private void Sorken(NetworkEntity e)
     {
-        persiguiendo = false;
         var s = e.GetComponent<SorkenEntity>();
-        if (s == null) return false;
+        if (s == null) return;
 
         bool nuevo = !_previo.TryGetValue(e.NetworkId, out var antes);
         int  estado = (int)s.State;
@@ -179,22 +180,29 @@ public class AudioEventWatcher : MonoBehaviour
 
         if (s.State == SorkenState.Chasing)
         {
-            persiguiendo = true;
             // Doc: "pasos cuyo volumen aumenta exponencialmente al acercarse". La curva
             // cuadratica va ENCIMA de la atenuacion 3D, asi los ultimos metros pegan fuerte.
             float cerca = Cercania(s.Position, 12f);
-            AudioManager.Bucle(BuclePasos, c => c.sorkenPasos, s.Position, cerca * cerca);
 
-            // Huesos: cada 0.6-1.4 s, no por frame. Mas seguido cuanto mas cerca.
+            // Los pasos son one-shots a intervalo, NO un loop: una pisada es un evento
+            // discreto, y ademas el paso se acelera al acercarse (el Sorken encima tuyo
+            // camina mas rapido de lo que suena a 12 m). Con varios clips en la pista, cada
+            // pisada sale distinta y no se oye el bucle.
+            if (Time.time >= _proximoPaso)
+            {
+                AudioManager.Sonar(c => c.sorkenPasos, s.Position, Mathf.Max(0.2f, cerca * cerca));
+                _proximoPaso = Time.time + Mathf.Lerp(IntervaloPasoLejos, IntervaloPasoCerca, cerca);
+            }
+
+            // Huesos: mas espaciados que los pasos, encima de ellos.
             if (Time.time >= _proximoHueso)
             {
                 AudioManager.Sonar(c => c.sorkenHuesos, s.Position, Mathf.Max(0.25f, cerca));
-                _proximoHueso = Time.time + Random.Range(0.6f, 1.4f) * (1.4f - cerca * 0.5f);
+                _proximoHueso = Time.time + Random.Range(0.9f, 2.2f) * (1.4f - cerca * 0.5f);
             }
         }
 
         _previo[e.NetworkId] = new Foto { tipo = e.EntityTypeId, estado = estado };
-        return true;
     }
 
     // ─────────────────────────────────────────────────────────── Veleth
@@ -318,7 +326,6 @@ public class AudioEventWatcher : MonoBehaviour
     private void LimpiarTodo()
     {
         _previo.Clear();
-        AudioManager.PararBucle(BuclePasos);
         AudioManager.PararBucle(BucleVeleth);
         AudioManager.PararBucle(BucleDrena);
         AudioManager.PararBucle(BucleSusurros);
