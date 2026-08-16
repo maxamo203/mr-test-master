@@ -14,6 +14,13 @@ Comments and identifiers are predominantly in Spanish; match that when editing e
 
 **When a request conflicts with the documentation:** If asked to implement something that contradicts or deviates from what is specified in `Documentacion Mortuorium v9.0.md`, I will ask for clarification and confirmation before proceeding. This ensures alignment with the official project specification and prevents unintended design drift.
 
+### Pendientes de actualizar en la documentación
+
+Cambios ya hechos en el código que **todavía no están reflejados** en `Documentacion Mortuorium v9.0.md` (la fuente de verdad) y hay que incorporar:
+
+- **Licencias de assets de audio de terceros.** El juego ahora incluye clips de OpenGameArt bajo **CC-BY 3.0** y **CC0** — ver `Assets/Audio/ATTRIBUTIONS.md` para el detalle. La documentación sólo menciona genéricamente que "los assets de audio y 3D se obtienen de repositorios libres" (sección 2.5): falta dejar asentado **qué packs concretos se usan, bajo qué licencia, y que el pack CC-BY obliga a acreditar a Little Robot Sound Factory en los créditos del juego**. Mientras esos clips estén en el build, esa atribución es una obligación legal, no una cortesía.
+- **Historias de usuario de audio.** US-4.1, US-4.4, US-6.4, US-7.x y US-11.3 figuran como "Por hacer" y ya están implementadas (ver "Sistema de audio" más abajo); corresponde actualizar su estado y los criterios de aceptación.
+
 ## Build & run
 
 There is **no CLI build, lint, or test setup** — this is a GUI-driven Unity project. Iterate through the Unity Editor and on-device builds.
@@ -43,6 +50,22 @@ All menus/HUD are IMGUI styled by **`MortuoriumTheme`** (static): palette, fonts
 **Full-screen vs safe-area fills**: IMGUI draws through `UIScale.Begin`'s matrix, which maps virtual coords only to the *safe area* — a plain `Fill` leaves the notch/home-indicator strips showing whatever is behind (3D scene or raw camera). Opaque menu screens call `MortuoriumTheme.FillScreen(Bg)` (fills the whole physical screen, resetting the matrix); screens over the AR camera (scanner HUD, SINCRONIZACIÓN, sala) call `FillOutsideSafeArea(Bg)` so the camera shows only inside the safe area and the outside strips are solid black, continuing the UI's gradient to the screen edge.
 
 **Pseudo-3D icons** (`MortuoriumIcons`): isometric tool glyphs (wall / cube / door / marker / floor / two recalibrate reticles) rasterized once into cached `Texture2D`s by code (no assets). Used in the scanner's bottom tool row (`ReticleController.DrawHerramientas`), which is a **horizontally drag-scrollable** strip (custom `Event.current` drag; a drag suppresses the button tap) with icon + full label per button. The two recalibrate actions (keep scene fixed / move scene with anchor) are entries in this strip — the old standalone `RecalibrateButton` is now an obsolete empty shell.
+
+## Sistema de audio (`Assets/Audio/`)
+
+**Todos los clips del juego viven en UN solo asset**: `Assets/Resources/AudioCatalog.asset` (clase `AudioCatalog`), un ScriptableObject donde cada sonido es un slot (`Pista`) con sus clips, su volumen de calibración, variación de tono y parámetros espaciales. Varios clips en una pista = se elige uno **al azar** en cada disparo. Crearlo con el menú **Mortuorium > Crear catalogo de audio** (lo deja en la ruta y con el nombre exactos que espera `Resources.Load`). Todos los slots pueden estar vacíos: el sistema queda mudo, sin logs.
+
+`AudioManager` es el **único** que crea `AudioSource` y el único que reproduce — nunca instanciar fuentes sueltas ni usar `PlayClipAtPoint` por fuera. Se auto-crea con `[RuntimeInitializeOnLoadMethod]` + `DontDestroyOnLoad` (no hay wiring de escena y sobrevive a `SceneFlow.GoTo`). API: `AudioManager.Sonar(c => c.miPista, pos)` para one-shots, `Bucle(clave, sel, pos, escala)` / `PararBucle(clave)` para loops, `Musica(sel, fade)` y `CapaTension(t01)`.
+
+`AudioEventWatcher` (mismo GameObject) traduce estado de entidades a sonidos recorriendo `EntityRegistry.All` y comparando contra el frame anterior. **Es central a propósito**: los directores (`GameDirector`, `ArbmosDirector`, `VelethDirector`) son *server-only*, así que un sonido disparado ahí no lo oiría ningún cliente; el estado replicado, en cambio, llega a todos los peers. Filtra por `ArbmosEntity.Rendered` o el host escucha los Arbmos de los demás jugadores. Los eventos que no son de entidades se enganchan en el único punto local por el que pasan host y cliente: `LocalDeath.Die`, `LocalSanity.Set`, `Flashlight.Toggle`/`AddCharge`, `NightTransition.NocheSuperada`, `NightResult`, y `RitualBookView.AplicarOscuridad` (los eventos del libro **no viajan por red**, sólo un float de oscuridad, así que se deducen de sus transiciones; el flag `silencioso` evita que el reinicio de noche suene como "salvaste el libro").
+
+**Volumen**: maestro = `GameOptions.Volumen` → `AudioListener.volume` (el sistema nuevo NO lo escribe); música y efectos son multiplicadores (`GameOptions.VolumenMusica` / `VolumenEfectos`) aplicados al reproducir. No hay `AudioMixer`. El chat de voz queda fuera de los tres: tiene su propio `VozVolumen`. Sliders en el menú principal (OPCIONES) y en pausa (OPCIONES → AUDIO).
+
+⚠️ **Nunca tocar `AudioSettings` en runtime** (`Reset`, sample rate, DSP buffer): recrea el motor de audio e invalida los `AudioClip` de streaming con `PCMReaderCallback` de `Assets/Voice/VoiceStream.cs` — el chat de voz queda mudo y nada lo recrea. Configuración global de audio: sólo editando `ProjectSettings/AudioManager.asset` (ahí está `m_RealVoiceCount = 48`, repartidas en 2 música + 1 tensión + 8 loops + 24 one-shots + 3 de voz; música y loops nunca se roban).
+
+**Espacialización**: no hay plugin spatializer, pero todas las fuentes 3D nacen con `spatialize = true`, doppler 0 y rolloff logarítmico, y los clips 3D se importan con `forceToMono`. Instalar Steam Audio más adelante es sólo setear el Spatializer Plugin en Project Settings — cero cambios de código.
+
+Los clips actuales (`Assets/Audio/Clips/`) son **placeholder** de OpenGameArt bajo CC-BY 3.0 y CC0 — ver `Assets/Audio/ATTRIBUTIONS.md`; el pack CC-BY **obliga** a acreditar a Little Robot Sound Factory en los créditos mientras esté en el build.
 
 ## Debug HUD (`Assets/DebugHud/`)
 

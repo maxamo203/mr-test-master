@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: AudioCatalog
   m_EditorClassIdentifier: Assembly-CSharp::AudioCatalog
   musicaMenu:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 5323d8d5612c5fe79e0d30a9d3de058f, type: 3}
     volumen: 0.7
     variacionTono: 0
     espacial: 0
@@ -21,7 +22,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   ambienteNoche:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 1b7ab7d2a196a0d5ffb4cbfa4be6cd2a, type: 3}
     volumen: 0.5
     variacionTono: 0
     espacial: 0
@@ -29,7 +31,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   capaTension:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 3a7d4bb8f333e3808ff08a13dfbfc05c, type: 3}
     volumen: 0.6
     variacionTono: 0
     espacial: 0
@@ -37,7 +40,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   musicaPersecucion:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: ae21dc5ec8f331b56036f79ff644a787, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0
@@ -45,7 +49,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   victoriaAmanecer:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 70c2434cf72a67bfb6d851a86d99568d, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0
@@ -53,16 +58,41 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   derrotaMuerte:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 53bc7cd2ff8e46ebf74dca66b7325028, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
     apertura: 0
-  entradasPorTipo: []
+  entradasPorTipo:
+  - markerTypeId: Door
+    pista:
+      clips:
+      - {fileID: 8300000, guid: 08963afc31bec5567fe733b70aaec0b2, type: 3}
+      - {fileID: 8300000, guid: 4243e699c397f3a35d0d6f325f2c0d4f, type: 3}
+      volumen: 1
+      variacionTono: 0.05
+      espacial: 1
+      distanciaMin: 1
+      distanciaMax: 20
+      apertura: 0
+  - markerTypeId: Window
+    pista:
+      clips:
+      - {fileID: 8300000, guid: 951ec6af4b93f5847c90d2937157ceb3, type: 3}
+      - {fileID: 8300000, guid: 7e3f56de9be7ee308547494756c3953f, type: 3}
+      volumen: 1
+      variacionTono: 0.05
+      espacial: 1
+      distanciaMin: 1
+      distanciaMax: 20
+      apertura: 0
   entradaGenerica:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: fb8f1f4f3feff9b8b5eb3c34296dd149, type: 3}
+    - {fileID: 8300000, guid: b128f1da12617e020dbc5714809bea7b, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -70,7 +100,13 @@ MonoBehaviour:
     distanciaMax: 20
     apertura: 0
   sorkenPasos:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 7c68887edd8d2fc018bb537678d8435e, type: 3}
+    - {fileID: 8300000, guid: 2169387da24f46f66e3f66e0e583439a, type: 3}
+    - {fileID: 8300000, guid: 2d8e8e3dfd9d4584b5c3aa17267e4680, type: 3}
+    - {fileID: 8300000, guid: b1b59760b26984ffc75d832114b80a13, type: 3}
+    - {fileID: 8300000, guid: 07a5003cb1956efc6b9fe14806e499a6, type: 3}
+    - {fileID: 8300000, guid: 1874debb25ef97e3e3536ef047dc2433, type: 3}
     volumen: 1
     variacionTono: 0.1
     espacial: 1
@@ -78,7 +114,11 @@ MonoBehaviour:
     distanciaMax: 12
     apertura: 0
   sorkenHuesos:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 65c082b9028b67638e83730339e21a4f, type: 3}
+    - {fileID: 8300000, guid: c4a53f3172159f91ea5a60a49f99c59a, type: 3}
+    - {fileID: 8300000, guid: fbd62551b0712653fa29142a977a9dd0, type: 3}
+    - {fileID: 8300000, guid: cc433912a33b9463f4a6b52f5f222c39, type: 3}
     volumen: 1
     variacionTono: 0.15
     espacial: 1
@@ -86,7 +126,8 @@ MonoBehaviour:
     distanciaMax: 12
     apertura: 0
   sorkenEntra:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: adb221aa8841edc33b7a253faafaf59e, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -94,7 +135,8 @@ MonoBehaviour:
     distanciaMax: 20
     apertura: 0
   sorkenRepelido:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: d935e2142d7b8b3fe7a8ea1e3e0c6863, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -102,7 +144,8 @@ MonoBehaviour:
     distanciaMax: 20
     apertura: 0
   sorkenGrab:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 2ecbdb65d0a1f3e5202879bc59f2ba8d, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -110,7 +153,8 @@ MonoBehaviour:
     distanciaMax: 20
     apertura: 0
   sorkenApuntado:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: bc131fc801aacdfae2d26a766076e2fc, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -118,7 +162,8 @@ MonoBehaviour:
     distanciaMax: 20
     apertura: 0
   arbmosAparece:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: c3d7cf2f94060527324c17c63e22482b, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -126,7 +171,8 @@ MonoBehaviour:
     distanciaMax: 12
     apertura: 0
   arbmosDrena:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 19c61d6d111b0ccc714554ff3a0462bc, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -134,7 +180,8 @@ MonoBehaviour:
     distanciaMax: 12
     apertura: 0
   arbmosSusurros:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: a53af80dcc9fa6fed0fa870d7fa194d1, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0.5
@@ -142,7 +189,8 @@ MonoBehaviour:
     distanciaMax: 12
     apertura: 0
   arbmosGritos:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 4e39c204487505f0b49ad0eea05fb268, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0.5
@@ -150,7 +198,8 @@ MonoBehaviour:
     distanciaMax: 12
     apertura: 0
   arbmosEmbestida:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: be1b5b1ee2684fe5377c74ac80a98714, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -158,7 +207,8 @@ MonoBehaviour:
     distanciaMax: 12
     apertura: 0
   arbmosJumpscare:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 819122347f5cc96ac431264b6ca02ef5, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0
@@ -166,7 +216,9 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   velethInvocacion:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 317f7f04cfad51ab286b20f5a219e543, type: 3}
+    - {fileID: 8300000, guid: 3396a2d7d6c3e09d37bc159e53e05a31, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -174,7 +226,8 @@ MonoBehaviour:
     distanciaMax: 25
     apertura: 0
   velethPersecucion:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 2927e611547bd941b51726f865d8e508, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -182,7 +235,8 @@ MonoBehaviour:
     distanciaMax: 20
     apertura: 0
   velethGrab:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: d816100cc8a97bbc4bf9f0c08cfd0a80, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -190,7 +244,8 @@ MonoBehaviour:
     distanciaMax: 20
     apertura: 0
   libroAtaqueEmpieza:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 92471cfaaa3dfe4a115dd6cab1efbb90, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -198,7 +253,8 @@ MonoBehaviour:
     distanciaMax: 25
     apertura: 0
   libroDefendiendo:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 143da89153f5249d10e49d51939c0c75, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -206,7 +262,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   libroSalvado:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 56c560986875fe37912c2affe6a5cf55, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 1
@@ -214,7 +271,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   libroPerdido:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 2ef45039cb8458a1c070b269fbef1ada, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0
@@ -222,7 +280,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   linternaOn:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: a268cc79ddc397fb7647729c4029fbb1, type: 3}
     volumen: 0.8
     variacionTono: 0
     espacial: 0
@@ -230,7 +289,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   linternaOff:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: db378b7e0f5e7759e5e68b8fe4c5b1d4, type: 3}
     volumen: 0.8
     variacionTono: 0
     espacial: 0
@@ -238,7 +298,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   linternaVacia:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 87b6aa3d14256278cf0f405d7ae0ea7d, type: 3}
     volumen: 0.8
     variacionTono: 0
     espacial: 0
@@ -246,7 +307,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   linternaSeAgota:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: b90bdd32267511b11f00d1da0d4d8edd, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0
@@ -254,7 +316,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   bateriaBaja:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: ee0d9f831f15032f316fac2f12a00240, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0
@@ -262,7 +325,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   pilaRecogida:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 82fbcf5ca832f398a742033a37330f16, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0
@@ -270,7 +334,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   pilaAparece:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: e55e72a6ce887279dd1885b1de2a5997, type: 3}
     volumen: 0.6
     variacionTono: 0
     espacial: 1
@@ -278,7 +343,8 @@ MonoBehaviour:
     distanciaMax: 10
     apertura: 0
   corduraBaja:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 212a04a41631969b45ea2a7b92a52bfa, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0
@@ -286,7 +352,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   corduraCero:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 749dcf781c81b0c7f0deba3b62b3014e, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0
@@ -294,7 +361,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   relojFinal:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 7b6ba1049a5a70c4ed02c256bf429f00, type: 3}
     volumen: 0.7
     variacionTono: 0
     espacial: 0
@@ -302,7 +370,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   nocheDesbloqueada:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: fce7841d12826203a42b87a5d7a52b2b, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0
@@ -310,7 +379,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   uiNavegar:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: e7e31ae0a7f74e4cbd4950c626a30e2b, type: 3}
     volumen: 0.5
     variacionTono: 0
     espacial: 0
@@ -318,7 +388,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   uiConfirmar:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: e07a755fe549e73f52855a5e6dbf8ecc, type: 3}
     volumen: 0.6
     variacionTono: 0
     espacial: 0
@@ -326,7 +397,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   uiVolver:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 7abf33eaab261b0280665995be9b15d9, type: 3}
     volumen: 0.5
     variacionTono: 0
     espacial: 0
@@ -334,7 +406,8 @@ MonoBehaviour:
     distanciaMax: 15
     apertura: 0
   uiAlerta:
-    clips: []
+    clips:
+    - {fileID: 8300000, guid: 968e0af7fd23bbd3435303640e30fb2b, type: 3}
     volumen: 1
     variacionTono: 0
     espacial: 0
