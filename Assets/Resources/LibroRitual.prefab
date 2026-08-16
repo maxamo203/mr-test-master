@@ -79,12 +79,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2bf0d9077ff94da41b9208325dca7bcf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Gameplay.RitualBookView
-  _tapaA: {fileID: 3279489527337475124}
-  _tapaB: {fileID: 768746702936394167}
-  _lomo: {fileID: 7815546970186820628}
+  _tapaA: {fileID: 0}
+  _tapaB: {fileID: 0}
+  _lomo: {fileID: 0}
   _colorOscuridad: {r: 0, g: 0, b: 0, a: 1}
   _opacidadMaxima: 0.96
   _suavidadMetros: 0.018
+  _colorHumo: {r: 0.01, g: 0.01, b: 0.015, a: 1}
+  _humoTasaMaxima: 423.2
+  _humoParticulasMaximas: 741
+  _humoTamanoMin: 0.06
+  _humoTamanoMax: 0.16
+  _humoOpacidad: 0.19
+  _humoSuavidad: 1
+  _humoVidaSegundos: 1.16
+  _humoVelocidadSalida: 0.08
+  _humoGravedad: 0.03
   _oscuridadPreview: 0
 --- !u!1 &4607919270932822500
 GameObject:

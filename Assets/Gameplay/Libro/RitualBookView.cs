@@ -26,10 +26,41 @@ namespace Gameplay
         [Tooltip("Ancho en metros del borde suave de la oscuridad.")]
         [Min(0.001f)] [SerializeField] private float _suavidadMetros = 0.018f;
 
+        [Header("Humo de oscuridad (particulas)")]
+        [Tooltip("Color de las particulas negras que se acumulan sobre el libro mientras se lo consume.")]
+        [SerializeField] private Color _colorHumo = new Color(0.01f, 0.01f, 0.015f, 1f);
+        [Tooltip("Particulas por segundo emitidas cuando la oscuridad esta al 100%. Junto con " +
+                 "Vida en segundos determina cuantas conviven a la vez (densidad = tasa x vida).")]
+        [SerializeField] private float _humoTasaMaxima = 160f;
+        [Tooltip("Tope de particulas vivas a la vez. Subilo si la densidad se 'corta' al ser " +
+                 "alta (tasa x vida cerca del limite).")]
+        [SerializeField] private int _humoParticulasMaximas = 600;
+        [SerializeField] private float _humoTamanoMin = 0.07f;
+        [SerializeField] private float _humoTamanoMax = 0.2f;
+        [Tooltip("Opacidad pico de CADA particula. Se mantiene baja para que se fundan " +
+                 "entre si (muchas superpuestas) en vez de leerse como circulos sueltos.")]
+        [Range(0f, 1f)] [SerializeField] private float _humoOpacidad = 0.6f;
+        [Tooltip("Difuminado del borde de cada particula. Mas alto = mas fusionado con las " +
+                 "vecinas, menos notorio que son circulos independientes.")]
+        [Range(0f, 1f)] [SerializeField] private float _humoSuavidad = 0.9f;
+        [Tooltip("Cuanto vive cada particula (s). MAS = mas densidad acumulada (a igual tasa) " +
+                 "y mas recorrido antes de caer/desvanecerse.")]
+        [SerializeField] private float _humoVidaSegundos = 1.8f;
+        [Tooltip("Velocidad de salida horizontal, hacia afuera desde el borde de la mancha " +
+                 "oscura (como chispas/ceniza saliendo por el costado).")]
+        [SerializeField] private float _humoVelocidadSalida = 0.08f;
+        [Tooltip("Gravedad que las hace caer despues de salir disparadas horizontalmente. " +
+                 "Chica a proposito: es una escala de libro, no una explosion.")]
+        [SerializeField] private float _humoGravedad = 0.03f;
+
         private readonly List<Renderer> _capasOscuridad = new();
         private readonly List<Renderer> _renderersLibro = new();
         private Material _materialOscuridad;
         private MaterialPropertyBlock _props;
+        private ParticleSystem _humo;
+        private Material _materialHumo;
+        private float _ultimaSuavidadHumo = -1f;
+        private Color _ultimoColorGradHumo;
         private Vector3 _centroLocal;
         private Vector2 _medioTamanoLocal;
         private float _radioLuz;
@@ -38,12 +69,14 @@ namespace Gameplay
 
         public Vector3 PuntoDeLuz => transform.TransformPoint(_centroLocal);
         public float RadioAproximado => _radioLuz;
+        public float Oscuridad01 => _oscuridad01;
         public bool Disponible { get; private set; } = true;
 
         private void Awake()
         {
             MedirGeometria();
             CrearCapasDeOscuridad();
+            CrearHumoOscuridad();
         }
 
         private void OnEnable()
@@ -62,6 +95,8 @@ namespace Gameplay
         private void OnDestroy()
         {
             if (_materialOscuridad != null) Destroy(_materialOscuridad);
+            if (_materialHumo != null) Destroy(_materialHumo);
+            if (_humo != null) Destroy(_humo.gameObject);
         }
 
         private void LateUpdate()
@@ -69,6 +104,13 @@ namespace Gameplay
             // El anchor puede corregir su pose en cualquier frame. Los parametros estan
             // en mundo, por eso se refrescan para que el circulo siga pegado al libro.
             ActualizarShader();
+#if UNITY_EDITOR
+            // Tuning en vivo del humo (densidad, vida, textura, color): SOLO en el editor,
+            // asi se puede arrastrar los sliders en Play y ver el cambio sin recompilar.
+            // En cualquier build (dev o prod) estos valores se fijan una sola vez, sin costo
+            // por frame — ver PushParamsHumo/CrearHumoOscuridad.
+            PushParamsHumo();
+#endif
         }
 
         public void AplicarOscuridad(float oscuridad01)
@@ -203,6 +245,128 @@ namespace Gameplay
 
             foreach (var renderer in _capasOscuridad)
                 if (renderer != null) renderer.SetPropertyBlock(_props);
+
+            ActualizarHumo(escala);
+        }
+
+        // Particulas negras que salen por el borde de la mancha oscura y crecen junto con la
+        // oscuridad: mismo centro/radio que el shader radial (sqrt(oscuridad01), ver
+        // comentario del shader), asi el borde de emision sigue al borde real de lo ennegrecido.
+        // Nacen SOLO en el borde del disco (radiusThickness=0) con una direccion radial-en-el-
+        // plano (comportamiento nativo de la forma Circle): salen horizontales hacia afuera, a
+        // la altura del libro, y despues caen por gravedad — no directo hacia abajo ni hacia arriba.
+        private void CrearHumoOscuridad()
+        {
+            var go = new GameObject("__HumoOscuridadLibro") { hideFlags = HideFlags.DontSave };
+            go.transform.SetParent(transform, false);
+            go.transform.position = PuntoDeLuz;
+
+            _humo = go.AddComponent<ParticleSystem>();
+            _humo.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+            var main = _humo.main;
+            main.loop = true;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.startColor = new Color(_colorHumo.r, _colorHumo.g, _colorHumo.b, 1f);
+
+            var shape = _humo.shape;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = 0.01f;
+            shape.radiusThickness = 0f; // solo el borde: "por los bordes del libro"
+            shape.rotation = new Vector3(-90f, 0f, 0f); // disco horizontal => salida radial horizontal
+
+            var noise = _humo.noise;
+            noise.enabled = true;
+            noise.frequency = 0.35f;
+
+            var sol = _humo.sizeOverLifetime;
+            sol.enabled = true;
+            // Crece poco (no un globo): el leve aumento ayuda a que las particulas se
+            // superpongan entre si y tapen los huecos, sin notarse como "burbujas" creciendo.
+            sol.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, 0.6f, 1f, 1.15f));
+
+            var col = _humo.colorOverLifetime;
+            col.enabled = true;
+
+            var emission = _humo.emission;
+            emission.rateOverTime = 0f;
+
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            _materialHumo = ArbmosGfx.ParticleMaterial(additive: false, tint: Color.white,
+                                                       tex: ArbmosGfx.SmokeTexture(_humoSuavidad));
+            _ultimaSuavidadHumo = _humoSuavidad;
+            renderer.material = _materialHumo;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.lightProbeUsage = LightProbeUsage.Off;
+            renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            renderer.sortingOrder = 10;
+
+            PushParamsHumo(); // fija densidad/vida/color una vez (en el editor ademas en vivo)
+        }
+
+        // Parametros "de autoria" (densidad, vida, salida, gravedad, color/opacidad, textura):
+        // se fijan una vez aca. En builds (dev y prod) quedan asi de por vida — solo el editor
+        // los vuelve a llamar cada frame (ver LateUpdate) para poder tunearlos en Play.
+        private void PushParamsHumo()
+        {
+            if (_humo == null) return;
+
+            var main = _humo.main;
+            main.startLifetime = Mathf.Max(0.1f, _humoVidaSegundos);
+            main.startSpeed = _humoVelocidadSalida;
+            main.gravityModifier = _humoGravedad; // cae despues de la salida horizontal
+            main.maxParticles = Mathf.Max(1, _humoParticulasMaximas);
+
+            var noise = _humo.noise;
+            noise.strength = 0.06f; // roce vivo sutil, sin tapar la trayectoria horizontal+caida
+
+            // Textura de difuminado: solo se regenera si cambio (cachea por "bucket" en
+            // ArbmosGfx, pero igual evitamos reasignar el material cada frame sin necesidad).
+            if (_materialHumo != null && !Mathf.Approximately(_humoSuavidad, _ultimaSuavidadHumo))
+            {
+                _materialHumo.mainTexture = ArbmosGfx.SmokeTexture(_humoSuavidad);
+                _ultimaSuavidadHumo = _humoSuavidad;
+            }
+
+            // El Gradient de color/opacidad asigna clase (GC): solo se reconstruye si cambio.
+            var colorActual = new Color(_colorHumo.r, _colorHumo.g, _colorHumo.b, _humoOpacidad);
+            if (_ultimoColorGradHumo.r != colorActual.r || _ultimoColorGradHumo.g != colorActual.g ||
+                _ultimoColorGradHumo.b != colorActual.b || _ultimoColorGradHumo.a != colorActual.a)
+            {
+                var col = _humo.colorOverLifetime;
+                var grad = new Gradient();
+                grad.SetKeys(
+                    new[] { new GradientColorKey(_colorHumo, 0f), new GradientColorKey(_colorHumo, 1f) },
+                    new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(_humoOpacidad, 0.3f),
+                            new GradientAlphaKey(0f, 1f) });
+                col.color = grad;
+                _ultimoColorGradHumo = colorActual;
+            }
+        }
+
+        // Solo structs (sin GC): se llama cada LateUpdate igual que el shader radial, para
+        // que la densidad de humo siga en vivo a _oscuridad01 (server-authoritative).
+        private void ActualizarHumo(float escala)
+        {
+            if (_humo == null) return;
+
+            bool activo = Disponible && _oscuridad01 > 0.001f;
+
+            var emission = _humo.emission;
+            emission.rateOverTime = activo ? _humoTasaMaxima * _oscuridad01 : 0f;
+
+            var main = _humo.main;
+            float tamano = Mathf.Lerp(_humoTamanoMin, _humoTamanoMax, _oscuridad01);
+            main.startSize = new ParticleSystem.MinMaxCurve(tamano * 0.7f, tamano);
+
+            var shape = _humo.shape;
+            shape.radius = Mathf.Max(0.01f, _radioLuz * escala * EscalaParaCobertura(_oscuridad01));
+
+            _humo.transform.position = PuntoDeLuz;
+
+            if (activo && !_humo.isPlaying) _humo.Play(true);
+            else if (!activo && _humo.isPlaying) _humo.Stop(true, ParticleSystemStopBehavior.StopEmitting);
         }
 
         public static GameObject TrySpawn(Transform anchor)

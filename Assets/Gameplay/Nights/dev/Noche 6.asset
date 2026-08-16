@@ -46,10 +46,14 @@ MonoBehaviour:
   arbmosLethalChaseSpeed: 3.5
   arbmosGrabRange: 1.2
   bookActive: 1
-  bookEventDelayMin: 30
-  bookEventDelayMax: 50
-  bookConsumeSeconds: 6
+  bookEventDelayMin: 10
+  bookEventDelayMax: 20
+  bookConsumeSeconds: 10
   bookDefenseSeconds: 4
+  velethChaseSpeed: 3.2
+  velethGrabRange: 1.1
+  velethRepathSeconds: 0.2
+  velethGrabHoldSeconds: 0.8
   flashlightConeAngleDeg: 30
   flashlightRange: 8
   initialAttemptDelay: 2
