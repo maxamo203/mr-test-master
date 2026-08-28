@@ -132,7 +132,10 @@ namespace Gamepad
             for (int s = 0; s < n; s++)
             {
                 _focus = (_focus + dir + n) % n;
-                if (_frame[_focus].enabled) return;
+                // El tic va sólo cuando el foco ATERRIZA en un ítem, no en cada vuelta del
+                // bucle que saltea los deshabilitados. Corre desde Tick() (una vez por
+                // frame, fuera de OnGUI) y con el cooldown de _navCd, así que no se repite.
+                if (_frame[_focus].enabled) { AudioManager.Sonar(c => c.uiNavegar); return; }
             }
         }
     }

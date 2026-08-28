@@ -59,12 +59,19 @@ namespace Gameplay
         [Header("Arbmos (alucinacion de cordura — individual por jugador)")]
         [Tooltip("Master switch: activar SOLO en las noches donde aparece el Arbmos (doc: noche 4+).")]
         public bool arbmosActive = false;
-        [Tooltip("Segundos quieto que invocan al Arbmos (inaccion => aparece).")]
+        [Tooltip("Duracion (s) de la VENTANA de quietud. Cada X segundos se abre una esfera nueva " +
+                 "centrada en el jugador; al cerrarse, si no se salio de ella se lo considera quieto " +
+                 "y se intenta invocar al Arbmos. Ver ArbmosDirector.UpdateQuietud.")]
         public float arbmosStillInvokeSeconds = 5f;
-        [Tooltip("Radio (m) bajo el cual se considera que el jugador esta 'quieto' (tolera el jitter AR). " +
-                 "Se mide sobre el eje del CUERPO, no sobre la camara, asi girar en el lugar para mirar " +
-                 "alrededor no cuenta como caminar; ademas se tolera mas cuanto mas gire. Ver ArbmosDirector.UpdateMotion.")]
-        public float arbmosStillRadius = 0.15f;
+        [Tooltip("Radio (m) de esa esfera: cuanto se puede desplazar el jugador dentro de la ventana " +
+                 "sin dejar de estar 'quieto'. Se mide sobre el eje del CUERPO, no sobre la camara, asi " +
+                 "girar en el lugar para mirar alrededor no cuenta como caminar; ademas se tolera mas " +
+                 "cuanto mas gire. En dev se puede pisar desde pausa -> ARBMOS (DEV).")]
+        public float arbmosStillRadius = 0.5f;
+        [Tooltip("Segundos que el jugador puede estar FUERA de la esfera sin invalidar la ventana. " +
+                 "Absorbe los saltos de una correccion de tracking (un frame malo no tiene por que " +
+                 "costar la ventana entera); salir de verdad supera esta gracia enseguida.")]
+        public float arbmosStillOutsideGrace = 0.4f;
         [Tooltip("Cuanto permanece la alucinacion no letal (s).")]
         public float arbmosPresentSeconds = 6f;
         [Tooltip("Velocidad (m/s) con la que el Arbmos deriva hacia el jugador mientras drena (anim running).")]
@@ -89,23 +96,32 @@ namespace Gameplay
         [Tooltip("Distancia (m) a la que el Arbmos letal atrapa al jugador.")]
         public float arbmosGrabRange = 1.2f;
 
-        [Header("Libro ritual (se cierra solo — hay que alumbrarlo)")]
+        [Header("Libro ritual (oscuridad desde el centro)")]
         [Tooltip("Master switch del libro. Desactivar (dev/testing) para probar SIN la " +
                  "mecánica del libro. En prod: siempre activo.")]
         public bool bookActive = true;
-        [Tooltip("Segundos que tarda en cerrarse del todo, desde abierto, si NADIE lo " +
-                 "alumbra. Si se cierra: game over para todos.")]
-        public float bookCloseSeconds = 180f;
-        [Tooltip("Segundos que tarda UN jugador alumbrándolo en abrirlo del todo, de cerrado " +
-                 "a abierto (sin descontar el cierre). El efecto se ACUMULA: con N jugadores " +
-                 "alumbrando tarda N veces menos. Tiene que ser MENOR que bookCloseSeconds, " +
-                 "si no un jugador solo nunca le gana al cierre.")]
-        public float bookOpenSecondsPerPlayer = 30f;
+        [Tooltip("Espera aleatoria minima (s) antes de que la oscuridad ataque el libro.")]
+        [Min(0f)] public float bookEventDelayMin = 30f;
+        [Tooltip("Espera aleatoria maxima (s) antes de que la oscuridad ataque el libro.")]
+        [Min(0f)] public float bookEventDelayMax = 50f;
+        [Tooltip("Ventana completa (s) desde que empieza la oscuridad hasta que consume el libro.")]
+        [Min(0.1f)] public float bookConsumeSeconds = 6f;
+        [Tooltip("Segundos CONTINUOS de linterna sobre el libro necesarios para salvarlo.")]
+        [Min(0.1f)] public float bookDefenseSeconds = 4f;
 
-        // Los dos de arriba están en segundos porque es lo que se piensa al diseñar la
-        // noche; la simulación necesita el ritmo (apertura por segundo).
-        public float BookCloseRate         => bookCloseSeconds         > 0f ? 1f / bookCloseSeconds         : 0f;
-        public float BookOpenRatePerPlayer => bookOpenSecondsPerPlayer > 0f ? 1f / bookOpenSecondsPerPlayer : 0f;
+        public float RandomBookEventDelay() =>
+            UnityEngine.Random.Range(Mathf.Min(bookEventDelayMin, bookEventDelayMax),
+                                     Mathf.Max(bookEventDelayMin, bookEventDelayMax));
+
+        [Header("Veleth (invocada al perder el libro)")]
+        [Tooltip("Velocidad de persecucion. Veleth no puede ser repelida con la linterna.")]
+        [Min(0.1f)] public float velethChaseSpeed = 3.2f;
+        [Tooltip("Distancia horizontal a la que Veleth atrapa al jugador.")]
+        [Min(0.05f)] public float velethGrabRange = 1.1f;
+        [Tooltip("Frecuencia con la que recalcula su ruta hacia el jugador que se mueve.")]
+        [Min(0.05f)] public float velethRepathSeconds = 0.2f;
+        [Tooltip("Pausa del jumpscare antes de continuar hacia otro jugador vivo.")]
+        [Min(0f)] public float velethGrabHoldSeconds = 0.8f;
 
         [Header("Cono de linterna (repeler — server-authoritative)")]
         [Tooltip("Semi-angulo del cono (grados) para contar que la linterna ilumina un objetivo.")]

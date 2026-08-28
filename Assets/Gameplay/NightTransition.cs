@@ -66,12 +66,13 @@ namespace Gameplay
             ServerDeaths.Reset();
             LocalDeath.Instance?.Revive();
             NightResult.Limpiar();
-            RitualBookDirector.Instance?.Reiniciar();   // el libro se vuelve a ver abierto
+            RitualBookDirector.Instance?.Reiniciar();   // el libro vuelve a verse limpio
+            VelethDirector.Instance?.StopRun();
 
             // Salir de Cardboard: la pantalla de sincronización es monoscópica y hay que
             // volver a apuntar a la imagen, cosa imposible con la vista estéreo (el
             // centro de la pantalla no es lo que ve ninguno de los dos ojos).
-            var cb = Object.FindFirstObjectByType<MRCardboardController>();
+            var cb = Object.FindAnyObjectByType<MRCardboardController>();
             if (cb != null && cb.CardboardActive) cb.SetCardboard(false);
 
             DetenerSistemas();
@@ -85,6 +86,7 @@ namespace Gameplay
             GameDirector.Instance?.StopRun();
             ArbmosDirector.Instance?.StopRun();
             RitualBookDirector.Instance?.StopRun();
+            VelethDirector.Instance?.StopRun();
             SanitySystem.Instance?.StopRun();
             Bateries.BatterySpawnManager.Instance?.StopRun();
         }
@@ -98,6 +100,7 @@ namespace Gameplay
             if (LocalDeath.Instance != null && LocalDeath.Instance.IsDead) return;
 
             NightResult.MarcarSobrevivida();
+            AudioManager.Musica(c => c.victoriaAmanecer, fade: 0.5f);
 
             // El desbloqueo es por dispositivo y necesita saber QUÉ noche era. Un
             // cliente que se unió por LAN no pasó por el menú de noches (NightIndex

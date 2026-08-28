@@ -32,7 +32,8 @@ MonoBehaviour:
   sanityDrainPerSecond: 12
   arbmosActive: 0
   arbmosStillInvokeSeconds: 3
-  arbmosStillRadius: 0.15
+  arbmosStillRadius: 0.5
+  arbmosStillOutsideGrace: 0.4
   arbmosPresentSeconds: 6
   arbmosPresentFollowSpeed: 1.3
   arbmosCooldownMin: 5
@@ -45,8 +46,14 @@ MonoBehaviour:
   arbmosLethalChaseSpeed: 3.5
   arbmosGrabRange: 1.2
   bookActive: 1
-  bookCloseSeconds: 180
-  bookOpenSecondsPerPlayer: 30
+  bookEventDelayMin: 10
+  bookEventDelayMax: 20
+  bookConsumeSeconds: 10
+  bookDefenseSeconds: 4
+  velethChaseSpeed: 3.2
+  velethGrabRange: 1.1
+  velethRepathSeconds: 0.2
+  velethGrabHoldSeconds: 0.8
   flashlightConeAngleDeg: 30
   flashlightRange: 8
   initialAttemptDelay: 2

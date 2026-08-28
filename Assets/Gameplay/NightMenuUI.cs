@@ -54,6 +54,14 @@ namespace Gameplay
         private string _confirmarBorrar;       // nombre del escaneo a borrar (overlay Escaneos)
         private Vector2 _scroll;
 
+        // US-1.1: chequeo de versión mínima de SO (Android 14 / iOS 17). A diferencia
+        // de los avisos de abajo, éste se re-evalúa en cada Awake, no se persiste.
+        private bool _versionIncompatible;
+
+        // US-1.1: aviso (una sola vez) de que no se pudo determinar la versión del SO
+        // (DeviceCompatibility.CompatResult.Unknown). No bloquea, solo recomienda.
+        private bool _mostrarAvisoVersionDesconocida;
+
         // US-1.5: aviso (una sola vez) de que iOS trackea con mucho menos drift que
         // Android. Ver Riesgos Identificados en la documentación.
         private bool _mostrarAvisoIos;
@@ -70,6 +78,14 @@ namespace Gameplay
         private void Awake()
         {
             GameSession.Ensure();
+
+            var compat = DeviceCompatibility.Check();
+            _versionIncompatible = compat == DeviceCompatibility.CompatResult.Unsupported;
+            _mostrarAvisoVersionDesconocida = compat == DeviceCompatibility.CompatResult.Unknown &&
+                                               !GameOptions.AvisoVersionDesconocidaVisto;
+            //_versionIncompatible = true;
+            //_mostrarAvisoVersionDesconocida = true;
+
             _mostrarAvisoIos = Application.platform == RuntimePlatform.Android && !GameOptions.AvisoIosVisto;
             //_mostrarAvisoIos = true;
         }
@@ -110,7 +126,14 @@ namespace Gameplay
         {
             _pendingMode = mode;
             RefrescarScans();
-            if (!HayEntornoJugable()) { _pantalla = Pantalla.SinEntorno; return; }
+            // Falta un entorno escaneado: es un callejón sin salida, se avisa con el
+            // sonido de alerta y no con el de confirmación que ya sonó al tocar el botón.
+            if (!HayEntornoJugable())
+            {
+                AudioManager.Sonar(c => c.uiAlerta);
+                _pantalla = Pantalla.SinEntorno;
+                return;
+            }
             _nocheSel = -1;
             _mapSel = null;
             _pantalla = Pantalla.Noches;
@@ -128,7 +151,15 @@ namespace Gameplay
             T.FillScreen(T.Bg);
             UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
 
-            if (_mostrarAvisoIos)
+            if (_versionIncompatible)
+            {
+                DrawBloqueoVersion(vw, vh);
+            }
+            else if (_mostrarAvisoVersionDesconocida)
+            {
+                DrawAvisoVersionDesconocida(vw, vh);
+            }
+            else if (_mostrarAvisoIos)
             {
                 DrawAvisoIos(vw, vh);
             }
@@ -383,7 +414,7 @@ namespace Gameplay
             if (foco) T.Fill(header, new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.12f));
             _nav.Button(header, $"AVANZADO {(_avanzadoOpen ? "(-)" : "(+)")}",
                         T.Estilo(T.FMono, 12, foco ? T.Cream : T.Muted, TextAnchor.MiddleLeft),
-                        () => _avanzadoOpen = !_avanzadoOpen);
+                        () => { AudioManager.Sonar(c => c.uiConfirmar); _avanzadoOpen = !_avanzadoOpen; });
             y += 32f;
 
             if (!_avanzadoOpen) return;
@@ -456,7 +487,9 @@ namespace Gameplay
                           $"{(_itemCount.TryGetValue(n, out var c) ? c : 0)} elementos · editar",
                           T.Estilo(T.FMono, 11, T.Dim, TextAnchor.MiddleRight));
 
-                T.Celda(_nav, zonaBorrar, primario: false, () => _confirmarBorrar = n,
+                // Pedir confirmación de borrado es destructivo: alerta, no confirmación.
+                T.Celda(_nav, zonaBorrar, primario: false,
+                        () => { AudioManager.Sonar(c2 => c2.uiAlerta); _confirmarBorrar = n; },
                         bordeOverride: T.Red);
                 GUI.Label(zonaBorrar, "borrar", T.Estilo(T.FMono, 11, T.Red, TextAnchor.MiddleCenter));
 
@@ -493,6 +526,73 @@ namespace Gameplay
                     }, fontSize: 16);
         }
 
+        // US-1.1: bloqueo duro por versión de SO no soportada (Android < 14 / iOS < 17).
+        // A diferencia de los avisos de abajo, no tiene forma de descartarse: no hay
+        // nada jugable que ofrecer, así que la única acción posible es salir.
+        private void DrawBloqueoVersion(float vw, float vh)
+        {
+            T.Fill(new Rect(0, 0, vw, vh), new Color(0f, 0f, 0f, 0.85f));
+
+            float pw = vw - 56f, ph = 284f;
+            var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
+            T.Panel(panel, T.BgPanel, T.Red);
+
+            const float iconSize = 60f;
+            MortuoriumIcons.Draw(new Rect(panel.center.x - iconSize / 2f, panel.y + 14f, iconSize, iconSize),
+                                  MortuoriumIcons.Icon.Pentagrama);
+
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 82f, pw - 44f, 30f),
+                      "VERSIÓN NO COMPATIBLE", T.Estilo(T.FBebas, 20, T.Cream));
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 118f, pw - 44f, 90f),
+                      "Lo sentimos, la versión de su dispositivo no es compatible con el juego.",
+                      T.Estilo(T.FElite, 14, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
+
+            T.Boton(_nav, new Rect(panel.x + 22f, panel.yMax - 62f, pw - 44f, 46f),
+                    "SALIR", true, SalirDelJuego, fontSize: 16, textColor: T.Red);
+        }
+
+        private static void SalirDelJuego()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
+        // US-1.1: aviso (una sola vez) de que no se pudo determinar con certeza la
+        // versión del SO. No bloquea: solo recomienda actualizar para evitar
+        // inestabilidad o problemas de rendimiento no cubiertos por las pruebas.
+        private void DrawAvisoVersionDesconocida(float vw, float vh)
+        {
+            T.Fill(new Rect(0, 0, vw, vh), new Color(0f, 0f, 0f, 0.7f));
+
+            float pw = vw - 56f, ph = 314f;
+            var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
+            T.Panel(panel, T.BgPanel, T.Tan);
+
+            const float iconSize = 60f;
+            MortuoriumIcons.Draw(new Rect(panel.center.x - iconSize / 2f, panel.y + 14f, iconSize, iconSize),
+                                  MortuoriumIcons.Icon.Pentagrama);
+
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 82f, pw - 44f, 30f),
+                      "NO PUDIMOS VERIFICAR TU VERSIÓN", T.Estilo(T.FBebas, 18, T.Cream));
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 118f, pw - 44f, 130f),
+                      "No pudimos determinar la versión de tu sistema operativo. Es posible que " +
+                      "experimentes inestabilidad o problemas de rendimiento. Para la mejor " +
+                      "experiencia recomendamos Android 14 o superior, o iOS 17 o superior.",
+                      T.Estilo(T.FElite, 13, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
+
+            T.Boton(_nav, new Rect(panel.x + 22f, panel.yMax - 62f, pw - 44f, 46f),
+                    "ENTENDIDO", true, CerrarAvisoVersionDesconocida, fontSize: 16);
+        }
+
+        private void CerrarAvisoVersionDesconocida()
+        {
+            _mostrarAvisoVersionDesconocida = false;
+            GameOptions.AvisoVersionDesconocidaVisto = true;
+        }
+
         // US-1.5: aviso de compatibilidad, una sola vez por dispositivo Android (la
         // deriva/re-localización del entorno escaneado es mucho menor en iOS; ver
         // "Riesgos Identificados" en la documentación). No bloquea seguir en Android.
@@ -500,15 +600,19 @@ namespace Gameplay
         {
             T.Fill(new Rect(0, 0, vw, vh), new Color(0f, 0f, 0f, 0.7f));
 
-            float pw = vw - 56f, ph = 250f;
+            float pw = vw - 56f, ph = 314f;
             var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
             T.Panel(panel, T.BgPanel, T.Tan);
 
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 20f, pw - 44f, 30f),
+            const float iconSize = 60f;
+            MortuoriumIcons.Draw(new Rect(panel.center.x - iconSize / 2f, panel.y + 14f, iconSize, iconSize),
+                                  MortuoriumIcons.Icon.Pentagrama);
+
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 82f, pw - 44f, 30f),
                       "MEJOR EXPERIENCIA EN iOS", T.Estilo(T.FBebas, 20, T.Cream));
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 56f, pw - 44f, 130f),
-                      "en dispositivos iOS el seguimiento de realidad aumentada es más estable " +
-                      "y sufre mucho menos deriva espacial que en Android. podés seguir jugando " +
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 118f, pw - 44f, 130f),
+                      "En dispositivos iOS el seguimiento de realidad aumentada es más estable " +
+                      "y sufre mucho menos deriva espacial que en Android. Podés seguir jugando " +
                       "en este dispositivo sin problema, pero si tenés un iPhone a mano vas a " +
                       "tener la mejor experiencia posible.",
                       T.Estilo(T.FElite, 13, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
@@ -544,12 +648,30 @@ namespace Gameplay
             if (!Mathf.Approximately(nuevoVol, GameOptions.Volumen)) GameOptions.Volumen = nuevoVol;
             y += 54f;
 
+            // Canales: el maestro de arriba los tapa a los dos. Se separan porque en un
+            // juego de terror los efectos son INFORMACIÓN (de dónde viene el Sorken, la
+            // alerta del libro) y el jugador tiene que poder bajar la música sin perderlos.
+            // La voz no entra acá: tiene su propio volumen en el menú de pausa.
+            y = FilaVolumen(vw, y, "MÚSICA", GameOptions.VolumenMusica,
+                            v => GameOptions.VolumenMusica = v);
+            y = FilaVolumen(vw, y, "EFECTOS", GameOptions.VolumenEfectos,
+                            v => GameOptions.VolumenEfectos = v);
+
             // Anchor points extra: opción por dispositivo (ver AnchorPointManager).
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
                          "PUNTOS DE ANCLAJE",
                          "colocá anclas en tu cuarto antes de empezar (menos deriva)",
                          GameOptions.PuntosAncla,
                          () => GameOptions.PuntosAncla = !GameOptions.PuntosAncla);
+            y += 68f;
+
+            // US-11.1: el filtro VHS en la PARTIDA es parte de la atmósfera y no se
+            // apaga; sobre los menús es opcional (gusto y legibilidad).
+            T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
+                         "FILTRO VHS EN MENÚS",
+                         "el grano y las líneas de cinta también sobre esta pantalla",
+                         GameOptions.VhsEnMenus,
+                         () => GameOptions.VhsEnMenus = !GameOptions.VhsEnMenus);
             y += 68f;
 
             // Estado del mando + botón para ir al visualizador.
@@ -586,6 +708,23 @@ namespace Gameplay
                     () => NightProgress.DesbloquearTodas(total), enabled: total > 0, fontSize: 13);
             T.Boton(_nav, new Rect(Pad + bw + 10f, y, bw, 46f), "BORRAR PROGRESO", primario: false,
                     NightProgress.BorrarProgreso, fontSize: 13, textColor: T.Red);
+        }
+
+        // Una fila de volumen (etiqueta + porcentaje + slider), con el mismo look que el
+        // maestro de arriba. Devuelve la Y siguiente. Ocupa 80px, igual que aquél.
+        private float FilaVolumen(float vw, float y, string etiqueta, float valor,
+                                  System.Action<float> set)
+        {
+            GUI.Label(new Rect(Pad, y, vw - Pad * 2f - 70f, 22f), etiqueta,
+                      T.Estilo(T.FMono, 13, T.CreamDim));
+            GUI.Label(new Rect(vw - Pad - 70f, y, 70f, 22f),
+                      $"{Mathf.RoundToInt(valor * 100f)}%",
+                      T.Estilo(T.FMono, 13, T.Tan, TextAnchor.MiddleRight));
+            y += 26f;
+
+            float nuevo = T.Slider(new Rect(Pad, y, vw - Pad * 2f, 30f), valor, 0f, 1f);
+            if (!Mathf.Approximately(nuevo, valor)) set(nuevo);
+            return y + 54f;
         }
 
         private void DrawControl(float vw, float vh)

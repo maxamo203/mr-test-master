@@ -28,6 +28,13 @@ namespace Gameplay
         private enum Phase { Idle, Entering, Chasing, Grabbed, Retreating }
 
         private NightConfig _night;
+
+        // La noche EFECTIVA de la corrida. No es lo mismo que GameSession.SelectedNight:
+        // si se entra a SampleScene sin pasar por el menu (tipico en el editor) esa es null
+        // y aca queda un NightConfig por defecto. Los sub-directores (ArbmosDirector) leen
+        // de aca para no quedarse sin noche en ese caso.
+        public NightConfig NocheActual => _night;
+
         private bool  _running;
         private Phase _phase = Phase.Idle;
 
@@ -96,7 +103,7 @@ namespace Gameplay
             PublicarReloj();
             SorkerNav.Ensure();
             ArbmosDirector.Ensure().StartRun();      // alucinacion de cordura (individual por jugador)
-            RitualBookDirector.Ensure().StartRun();  // libro sobre la imagen: se cierra si no lo alumbran
+            RitualBookDirector.Ensure().StartRun();  // libro sobre la imagen: eventos de oscuridad
             _running = true;
         }
 
@@ -192,6 +199,14 @@ namespace Gameplay
             _sorkenNetId = NetworkManager.Instance.ServerSpawn(EntityTypeIds.Sorken, EmergePosition(), 0);
             _sorken = GetSorken(_sorkenNetId);
             if (_sorken == null) { _attemptTimer = 2f; return; }
+
+            // US-4.1: que tipo de punto es (puerta/ventana/...), para que suene distinto.
+            // Se resuelve contra el AudioCatalog y viaja como un byte junto al estado, asi
+            // los clientes tambien lo saben (ver SorkenEntity.MarkerTypeIndex).
+            var catAudio = AudioManager.Catalogo;
+            _sorken.SetMarkerTypeIndex(catAudio != null
+                ? catAudio.IndiceEntrada(_marker.KindId)
+                : AudioCatalog.IndiceDesconocido);
 
             _sorken.SetPositionDirectly(EmergePosition());
             _sorken.FaceDirection(_marker.transform.forward); // mira hacia adentro (normal)
@@ -441,12 +456,14 @@ namespace Gameplay
 
             int markers = SceneRegistry.Instance != null ? SceneRegistry.Instance.Markers.Count : 0;
             string libro = RitualBookDirector.Instance != null ? RitualBookDirector.Instance.DebugLine() : null;
+            string veleth = VelethDirector.Instance != null ? VelethDirector.Instance.DebugLine() : null;
             return
                 $"[GameDirector]  phase={_phase}\n" +
                 $"attemptTimer={_attemptTimer:F1}  repel={_repel:F1}  grace={_grace:F1}\n" +
                 $"sorken={(_sorken != null ? _sorken.State.ToString() : "null")}  netId={_sorkenNetId}\n" +
                 $"markers={markers}  alivePlayers={CountAlivePlayers()}  dead={ServerDeaths.Count}" +
-                (libro != null ? $"\n{libro}" : "");
+                (libro != null ? $"\n{libro}" : "") +
+                (veleth != null ? $"\n{veleth}" : "");
         }
     }
 }

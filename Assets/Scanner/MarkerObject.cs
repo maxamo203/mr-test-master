@@ -16,6 +16,13 @@ namespace Scanner
         public string Id { get; private set; }
         // Tipo del marcador (asset MarkerType, definido desde el editor).
         public MarkerType Type { get; private set; }
+
+        // Id del tipo tal como viene del escaneo, SIEMPRE presente aunque Type sea null.
+        // En DisplayOnly (gameplay multijugador) no hay MarkerBuilder que publique el
+        // MarkerCatalog, asi que Type queda null y sin esto se perderia de que tipo de
+        // punto se trata — que es justo lo que necesita el audio para dar un ruido
+        // distinto por cada punto de entrada (US-4.1).
+        public string KindId { get; private set; }
         public WallObject Wall => _wall;
         public float U => _u;
         public float V => _v;
@@ -44,7 +51,7 @@ namespace Scanner
         // Crea el marcador asociado a una pared, en (u,v) de la cara indicada por
         // faceSign (+1 = lado +Normal, -1 = lado -Normal).
         public static MarkerObject Create(MarkerType type, WallObject wall, float u, float v,
-                                          int faceSign, string id = null)
+                                          int faceSign, string id = null, string kindId = null)
         {
             if (wall == null || WorldOrigin.Instance == null) return null;
             // Fuera de DisplayOnly (scanner) el tipo es obligatorio (define color/visual).
@@ -64,6 +71,8 @@ namespace Scanner
             var m = root.AddComponent<MarkerObject>();
             m.Id    = id ?? System.Guid.NewGuid().ToString("N").Substring(0, 8);
             m.Type  = type;
+            // El tipo resuelto manda; si no se pudo resolver (DisplayOnly) queda el id crudo.
+            m.KindId = type != null ? type.Id : kindId;
             m._wall = wall;
             m._u = u;
             m._v = v;
@@ -101,13 +110,15 @@ namespace Scanner
                 Debug.LogWarning($"[MarkerObject] Tipo '{d.kind}' no esta en el catalogo (marcador '{d.id}'). Se descarta.");
                 return null;
             }
-            return Create(type, wall, d.u, d.v, d.side, d.id);
+            return Create(type, wall, d.u, d.v, d.side, d.id, d.kind);
         }
 
         public MarkerData ToData() => new MarkerData
         {
             id     = Id,
-            kind   = Type != null ? Type.Id : null,
+            // Si el tipo no se pudo resolver (DisplayOnly), se conserva el id crudo en vez
+            // de escribir null y perder el dato al re-guardar.
+            kind   = Type != null ? Type.Id : KindId,
             wallId = _wall != null ? _wall.Id : null,
             u      = _u,
             v      = _v,

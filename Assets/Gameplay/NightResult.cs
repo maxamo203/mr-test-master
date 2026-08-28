@@ -40,10 +40,22 @@ namespace Gameplay
 
         public static void MarcarSobrevivida() => Sobrevivio = true;
 
-        public static void MarcarDesbloqueo(int numeroBase1) => NocheDesbloqueada = numeroBase1;
+        public static void MarcarDesbloqueo(int numeroBase1)
+        {
+            NocheDesbloqueada = numeroBase1;
+            if (numeroBase1 > 0) AudioManager.Sonar(c => c.nocheDesbloqueada);
+        }
+
+        // Cuántos segundos antes del amanecer empieza a oírse el tic de la cuenta atrás.
+        private const int SegundosDeCuentaAtras = 10;
 
         public static void SetReloj(int restantes, int totales)
         {
+            // Un tic por segundo en el tramo final. El reloj se publica a 1 Hz, pero se
+            // compara contra el valor anterior por si llega repetido o fuera de orden.
+            if (restantes != SegundosRestantes && restantes > 0 && restantes <= SegundosDeCuentaAtras)
+                AudioManager.Sonar(c => c.relojFinal);
+
             SegundosRestantes = restantes;
             SegundosTotales   = totales;
         }

@@ -6,12 +6,16 @@ using UnityEngine;
 public static class GameOptions
 {
     private const string KeyVolumen     = "opt_volumen";
+    private const string KeyVolMusica   = "opt_volumen_musica";
+    private const string KeyVolEfectos  = "opt_volumen_efectos";
     private const string KeyPuntosAncla = "opt_puntos_ancla";
     private const string KeyVozMic      = "opt_voz_mic";
     private const string KeyVozVolumen  = "opt_voz_volumen";
     private const string KeyVozSens     = "opt_voz_sensibilidad";
     private const string KeyCalidadAR   = "opt_calidad_ar";
     private const string KeyAvisoIos    = "opt_aviso_ios_visto";
+    private const string KeyVhsMenus    = "opt_vhs_menus";
+    private const string KeyAvisoVerDesc = "opt_aviso_version_desconocida_visto";
 
     // Volumen maestro 0..1 (AudioListener.volume). Persiste entre sesiones.
     public static float Volumen
@@ -23,6 +27,32 @@ public static class GameOptions
             PlayerPrefs.SetFloat(KeyVolumen, v);
             AudioListener.volume = v;
         }
+    }
+
+    // ── Canales de audio (aparte del maestro de arriba) ───────────────────────
+    // Volumen maestro = AudioListener.volume (Volumen, arriba). Estos dos son
+    // multiplicadores que aplica AudioManager al reproducir cada sonido, así el
+    // jugador puede bajar la música sin perder las pistas sonoras del juego (que en
+    // un juego de terror son información: de dónde viene el Sorken, la alerta del
+    // libro). El chat de voz queda FUERA de los dos: tiene su propio VozVolumen,
+    // para poder bajar el juego y seguir escuchando a los compañeros.
+
+    // No hace falta avisarle a nadie al cambiarlos: AudioManager los lee en cada Update
+    // (música y capa de tensión) y en cada disparo (efectos), así que mover el slider se
+    // oye en el acto.
+
+    // Volumen de la música y la capa ambiental de tensión (0..1).
+    public static float VolumenMusica
+    {
+        get => PlayerPrefs.GetFloat(KeyVolMusica, 1f);
+        set => PlayerPrefs.SetFloat(KeyVolMusica, Mathf.Clamp01(value));
+    }
+
+    // Volumen de todo lo que no es música ni voz: entidades, linterna, libro, UI (0..1).
+    public static float VolumenEfectos
+    {
+        get => PlayerPrefs.GetFloat(KeyVolEfectos, 1f);
+        set => PlayerPrefs.SetFloat(KeyVolEfectos, Mathf.Clamp01(value));
     }
 
     // ¿Este dispositivo coloca anchor points extra antes de empezar la partida?
@@ -95,6 +125,34 @@ public static class GameOptions
         set
         {
             PlayerPrefs.SetInt(KeyAvisoIos, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    // US-11.1: ¿el filtro VHS / cámara antigua también se dibuja sobre los MENÚS?
+    // En partida el filtro es parte de la atmósfera y no se apaga acá; sobre los menús
+    // es cuestión de gusto (y de legibilidad), así que el jugador lo decide.
+    // Ver VHSOverlayUI. Default: encendido.
+    public static bool VhsEnMenus
+    {
+        get => PlayerPrefs.GetInt(KeyVhsMenus, 1) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeyVhsMenus, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    // US-1.1: ¿ya se le mostró al jugador el aviso de que no se pudo determinar la
+    // versión de su sistema operativo (DeviceCompatibility.CompatResult.Unknown)?
+    // A diferencia del bloqueo por versión no soportada (que no se persiste, se
+    // re-evalúa siempre), este es un aviso no bloqueante y se muestra una sola vez.
+    public static bool AvisoVersionDesconocidaVisto
+    {
+        get => PlayerPrefs.GetInt(KeyAvisoVerDesc, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeyAvisoVerDesc, value ? 1 : 0);
             PlayerPrefs.Save();
         }
     }

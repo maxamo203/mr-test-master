@@ -31,7 +31,8 @@ MonoBehaviour:
   sanityDrainPerSecond: 8
   arbmosActive: 1
   arbmosStillInvokeSeconds: 4
-  arbmosStillRadius: 0.15
+  arbmosStillRadius: 0.5
+  arbmosStillOutsideGrace: 0.4
   arbmosPresentSeconds: 6
   arbmosPresentFollowSpeed: 1.4
   arbmosCooldownMin: 18
