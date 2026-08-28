@@ -52,9 +52,15 @@ public class Flashlight : MonoBehaviour
     public bool  IsEmpty  => currentCharge <= 0f;
 
     // Suma carga (al recoger una pila). Vuelve a permitir encender si estaba agotada.
+    //
+    // Es tambien el UNICO punto por el que pasan host y cliente al recoger una pila (el
+    // host resuelve en BatterySpawnManager y el cliente en ContextActionController), asi
+    // que el sonido de "pila recogida" va aca y no se duplica.
     public void AddCharge(float amount)
     {
+        float antes = currentCharge;
         currentCharge = Mathf.Clamp(currentCharge + amount, 0f, maxCharge);
+        if (currentCharge > antes) AudioManager.Sonar(c => c.pilaRecogida);
     }
 
     // Prende/apaga la linterna. No enciende si no hay carga. Punto único de toggle
@@ -62,8 +68,13 @@ public class Flashlight : MonoBehaviour
     public void Toggle()
     {
         if (!CanOperate) return;      // fuera de partida no se prende
-        if (!isOn && IsEmpty) return;
+        // Click en falso: intentas prenderla sin bateria. Merece su propio sonido, es
+        // informacion (te quedaste sin pilas) en el peor momento posible.
+        if (!isOn && IsEmpty) { AudioManager.Sonar(c => c.linternaVacia); return; }
+
         isOn = !isOn;
+        if (isOn) AudioManager.Sonar(c => c.linternaOn);
+        else      AudioManager.Sonar(c => c.linternaOff);
     }
 
     static readonly int ID_POS       = Shader.PropertyToID("_FlashlightPos");
@@ -77,6 +88,13 @@ public class Flashlight : MonoBehaviour
 
     private Light _light;
     private float _lastToggleTime = -999f;
+
+    // Umbrales del aviso sonoro de batería baja (fracción de carga). El de rearme es más
+    // alto que el de disparo a propósito: sin esa histéresis el aviso se repetiría en loop
+    // mientras la carga oscila alrededor del umbral.
+    private const float AvisoBateriaBaja  = 0.20f;
+    private const float RearmeBateriaBaja = 0.30f;
+    private bool _avisoBateriaBaja;
 
     void Awake()
     {
@@ -112,9 +130,23 @@ public class Flashlight : MonoBehaviour
         {
             if (currentCharge > 0f)
                 currentCharge = Mathf.Max(0f, currentCharge - drainPerSecond * Time.deltaTime);
+
+            // Aviso de batería baja, una sola vez por bajada (se rearma al recargar por
+            // encima del umbral alto, para no repetirlo titilando en el borde).
+            if (!_avisoBateriaBaja && !IsEmpty && Charge01 <= AvisoBateriaBaja)
+            {
+                AudioManager.Sonar(c => c.bateriaBaja);
+                _avisoBateriaBaja = true;
+            }
+
+            // Apagón por agotamiento: NO pasa por Toggle(), así que el sonido va acá.
             if (currentCharge <= 0f)
+            {
                 isOn = false;
+                AudioManager.Sonar(c => c.linternaSeAgota);
+            }
         }
+        if (_avisoBateriaBaja && Charge01 > RearmeBateriaBaja) _avisoBateriaBaja = false;
 
         if (innerAngleDeg > outerAngleDeg - 1f)
             innerAngleDeg = Mathf.Max(0f, outerAngleDeg - 1f);

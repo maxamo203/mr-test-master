@@ -2,41 +2,32 @@ using UnityEngine;
 
 namespace Gameplay
 {
-    // El LIBRO RITUAL, la mecánica que corre toda la noche de fondo: el libro descansa
-    // sobre la imagen de referencia, arranca ABIERTO y se va cerrando solo. Alumbrarlo con
-    // la linterna lo vuelve a abrir, y varios jugadores alumbrando ACUMULAN (se abre más
-    // rápido). Si llega a cerrarse del todo: game over para todos.
-    //
-    // SERVER-AUTHORITATIVE: sólo el host simula la apertura — es el único que conoce las
-    // poses y las linternas de todos. El valor viaja a los clientes por RitualBook a 5 Hz;
-    // la apertura cambia del orden de 1/bookCloseSeconds por segundo (minutos de recorrido),
-    // así que a ese ritmo el salto entre paquetes es imperceptible y no hace falta interpolar.
-    //
-    // La apertura vive acá y no en el visual porque el visual cuelga del anchor de la
-    // imagen y se destruye/recrea en cada recalibración (ver ARImageAnchor.RestartTracking).
-    //
-    // Se auto-crea (Ensure) desde GameDirector (host) y desde RitualBookView.TrySpawn
-    // (cliente) — no hay que ponerlo en la escena.
+    // Simulacion SERVER-AUTHORITATIVE del libro ritual. Espera un intervalo aleatorio,
+    // oscurece el libro desde el centro durante una ventana corta y permite salvarlo
+    // manteniendo una linterna apuntada durante el tiempo configurado.
     public class RitualBookDirector : MonoBehaviour
     {
         public static RitualBookDirector Instance { get; private set; }
 
-        // Cada cuánto (s) el server manda la apertura a los clientes.
         private const float SendInterval = 0.2f;
 
-        // 0 = cerrado (game over), 1 = abierto del todo.
-        public float Apertura01 { get; private set; } = 1f;
-
-        // Jugadores que lo alumbraron en el último frame (sólo host; diagnóstico).
+        private bool UsaFlowLocal => NetworkManager.Instance != null &&
+                                      NetworkManager.Instance.IsServer && _flow != null;
+        public float Oscuridad01 => UsaFlowLocal ? _flow.Darkness01 : _oscuridadRemota;
+        public float Defensa01 => UsaFlowLocal ? _flow.Defense01 : 0f;
+        public RitualBookPhase Fase => UsaFlowLocal ? _flow.Phase : RitualBookPhase.Waiting;
         public int Alumbrando { get; private set; }
+        public bool TodosAlumbrando { get; private set; }
+        public event System.Action OnVelethInvoked;
+
+        // Compatibilidad de lectura para codigo/editor antiguo: 1 era abierto y 0 cerrado.
+        public float Apertura01 => 1f - Oscuridad01;
 
         private NightConfig _night;
-        private bool  _running;
+        private RitualBookFlow _flow;
+        private bool _running;
         private float _sendTimer;
-
-        // NetworkManager al que estamos suscritos. No alcanza con un bool: sobrevivimos a
-        // los cambios de escena (DontDestroyOnLoad) y SceneFlow destruye el NetworkManager,
-        // así que la próxima sesión trae uno nuevo al que hay que re-suscribirse.
+        private float _oscuridadRemota;
         private NetworkManager _suscritoA;
 
         public static RitualBookDirector Ensure()
@@ -58,116 +49,159 @@ namespace Gameplay
 
         private void OnDestroy()
         {
-            if (_suscritoA != null) _suscritoA.OnRitualBook -= SetApertura;
+            if (_suscritoA != null) _suscritoA.OnRitualBook -= SetOscuridadRemota;
             _suscritoA = null;
             if (Instance == this) Instance = null;
         }
 
-        // Lo llama el GameDirector (server) al arrancar la partida.
         public void StartRun()
         {
             var net = NetworkManager.Instance;
             if (net == null || !net.IsServer) return;
 
-            _night     = GameSession.Instance != null ? GameSession.Instance.SelectedNight : null;
+            _night = GameSession.Instance != null ? GameSession.Instance.SelectedNight : null;
             _sendTimer = 0f;
             Alumbrando = 0;
-            SetApertura(1f);                  // el libro arranca ABIERTO
-            net.ServerSendRitualBook(1f);
+            TodosAlumbrando = false;
+            _oscuridadRemota = 0f;
+
+            if (_night != null && _night.bookActive)
+            {
+                _flow = new RitualBookFlow(_night.RandomBookEventDelay);
+                _flow.Restart();
+            }
+            else
+            {
+                _flow = null;
+            }
+
+            // Silencioso: arrancar la noche pone la oscuridad en 0, y si la noche anterior
+            // terminó con el libro perdido (oscuridad 1) esa bajada sonaría como "lo salvaste".
+            AplicarVista(0f, silencioso: true);
+            net.ServerSendRitualBook(0f);
             _running = true;
         }
 
-        // Corta la corrida sin cerrar la sesión (ver Gameplay.NightTransition).
         public void StopRun()
         {
-            _running   = false;
+            _running = false;
             Alumbrando = 0;
+            TodosAlumbrando = false;
         }
 
-        // Parte local del reinicio de la noche: el libro vuelve a verse abierto en ESTE
-        // dispositivo (el host además reenvía el valor al arrancar la próxima noche).
         public void Reiniciar()
         {
             Alumbrando = 0;
-            SetApertura(1f);
+            TodosAlumbrando = false;
+            _oscuridadRemota = 0f;
+            _flow?.Restart();
+            AplicarVista(0f, silencioso: true);   // reinicio de noche, no es que lo salvaron
         }
 
         private void Update()
         {
-            // El NetworkManager puede no existir todavía al crearnos, y cambia de instancia
-            // entre sesiones (ver _suscritoA).
             var net = NetworkManager.Instance;
             if (net != _suscritoA)
             {
-                if (_suscritoA != null) _suscritoA.OnRitualBook -= SetApertura;
-                if (net        != null) net.OnRitualBook        += SetApertura;
-                _suscritoA = net;
+                if (_suscritoA != null) _suscritoA.OnRitualBook -= SetOscuridadRemota;
+                if (net != null) _suscritoA = net;
+                else             _suscritoA = null;
+                if (_suscritoA != null) _suscritoA.OnRitualBook += SetOscuridadRemota;
             }
 
-            // Cliente: sólo recibe la apertura, no simula nada.
-            if (!_running) return;
-            if (net == null || !net.IsServer) return;
-            if (_night == null || !_night.bookActive) return;
+            if (!_running || net == null || !net.IsServer || _flow == null) return;
 
-            // Sin visual no sabemos dónde está el libro (anchor perdido / todavía sin
-            // calibrar). Congelamos la apertura en vez de cerrarlo a ciegas: el jugador
-            // tampoco lo podría alumbrar, así que sería una muerte que no puede evitar.
+            // Si se perdio el anchor, congelamos la mecanica: el jugador no puede ver ni
+            // defender el libro y no debe perder por una recalibracion.
             var view = RitualBookView.Active;
             if (view == null) return;
 
-            float dt = Time.deltaTime;
-
-            // El cono sale de la linterna REAL, no del número de la NightConfig: ése es el
-            // del repel del Sorken y quedó mucho más abierto que el haz (30° / 8 m contra
-            // 7.2° / 4.2 m del prefab), así que el libro se abría con la linterna
-            // claramente afuera. Los valores de la noche quedan de respaldo.
-            float ang   = _night.flashlightConeAngleDeg;
+            // Se mide tambien durante Waiting. El flow no acumula defensa antes del
+            // ataque, pero asi el primer fragmento de frame del evento cuenta si el
+            // jugador ya estaba apuntando al libro.
+            float ang = _night.flashlightConeAngleDeg;
             float range = _night.flashlightRange;
             if (PlayerLights.TryConoReal(out var angReal, out var rangeReal))
             {
-                ang   = angReal;
+                ang = angReal;
                 range = rangeReal;
             }
-
             Alumbrando = PlayerLights.CountIlluminating(
                 view.PuntoDeLuz, ang, range, view.RadioAproximado);
+            int jugadoresVivos = ContarJugadoresVivos(net);
+            TodosAlumbrando = jugadoresVivos > 0 && Alumbrando >= jugadoresVivos;
 
-            // Se cierra solo a ritmo constante; cada linterna encima suma su propio ritmo
-            // de apertura (de ahí que varios jugadores lo abran más rápido).
-            float delta = (_night.BookOpenRatePerPlayer * Alumbrando - _night.BookCloseRate) * dt;
-            SetApertura(Apertura01 + delta);
+            var result = _flow.Tick(Time.deltaTime, Alumbrando, jugadoresVivos,
+                                    _night.bookConsumeSeconds, _night.bookDefenseSeconds);
+            AplicarVista(_flow.Darkness01);
 
-            _sendTimer -= dt;
-            if (_sendTimer <= 0f)
+            if ((result & RitualBookTickResult.ConsumptionStarted) != 0)
+                Debug.Log("[LibroRitual] La oscuridad empezo a consumir el libro.");
+
+            if ((result & RitualBookTickResult.Saved) != 0)
+                Debug.Log("[LibroRitual] El libro fue salvado con la linterna.");
+
+            _sendTimer -= Time.deltaTime;
+            if (_sendTimer <= 0f || result != RitualBookTickResult.None)
             {
                 _sendTimer = SendInterval;
-                net.ServerSendRitualBook(Apertura01);
+                net.ServerSendRitualBook(_flow.Darkness01);
             }
 
-            if (Apertura01 <= 0f) CerrarYMatar();
+            if ((result & RitualBookTickResult.Consumed) != 0)
+                InvocarVeleth();
         }
 
-        // El libro se cerró: game over compartido. Por ahora no hay otra consecuencia —
-        // mueren todos y cada uno ve su pantalla de muerte.
-        private void CerrarYMatar()
+        private void InvocarVeleth()
         {
             _running = false;
-            NetworkManager.Instance?.ServerSendRitualBook(0f);   // que todos lo vean cerrado
-            int muertos = ServerDeaths.KillAll();
-            Debug.Log($"[LibroRitual] El libro se cerró: game over ({muertos} jugadores).");
+            NetworkManager.Instance?.ServerSendRitualBook(1f);
+            var view = RitualBookView.Active;
+            Vector3 origen = view != null ? view.PuntoDeLuz : Vector3.zero;
+            if (view != null) view.SetDisponible(false);
+
+            bool invocada = VelethDirector.Ensure().StartHunt(origen);
+            OnVelethInvoked?.Invoke();
+            Debug.Log(invocada
+                ? "[LibroRitual] El libro fue consumido: Veleth fue invocada."
+                : "[LibroRitual] El libro fue consumido, pero no se pudo crear a Veleth.");
         }
 
-        private void SetApertura(float valor)
+        private void SetOscuridadRemota(float oscuridad01)
         {
-            Apertura01 = Mathf.Clamp01(valor);
-            if (RitualBookView.Active != null) RitualBookView.Active.Aplicar(Apertura01);
+            // El host usa su flow local; este valor es la fuente de verdad en clientes.
+            if (NetworkManager.Instance != null && NetworkManager.Instance.IsServer) return;
+            _oscuridadRemota = Mathf.Clamp01(oscuridad01);
+            AplicarVista(_oscuridadRemota);
         }
 
-        // Línea para el HUD de diagnóstico (development builds). Null si no corre acá.
+        private static void AplicarVista(float oscuridad01, bool silencioso = false)
+        {
+            if (RitualBookView.Active != null)
+                RitualBookView.Active.AplicarOscuridad(oscuridad01, silencioso);
+        }
+
+        private static int ContarJugadoresVivos(NetworkManager net)
+        {
+            int vivos = ServerDeaths.IsAlive(0) ? 1 : 0;
+            foreach (uint clientId in net.ConnectedClients)
+                if (ServerDeaths.IsAlive(clientId)) vivos++;
+            return vivos;
+        }
+
         public string DebugLine()
         {
-            if (!_running) return null;
-            return $"libro={Apertura01:P0}  alumbrando={Alumbrando}";
+            if (!_running || _flow == null) return null;
+            int jugadoresVivos = NetworkManager.Instance != null
+                ? ContarJugadoresVivos(NetworkManager.Instance)
+                : 1;
+            float velocidadAtaque = TodosAlumbrando ? 0f
+                : Alumbrando == 0 ? 1f
+                : 1f - Alumbrando / (float)Mathf.Max(1, jugadoresVivos);
+            return $"libro={_flow.Phase} oscuridad={_flow.Darkness01:P0} " +
+                   $"defensa={_flow.Defense01:P0} alumbrando={Alumbrando} " +
+                   $"todos={TodosAlumbrando} velocidadAtaque=" +
+                   $"{velocidadAtaque:P0}";
         }
     }
 }

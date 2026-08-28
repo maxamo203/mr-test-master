@@ -167,7 +167,14 @@ public static class MortuoriumTheme
                                      new Rect(0, 0, 1f, Screen.height / 3f));
         GUI.color = prev;
         GUI.matrix = m;
+        ScanlinesYaPintadas = true;
     }
+
+    // ¿Alguna pantalla ya pintó las scanlines del tema en este frame? Lo consulta el
+    // filtro VHS de los menús (US-11.1, VHSOverlayUI) para no dibujar un segundo juego
+    // de líneas encima. Lo limpia ese mismo overlay, que corre último en el frame.
+    public static bool ScanlinesYaPintadas { get; private set; }
+    public static void LimpiarFlagScanlines() => ScanlinesYaPintadas = false;
 
     // Rellena SÓLO las franjas fuera del área segura (arriba/abajo/laterales) con un
     // color sólido, dejando el área segura intacta — para pantallas sobre la cámara
@@ -292,12 +299,16 @@ public static class MortuoriumTheme
         // (botón invisible) del texto (GUI.Label encima).
         var invisible = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
         bool clicked;
+        // El sonido va DENTRO de la acción, no al lado del `clicked`: por acá pasan tanto
+        // el tap como la activación con el mando (ImguiGamepadMenu invoca esta misma
+        // Action desde su Tick), así suena una sola vez en los dos caminos.
         if (nav != null)
-            clicked = nav.Button(r, "", invisible, () => { if (enabled) onClick?.Invoke(); });
+            clicked = nav.Button(r, "", invisible,
+                                 () => { if (enabled) { AudioManager.Sonar(c => c.uiConfirmar); onClick?.Invoke(); } });
         else
         {
             clicked = GUI.Button(r, "", invisible);
-            if (clicked && enabled) onClick?.Invoke();
+            if (clicked && enabled) { AudioManager.Sonar(c => c.uiConfirmar); onClick?.Invoke(); }
         }
         GUI.enabled = prevEnabled;
         GUI.Label(r, label, st);
@@ -312,8 +323,9 @@ public static class MortuoriumTheme
         if (foco) { Fill(r, new Color(Tan.r, Tan.g, Tan.b, 0.14f)); Borde(r, Tan); }
         var st = Estilo(FBebas, 26, foco ? Cream : Muted, TextAnchor.MiddleCenter);
         var invisible = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
-        if (nav != null) nav.Button(r, "", invisible, onClick);
-        else if (GUI.Button(r, "", invisible)) onClick?.Invoke();
+        Action volver = () => { AudioManager.Sonar(c => c.uiVolver); onClick?.Invoke(); };
+        if (nav != null) nav.Button(r, "", invisible, volver);
+        else if (GUI.Button(r, "", invisible)) volver();
         GUI.Label(r, "<", st);
     }
 
@@ -333,8 +345,10 @@ public static class MortuoriumTheme
         bool prevEnabled = GUI.enabled;
         GUI.enabled = enabled;
         var st = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
-        if (nav != null) nav.Button(r, "", st, () => { if (enabled) onClick?.Invoke(); });
-        else if (GUI.Button(r, "", st) && enabled) onClick?.Invoke();
+        if (nav != null)
+            nav.Button(r, "", st,
+                       () => { if (enabled) { AudioManager.Sonar(c => c.uiConfirmar); onClick?.Invoke(); } });
+        else if (GUI.Button(r, "", st) && enabled) { AudioManager.Sonar(c => c.uiConfirmar); onClick?.Invoke(); }
         GUI.enabled = prevEnabled;
     }
 
