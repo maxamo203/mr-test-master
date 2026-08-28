@@ -327,8 +327,8 @@ MonoBehaviour:
   pilaRecogida:
     clips:
     - {fileID: 8300000, guid: 82fbcf5ca832f398a742033a37330f16, type: 3}
-    volumen: 1
-    variacionTono: 0
+    volumen: 0.458
+    variacionTono: 0.2
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
