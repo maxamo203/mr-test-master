@@ -15,6 +15,11 @@ public class ARLobbyUI : MonoBehaviour
     [Tooltip("Segundos que el título de la noche permanece en pantalla al arrancar.")]
     [SerializeField] private float _briefingDuration = 3f;
 
+    [Header("Sincronización")]
+    [Tooltip("Opacidad (0-1) de la imagen de referencia guardada como guía fantasma " +
+             "mientras se busca la zona en el entorno, para reencuadrar la cámara.")]
+    [SerializeField, Range(0.1f, 0.8f)] private float _ghostAlpha = 0.35f;
+
     private ARLobbyManager _lobby;
     private NetworkManager _net;
     private readonly Gamepad.ImguiGamepadMenu _nav = new();
@@ -124,6 +129,7 @@ public class ARLobbyUI : MonoBehaviour
         switch (_lobby.State)
         {
             case ARLobbyManager.LobbyState.Scanning:
+                DrawGhostImage(vw, vh);
                 GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f),
                           $"buscando la imagen… {Spinner()}",
                           T.Estilo(T.FMono, 13, T.Tan));
@@ -162,6 +168,34 @@ public class ARLobbyUI : MonoBehaviour
         }
 
         _nav.End();
+    }
+
+    // Imagen de referencia guardada con el escaneo, semi-transparente y centrada
+    // en el área libre encima del panel: guía para reencuadrar la cámara sobre el
+    // punto físico exacto mientras ARImageAnchor intenta reengancharla.
+    private void DrawGhostImage(float vw, float vh)
+    {
+        if (!CapturedReference.HasImage) return;
+        var tex = CapturedReference.Texture;
+
+        float availableH = vh - 320f; // encima del panel de SINCRONIZACIÓN
+        if (availableH < 40f) return;
+
+        float w = vw * 0.55f;
+        float h = w * tex.height / (float)tex.width;
+        if (h > availableH * 0.7f)
+        {
+            h = availableH * 0.7f;
+            w = h * tex.width / (float)tex.height;
+        }
+
+        var r = new Rect((vw - w) * 0.5f, (availableH - h) * 0.5f, w, h);
+
+        var prevColor = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, _ghostAlpha);
+        GUI.DrawTexture(r, tex, ScaleMode.StretchToFill);
+        GUI.color = prevColor;
+        T.Borde(r, T.Cream, 2f);
     }
 
     // ── Colocación de anchor points (opción por dispositivo) ──────────────
