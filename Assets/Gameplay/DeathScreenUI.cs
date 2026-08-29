@@ -57,15 +57,15 @@ namespace Gameplay
             GUI.Label(titRect, titulo, T.Estilo(T.FBebas, 64, colorTit, TextAnchor.MiddleCenter));
 
             GUI.Label(new Rect(Pad, vh * 0.28f + 96f, vw - Pad * 2f, 26f),
-                      sobrevivio ? "amaneció. el ritual sigue, pero no esta noche."
-                                 : "el ritual te reclamó… por ahora.",
+                      sobrevivio ? "Amaneció. el ritual sigue, pero no esta noche."
+                                 : "El ritual te reclamó… por ahora.",
                       T.Estilo(T.FElite, 14, T.Muted, TextAnchor.MiddleCenter));
 
             // Aviso de desbloqueo (sólo si esta victoria movió de verdad la progresión;
             // rejugar una noche ya superada no desbloquea nada).
             if (sobrevivio && NightResult.NocheDesbloqueada > 0)
                 GUI.Label(new Rect(Pad, vh * 0.28f + 126f, vw - Pad * 2f, 24f),
-                          $"noche {NightResult.NocheDesbloqueada} desbloqueada",
+                          $"Noche {NightResult.NocheDesbloqueada} desbloqueada",
                           T.Estilo(T.FMono, 12, T.Tan, TextAnchor.MiddleCenter));
 
             // Reintentar / cambiar de noche sólo las decide el host: reinician la noche
@@ -97,7 +97,7 @@ namespace Gameplay
             else
             {
                 GUI.Label(new Rect(Pad, y - 34f, vw - Pad * 2f, 24f),
-                          "esperando a que el host reinicie la noche…",
+                          "Esperando a que el host reinicie la noche…",
                           T.Estilo(T.FMono, 11, T.Dim, TextAnchor.MiddleCenter));
             }
 
@@ -129,7 +129,7 @@ namespace Gameplay
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "ELEGÍ LA NOCHE",
                       T.Estilo(T.FBebas, 28, T.Cream));
             GUI.Label(new Rect(Pad, 130f, vw - Pad * 2f, 22f),
-                      "la sesión no se reinicia: tus anclas siguen puestas",
+                      "La sesión no se reinicia: tus anclas siguen puestas",
                       T.Estilo(T.FMono, 11, T.Dim));
 
             int total = Mathf.Max(6, nights != null ? nights.Length : 0);
@@ -165,12 +165,12 @@ namespace Gameplay
 
                 var noche = s.Nights[i];
                 string nombre = noche != null && !string.IsNullOrEmpty(noche.displayName)
-                    ? noche.displayName : $"noche {i + 1}";
+                    ? noche.displayName : $"Noche {i + 1}";
                 GUI.Label(new Rect(r.x + 6f, r.y + 42f, r.width - 12f, 18f), nombre.ToUpperInvariant(),
                           T.Estilo(T.FMono, 10, T.CreamDim, TextAnchor.MiddleCenter));
 
                 GUI.Label(new Rect(r.x, r.y + 62f, r.width, 18f),
-                          actual ? "recién jugada" : "disponible",
+                          actual ? "Recién jugada" : "Disponible",
                           T.Estilo(T.FMono, 10, actual ? T.Red : T.Dim, TextAnchor.MiddleCenter));
             }
 

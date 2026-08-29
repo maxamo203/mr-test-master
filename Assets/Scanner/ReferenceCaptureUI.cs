@@ -334,7 +334,7 @@ namespace Scanner
 
                 var r = new Rect(0, sh * 0.45f, sw, sh * 0.1f);
                 T.Fill(r, new Color(0f, 0f, 0f, 0.6f));
-                GUI.Label(r, "buscando la zona en el entorno…",
+                GUI.Label(r, "Buscando la zona en el entorno…",
                           T.Estilo(T.FElite, FsBtn, T.Cream, TextAnchor.MiddleCenter));
                 return;
             }
@@ -349,12 +349,12 @@ namespace Scanner
                 // Esquina para redimensionar (tan) + guía de las 4 esquinas.
                 T.Fill(HandleRect(), T.Tan);
 
-                DrawTopLabel("ajustá el recuadro sobre una zona con detalle y tocá CAPTURAR");
+                DrawTopLabel("Ajustá el recuadro sobre una zona con detalle y tocá CAPTURAR");
                 DrawBtn(CaptureBtn(), "CAPTURAR", primario: true);
             }
             else // Confirm
             {
-                DrawTopLabel("ajustá el ancho real de la imagen y confirmá");
+                DrawTopLabel("Ajustá el ancho real de la imagen y confirmá");
 
                 // Panel inferior para leer los controles sobre la cámara/preview.
                 float panelTop = SliderRow().y - sh * 0.05f;

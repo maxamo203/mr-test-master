@@ -160,7 +160,7 @@ namespace Scanner
                 ? "EDITANDO ESCANEO" : "ESCANEO DE ENTORNO";
             GUI.Label(new Rect(84f, 18f, vw - 100f, 36f), titulo, T.Estilo(T.FBebas, 22, T.Cream));
             GUI.Label(new Rect(84f, 56f, vw - 100f, 40f),
-                      "apuntá con el centro de la pantalla al punto real y tocá COLOCAR",
+                      "Apuntá con el centro de la pantalla al punto real y tocá COLOCAR",
                       T.Estilo(T.FMono, 11, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
         }
 
@@ -392,7 +392,7 @@ namespace Scanner
 
             if (n == 0)
             {
-                GUI.Label(new Rect(x, y, bw, 44f), "catálogo vacío",
+                GUI.Label(new Rect(x, y, bw, 44f), "Catálogo vacío",
                           T.Estilo(T.FMono, 12, T.Dim, TextAnchor.MiddleCenter));
                 return;
             }
@@ -427,20 +427,20 @@ namespace Scanner
 
             string hint = modo switch
             {
-                ScannerMode.Wall_V1        => "apuntá al primer vértice de la pared (piso) y tocá COLOCAR",
-                ScannerMode.Wall_Height    => "apuntá arriba (cielorraso) y tocá COLOCAR para fijar la altura",
+                ScannerMode.Wall_V1        => "Apuntá al primer vértice de la pared (piso) y tocá COLOCAR",
+                ScannerMode.Wall_Height    => "Apuntá arriba (cielorraso) y tocá COLOCAR para fijar la altura",
                 ScannerMode.Wall_Vn        => $"altura de la polilínea: {(_wallBuilder != null ? _wallBuilder.CurrentPolylineHeight : 0f):F2} m — siguiente vértice y COLOCAR",
-                ScannerMode.DoorPickWall   => "tocá la pared donde va el agujero de la puerta",
-                ScannerMode.Door_V1        => "apuntá a la esquina inferior de la puerta y tocá COLOCAR",
-                ScannerMode.Door_V2        => "apuntá a la esquina superior opuesta y tocá COLOCAR",
-                ScannerMode.Cube_V1        => "apuntá a la 1ra esquina del cubo y tocá COLOCAR",
-                ScannerMode.Cube_V2        => "apuntá a la esquina opuesta (diagonal) y tocá COLOCAR",
-                ScannerMode.Cube_V3        => "apuntá a un 3er punto para fijar la rotación y tocá COLOCAR",
-                ScannerMode.Floor_Place    => "apuntá al piso real y tocá COLOCAR (después podés arrastrarlo)",
+                ScannerMode.DoorPickWall   => "Tocá la pared donde va el agujero de la puerta",
+                ScannerMode.Door_V1        => "Apuntá a la esquina inferior de la puerta y tocá COLOCAR",
+                ScannerMode.Door_V2        => "Apuntá a la esquina superior opuesta y tocá COLOCAR",
+                ScannerMode.Cube_V1        => "Apuntá a la 1ra esquina del cubo y tocá COLOCAR",
+                ScannerMode.Cube_V2        => "Apuntá a la esquina opuesta (diagonal) y tocá COLOCAR",
+                ScannerMode.Cube_V3        => "Apuntá a un 3er punto para fijar la rotación y tocá COLOCAR",
+                ScannerMode.Floor_Place    => "Apuntá al piso real y tocá COLOCAR (después podés arrastrarlo)",
                 ScannerMode.Marker_Place   => $"apuntá a la PARED donde hay {(_markerBuilder != null && _markerBuilder.PendingType != null ? _markerBuilder.PendingType.DisplayName : "el punto")} y tocá COLOCAR",
-                ScannerMode.EditMoveTarget => "apuntá a la nueva posición y tocá COLOCAR",
+                ScannerMode.EditMoveTarget => "Apuntá a la nueva posición y tocá COLOCAR",
                 ScannerMode.AutoWall_Scanning => "BETA: movete y mirá las paredes; tocá una resaltada para confirmarla",
-                ScannerMode.AutoWall_Confirm  => "¿confirmar esta pared detectada como pared real?",
+                ScannerMode.AutoWall_Confirm  => "¿Confirmar esta pared detectada como pared real?",
                 _ => null,
             };
             if (hint == null) return;
@@ -467,7 +467,7 @@ namespace Scanner
             {
                 // Ancho (grosor) de la pared en vivo: propaga a toda la polilinea.
                 GUI.Label(new Rect(x, y, w * 0.55f, 20f),
-                          $"ancho pared: {_wallBuilder.CurrentPolylineWidth:F2} m",
+                          $"Ancho pared: {_wallBuilder.CurrentPolylineWidth:F2} m",
                           T.Estilo(T.FMono, 11, T.CreamDim));
                 float nuevoW = T.Slider(new Rect(x + w * 0.58f, y - 4f, w * 0.42f, 26f),
                                         _wallBuilder.CurrentPolylineWidth, 0.05f, 0.5f);
@@ -482,7 +482,7 @@ namespace Scanner
                 if (_closePolyline) T.Fill(new Rect(box.x + 4f, box.y + 4f, 10f, 10f), T.Tan);
                 if (GUI.Button(rCerrar, GUIContent.none, GUIStyle.none))
                     _closePolyline = !_closePolyline;
-                GUI.Label(new Rect(x + 26f, y, w - 26f, 26f), "cerrar (unir al inicio)",
+                GUI.Label(new Rect(x + 26f, y, w - 26f, 26f), "Cerrar (unir al inicio)",
                           T.Estilo(T.FMono, 11, T.CreamDim));
                 y += 32f;
 
@@ -539,14 +539,14 @@ namespace Scanner
             float y = panel.y + 10f;
 
             GUI.Label(new Rect(x, y, w, 30f),
-                      "colocá anclas repartidas por el cuarto y tocá COLOCAR; " +
+                      "Colocá anclas repartidas por el cuarto y tocá COLOCAR; " +
                       "sirven para que el escaneo no se corra al alejarte",
                       T.Estilo(T.FElite, 12, T.Tan, TextAnchor.UpperLeft, wrap: true));
             y += 32f;
 
             string estado = mgr.Count < AnchorPointManager.MinAnclas
-                ? $"anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
-                : $"anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
+                ? $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
+                : $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
             GUI.Label(new Rect(x, y, w * 0.6f, 22f), estado,
                       T.Estilo(T.FMono, 12, mgr.PuedeCerrar ? T.Green : T.Tan));
             if (!string.IsNullOrEmpty(_errorAnclas))

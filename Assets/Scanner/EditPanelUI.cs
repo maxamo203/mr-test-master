@@ -51,11 +51,11 @@ namespace Scanner
             switch (sel)
             {
                 case WallVertexHandle: DrawHandle(vw, vh, "VÉRTICE DE PARED",
-                    "arrastrá el gizmo para mover el vértice"); break;
+                    "Arrastrá el gizmo para mover el vértice"); break;
                 case CubeVertexHandle: DrawHandle(vw, vh, "ESQUINA DE CUBO",
-                    "arrastrá el gizmo para reformar el cubo (la esquina opuesta queda fija)"); break;
+                    "Arrastrá el gizmo para reformar el cubo (la esquina opuesta queda fija)"); break;
                 case DoorHandle: DrawHandle(vw, vh, "ESQUINA DE PUERTA",
-                    "arrastrá el gizmo para mover la esquina del hueco de la puerta"); break;
+                    "Arrastrá el gizmo para mover la esquina del hueco de la puerta"); break;
                 case FloorPoint floor:   DrawFloor(vw, vh, floor);   break;
                 case MarkerObject marker: DrawMarker(vw, vh, marker); break;
                 case WallObject wall:    DrawWall(vw, vh, wall);     break;
@@ -79,7 +79,7 @@ namespace Scanner
             float panelH = TitleBlock + G + HintH + G + BtnH + PadIn;
             var p = Frame(vw, vh, panelH, "PISO", out float x, out float iw, out float y);
             GUI.Label(new Rect(x, y, iw, HintH),
-                      "arrastrá el gizmo para ubicar el punto sobre el piso real",
+                      "Arrastrá el gizmo para ubicar el punto sobre el piso real",
                       T.Estilo(T.FMono, 11, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
             float half = (iw - 10f) * 0.5f;
             float by = p.yMax - PadIn - BtnH;
@@ -105,10 +105,10 @@ namespace Scanner
             bool poly = !string.IsNullOrEmpty(wall.PolylineId);
 
             // Altura + Ancho (label izquierda + slider derecha).
-            float nh = SliderRow(x, ref y, iw, poly ? "alto (poli)" : "alto", wall.Height, 0.5f, 5f, "{0:0.00} m");
+            float nh = SliderRow(x, ref y, iw, poly ? "Alto (poli)" : "Alto", wall.Height, 0.5f, 5f, "{0:0.00} m");
             if (Mathf.Abs(nh - wall.Height) > 0.001f) wall.SetHeightForPolyline(nh);
 
-            float nw = SliderRow(x, ref y, iw, poly ? "ancho (poli)" : "ancho", wall.Width, 0.05f, 0.5f, "{0:0.00} m");
+            float nw = SliderRow(x, ref y, iw, poly ? "Ancho (poli)" : "Ancho", wall.Width, 0.05f, 0.5f, "{0:0.00} m");
             if (Mathf.Abs(nw - wall.Width) > 0.001f) wall.SetWidthForPolyline(nw);
 
             float half = (iw - 10f) * 0.5f;
@@ -135,7 +135,7 @@ namespace Scanner
             var p = Frame(vw, vh, panelH, "MARCADOR", out float x, out float iw, out float y);
 
             GUI.Label(new Rect(x, y, iw, 22f),
-                      $"tipo: {(marker.Type != null ? marker.Type.DisplayName : "?")}",
+                      $"Tipo: {(marker.Type != null ? marker.Type.DisplayName : "?")}",
                       T.Estilo(T.FMono, 12, T.Blue, TextAnchor.MiddleLeft));
             y += 22f + G;
 

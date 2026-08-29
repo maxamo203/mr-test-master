@@ -250,7 +250,7 @@ namespace Gameplay
             y += bh + 14f;
             T.Boton(_nav, new Rect(x, y, bw, bh), "OPCIONES", false, () => _pantalla = Pantalla.Opciones);
 
-            GUI.Label(new Rect(0, vh - 36f, vw, 20f), "build interna · equipo 112",
+            GUI.Label(new Rect(0, vh - 36f, vw, 20f), "Build interna · equipo 112",
                       T.Estilo(T.FMono, 10, T.Disabled, TextAnchor.MiddleCenter));
         }
 
@@ -270,11 +270,11 @@ namespace Gameplay
 
             float y = 170f;
             DrawCard(new Rect(Pad, y, vw - Pad * 2f, 84f), "CREAR SALA (HOST)",
-                     "tu dispositivo aloja la sesión", primario: false,
+                     "Tu dispositivo aloja la sesión", primario: false,
                      () => ConfigurarPartida(GameSession.SessionMode.MultiHost));
             y += 100f;
             DrawCard(new Rect(Pad, y, vw - Pad * 2f, 84f), "UNIRSE (CLIENTE)",
-                     "buscar una sala o ingresar la IP", primario: false, UnirseComoCliente);
+                     "Buscar una sala o ingresar la IP", primario: false, UnirseComoCliente);
         }
 
         // Cliente: no elige noche ni entorno (los define/comparte el host). Va directo
@@ -313,7 +313,7 @@ namespace Gameplay
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "FALTA UN ENTORNO",
                       T.Estilo(T.FBebas, 28, T.Cream));
             GUI.Label(new Rect(Pad, 140f, vw - Pad * 2f, 120f),
-                      "no hay ningún entorno escaneado (con imagen de referencia) todavía. " +
+                      "No hay ningún entorno escaneado (con imagen de referencia) todavía. " +
                       "el ritual necesita conocer tu espacio real antes de empezar a jugar.",
                       T.Estilo(T.FElite, 14, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
 
@@ -357,7 +357,7 @@ namespace Gameplay
                     GUI.Label(new Rect(r.x, r.y + 12f, r.width, 34f), (i + 1).ToString(),
                               T.Estilo(T.FBebas, 26, T.Disabled, TextAnchor.MiddleCenter));
                     T.Candado(new Rect(r.center.x - 8f, r.y + 46f, 16f, 18f), T.Disabled);
-                    GUI.Label(new Rect(r.x, r.y + 66f, r.width, 18f), "bloqueada",
+                    GUI.Label(new Rect(r.x, r.y + 66f, r.width, 18f), "Bloqueada",
                               T.Estilo(T.FMono, 12, T.Disabled, TextAnchor.MiddleCenter));
                     continue;
                 }
@@ -381,7 +381,7 @@ namespace Gameplay
                         fillOverride: sel ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.14f) : (Color?)null);
                 GUI.Label(new Rect(r.x, r.y + 12f, r.width, 34f), (i + 1).ToString(),
                           T.Estilo(T.FBebas, 26, T.Cream, TextAnchor.MiddleCenter));
-                GUI.Label(new Rect(r.x, r.y + 50f, r.width, 20f), sel ? "elegida" : "disponible",
+                GUI.Label(new Rect(r.x, r.y + 50f, r.width, 20f), sel ? "Elegida" : "Disponible",
                           T.Estilo(T.FMono, 13, sel ? T.Tan : T.Dim, TextAnchor.MiddleCenter));
             }
 
@@ -405,7 +405,7 @@ namespace Gameplay
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "ELEGÍ EL ENTORNO",
                       T.Estilo(T.FBebas, 28, T.Cream));
             GUI.Label(new Rect(Pad, 132f, vw - Pad * 2f, 38f),
-                      "seleccioná un escaneo guardado para esta noche",
+                      "Seleccioná un escaneo guardado para esta noche",
                       T.Estilo(T.FElite, 14, T.Dim, wrap: true));
 
             // "Avanzado" (puerto) anclado al borde inferior, arriba del CONFIRMAR.
@@ -474,8 +474,8 @@ namespace Gameplay
                                      NetworkConfig.DefaultPort.ToString());
             bool custom = PuertoElegido() != NetworkConfig.DefaultPort;
             GUI.Label(new Rect(Pad + 162f, y, w - 162f, 54f),
-                      custom ? "puerto custom: NO se autoanuncia; los demás deben escribir ip:puerto"
-                             : "por defecto: se autoanuncia por LAN (los demás lo encuentran solos)",
+                      custom ? "Puerto custom: NO se autoanuncia; los demás deben escribir ip:puerto"
+                             : "Por defecto: se autoanuncia por LAN (los demás lo encuentran solos)",
                       T.Estilo(T.FMono, 12, custom ? T.Tan : T.Dim, TextAnchor.UpperLeft, wrap: true));
         }
 
@@ -508,7 +508,7 @@ namespace Gameplay
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "ESCANEO DE ENTORNO",
                       T.Estilo(T.FBebas, 28, T.Cream));
             GUI.Label(new Rect(Pad, 132f, vw - Pad * 2f, 38f),
-                      "continuá editando un escaneo guardado o empezá uno nuevo",
+                      "Continuá editando un escaneo guardado o empezá uno nuevo",
                       T.Estilo(T.FElite, 14, T.Dim, wrap: true));
 
             float rowH = 64f, gap = 10f;
@@ -540,7 +540,7 @@ namespace Gameplay
                 T.Celda(_nav, zonaBorrar, primario: false,
                         () => { AudioManager.Sonar(c2 => c2.uiAlerta); _confirmarBorrar = n; },
                         bordeOverride: T.Red);
-                GUI.Label(zonaBorrar, "borrar", T.Estilo(T.FMono, 14, T.Red, TextAnchor.MiddleCenter));
+                GUI.Label(zonaBorrar, "Borrar", T.Estilo(T.FMono, 14, T.Red, TextAnchor.MiddleCenter));
 
                 y += rowH + gap;
             }
@@ -561,7 +561,7 @@ namespace Gameplay
             GUI.Label(new Rect(panel.x + 22f, panel.y + 20f, pw - 44f, 30f),
                       $"¿ELIMINAR \"{_confirmarBorrar}\"?", T.Estilo(T.FBebas, 20, T.Cream));
             GUI.Label(new Rect(panel.x + 22f, panel.y + 56f, pw - 44f, 24f),
-                      "esta acción no se puede deshacer", T.Estilo(T.FMono, 15, T.Muted));
+                      "Esta acción no se puede deshacer", T.Estilo(T.FMono, 15, T.Muted));
 
             float bw = (pw - 44f - 10f) / 2f;
             T.Boton(_nav, new Rect(panel.x + 22f, panel.yMax - 70f, bw, 48f),
@@ -709,7 +709,7 @@ namespace Gameplay
             // Anchor points extra: opción por dispositivo (ver AnchorPointManager).
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
                          "PUNTOS DE ANCLAJE",
-                         "colocá anclas en tu cuarto antes de empezar (menos deriva)",
+                         "Colocá anclas en tu cuarto antes de empezar (menos deriva)",
                          GameOptions.PuntosAncla,
                          () => GameOptions.PuntosAncla = !GameOptions.PuntosAncla);
             y += 68f;
@@ -717,7 +717,7 @@ namespace Gameplay
             // Detección automática de paredes: experimental, opt-in (ver AutoWallBuilder).
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
                          "PARED AUTOMÁTICA (BETA)",
-                         "en el escáner, sugiere paredes detectadas por la cámara para confirmar/ajustar",
+                         "En el escáner, sugiere paredes detectadas por la cámara para confirmar/ajustar",
                          GameOptions.EscaneoAutoBeta,
                          () => GameOptions.EscaneoAutoBeta = !GameOptions.EscaneoAutoBeta);
             y += 68f;
@@ -726,7 +726,7 @@ namespace Gameplay
             // apaga; sobre los menús es opcional (gusto y legibilidad).
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
                          "FILTRO VHS EN MENÚS",
-                         "el grano y las líneas de cinta también sobre esta pantalla",
+                         "El grano y las líneas de cinta también sobre esta pantalla",
                          GameOptions.VhsEnMenus,
                          () => GameOptions.VhsEnMenus = !GameOptions.VhsEnMenus);
             y += 68f;
@@ -734,8 +734,8 @@ namespace Gameplay
             // Estado del mando + botón para ir al visualizador.
             var gm = Gamepad.GamepadManager.Instance;
             string estado = (gm != null && gm.IsConnected)
-                ? $"joystick: {gm.DisplayName}\nestado: conectado"
-                : "joystick: ninguno\nconectá un mando por Bluetooth desde el sistema";
+                ? $"Joystick: {gm.DisplayName}\nestado: conectado"
+                : "Joystick: ninguno\nconectá un mando por Bluetooth desde el sistema";
             var caja = new Rect(Pad, y, vw - Pad * 2f, 56f);
             T.Borde(caja, T.Border);
             GUI.Label(new Rect(caja.x + 14f, caja.y + 8f, caja.width - 28f, caja.height - 16f),
@@ -756,7 +756,7 @@ namespace Gameplay
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f), "DESARROLLO", T.Estilo(T.FMono, 11, T.Red));
             y += 22f;
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f),
-                      $"progreso: {NightProgress.Desbloqueadas} de {total} noches desbloqueadas",
+                      $"Progreso: {NightProgress.Desbloqueadas} de {total} noches desbloqueadas",
                       T.Estilo(T.FMono, 11, T.CreamDim));
             y += 26f;
 
@@ -793,8 +793,8 @@ namespace Gameplay
 
             var gm = Gamepad.GamepadManager.Instance;
             string status = (gm != null && gm.IsConnected)
-                ? $"joystick: {gm.DisplayName}  ·  {gm.Brand}"
-                : "ningún mando conectado";
+                ? $"Joystick: {gm.DisplayName}  ·  {gm.Brand}"
+                : "Ningún mando conectado";
             GUI.Label(new Rect(Pad, 136f, vw - Pad * 2f, 26f), status,
                       T.Estilo(T.FMono, 15, gm != null && gm.IsConnected ? T.Green : T.Muted));
 
@@ -802,7 +802,7 @@ namespace Gameplay
             if (gm != null && gm.IsConnected)
             {
                 bool present = gm.TryGetBattery(out float lvl);
-                string bat = present ? $"batería: {Mathf.RoundToInt(lvl * 100f)}%" : "batería: N/D";
+                string bat = present ? $"Batería: {Mathf.RoundToInt(lvl * 100f)}%" : "Batería: N/D";
                 GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f), bat,
                           T.Estilo(T.FMono, 15, T.Muted));
                 y += 30f;

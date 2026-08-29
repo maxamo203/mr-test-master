@@ -109,8 +109,8 @@ public class ARLobbyUI : MonoBehaviour
 
         string entorno = Gameplay.GameSession.Instance != null &&
                          !string.IsNullOrEmpty(Gameplay.GameSession.Instance.SelectedMap)
-            ? $"entorno: {Gameplay.GameSession.Instance.SelectedMap}"
-            : "entorno compartido por el host";
+            ? $"Entorno: {Gameplay.GameSession.Instance.SelectedMap}"
+            : "Entorno compartido por el host";
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), entorno,
                   T.Estilo(T.FElite, 13, T.CreamDim));
         y += 26f;
@@ -119,9 +119,9 @@ public class ARLobbyUI : MonoBehaviour
         // los jugadores" ni "mismo espacio virtual" (no hay con quién compartirlo).
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 40f),
                   solo
-                      ? "apuntá la cámara a la imagen de referencia para ubicarte " +
+                      ? "Apuntá la cámara a la imagen de referencia para ubicarte " +
                         "en tu espacio escaneado."
-                      : "todos los jugadores deben apuntar la cámara a la imagen de " +
+                      : "Todos los jugadores deben apuntar la cámara a la imagen de " +
                         "referencia para ubicarse en el mismo espacio virtual.",
                   T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
         y += 48f;
@@ -131,7 +131,7 @@ public class ARLobbyUI : MonoBehaviour
             case ARLobbyManager.LobbyState.Scanning:
                 DrawGhostImage(vw, vh);
                 GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f),
-                          $"buscando la imagen… {Spinner()}",
+                          $"Buscando la imagen… {Spinner()}",
                           T.Estilo(T.FMono, 13, T.Tan));
                 break;
 
@@ -140,8 +140,8 @@ public class ARLobbyUI : MonoBehaviour
                 // El contador de conectados/listos solo aplica a multijugador.
                 GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f),
                           solo
-                              ? "imagen detectada · listo para empezar"
-                              : $"imagen detectada · conectados {_lobby.ConnectedCount} · listos {_lobby.ResolvedCount}",
+                              ? "Imagen detectada · listo para empezar"
+                              : $"Imagen detectada · conectados {_lobby.ConnectedCount} · listos {_lobby.ResolvedCount}",
                           T.Estilo(T.FMono, 12, T.Green));
 
                 bool puede = _lobby.CanStartGame;
@@ -159,10 +159,10 @@ public class ARLobbyUI : MonoBehaviour
             }
 
             case ARLobbyManager.LobbyState.AllReady:
-                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f), "imagen detectada",
+                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f), "Imagen detectada",
                           T.Estilo(T.FMono, 12, T.Green));
                 GUI.Label(new Rect(Pad, y + 26f, vw - Pad * 2f, 24f),
-                          "esperando a que el host inicie la noche…",
+                          "Esperando a que el host inicie la noche…",
                           T.Estilo(T.FMono, 12, T.Muted));
                 break;
         }
@@ -232,20 +232,20 @@ public class ARLobbyUI : MonoBehaviour
         y += 38f;
 
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 44f),
-                  "recorré tu cuarto y colocá anclas apuntando a paredes o muebles. " +
+                  "Recorré tu cuarto y colocá anclas apuntando a paredes o muebles. " +
                   "cuantas más y más repartidas, menos se corre el mapa.",
                   T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
         y += 50f;
 
         string estado = mgr.Count < AnchorPointManager.MinAnclas
-            ? $"anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
-            : $"anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
+            ? $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
+            : $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), estado,
                   T.Estilo(T.FMono, 13, mgr.PuedeCerrar ? T.Green : T.Tan));
         y += 24f;
 
         // Motivo del último rechazo (o el hint de Cardboard, que gana).
-        string aviso = mgr.CardboardBloquea ? "salí de Cardboard para poder apuntar" : _errorAnclas;
+        string aviso = mgr.CardboardBloquea ? "Salí de Cardboard para poder apuntar" : _errorAnclas;
         if (!string.IsNullOrEmpty(aviso))
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), aviso, T.Estilo(T.FMono, 11, T.Red));
 
