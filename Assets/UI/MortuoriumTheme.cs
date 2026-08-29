@@ -382,7 +382,11 @@ public static class MortuoriumTheme
     {
         var st = new GUIStyle(GUI.skin.textField)
         {
-            font = FMono, fontSize = 15, alignment = TextAnchor.MiddleLeft,
+            // En Android las fuentes custom no renderizan bien (ver Estilo()) — con
+            // FMono directo el texto se actualiza pero el glyph no se pinta, así que
+            // parece que "no se ve lo que escribís" aunque el valor sí cambie.
+            font = Application.platform == RuntimePlatform.Android ? null : FMono,
+            fontSize = 15, alignment = TextAnchor.MiddleLeft,
         };
         st.normal.textColor = st.focused.textColor = st.hover.textColor = st.active.textColor = Cream;
         st.normal.background = st.focused.background = st.hover.background = st.active.background = null;
