@@ -7,6 +7,7 @@ public static class GameOptions
 {
     private const string KeyVolumen     = "opt_volumen";
     private const string KeyPuntosAncla = "opt_puntos_ancla";
+    private const string KeyEscaneoAutoBeta = "opt_escaneo_auto_beta";
     private const string KeyVozMic      = "opt_voz_mic";
     private const string KeyVozVolumen  = "opt_voz_volumen";
     private const string KeyVozSens     = "opt_voz_sensibilidad";
@@ -36,6 +37,20 @@ public static class GameOptions
         set
         {
             PlayerPrefs.SetInt(KeyPuntosAncla, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    // ¿Está habilitado el modo BETA de detección automática de paredes (ARCore
+    // detecta planos verticales y el jugador confirma/descarta cada uno)? Opt-in
+    // y apagado por defecto: es experimental, así que solo aparece el botón en la
+    // botonera del escáner (ver ReticleController) si esto está activo.
+    public static bool EscaneoAutoBeta
+    {
+        get => PlayerPrefs.GetInt(KeyEscaneoAutoBeta, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeyEscaneoAutoBeta, value ? 1 : 0);
             PlayerPrefs.Save();
         }
     }

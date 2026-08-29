@@ -647,6 +647,14 @@ namespace Gameplay
                          () => GameOptions.PuntosAncla = !GameOptions.PuntosAncla);
             y += 68f;
 
+            // Detección automática de paredes: experimental, opt-in (ver AutoWallBuilder).
+            T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
+                         "PARED AUTOMÁTICA (BETA)",
+                         "en el escáner, sugiere paredes detectadas por la cámara para confirmar/ajustar",
+                         GameOptions.EscaneoAutoBeta,
+                         () => GameOptions.EscaneoAutoBeta = !GameOptions.EscaneoAutoBeta);
+            y += 68f;
+
             // US-11.1: el filtro VHS en la PARTIDA es parte de la atmósfera y no se
             // apaga; sobre los menús es opcional (gusto y legibilidad).
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
