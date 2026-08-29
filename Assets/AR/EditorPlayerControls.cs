@@ -138,7 +138,7 @@ public class EditorPlayerControls : MonoBehaviour
         if (kb.dKey.isPressed) x += 1f;
         if (kb.sKey.isPressed) z -= 1f;
         if (kb.wKey.isPressed) z += 1f;
-        if (kb.spaceKey.isPressed || kb.eKey.isPressed)     y += 1f;
+        if (kb.spaceKey.isPressed)     y += 1f;
         if (kb.leftCtrlKey.isPressed || kb.qKey.isPressed)  y -= 1f;
 
         if (x == 0f && z == 0f && y == 0f) return;

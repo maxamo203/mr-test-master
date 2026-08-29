@@ -79,7 +79,7 @@ namespace Gameplay
                 if (e.EntityTypeId != EntityTypeIds.Sorken) continue;
                 var s = e.GetComponent<SorkenEntity>();
                 if (s == null) continue;
-                if (s.State != SorkenState.Emerging && s.State != SorkenState.Chasing &&
+                if (s.State != SorkenState.EmergingDoor && s.State != SorkenState.EmergingWindow && s.State != SorkenState.Chasing &&
                     s.State != SorkenState.Grabbing) continue;
 
                 float d = Vector3.Distance(cam.transform.position, s.Position);

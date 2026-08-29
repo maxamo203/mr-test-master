@@ -15,11 +15,16 @@ public class SorkenAnimator : MonoBehaviour
 {
     [Header("Clips por estado (arrastrar). Si falta uno, cae a Idle.")]
     public AnimationClip idleClip;
+    [Tooltip("Emergencia por puerta.")]
     public AnimationClip emergeClip;
+    [Tooltip("Emergencia por ventana.")]
+    public AnimationClip emergeWindowClip;
     public AnimationClip chaseClip;
     public AnimationClip grabClip;
     [Tooltip("Animacion al ser repelido (retroceder / desaparecer). Si falta, usa chase.")]
     public AnimationClip retreatClip;
+    public AnimationClip coverStartClip;
+    public AnimationClip coverWalkClip;
 
     [Tooltip("Velocidad del cross-fade entre clips (unidades de peso por segundo).")]
     [SerializeField] private float _blendSpeed = 6f;
@@ -29,6 +34,8 @@ public class SorkenAnimator : MonoBehaviour
     private AnimationMixerPlayable _mixer;
     private float[] _weights;   // peso actual de cada input (index = (int)SorkenState)
     private int _inputCount;
+    private AnimationClipPlayable[] _clipPlayables;
+    private int _lastState = -1;
 
     private void Awake()
     {
@@ -39,15 +46,19 @@ public class SorkenAnimator : MonoBehaviour
         // Un input del mixer por estado (mismo orden que el enum SorkenState).
         var clips = new[]
         {
-            idleClip,                                  // Idle
-            emergeClip != null ? emergeClip : idleClip, // Emerging
-            chaseClip  != null ? chaseClip  : idleClip, // Chasing
-            grabClip   != null ? grabClip   : idleClip, // Grabbing
-            retreatClip != null ? retreatClip                        // Retreating
-                                : (chaseClip != null ? chaseClip : idleClip),
+            idleClip,                                                   // Idle
+            emergeClip != null ? emergeClip : idleClip,                 // EmergingDoor
+            chaseClip  != null ? chaseClip  : idleClip,                 // Chasing
+            grabClip   != null ? grabClip   : idleClip,                 // Grabbing
+            retreatClip != null ? retreatClip : (chaseClip ?? idleClip),// Retreating
+            coverStartClip != null ? coverStartClip : idleClip,         // CoverStarting
+            coverWalkClip  != null ? coverWalkClip  : (chaseClip ?? idleClip), // CoverWalking
+            emergeWindowClip != null ? emergeWindowClip :
+                (emergeClip != null ? emergeClip : idleClip),           // EmergingWindow
         };
         _inputCount = clips.Length;
         _weights    = new float[_inputCount];
+        _clipPlayables = new AnimationClipPlayable[_inputCount];
 
         _graph = PlayableGraph.Create("SorkenAnim");
         _graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
@@ -61,6 +72,7 @@ public class SorkenAnimator : MonoBehaviour
             {
                 var cp = AnimationClipPlayable.Create(_graph, clips[i]);
                 _graph.Connect(cp, 0, _mixer, i);
+                _clipPlayables[i] = cp;
             }
             _mixer.SetInputWeight(i, i == 0 ? 1f : 0f);
         }
@@ -74,6 +86,18 @@ public class SorkenAnimator : MonoBehaviour
 
         int target = (int)_sorken.State;
         if (target < 0 || target >= _inputCount) target = 0;
+
+        // Los Playables avanzan aunque su peso sea cero. Al entrar a un estado
+        // puntual reiniciamos su clip, para no mostrar un fotograma intermedio o final.
+        if (target != _lastState)
+        {
+            if (_clipPlayables[target].IsValid())
+            {
+                _clipPlayables[target].SetTime(0d);
+                _clipPlayables[target].SetPlayState(PlayState.Playing);
+            }
+            _lastState = target;
+        }
 
         // Rampa de pesos hacia el estado objetivo y normalizacion.
         float step = _blendSpeed * Time.deltaTime;

@@ -25,7 +25,7 @@ namespace Gameplay
                  "reaparece el Sorken para no arrancar detras de la pared. ~medio metro.")]
         [SerializeField] private float _enterClearance = 0.5f;
 
-        private enum Phase { Idle, Entering, Chasing, Grabbed, Retreating }
+        private enum Phase { Idle, Entering, Chasing, CoverStarting, Grabbed, Retreating }
 
         private NightConfig _night;
 
@@ -48,6 +48,7 @@ namespace Gameplay
         private float _repel;          // segundos continuos de iluminacion sobre el objetivo
         private float _grace;          // Entering: cuenta a la entrada
         private float _phaseTimer;     // Grabbed / Retreating
+        private bool  _coverStartPlayedThisAttempt;
 
         // Sorken actual (null entre intentos).
         private SorkenEntity _sorken;
@@ -93,6 +94,7 @@ namespace Gameplay
             }
 
             ServerDeaths.Reset();
+            _coverStartPlayedThisAttempt = false;
             _phase = Phase.Idle;
             _attemptTimer = _night.initialAttemptDelay;
 
@@ -160,7 +162,8 @@ namespace Gameplay
             {
                 case Phase.Idle:       TickIdle(dt);       break;
                 case Phase.Entering:   TickEntering(dt);   break;
-                case Phase.Chasing:    TickChasing(dt);    break;
+                case Phase.Chasing:       TickChasing(dt);       break;
+                case Phase.CoverStarting: TickCoverStarting(dt); break;
                 case Phase.Grabbed:    TickGrabbed(dt);    break;
                 case Phase.Retreating: TickRetreating(dt); break;
             }
@@ -210,7 +213,11 @@ namespace Gameplay
 
             _sorken.SetPositionDirectly(EmergePosition());
             _sorken.FaceDirection(_marker.transform.forward); // mira hacia adentro (normal)
-            _sorken.SetState(SorkenState.Emerging);
+            // La entrada tiene dos etapas: primero se mantiene en el punto para
+            // que el jugador pueda detectarlo y repelerlo; la animacion de emergencia
+            // solo arranca en el tramo final configurado de la ventana.
+            _sorken.SetState(SorkenState.Idle);
+            _coverStartPlayedThisAttempt = false;
 
             _repel = 0f; _grace = 0f;
             _phase = Phase.Entering;
@@ -229,8 +236,15 @@ namespace Gameplay
             if (AnyIlluminating(_marker.transform.position)) _repel += dt; else _repel = 0f;
             if (_repel >= _night.entryRepelSeconds) { Retreat(); return; }
 
-            // Si NO se lo repele dentro del grace, ENTRA (persigue). No se va solo.
+            // Si NO se lo repele durante la ventana, entra a perseguir. Reservamos
+            // el tramo final para la animacion de emergencia, para que no se ejecute
+            // completa apenas aparece en el marcador.
             _grace += dt;
+            float animationStart = Mathf.Max(0f, _night.entryGraceSeconds - _night.entryAnimationSeconds);
+            if (_grace >= animationStart &&
+                _sorken.State != SorkenState.EmergingDoor &&
+                _sorken.State != SorkenState.EmergingWindow)
+                _sorken.SetState(EmergingStateForMarker());
             if (_grace >= _night.entryGraceSeconds) EnterChase();
         }
 
@@ -247,17 +261,42 @@ namespace Gameplay
         }
 
         // --- Chasing ---
-        private void TickChasing(float dt)
+private void TickChasing(float dt)
         {
             if (_sorken == null) { EndAttempt(); return; }
             if (!NearestAlivePlayer(_sorken.Position, out _, out var tpos)) { Retreat(); return; }
 
-            // Distancia HORIZONTAL: el jugador es la camara AR (~1.5m de alto) y el
-            // Sorken esta en el piso; con distancia 3D el grab nunca dispararia.
+            // El agarre es la acción de máxima prioridad: gana aun si el jugador lo
+            // ilumina cuando ya está dentro del rango.
             if (HorizDist(_sorken.Position, tpos) <= _night.grabRange) { Grab(); return; }
 
-            if (AnyIlluminating(_sorken.Position)) _repel += dt; else _repel = 0f;
-            if (_repel >= _night.chaseRepelSeconds) { Retreat(); return; }
+            bool iluminado = IsSorkenDirectlyLit();
+            if (iluminado)
+            {
+                // Ante una nueva exposición, primero se detiene para cubrirse. La
+                // entrada sólo ocurre una vez por exposición continua.
+                if (!_coverStartPlayedThisAttempt)
+                {
+                    BeginCoverStart();
+                    return;
+                }
+
+                // El gesto inicial solo se reproduce una vez por ingreso. Si la luz
+                // vuelve despues, retoma directamente la marcha cubierta.
+                if (_sorken.State != SorkenState.CoverWalking)
+                    _sorken.SetState(SorkenState.CoverWalking);
+
+                // Tras completar la transición, puede seguir cubierto un rato antes de
+                // que la linterna sostenida lo repela por completo.
+                _repel += dt;
+                if (_repel >= _night.chaseRepelSeconds) { Retreat(); return; }
+            }
+            else
+            {
+                _repel = 0f;
+                if (_sorken.State == SorkenState.CoverWalking)
+                    _sorken.SetState(SorkenState.Chasing);
+            }
 
             // Path-following con SorkerNav (A* respeta paredes/puertas/cubos).
             _repathTimer -= dt;
@@ -269,10 +308,69 @@ namespace Gameplay
                 else
                     _path.Clear();
             }
+
             Vector3 step = _pathIndex < _path.Count ? _path[_pathIndex] : tpos;
-            _sorken.MoveTo(step, _night.sorkenChaseSpeed, dt);
+            float speed = _night.sorkenChaseSpeed *
+                          (_sorken.State == SorkenState.CoverWalking
+                              ? _night.sorkenCoverWalkSpeedMultiplier
+                              : 1f);
+            _sorken.MoveTo(step, speed, dt);
             if (_pathIndex < _path.Count && HorizDist(_sorken.Position, _path[_pathIndex]) <= 0.2f) _pathIndex++;
         }
+
+private void BeginCoverStart()
+        {
+            _coverStartPlayedThisAttempt = true;
+            _sorken.SetState(SorkenState.CoverStarting);
+            _phaseTimer = 0f;
+            _phase = Phase.CoverStarting;
+        }
+
+        private void TickCoverStarting(float dt)
+        {
+            if (_sorken == null) { EndAttempt(); return; }
+            if (!NearestAlivePlayer(_sorken.Position, out _, out var target)) { Retreat(); return; }
+
+            // El agarre conserva la máxima prioridad durante la transición.
+            if (HorizDist(_sorken.Position, target) <= _night.grabRange) { Grab(); return; }
+
+            // Si la luz deja de tocarlo antes de completar el gesto, retoma la
+            // persecución normal y el próximo haz iniciará una nueva transición.
+            if (!IsSorkenDirectlyLit())
+            {
+                _sorken.SetState(SorkenState.Chasing);
+                _phase = Phase.Chasing;
+                return;
+            }
+
+            _phaseTimer += dt;
+            if (_phaseTimer >= _night.sorkenCoverStartSeconds)
+            {
+                _sorken.SetState(SorkenState.CoverWalking);
+                _repel = 0f;
+                _phase = Phase.Chasing;
+            }
+        }
+
+        private bool IsSorkenDirectlyLit()
+        {
+            if (_sorken == null || !PlayerLights.TryConoReal(out var angle, out var range)) return false;
+            // Centro del torso + radio del cuerpo: evita que el jugador deba apuntar
+            // exactamente a un punto infinitesimal y usa el cono real de la linterna.
+            return PlayerLights.AnyIlluminating(_sorken.Position + Vector3.up * 1f,
+                                                angle, range, 0.4f);
+        }
+
+        private SorkenState EmergingStateForMarker()
+        {
+            string kind = _marker != null && _marker.KindId != null
+                ? _marker.KindId.ToLowerInvariant()
+                : string.Empty;
+            return kind.Contains("window") || kind.Contains("ventana")
+                ? SorkenState.EmergingWindow
+                : SorkenState.EmergingDoor;
+        }
+
 
         private void Grab()
         {

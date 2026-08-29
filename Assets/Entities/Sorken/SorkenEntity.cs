@@ -4,11 +4,14 @@ using UnityEngine;
 // en todos los peers. El GameDirector (server) los fija.
 public enum SorkenState : byte
 {
-    Idle       = 0,
-    Emerging   = 1,  // asomando por el marcador (puerta/ventana)
-    Chasing    = 2,  // persiguiendo al jugador
-    Grabbing   = 3,  // atrapando
-    Retreating = 4,  // repelido: se retira
+    Idle          = 0,
+    EmergingDoor  = 1,
+    Chasing       = 2,
+    Grabbing      = 3,
+    Retreating    = 4,
+    CoverStarting = 5,
+    CoverWalking  = 6,
+    EmergingWindow = 7,
 }
 
 // Logica pura del Sorken (sin red). El GameDirector (server) le fija el estado y lo
@@ -47,7 +50,7 @@ public class SorkenEntity : MonoBehaviour
 
     // El offset del modelo solo aplica mientras emerge; el resto del tiempo va derecho.
     private Quaternion RotOffset =>
-        State == SorkenState.Emerging ? Quaternion.Euler(ModelRotationOffset) : Quaternion.identity;
+        State == SorkenState.EmergingDoor ? Quaternion.Euler(ModelRotationOffset) : Quaternion.identity;
 
     // Pose deseada (la que fija el codigo). Se re-aplica en LateUpdate.
     private Vector3    _desiredPos;

@@ -32,8 +32,11 @@ namespace Gameplay
         public float attemptIntervalMax = 35f;
         [Tooltip("Segundos que hay que iluminar el punto para repeler el intento.")]
         public float entryRepelSeconds = 3f;
-        [Tooltip("Segundos de gracia antes de que el Sorken entre si no se repele.")]
-        public float entryGraceSeconds = 5f;
+        [Tooltip("Duracion total del intento de entrada antes de que el Sorken comience la persecucion.")]
+        [Min(0.1f)] public float entryGraceSeconds = 8f;
+        [Tooltip("Tramo final de la entrada reservado para la animacion de emergencia. " +
+                 "El Sorken permanece quieto durante el resto de la ventana para dar tiempo a reaccionar.")]
+        [Min(0f)] public float entryAnimationSeconds = 3f;
         [Tooltip("Distancia (m) a la que el jugador dispara la ventana de entrada.")]
         public float entryTriggerDistance = 3f;
 
@@ -41,6 +44,10 @@ namespace Gameplay
         [Tooltip("Segundos que hay que iluminar al Sorken para ahuyentarlo en el chase.")]
         public float chaseRepelSeconds = 5f;
         public float sorkenChaseSpeed = 2.5f;
+        [Tooltip("Duracion de la animacion inicial al cubrirse el rostro con la linterna.")]
+        [Min(0f)] public float sorkenCoverStartSeconds = 3f;
+        [Tooltip("Multiplicador de velocidad mientras avanza cubriendose de la linterna.")]
+        [Range(0.1f, 1f)] public float sorkenCoverWalkSpeedMultiplier = 0.7f;
         [Tooltip("Velocidad al retirarse tras ser repelido (sale corriendo).")]
         public float sorkenRetreatSpeed = 3.5f;
         [Tooltip("Distancia (m) a la que el Sorken atrapa al jugador (grab).")]
