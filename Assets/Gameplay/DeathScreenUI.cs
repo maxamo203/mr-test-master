@@ -180,9 +180,11 @@ namespace Gameplay
 
         private void ReturnToMenu()
         {
-            // NightResult es estático y sobrevive el cambio de escena: sin esto, la
-            // próxima partida arrancaría mostrando ya la pantalla de fin de noche.
-            NightResult.Limpiar();
+            // Frena los directores DontDestroyOnLoad y limpia el estado estático
+            // (muertes, cordura local, NightResult). Sin esto la próxima partida
+            // arrancaba mostrando ya la pantalla de fin de noche, y el libro/Arbmos
+            // seguían corriendo en su sala de sincronización.
+            NightTransition.TeardownSesion();
 
             // Teardown de la sesión (mismo criterio que SceneFlow): salir de la partida.
             if (NetworkManager.Instance != null) Destroy(NetworkManager.Instance.gameObject);

@@ -49,8 +49,8 @@ public class VelethDirector : MonoBehaviour
     public bool StartHunt(Vector3 invocationWorldPosition)
     {
         var net = NetworkManager.Instance;
-        if (net == null || !net.IsServer || WorldOrigin.Instance == null ||
-            EntityRegistry.Instance == null)
+        if (net == null || !net.IsServer || !net.GameStarted ||
+            WorldOrigin.Instance == null || EntityRegistry.Instance == null)
             return false;
 
         StopRun();
@@ -104,7 +104,8 @@ public class VelethDirector : MonoBehaviour
     {
         if (!_running || _veleth == null) return;
         var net = NetworkManager.Instance;
-        if (net == null || !net.IsServer) return;
+        // GameStarted: la persecucion no puede seguir (ni empezar) fuera de partida.
+        if (net == null || !net.IsServer || !net.GameStarted) return;
 
         float dt = Time.deltaTime;
         if (_grabTimer > 0f)

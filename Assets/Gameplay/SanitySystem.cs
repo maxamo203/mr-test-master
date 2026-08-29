@@ -41,6 +41,7 @@ namespace Gameplay
         {
             if (NetworkManager.Instance != null)
                 NetworkManager.Instance.OnGameStarted -= HandleGameStarted;
+            if (Instance == this) Instance = null;
         }
 
         private NightConfig Night =>

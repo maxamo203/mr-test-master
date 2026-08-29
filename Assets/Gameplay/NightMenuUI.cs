@@ -242,7 +242,17 @@ namespace Gameplay
         // a SampleScene, donde GameBootstrapper muestra el autodescubrimiento / IP.
         private void UnirseComoCliente()
         {
-            GameSession.Ensure().Mode = GameSession.SessionMode.MultiClient;
+            var s = GameSession.Ensure();
+            s.Mode = GameSession.SessionMode.MultiClient;
+
+            // Soltar la noche de una partida anterior de ESTE dispositivo: GameSession es
+            // DontDestroyOnLoad y su NightIndex sobrevive. NightTransition.NocheSuperada
+            // asume que un cliente lo tiene en -1 para no mover su progresión; si quedaba
+            // el índice de la noche que jugó solo antes, sobrevivir la noche del host le
+            // desbloqueaba una noche que nunca jugó.
+            s.SelectedNight = null;
+            s.NightIndex    = -1;
+
             SceneFlow.GoTo(_lobbyScene);
         }
 

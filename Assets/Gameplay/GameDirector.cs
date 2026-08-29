@@ -80,6 +80,7 @@ namespace Gameplay
         private void OnDestroy()
         {
             if (NetworkManager.Instance != null) NetworkManager.Instance.OnGameStarted -= HandleGameStarted;
+            if (Instance == this) Instance = null;
         }
 
         private void HandleGameStarted()

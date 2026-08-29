@@ -51,6 +51,21 @@ public class Flashlight : MonoBehaviour
     public float Charge01 => maxCharge > 0f ? Mathf.Clamp01(currentCharge / maxCharge) : 0f;
     public bool  IsEmpty  => currentCharge <= 0f;
 
+    // Estado de arranque de noche: pila llena y encendida.
+    //
+    // Se engancha a NetworkManager.OnGameStarted (ver Update/OnDisable), que es el unico
+    // evento por el que pasan host y cliente tanto en el arranque en frio (menu ->
+    // SampleScene) como en el REINTENTO, que no recarga la escena (ver
+    // Gameplay.NightTransition) y por lo tanto no restaura los valores del prefab. Sin
+    // esto, al reintentar se empezaba la noche con la carga drenada de la anterior — y si
+    // se habia agotado, ademas apagada, lo que arrancaba drenando cordura de una.
+    public void ResetNoche()
+    {
+        currentCharge     = maxCharge;
+        isOn              = true;
+        _avisoBateriaBaja = false;
+    }
+
     // Suma carga (al recoger una pila). Vuelve a permitir encender si estaba agotada.
     //
     // Es tambien el UNICO punto por el que pasan host y cliente al recoger una pila (el
@@ -109,9 +124,21 @@ public class Flashlight : MonoBehaviour
 
     void OnEnable()  { EnhancedTouchSupport.Enable(); }
 
+    // NetworkManager puede no existir todavia cuando arranca la escena (mismo patron
+    // que LocalDeath / LocalSanity): suscribir en cuanto aparezca.
+    private bool _suscritoAPartida;
+
+    private void SuscribirAPartida()
+    {
+        if (_suscritoAPartida || NetworkManager.Instance == null) return;
+        NetworkManager.Instance.OnGameStarted += ResetNoche;
+        _suscritoAPartida = true;
+    }
 
     void Update()
     {
+        SuscribirAPartida();
+
         // Fuera de partida la linterna no funciona: suprimir su salida (sin tocar isOn,
         // asi al arrancar la partida queda encendida por defecto). El toggle esta
         // bloqueado por CanOperate, y no se drena bateria aca.
@@ -195,5 +222,9 @@ public class Flashlight : MonoBehaviour
     {
         Shader.SetGlobalFloat(ID_INTENSITY, 0f);
         EnhancedTouchSupport.Disable();
+
+        if (_suscritoAPartida && NetworkManager.Instance != null)
+            NetworkManager.Instance.OnGameStarted -= ResetNoche;
+        _suscritoAPartida = false;
     }
 }

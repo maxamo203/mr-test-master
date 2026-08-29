@@ -82,9 +82,16 @@ namespace Gameplay
             _running = true;
         }
 
+        // Frena la mecanica del libro. SUELTA el flow a proposito: este director es
+        // DontDestroyOnLoad, asi que un flow a medio consumir sobrevivia al cambio de
+        // escena y se reanudaba en cuanto habia un server nuevo — antes incluso de que
+        // arrancara la partida — invocando a Veleth en la sala de sincronizacion.
+        // StartRun siempre construye uno nuevo, asi que no hay nada que conservar.
         public void StopRun()
         {
             _running = false;
+            _flow = null;
+            _oscuridadRemota = 0f;
             Alumbrando = 0;
             TodosAlumbrando = false;
         }
@@ -109,7 +116,10 @@ namespace Gameplay
                 if (_suscritoA != null) _suscritoA.OnRitualBook += SetOscuridadRemota;
             }
 
-            if (!_running || net == null || !net.IsServer || _flow == null) return;
+            // GameStarted ademas de _running: el libro ya existe en la SALA (lo spawnea
+            // ARImageAnchor apenas aparece la imagen, que solo exige InSession), asi que
+            // sin este guard la mecanica corre durante la sincronizacion.
+            if (!_running || net == null || !net.IsServer || !net.GameStarted || _flow == null) return;
 
             // Si se perdio el anchor, congelamos la mecanica: el jugador no puede ver ni
             // defender el libro y no debe perder por una recalibracion.

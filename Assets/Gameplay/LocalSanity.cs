@@ -36,6 +36,7 @@ namespace Gameplay
         {
             if (_subscribed && NetworkManager.Instance != null)
                 NetworkManager.Instance.OnSanityUpdated -= Set;
+            if (Instance == this) Instance = null;
         }
 
         // Unico punto por el que entra la cordura en este dispositivo (host y cliente), asi
@@ -56,6 +57,16 @@ namespace Gameplay
 
         // Fraccion de cordura a la que se avisa "estas en rojo".
         private const float UmbralCorduraBaja = 0.3f;
+
+        // Vuelve al maximo sin sonar. La cordura autoritativa la reconstruye el
+        // SanitySystem al arrancar la noche, pero tarda hasta un ciclo de envio en
+        // llegar: sin esto, toda la pantalla de sincronizacion (y el arranque de la
+        // noche siguiente) se ve con la cordura de la noche anterior — HUD en rojo y
+        // TensionSystem/CameraFXOverlay con la distorsion al maximo.
+        public void Reiniciar()
+        {
+            Value = Max;
+        }
 
         public static LocalSanity Ensure()
         {
