@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using T = MortuoriumTheme;
 using UnityEngine.InputSystem;
@@ -22,6 +23,7 @@ namespace Scanner
         [SerializeField] private CubeBuilder _cubeBuilder;
         [SerializeField] private MarkerBuilder _markerBuilder;
         [SerializeField] private ARImageAnchor _imageAnchor;
+        [SerializeField] private AutoWallBuilder _autoWallBuilder;
 
         private ScanStateMachine _fsm;
         private ResolvedHit _lastHit;
@@ -57,6 +59,7 @@ namespace Scanner
             if (_cubeBuilder == null) _cubeBuilder = FindFirstObjectByType<CubeBuilder>();
             if (_markerBuilder == null) _markerBuilder = FindFirstObjectByType<MarkerBuilder>();
             if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
+            if (_autoWallBuilder == null) _autoWallBuilder = FindFirstObjectByType<AutoWallBuilder>();
 
             // Fantasma en vivo de lo que se va a colocar. Lo instanciamos acá para no
             // tener que cablearlo en la escena (encuentra los builders por su cuenta).
@@ -233,7 +236,8 @@ namespace Scanner
         {
             var modo = _fsm.Current;
             bool idle = modo == ScannerMode.Idle;
-            bool puedeRecal = !IsPlacingMode(modo);   // recalibrar salvo mientras se coloca
+            bool enAutoWall = modo == ScannerMode.AutoWall_Scanning || modo == ScannerMode.AutoWall_Confirm;
+            bool puedeRecal = !IsPlacingMode(modo) && !enAutoWall;   // recalibrar salvo mientras se coloca
 
             bool enPared  = modo == ScannerMode.Wall_V1 || modo == ScannerMode.Wall_Height || modo == ScannerMode.Wall_Vn;
             bool enCubo   = modo == ScannerMode.Cube_V1 || modo == ScannerMode.Cube_V2 || modo == ScannerMode.Cube_V3;
@@ -242,8 +246,10 @@ namespace Scanner
             bool enPiso   = modo == ScannerMode.Floor_Place;
             bool enAncla  = modo == ScannerMode.Anchor_Place;
 
-            // Entradas de la botonera (en orden).
-            var items = new (string label, MortuoriumIcons.Icon icon, bool activo, bool enabled, Action onTap)[]
+            // Entradas de la botonera (en orden). El item de índice 3 ("IDENTIFICAR")
+            // le cuelga el submenú de marcadores más abajo — si agregás items, hacelo
+            // DESPUÉS de RECALIBRAR para no correr ese índice fijo.
+            var items = new List<(string label, MortuoriumIcons.Icon icon, bool activo, bool enabled, Action onTap)>
             {
                 ("PARED",        MortuoriumIcons.Icon.Pared,  enPared,  idle, () => _wallBuilder?.StartPolyline()),
                 ("CUBO",         MortuoriumIcons.Icon.Cubo,   enCubo,   idle, () => _cubeBuilder?.StartCube()),
@@ -257,8 +263,12 @@ namespace Scanner
                 ("RECALIBRAR\n(+mover)", MortuoriumIcons.Icon.RecalMover, false, puedeRecal, () => Recalibrar(false)),
             };
 
+            if (GameOptions.EscaneoAutoBeta)
+                items.Add(("PARED AUTO\n(BETA)", MortuoriumIcons.Icon.Pared, enAutoWall, idle,
+                          () => _autoWallBuilder?.StartAutoScan()));
+
             var viewport = new Rect(Pad, y, vw - Pad * 2f, h);
-            float contentW = items.Length * (ToolW + ToolGap) - ToolGap;
+            float contentW = items.Count * (ToolW + ToolGap) - ToolGap;
             float maxScroll = Mathf.Max(0f, contentW - viewport.width);
 
             HandleToolDrag(viewport, maxScroll);
@@ -270,7 +280,7 @@ namespace Scanner
             _identVisible = _identScreenX + ToolW > viewport.x && _identScreenX < viewport.xMax;
 
             GUI.BeginGroup(viewport);
-            for (int i = 0; i < items.Length; i++)
+            for (int i = 0; i < items.Count; i++)
             {
                 float bx = i * (ToolW + ToolGap) - _toolScroll;
                 if (bx + ToolW < 0f || bx > viewport.width) continue;   // fuera de vista
@@ -429,6 +439,8 @@ namespace Scanner
                 ScannerMode.Floor_Place    => "apuntá al piso real y tocá COLOCAR (después podés arrastrarlo)",
                 ScannerMode.Marker_Place   => $"apuntá a la PARED donde hay {(_markerBuilder != null && _markerBuilder.PendingType != null ? _markerBuilder.PendingType.DisplayName : "el punto")} y tocá COLOCAR",
                 ScannerMode.EditMoveTarget => "apuntá a la nueva posición y tocá COLOCAR",
+                ScannerMode.AutoWall_Scanning => "BETA: movete y mirá las paredes; tocá una resaltada para confirmarla",
+                ScannerMode.AutoWall_Confirm  => "¿confirmar esta pared detectada como pared real?",
                 _ => null,
             };
             if (hint == null) return;
@@ -436,7 +448,7 @@ namespace Scanner
             // Altura del panel según los controles extra del modo.
             float hExtra = 0f;
             if (enPared) hExtra = 44f /*slider ancho*/ + 48f /*terminar*/ + 34f /*cerrar*/;
-            if (modo == ScannerMode.Cube_V3) hExtra = 48f;
+            if (modo == ScannerMode.Cube_V3 || modo == ScannerMode.AutoWall_Confirm) hExtra = 48f;
             float hPanel = 30f /*hint*/ + hExtra + 48f /*cancelar*/ + 24f;
 
             var panel = new Rect(Pad, yBase - hPanel, vw - Pad * 2f, hPanel);
@@ -486,9 +498,26 @@ namespace Scanner
                 y += 48f;
             }
 
-            T.Boton(null, new Rect(x, y, w, 40f), "CANCELAR", primario: false,
-                    () => _fsm.SetMode(ScannerMode.Idle), fontSize: 14,
-                    textColor: T.Muted);
+            if (modo == ScannerMode.AutoWall_Confirm)
+            {
+                T.Boton(null, new Rect(x, y, w, 40f), "CONFIRMAR PARED", primario: true,
+                        () => _autoWallBuilder?.ConfirmSelected(), fontSize: 15);
+                y += 48f;
+            }
+
+            // El botón de cierre cambia de rol en el modo BETA: "terminar" corta el
+            // ARPlaneManager entero (AutoWall_Scanning); "descartar" solo suelta el
+            // candidato tocado y vuelve a escanear (AutoWall_Confirm).
+            if (modo == ScannerMode.AutoWall_Scanning)
+                T.Boton(null, new Rect(x, y, w, 40f), "TERMINAR", primario: false,
+                        () => _autoWallBuilder?.EndAutoScan(), fontSize: 14, textColor: T.Muted);
+            else if (modo == ScannerMode.AutoWall_Confirm)
+                T.Boton(null, new Rect(x, y, w, 40f), "DESCARTAR", primario: false,
+                        () => _autoWallBuilder?.DiscardSelected(), fontSize: 14, textColor: T.Muted);
+            else
+                T.Boton(null, new Rect(x, y, w, 40f), "CANCELAR", primario: false,
+                        () => _fsm.SetMode(ScannerMode.Idle), fontSize: 14,
+                        textColor: T.Muted);
         }
 
         // Panel del flujo de anclas: contador, motivo del último rechazo y los dos
