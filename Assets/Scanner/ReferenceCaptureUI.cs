@@ -31,6 +31,10 @@ namespace Scanner
         [Tooltip("Distancia (m) usada para estimar el tamaño si el raycast no toca nada.")]
         [SerializeField] private float _fallbackDistance = 1.5f;
 
+        [Tooltip("Opacidad (0-1) del fragmento capturado como guía fantasma mientras se " +
+                 "busca la zona en el entorno, para reencuadrar la cámara sobre el punto físico.")]
+        [SerializeField, Range(0.1f, 0.8f)] private float _ghostAlpha = 0.35f;
+
         // Rango del ancho real, en cm. El SLIDER llega hasta SliderMaxCm (lo común);
         // por TEXTO se puede ingresar hasta MaxCm (más grande) si hiciera falta.
         private const float MinCm = 2f, SliderMaxCm = 100f, MaxCm = 300f;
@@ -326,6 +330,8 @@ namespace Scanner
 
             if (_phase == Phase.Waiting)
             {
+                DrawGhostOverlay();
+
                 var r = new Rect(0, sh * 0.45f, sw, sh * 0.1f);
                 T.Fill(r, new Color(0f, 0f, 0f, 0.6f));
                 GUI.Label(r, "buscando la zona en el entorno…",
@@ -408,6 +414,22 @@ namespace Scanner
             {
                 GUI.Label(inner, $"{_widthMeters * 100f:0} cm", st);
             }
+        }
+
+        // Fragmento capturado, semi-transparente, en el mismo rectángulo donde se tomó:
+        // guía para reencuadrar la cámara sobre el punto físico exacto mientras
+        // ARImageAnchor intenta reengancharlo. _sel no se mueve en esta fase (no hay
+        // drag activo), así que queda fijo como referencia en pantalla.
+        private void DrawGhostOverlay()
+        {
+            if (!CapturedReference.HasImage) return;
+
+            var prevColor = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, _ghostAlpha);
+            GUI.DrawTexture(_sel, CapturedReference.Texture, ScaleMode.StretchToFill);
+            GUI.color = prevColor;
+
+            T.Borde(_sel, T.Cream, Mathf.Max(2f, Screen.height * 0.003f));
         }
 
         // ── Layout (px reales) ───────────────────────────────────────────────────
