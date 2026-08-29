@@ -468,9 +468,22 @@ namespace Scanner
 
         private void DrawTopLabel(string msg)
         {
-            var r = new Rect(0, Scanner.SafeArea.Top + Screen.height * 0.02f, Screen.width, Screen.height * 0.05f);
+            // Wrap a 2 líneas: sin esto, con MiddleCenter y una sola línea, mensajes
+            // largos como "ajustá el recuadro..." se recortaban simétrico en los dos
+            // extremos (ej. "Está el recuadro... CAPTURAR" -> "stá el recuadro...
+            // CAPTUR") en vez de bajar a una segunda línea.
+            //
+            // Este overlay dibuja en píxeles reales (GUI.matrix identidad, ver OnGUI),
+            // pero el botón de pausa (PauseMenuController, esquina sup-derecha) usa
+            // coordenadas virtuales de UIScale — convertimos su borde inferior a
+            // píxeles reales para no superponernos.
+            float pauseBottomReal = Scanner.SafeArea.Top + (28f + 60f) * UIScale.Factor + 8f;
+            var r = new Rect(0, pauseBottomReal, Screen.width, Screen.height * 0.065f);
             T.Fill(r, new Color(0f, 0f, 0f, 0.5f));
-            GUI.Label(r, msg, T.Estilo(T.FElite, FsLabel, T.CreamDim, TextAnchor.MiddleCenter));
+            // Blanco puro solo en Android: ahí T.CreamDim se ve apagado/gris (mismo
+            // motivo que el resto de los ajustes de esta rama — ver MortuoriumTheme).
+            var color = Application.platform == RuntimePlatform.Android ? Color.white : T.CreamDim;
+            GUI.Label(r, msg, T.Estilo(T.FElite, FsLabel, color, TextAnchor.MiddleCenter, wrap: true));
         }
     }
 }

@@ -17,12 +17,12 @@ using Gamepad;
 public static class MortuoriumTheme
 {
     // ── Paleta (hex del prototipo) ────────────────────────────────────────
-    public static readonly Color Bg        = Hex("0c0a08");   // fondo general
+    public static readonly Color Bg        = Hex("060504");   // fondo general
     public static readonly Color BgPanel   = Hex("141110");   // paneles/modales
     public static readonly Color BgField   = Hex("131010");   // campos de texto
     public static readonly Color Cream     = Hex("e9e3d6");   // texto principal
     public static readonly Color CreamDim  = Hex("c9c2b4");   // texto secundario
-    public static readonly Color Muted     = Hex("8a8074");   // texto apagado
+    public static readonly Color Muted     = Hex("a89e90");   // texto apagado
     public static readonly Color Dim       = Hex("6b6459");   // texto muy apagado
     public static readonly Color Disabled  = Hex("4a443c");   // deshabilitado
     public static readonly Color Border    = Hex("3a322a");   // borde estándar
@@ -265,6 +265,17 @@ public static class MortuoriumTheme
     // Título con "glitch" cromático (sombra roja/teal) tipo MORTUORIUM.
     public static void TituloGlitch(Rect r, string texto, int size)
     {
+        // "size" es un tamaño MÁXIMO deseado: si el texto no entra en r.width lo
+        // encogemos hasta que entre. Hace falta porque en Android Estilo() apaga
+        // las fuentes custom (Bebas Neue no renderiza bien ahí — ver EnsureFonts)
+        // y cae al font default del skin, bastante más ancho a igual tamaño de
+        // punto; sin este ajuste, con TextAnchor.MiddleCenter y sin wrap, el título
+        // se recorta simétrico por los dos extremos (p. ej. "MORTUORIUM" -> "ORTUORIU").
+        float anchoTexto = Estilo(FBebas, size, Color.white, TextAnchor.MiddleCenter)
+                           .CalcSize(new GUIContent(texto)).x;
+        if (anchoTexto > r.width * 0.98f && anchoTexto > 0f)
+            size = Mathf.Max(8, Mathf.FloorToInt(size * (r.width * 0.98f / anchoTexto)));
+
         var rojo = new Color(1f, 0.12f, 0.20f, 0.55f);
         var teal = new Color(0f, 0.86f, 0.78f, 0.35f);
         // El desplazamiento del glitch escala con el tamaño (para que se vea igual
