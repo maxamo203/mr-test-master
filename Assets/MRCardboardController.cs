@@ -64,10 +64,6 @@ public class MRCardboardController : MonoBehaviour
     private GameObject _canvas;
     private RawImage   _leftImg, _rightImg;
 
-    // Orientación previa a entrar (para restaurarla tal cual al salir).
-    private ScreenOrientation _prevOrientation;
-    private bool _prevAutoPortrait, _prevAutoPortraitUpsideDown, _prevAutoLandscapeLeft, _prevAutoLandscapeRight;
-
     public void ToggleCardboardMode() => SetCardboard(!CardboardActive);
 
     // Compat con llamadas viejas: el IPD ahora vive en CardboardCalibrationUI (persistido).
@@ -76,6 +72,20 @@ public class MRCardboardController : MonoBehaviour
     public void SetCardboard(bool on)
     {
         if (on == CardboardActive) return;
+
+        // No entrar mientras se está buscando la imagen de referencia (calibrando):
+        // el fantasma de esa pantalla se dibuja a pantalla completa, sin contemplar
+        // el split de ojos izq/der, y queda superpuesto justo en el medio de los dos.
+        if (on)
+        {
+            var anchor = FindFirstObjectByType<ARImageAnchor>();
+            if (anchor != null && !anchor.IsFound)
+            {
+                Debug.LogWarning("[MRCardboard] No se puede entrar a Cardboard mientras se busca la imagen de referencia.");
+                return;
+            }
+        }
+
         if (!ResolveArCamera())
         {
             Debug.LogError("[MRCardboard] No encontré la cámara AR; no puedo entrar a modo Cardboard.");
@@ -86,13 +96,8 @@ public class MRCardboardController : MonoBehaviour
 
     private void EnterCardboard()
     {
-        // Cardboard se sostiene horizontal: fijamos landscape. Guardamos los 4 flags de
-        // autorotación para devolver la orientación exacta al salir.
-        _prevOrientation            = Screen.orientation;
-        _prevAutoPortrait           = Screen.autorotateToPortrait;
-        _prevAutoPortraitUpsideDown = Screen.autorotateToPortraitUpsideDown;
-        _prevAutoLandscapeLeft      = Screen.autorotateToLandscapeLeft;
-        _prevAutoLandscapeRight     = Screen.autorotateToLandscapeRight;
+        // Cardboard se sostiene horizontal: fijamos landscape. RestoreOrientation()
+        // se encarga de volver a portrait al salir (ver su comentario).
         Screen.orientation = ScreenOrientation.LandscapeLeft;
 
         _calib = GetComponent<CardboardCalibrationUI>();
@@ -337,15 +342,18 @@ public class MRCardboardController : MonoBehaviour
         return arCamera != null;
     }
 
+    // Fuerza vertical directo en vez de "restaurar" _prevOrientation: toda la app
+    // (menús, escáner, partida) es portrait-only fuera de Cardboard, así que no hace
+    // falta adivinar/guardar el estado previo — y guardarlo era frágil (si al ENTRAR
+    // Screen.orientation ya leía Landscape por lo que sea, salir "restauraba" eso
+    // mismo, dejando todo horizontal incluso después de volver al menú).
     private void RestoreOrientation()
     {
-        Screen.autorotateToPortrait           = _prevAutoPortrait;
-        Screen.autorotateToPortraitUpsideDown = _prevAutoPortraitUpsideDown;
-        Screen.autorotateToLandscapeLeft      = _prevAutoLandscapeLeft;
-        Screen.autorotateToLandscapeRight     = _prevAutoLandscapeRight;
-        bool anyAuto = _prevAutoPortrait || _prevAutoPortraitUpsideDown ||
-                       _prevAutoLandscapeLeft || _prevAutoLandscapeRight;
-        Screen.orientation = anyAuto ? ScreenOrientation.AutoRotation : _prevOrientation;
+        Screen.autorotateToPortrait           = true;
+        Screen.autorotateToPortraitUpsideDown = false;
+        Screen.autorotateToLandscapeLeft      = false;
+        Screen.autorotateToLandscapeRight     = false;
+        Screen.orientation = ScreenOrientation.Portrait;
     }
 
     private void OnDisable()
