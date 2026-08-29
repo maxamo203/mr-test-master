@@ -11,17 +11,21 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
   m_Name: Noche 1
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   displayName: Noche 1 (DEV)
   briefing: (DEV) Sorken rapido para probar.
+  nightDurationSeconds: 300
   sorkenActive: 1
   attemptIntervalMin: 2
   attemptIntervalMax: 5
   entryRepelSeconds: 2
-  entryGraceSeconds: 4
+  entryGraceSeconds: 8
+  entryAnimationSeconds: 3
   entryTriggerDistance: 3
   chaseRepelSeconds: 3
   sorkenChaseSpeed: 2.5
+  sorkenCoverStartSeconds: 3
+  sorkenCoverWalkSpeedMultiplier: 0.7
   sorkenRetreatSpeed: 3.5
   grabRange: 1.2
   flashlightMaxCharge: 200
@@ -30,6 +34,29 @@ MonoBehaviour:
   flashlightOffThreshold: 3
   sanityDrainPerSecond: 8
   arbmosActive: 0
+  arbmosStillInvokeSeconds: 5
+  arbmosStillRadius: 0.5
+  arbmosStillOutsideGrace: 0.4
+  arbmosPresentSeconds: 6
+  arbmosPresentFollowSpeed: 1.2
+  arbmosCooldownMin: 20
+  arbmosCooldownMax: 40
+  arbmosSpawnDistance: 2.5
+  arbmosSanityDrainPerSecond: 6
+  arbmosSpawnChancePerAttempt: 0.6
+  arbmosFlashlightOffChanceMul: 2
+  arbmosLethalStalkSeconds: 3
+  arbmosLethalChaseSpeed: 3.5
+  arbmosGrabRange: 1.2
+  bookActive: 1
+  bookEventDelayMin: 30
+  bookEventDelayMax: 50
+  bookConsumeSeconds: 6
+  bookDefenseSeconds: 4
+  velethChaseSpeed: 3.2
+  velethGrabRange: 1.1
+  velethRepathSeconds: 0.2
+  velethGrabHoldSeconds: 0.8
   flashlightConeAngleDeg: 30
   flashlightRange: 8
   initialAttemptDelay: 2
