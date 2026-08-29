@@ -119,7 +119,10 @@ public class ArbmosDirector : MonoBehaviour
     {
         if (!_running) return;
         var net = NetworkManager.Instance;
-        if (net == null || !net.IsServer) return;
+        // GameStarted ademas de _running: este director es DontDestroyOnLoad y salir al
+        // menu no lo frenaba, asi que se reanudaba —con la noche y los haunts viejos— en
+        // cuanto la partida siguiente levantaba su server, todavia en la sala.
+        if (net == null || !net.IsServer || !net.GameStarted) return;
 
         // Solo en las noches donde el diseñador activo al Arbmos (doc: noche 4 en adelante).
         if (_night == null || !_night.arbmosActive) return;

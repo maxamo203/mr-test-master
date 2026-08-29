@@ -14,6 +14,11 @@ public static class SceneFlow
 
     public static void GoTo(string escena)
     {
+        // Los directores de gameplay son DontDestroyOnLoad y el estado de muerte /
+        // resultado es estático: no alcanza con destruir los tres singletons de abajo.
+        // Ver Gameplay.NightTransition.TeardownSesion.
+        Gameplay.NightTransition.TeardownSesion();
+
         if (NetworkManager.Instance != null) Object.Destroy(NetworkManager.Instance.gameObject);
         if (EntityRegistry.Instance != null) Object.Destroy(EntityRegistry.Instance.gameObject);
         if (WorldOrigin.Instance    != null) Object.Destroy(WorldOrigin.Instance.gameObject);

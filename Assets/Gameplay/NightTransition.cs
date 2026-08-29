@@ -65,6 +65,7 @@ namespace Gameplay
         {
             ServerDeaths.Reset();
             LocalDeath.Instance?.Revive();
+            LocalSanity.Instance?.Reiniciar();
             NightResult.Limpiar();
             RitualBookDirector.Instance?.Reiniciar();   // el libro vuelve a verse limpio
             VelethDirector.Instance?.StopRun();
@@ -76,6 +77,29 @@ namespace Gameplay
             if (cb != null && cb.CardboardActive) cb.SetCardboard(false);
 
             DetenerSistemas();
+        }
+
+        // SALIR de la partida (al menú, al escáner…), que NO es lo mismo que reiniciar la
+        // noche: acá se recarga la escena, así que todo lo que vive en ella se va solo.
+        //
+        // El problema es lo que NO se va: los directores son DontDestroyOnLoad
+        // (RitualBookDirector, VelethDirector, ArbmosDirector, SorkerNav) y el estado de
+        // muerte / resultado es estático. Sin este teardown quedaban "corriendo" y se
+        // reanudaban en la partida siguiente en cuanto había un server nuevo — todavía en
+        // la sala de sincronización, antes de que arrancara la noche.
+        //
+        // Lo llaman SceneFlow.GoTo y DeathScreenUI.ReturnToMenu (los dos únicos caminos
+        // de salida). Es idempotente y seguro fuera de partida (menú, escáner): los
+        // singletons de escena limpian su Instance en OnDestroy, así que acá el ?. de C#
+        // ve null de verdad y no una referencia a un objeto ya destruido — que es lo que
+        // vería si sólo confiáramos en el == sobrecargado de UnityEngine.Object.
+        public static void TeardownSesion()
+        {
+            DetenerSistemas();
+            ServerDeaths.Reset();
+            LocalDeath.Instance?.Revive();
+            LocalSanity.Instance?.Reiniciar();
+            NightResult.Limpiar();
         }
 
         // Sólo frena los sistemas de gameplay (sin revivir ni limpiar el resultado):

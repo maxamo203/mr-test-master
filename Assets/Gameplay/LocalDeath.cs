@@ -32,6 +32,7 @@ namespace Gameplay
         {
             if (_subscribed && NetworkManager.Instance != null)
                 NetworkManager.Instance.OnPlayerDied -= Die;
+            if (Instance == this) Instance = null;
         }
 
         // Punto unico de muerte del jugador de ESTE dispositivo (lo llaman el host directo

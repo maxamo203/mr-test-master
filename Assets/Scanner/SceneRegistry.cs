@@ -18,6 +18,12 @@ namespace Scanner
         public IReadOnlyList<CubeObject> Cubes => _cubes;
         public IReadOnlyList<MarkerObject> Markers => _markers;
 
+        // Sube en cada ClearAll: identifica el "contenido" cargado ahora mismo. Los
+        // consumidores que cachean geometría derivada (SorkerNav) la incluyen en su firma
+        // para detectar un cambio de mapa — contar paredes y cubos no alcanza, porque dos
+        // escaneos distintos pueden coincidir en cantidad y dejar el caché viejo en pie.
+        public int Generacion { get; private set; }
+
         // Busca una pared por Id (usado al reconstruir marcadores, que son relativos
         // a una pared).
         public WallObject FindWall(string id)
@@ -43,6 +49,8 @@ namespace Scanner
 
         public void ClearAll()
         {
+            Generacion++;
+
             // Los marcadores primero: son hijos-logicos de las paredes.
             foreach (var m in _markers) if (m != null) Destroy(m.gameObject);
             foreach (var w in _walls) if (w != null) Destroy(w.gameObject);

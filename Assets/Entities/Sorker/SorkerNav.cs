@@ -56,11 +56,16 @@ public class SorkerNav : MonoBehaviour
         return Instance;
     }
 
+    // Firma del contenido actual del SceneRegistry. Incluye Generacion (que sube en cada
+    // ClearAll, o sea en cada carga de mapa) ademas de las cantidades: este singleton es
+    // DontDestroyOnLoad, asi que el grid cruza el cambio de escena, y con solo contar
+    // paredes/cubos dos mapas distintos con las mismas cantidades daban la misma firma —
+    // la IA terminaba navegando la geometria del mapa anterior.
     private static int SceneSignature()
     {
         var reg = SceneRegistry.Instance;
         if (reg == null) return 0;
-        return reg.Walls.Count * 73856093 ^ reg.Cubes.Count * 19349663;
+        return reg.Walls.Count * 73856093 ^ reg.Cubes.Count * 19349663 ^ reg.Generacion * 83492791;
     }
 
     // Construye (o reconstruye) el grid desde el SceneRegistry actual.

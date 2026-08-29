@@ -99,6 +99,7 @@ namespace Bateries
         {
             if (NetworkManager.Instance != null)
                 NetworkManager.Instance.OnGameStarted -= HandleGameStarted;
+            if (Instance == this) Instance = null;
         }
 
         private void HandleGameStarted()
