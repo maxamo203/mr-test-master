@@ -188,14 +188,13 @@ namespace Gameplay
         // ------------------------------------------------------- pantallas
         private void DrawMenu(float vw, float vh)
         {
-            // Título grande: el tamaño escala con el ancho para que "MORTUORIUM"
-            // ocupe casi todo el ancho, igual que el wordmark del splash (así la
-            // transición splash -> menú no salta de tamaño/posición).
-            int titleSize = Mathf.RoundToInt(vw * 0.20f);
-            float titleY  = vh * 0.26f;
-            float titleH  = titleSize * 1.15f;
-            T.TituloGlitch(new Rect(0, titleY, vw, titleH), "MORTUORIUM", titleSize);
-            GUI.Label(new Rect(0, titleY + titleH + 4f, vw, 26f), "El ritual no debe parar",
+            // Wordmark grande: el ancho escala con vw para que ocupe casi todo el
+            // ancho, igual que en el splash (así la transición splash -> menú no
+            // salta de tamaño/posición; de hecho es la misma imagen).
+            float logoW  = vw * 0.82f;
+            float titleY = vh * 0.24f;
+            float logoH  = T.LogoGlitch(new Rect((vw - logoW) * 0.5f, titleY, logoW, vh * 0.5f));
+            GUI.Label(new Rect(0, titleY + logoH + 4f, vw, 26f), "El ritual no debe parar",
                       T.Estilo(T.FElite, 14, T.Muted, TextAnchor.MiddleCenter));
 
             float bw = vw - Pad * 2f, bh = 56f, x = Pad;
