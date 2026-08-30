@@ -88,7 +88,12 @@ public static class MortuoriumTheme
         if (_styles.TryGetValue(key, out var st)) return st;
         st = new GUIStyle(GUI.skin.label)
         {
-            font      = Application.platform == RuntimePlatform.Android ? null : font,
+            // PRUEBA: antes forzaba null en Android ("no renderizan" — commit 6892163).
+            // Se sospecha que ese diagnóstico se hizo sin el contenido real de Git LFS
+            // descargado (los .ttf eran punteros de ~130 bytes, no la fuente real — ver
+            // conversación). Ahora que el LFS está bien, probamos la fuente real en
+            // Android también. Si vuelve a verse mal, revertir a la condición de antes.
+            font      = font,
             fontSize  = size,
             alignment = anchor,
             wordWrap  = wrap,
