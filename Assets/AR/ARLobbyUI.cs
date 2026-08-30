@@ -15,6 +15,11 @@ public class ARLobbyUI : MonoBehaviour
     [Tooltip("Segundos que el título de la noche permanece en pantalla al arrancar.")]
     [SerializeField] private float _briefingDuration = 3f;
 
+    [Header("Sincronización")]
+    [Tooltip("Opacidad (0-1) de la imagen de referencia guardada como guía fantasma " +
+             "mientras se busca la zona en el entorno, para reencuadrar la cámara.")]
+    [SerializeField, Range(0.1f, 0.8f)] private float _ghostAlpha = 0.35f;
+
     private ARLobbyManager _lobby;
     private NetworkManager _net;
     private readonly Gamepad.ImguiGamepadMenu _nav = new();
@@ -91,6 +96,14 @@ public class ARLobbyUI : MonoBehaviour
             return;
         }
 
+        // ── CALIBRACIÓN MANUAL (sin la imagen física) ────────────────────────
+        if (_lobby.State == ARLobbyManager.LobbyState.CalibrandoManual)
+        {
+            DrawCalibracionManual(vw, vh);
+            _nav.End();
+            return;
+        }
+
         // ── SINCRONIZACIÓN (encima de la cámara, debajo de la franja de sala) ──
         bool solo = Gameplay.GameSession.Instance != null &&
                     Gameplay.GameSession.Instance.SoloUnJugador;
@@ -104,8 +117,8 @@ public class ARLobbyUI : MonoBehaviour
 
         string entorno = Gameplay.GameSession.Instance != null &&
                          !string.IsNullOrEmpty(Gameplay.GameSession.Instance.SelectedMap)
-            ? $"entorno: {Gameplay.GameSession.Instance.SelectedMap}"
-            : "entorno compartido por el host";
+            ? $"Entorno: {Gameplay.GameSession.Instance.SelectedMap}"
+            : "Entorno compartido por el host";
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), entorno,
                   T.Estilo(T.FElite, 13, T.CreamDim));
         y += 26f;
@@ -114,9 +127,9 @@ public class ARLobbyUI : MonoBehaviour
         // los jugadores" ni "mismo espacio virtual" (no hay con quién compartirlo).
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 40f),
                   solo
-                      ? "apuntá la cámara a la imagen de referencia para ubicarte " +
+                      ? "Apuntá la cámara a la imagen de referencia para ubicarte " +
                         "en tu espacio escaneado."
-                      : "todos los jugadores deben apuntar la cámara a la imagen de " +
+                      : "Todos los jugadores deben apuntar la cámara a la imagen de " +
                         "referencia para ubicarse en el mismo espacio virtual.",
                   T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
         y += 48f;
@@ -124,26 +137,40 @@ public class ARLobbyUI : MonoBehaviour
         switch (_lobby.State)
         {
             case ARLobbyManager.LobbyState.Scanning:
+            {
+                DrawGhostImage(vw, vh);
                 GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f),
-                          $"buscando la imagen… {Spinner()}",
+                          $"Buscando la imagen… {Spinner()}",
                           T.Estilo(T.FMono, 13, T.Tan));
+
+                // Escape: la imagen física se perdió / quedó en otro lado. El entorno
+                // ya está cargado, así que se puede ubicar el 0,0 a mano.
+                if (!string.IsNullOrEmpty(_errorManual))
+                    GUI.Label(new Rect(Pad, vh - 44f - 48f - 22f, vw - Pad * 2f, 20f), _errorManual,
+                              T.Estilo(T.FMono, 11, T.Red));
+                T.Boton(_nav, new Rect(Pad, vh - 44f - 48f, vw - Pad * 2f, 48f),
+                        "NO TENGO LA IMAGEN", primario: false,
+                        () => _errorManual = _lobby.CalibrarSinImagen(),
+                        enabled: _lobby.PuedeCalibrarManual, fontSize: 15);
                 break;
+            }
 
             case ARLobbyManager.LobbyState.WaitingForClients:
             {
                 // El contador de conectados/listos solo aplica a multijugador.
                 GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f),
                           solo
-                              ? "imagen detectada · listo para empezar"
-                              : $"imagen detectada · conectados {_lobby.ConnectedCount} · listos {_lobby.ResolvedCount}",
+                              ? "Imagen detectada · listo para empezar"
+                              : $"Imagen detectada · conectados {_lobby.ConnectedCount} · listos {_lobby.ResolvedCount}",
                           T.Estilo(T.FMono, 12, T.Green));
 
                 bool puede = _lobby.CanStartGame;
+                float yAjustar = DrawAjustarEntorno(vw, vh - 44f - 56f - 12f);
                 if (!puede)
                 {
                     string motivo = _lobby.StartBlockReason;
                     if (!string.IsNullOrEmpty(motivo))
-                        GUI.Label(new Rect(Pad, vh - 44f - 56f - 24f, vw - Pad * 2f, 22f), motivo,
+                        GUI.Label(new Rect(Pad, yAjustar - 24f, vw - Pad * 2f, 22f), motivo,
                                   T.Estilo(T.FMono, 11, T.Tan));
                 }
                 T.Boton(_nav, new Rect(Pad, vh - 44f - 56f, vw - Pad * 2f, 56f),
@@ -153,15 +180,44 @@ public class ARLobbyUI : MonoBehaviour
             }
 
             case ARLobbyManager.LobbyState.AllReady:
-                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f), "imagen detectada",
+                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f), "Imagen detectada",
                           T.Estilo(T.FMono, 12, T.Green));
                 GUI.Label(new Rect(Pad, y + 26f, vw - Pad * 2f, 24f),
-                          "esperando a que el host inicie la noche…",
+                          "Esperando a que el host inicie la noche…",
                           T.Estilo(T.FMono, 12, T.Muted));
+                DrawAjustarEntorno(vw, vh - 44f - 48f);
                 break;
         }
 
         _nav.End();
+    }
+
+    // Imagen de referencia guardada con el escaneo, semi-transparente y centrada
+    // en el área libre encima del panel: guía para reencuadrar la cámara sobre el
+    // punto físico exacto mientras ARImageAnchor intenta reengancharla.
+    private void DrawGhostImage(float vw, float vh)
+    {
+        if (!CapturedReference.HasImage) return;
+        var tex = CapturedReference.Texture;
+
+        float availableH = vh - 320f; // encima del panel de SINCRONIZACIÓN
+        if (availableH < 40f) return;
+
+        float w = vw * 0.55f;
+        float h = w * tex.height / (float)tex.width;
+        if (h > availableH * 0.7f)
+        {
+            h = availableH * 0.7f;
+            w = h * tex.width / (float)tex.height;
+        }
+
+        var r = new Rect((vw - w) * 0.5f, (availableH - h) * 0.5f, w, h);
+
+        var prevColor = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, _ghostAlpha);
+        GUI.DrawTexture(r, tex, ScaleMode.StretchToFill);
+        GUI.color = prevColor;
+        T.Borde(r, T.Cream, 2f);
     }
 
     // ── Colocación de anchor points (opción por dispositivo) ──────────────
@@ -198,20 +254,20 @@ public class ARLobbyUI : MonoBehaviour
         y += 38f;
 
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 44f),
-                  "recorré tu cuarto y colocá anclas apuntando a paredes o muebles. " +
+                  "Recorré tu cuarto y colocá anclas apuntando a paredes o muebles. " +
                   "cuantas más y más repartidas, menos se corre el mapa.",
                   T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
         y += 50f;
 
         string estado = mgr.Count < AnchorPointManager.MinAnclas
-            ? $"anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
-            : $"anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
+            ? $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
+            : $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), estado,
                   T.Estilo(T.FMono, 13, mgr.PuedeCerrar ? T.Green : T.Tan));
         y += 24f;
 
         // Motivo del último rechazo (o el hint de Cardboard, que gana).
-        string aviso = mgr.CardboardBloquea ? "salí de Cardboard para poder apuntar" : _errorAnclas;
+        string aviso = mgr.CardboardBloquea ? "Salí de Cardboard para poder apuntar" : _errorAnclas;
         if (!string.IsNullOrEmpty(aviso))
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), aviso, T.Estilo(T.FMono, 11, T.Red));
 
@@ -244,8 +300,65 @@ public class ARLobbyUI : MonoBehaviour
     }
 
     private string _errorAnclas;
+    private string _errorManual;
 
     private void ReportarAnclas() => _lobby.ReportarAnclas();
+
+    // Con la imagen YA detectada, corregir a mano una pose que quedó corrida respecto
+    // del cuarto real. La otra vía es tocar directamente el marcador del 0,0 (el
+    // libro), pero eso no se ve: este botón es el que lo hace descubrible.
+    // Devuelve la Y donde quedó, para apilar lo de arriba.
+    private float DrawAjustarEntorno(float vw, float yBase)
+    {
+        const float h = 42f;
+        float y = yBase - h;
+        T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, h), "AJUSTAR ENTORNO", primario: false,
+                () => { _errorManual = null; _lobby.AbrirAjusteOrigen(); }, fontSize: 14);
+        return y;
+    }
+
+    // ── Calibración manual del 0,0 (sin la imagen física) ─────────────────
+    // El mapa ya está en pantalla, anclado donde el jugador apuntó. Acá sólo va el
+    // texto y los cierres: mover y rotar se hace arrastrando el gizmo 3D que
+    // ManualCalibration engancha al origen.
+    private void DrawCalibracionManual(float vw, float vh)
+    {
+        // Mira fina al centro: es el punto que usa RECENTRAR.
+        const float R = 20f, G = 6f, W = 2f;
+        float cx = vw * 0.5f, cy = vh * 0.5f;
+        var mira = new Color(T.Cream.r, T.Cream.g, T.Cream.b, 0.75f);
+        T.Fill(new Rect(cx - R, cy - W * 0.5f, R - G, W), mira);
+        T.Fill(new Rect(cx + G, cy - W * 0.5f, R - G, W), mira);
+        T.Fill(new Rect(cx - W * 0.5f, cy - R, W, R - G), mira);
+        T.Fill(new Rect(cx - W * 0.5f, cy + G, W, R - G), mira);
+
+        T.Gradiente(new Rect(0, vh - 360f, vw, 360f), 0.9f, haciaAbajo: false);
+        UIBlocker.AddVirtualRect(new Rect(0, vh - 200f, vw, 200f));
+
+        float y = vh - 330f;
+        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 36f), "UBICAR EL ENTORNO",
+                  T.Estilo(T.FBebas, 26, T.Cream));
+        y += 38f;
+
+        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 60f),
+                  "el mapa quedó centrado donde apuntaste. Arrastrá las flechas para " +
+                  "moverlo y el anillo para girarlo hasta que las paredes virtuales " +
+                  "coincidan con las reales.",
+                  T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
+        y += 66f;
+
+        if (!string.IsNullOrEmpty(_errorManual))
+            GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), _errorManual,
+                      T.Estilo(T.FMono, 11, T.Red));
+
+        float by = vh - 44f - 56f;
+        T.Boton(_nav, new Rect(Pad, by, vw - Pad * 2f, 56f), "LISTO", primario: true,
+                () => { _errorManual = null; _lobby.CalibracionManualLista(); });
+
+        by -= 52f;
+        T.Boton(_nav, new Rect(Pad, by, vw - Pad * 2f, 46f), "RECENTRAR ACÁ", primario: false,
+                () => _errorManual = _lobby.RecentrarManual(), fontSize: 15);
+    }
 
     // ── Briefing de la noche (cartel de intro, sin overlay ni botón) ──────
     // Entra deslizándose desde la izquierda con fade, se sostiene y sale con fade.

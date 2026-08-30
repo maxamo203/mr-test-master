@@ -17,12 +17,12 @@ using Gamepad;
 public static class MortuoriumTheme
 {
     // ── Paleta (hex del prototipo) ────────────────────────────────────────
-    public static readonly Color Bg        = Hex("0c0a08");   // fondo general
+    public static readonly Color Bg        = Hex("060504");   // fondo general
     public static readonly Color BgPanel   = Hex("141110");   // paneles/modales
     public static readonly Color BgField   = Hex("131010");   // campos de texto
     public static readonly Color Cream     = Hex("e9e3d6");   // texto principal
     public static readonly Color CreamDim  = Hex("c9c2b4");   // texto secundario
-    public static readonly Color Muted     = Hex("8a8074");   // texto apagado
+    public static readonly Color Muted     = Hex("a89e90");   // texto apagado
     public static readonly Color Dim       = Hex("6b6459");   // texto muy apagado
     public static readonly Color Disabled  = Hex("4a443c");   // deshabilitado
     public static readonly Color Border    = Hex("3a322a");   // borde estándar
@@ -88,7 +88,12 @@ public static class MortuoriumTheme
         if (_styles.TryGetValue(key, out var st)) return st;
         st = new GUIStyle(GUI.skin.label)
         {
-            font      = Application.platform == RuntimePlatform.Android ? null : font,
+            // PRUEBA: antes forzaba null en Android ("no renderizan" — commit 6892163).
+            // Se sospecha que ese diagnóstico se hizo sin el contenido real de Git LFS
+            // descargado (los .ttf eran punteros de ~130 bytes, no la fuente real — ver
+            // conversación). Ahora que el LFS está bien, probamos la fuente real en
+            // Android también. Si vuelve a verse mal, revertir a la condición de antes.
+            font      = font,
             fontSize  = size,
             alignment = anchor,
             wordWrap  = wrap,
@@ -288,6 +293,17 @@ public static class MortuoriumTheme
     // Título con "glitch" cromático (sombra roja/teal) tipo MORTUORIUM.
     public static void TituloGlitch(Rect r, string texto, int size)
     {
+        // "size" es un tamaño MÁXIMO deseado: si el texto no entra en r.width lo
+        // encogemos hasta que entre. Hace falta porque en Android Estilo() apaga
+        // las fuentes custom (Bebas Neue no renderiza bien ahí — ver EnsureFonts)
+        // y cae al font default del skin, bastante más ancho a igual tamaño de
+        // punto; sin este ajuste, con TextAnchor.MiddleCenter y sin wrap, el título
+        // se recorta simétrico por los dos extremos (p. ej. "MORTUORIUM" -> "ORTUORIU").
+        float anchoTexto = Estilo(FBebas, size, Color.white, TextAnchor.MiddleCenter)
+                           .CalcSize(new GUIContent(texto)).x;
+        if (anchoTexto > r.width * 0.98f && anchoTexto > 0f)
+            size = Mathf.Max(8, Mathf.FloorToInt(size * (r.width * 0.98f / anchoTexto)));
+
         var rojo = new Color(1f, 0.12f, 0.20f, 0.55f);
         var teal = new Color(0f, 0.86f, 0.78f, 0.35f);
         // El desplazamiento del glitch escala con el tamaño (para que se vea igual
@@ -460,7 +476,11 @@ public static class MortuoriumTheme
     {
         var st = new GUIStyle(GUI.skin.textField)
         {
-            font = FMono, fontSize = 15, alignment = TextAnchor.MiddleLeft,
+            // En Android las fuentes custom no renderizan bien (ver Estilo()) — con
+            // FMono directo el texto se actualiza pero el glyph no se pinta, así que
+            // parece que "no se ve lo que escribís" aunque el valor sí cambie.
+            font = Application.platform == RuntimePlatform.Android ? null : FMono,
+            fontSize = 15, alignment = TextAnchor.MiddleLeft,
         };
         st.normal.textColor = st.focused.textColor = st.hover.textColor = st.active.textColor = Cream;
         st.normal.background = st.focused.background = st.hover.background = st.active.background = null;

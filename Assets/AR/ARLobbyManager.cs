@@ -10,6 +10,7 @@ public class ARLobbyManager : MonoBehaviour
     {
         Idle,               // antes de conectar
         Scanning,           // buscando la imagen de referencia
+        CalibrandoManual,   // sin imagen física: el jugador ubica el 0,0 a mano (ManualCalibration)
         PlacingAnchors,     // imagen encontrada, colocando anchor points extra (opción por dispositivo)
         WaitingForClients,  // host encontró imagen, esperando clientes
         AllReady,           // cliente encontró imagen, esperando que host arranque
@@ -61,6 +62,29 @@ public class ARLobbyManager : MonoBehaviour
         // Si este dispositivo va a colocar anclas, el manager tiene que existir antes
         // de que aparezca la imagen (se suscribe a OnImageReacquired).
         if (GameOptions.PuntosAncla) AnchorPointManager.Ensure();
+
+        // Tocar el 0,0 (en partida, el LIBRO: es el visual del ancla) abre el ajuste.
+        // En esta escena no hay SelectionController, así que el tap lo detecta la
+        // propia ManualCalibration y acá sólo decidimos cuándo se permite: mientras
+        // se sincroniza. Con la noche ya empezada NO, o un toque suelto movería el
+        // mapa bajo los pies del jugador.
+        var cal = ManualCalibration.Ensure();
+        cal.PuedeAbrirPorTap = () => _mapaListo && EnSincronizacion;
+        cal.OnTapEnOrigen += AbrirAjusteOrigen;
+    }
+
+    // Estados en los que todavía se está ubicando el entorno (la noche no arrancó).
+    private bool EnSincronizacion =>
+        State == LobbyState.Scanning || State == LobbyState.WaitingForClients ||
+        State == LobbyState.AllReady || State == LobbyState.CalibrandoManual;
+
+    // Abre el ajuste del 0,0 sin recentrar nada: sirve con la imagen ya detectada,
+    // cuando la pose que dio el tracking quedó corrida respecto del cuarto real.
+    public void AbrirAjusteOrigen()
+    {
+        if (!EnSincronizacion) return;
+        ManualCalibration.Ensure().AbrirAjuste();
+        State = LobbyState.CalibrandoManual;
     }
 
     // ── Llamados por GameBootstrapper ─────────────────────────────────────
@@ -80,6 +104,7 @@ public class ARLobbyManager : MonoBehaviour
         }
 
         ScanLoader.LoadForDisplay(mapName, _imageAnchor);
+        _mapaListo = true;
         NetworkManager.Instance.ServerSetMap(ScanPackage.Pack(mapName));
     }
 
@@ -124,6 +149,7 @@ public class ARLobbyManager : MonoBehaviour
             return;
         }
         ScanLoader.LoadForDisplay(name, _imageAnchor);
+        _mapaListo = true;
         State = LobbyState.Scanning;
         Debug.Log($"[ARLobby] Mapa '{name}' cargado; apuntá a la imagen para sincronizar.");
     }
@@ -178,7 +204,12 @@ public class ARLobbyManager : MonoBehaviour
         // Sólo nos interesa la detección mientras estamos sincronizando. Si la partida
         // ya arrancó, una re-detección no puede tirarnos de vuelta al lobby.
         if (State != LobbyState.Scanning) return;
+        ContinuarTrasCalibrar();
+    }
 
+    // Ya hay marco de referencia (por la imagen o a mano): sigue el flujo del lobby.
+    private void ContinuarTrasCalibrar()
+    {
         // Con la opción activada, primero se colocan las anclas: el paso de la FSM
         // que sigue lo dispara el botón LISTO (ver AnchorPlacementDone).
         //
@@ -198,6 +229,40 @@ public class ARLobbyManager : MonoBehaviour
         AvanzarTrasSincronizar();
     }
 
+    // ── Calibración manual (sin la imagen física) ─────────────────────────
+
+    // El mapa ya está cargado en la escena (es lo único que se necesita para poder
+    // ubicarlo a mano). En el cliente eso pasa recién al recibir el .mscn del host.
+    private bool _mapaListo;
+    public bool PuedeCalibrarManual => _mapaListo && State == LobbyState.Scanning;
+
+    // "NO TENGO LA IMAGEN": centra el 0,0 del mapa donde apunta la mira y abre el
+    // ajuste con el gizmo. Devuelve null si salió bien, o el motivo del fallo.
+    public string CalibrarSinImagen()
+    {
+        if (!PuedeCalibrarManual) return "el entorno todavía no está cargado";
+
+        if (!ManualCalibration.Ensure().CentrarBajoLaMira(out var error)) return error;
+        State = LobbyState.CalibrandoManual;
+        return null;
+    }
+
+    // Vuelve a llevar el 0,0 al punto que apunta la mira, sin salir del ajuste.
+    public string RecentrarManual()
+    {
+        if (State != LobbyState.CalibrandoManual) return null;
+        return ManualCalibration.Ensure().CentrarBajoLaMira(out var error) ? null : error;
+    }
+
+    // El jugador cerró el ajuste con LISTO. De acá en adelante es exactamente el
+    // mismo camino que tras detectar la imagen (anclas primero si están activadas).
+    public void CalibracionManualLista()
+    {
+        if (State != LobbyState.CalibrandoManual) return;
+        ManualCalibration.Instance?.Listo();
+        ContinuarTrasCalibrar();
+    }
+
     // ── Reinicio de noche sin cerrar la sesión (ver Gameplay.NightTransition) ──
 
     // Vuelve a la pantalla de sincronización y re-lanza la búsqueda de la imagen. NO
@@ -206,6 +271,17 @@ public class ARLobbyManager : MonoBehaviour
     {
         _resolvedClients.Clear();
         ResolvedCount = 0;
+
+        // Este jugador venía calibrado a mano: mandarlo a buscar una imagen que no
+        // tiene sería un callejón sin salida. Volvemos al ajuste del 0,0 conservando
+        // su anchor manual — puede retocarlo o cerrar con LISTO de una.
+        if (ManualCalibration.Calibrado)
+        {
+            State = LobbyState.CalibrandoManual;
+            ManualCalibration.Instance.AbrirAjuste();
+            return;
+        }
+
         State = LobbyState.Scanning;
 
         // keepVisualPosition: false → la escena se mueve con el anchor nuevo, que es
@@ -294,6 +370,13 @@ public class ARLobbyManager : MonoBehaviour
     private void OnDestroy()
     {
         if (_imageAnchor != null) _imageAnchor.OnImageReacquired -= OnImageFound;
+
+        var cal = ManualCalibration.Instance;
+        if (cal != null)
+        {
+            cal.OnTapEnOrigen -= AbrirAjusteOrigen;
+            cal.PuedeAbrirPorTap = null;
+        }
 
         var net = NetworkManager.Instance;
         if (net == null) return;

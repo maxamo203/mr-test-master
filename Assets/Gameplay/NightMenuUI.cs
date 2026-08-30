@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using Scanner;   // UIScale, UIBlocker, ScanSerializer, ScannerLaunchParams
 using T = MortuoriumTheme;
 
@@ -90,7 +91,42 @@ namespace Gameplay
             //_mostrarAvisoIos = true;
         }
 
-        private void Update() => _nav.Update();
+        private void Update()
+        {
+            _nav.Update();
+            HandleBackButton();
+        }
+
+        // Botón/gesto "atrás" de Android: el Input System nuevo lo reporta como
+        // Key.Escape del teclado virtual. Replica la MISMA navegación que el botón
+        // "volver" (T.BotonVolver) de cada pantalla, con la misma precedencia que
+        // OnGUI usa para decidir qué se está mostrando (overlays primero).
+        private void HandleBackButton()
+        {
+            var kb = Keyboard.current;
+            if (kb == null || !kb.escapeKey.wasPressedThisFrame) return;
+
+            // Mismo orden de precedencia que OnGUI (qué overlay tapa a qué otro).
+            // Bloqueo por versión no compatible: a propósito no tiene botón de
+            // volver (no se puede omitir), así que el back tampoco hace nada acá.
+            if (_versionIncompatible) return;
+            if (_mostrarAvisoVersionDesconocida) { CerrarAvisoVersionDesconocida(); return; }
+            if (_mostrarAvisoIos) { CerrarAvisoIos(); return; }
+            if (_confirmarBorrar != null) { _confirmarBorrar = null; return; }
+
+            switch (_pantalla)
+            {
+                case Pantalla.CrearUnirse: _pantalla = Pantalla.Menu; break;
+                case Pantalla.SinEntorno:
+                case Pantalla.Noches:      VolverDeSubflujo(); break;
+                case Pantalla.Entorno:     _pantalla = Pantalla.Noches; break;
+                case Pantalla.Escaneos:    _pantalla = Pantalla.Menu; break;
+                case Pantalla.Opciones:    _pantalla = Pantalla.Menu; break;
+                case Pantalla.Control:     _pantalla = Pantalla.Opciones; break;
+                // Pantalla.Menu: pantalla raíz, sin destino — no forzamos salir de
+                // la app, dejamos que el SO maneje el back (minimizar).
+            }
+        }
 
         // Relee la lista de escaneos guardados y cachea conteo + si tienen imagen de
         // referencia (sin ella un entorno no es jugable ni sincronizable).
@@ -194,8 +230,8 @@ namespace Gameplay
             float logoW  = vw * 0.82f;
             float titleY = vh * 0.24f;
             float logoH  = T.LogoGlitch(new Rect((vw - logoW) * 0.5f, titleY, logoW, vh * 0.5f));
-            GUI.Label(new Rect(0, titleY + logoH + 4f, vw, 26f), "El ritual no debe parar",
-                      T.Estilo(T.FElite, 14, T.Muted, TextAnchor.MiddleCenter));
+            GUI.Label(new Rect(0, titleY + logoH + 4f, vw, 34f), "El ritual no debe parar",
+                      T.Estilo(T.FElite, 21, T.Muted, TextAnchor.MiddleCenter));
 
             float bw = vw - Pad * 2f, bh = 56f, x = Pad;
             float y = vh - 44f - (bh + 14f) * 4f - 24f;
@@ -210,7 +246,7 @@ namespace Gameplay
             y += bh + 14f;
             T.Boton(_nav, new Rect(x, y, bw, bh), "OPCIONES", false, () => _pantalla = Pantalla.Opciones);
 
-            GUI.Label(new Rect(0, vh - 36f, vw, 20f), "build interna · equipo 112",
+            GUI.Label(new Rect(0, vh - 36f, vw, 20f), "Build interna · equipo 112",
                       T.Estilo(T.FMono, 10, T.Disabled, TextAnchor.MiddleCenter));
         }
 
@@ -230,11 +266,11 @@ namespace Gameplay
 
             float y = 170f;
             DrawCard(new Rect(Pad, y, vw - Pad * 2f, 84f), "CREAR SALA (HOST)",
-                     "tu dispositivo aloja la sesión", primario: false,
+                     "Tu dispositivo aloja la sesión", primario: false,
                      () => ConfigurarPartida(GameSession.SessionMode.MultiHost));
             y += 100f;
             DrawCard(new Rect(Pad, y, vw - Pad * 2f, 84f), "UNIRSE (CLIENTE)",
-                     "buscar una sala o ingresar la IP", primario: false, UnirseComoCliente);
+                     "Buscar una sala o ingresar la IP", primario: false, UnirseComoCliente);
         }
 
         // Cliente: no elige noche ni entorno (los define/comparte el host). Va directo
@@ -260,8 +296,8 @@ namespace Gameplay
             T.Celda(_nav, r, primario, onClick);
             GUI.Label(new Rect(r.x + 20f, r.y + 16f, r.width - 40f, 32f), titulo,
                       T.Estilo(T.FBebas, 24, T.Cream));
-            GUI.Label(new Rect(r.x + 20f, r.y + 50f, r.width - 40f, 20f), subtitulo,
-                      T.Estilo(T.FMono, 12, T.Dim));
+            GUI.Label(new Rect(r.x + 20f, r.y + 50f, r.width - 40f, 24f), subtitulo,
+                      T.Estilo(T.FMono, 15, T.Dim));
         }
 
         // Alerta de "falta un entorno" (un jugador o crear sala). Vuelve al origen
@@ -273,7 +309,7 @@ namespace Gameplay
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "FALTA UN ENTORNO",
                       T.Estilo(T.FBebas, 28, T.Cream));
             GUI.Label(new Rect(Pad, 140f, vw - Pad * 2f, 120f),
-                      "no hay ningún entorno escaneado (con imagen de referencia) todavía. " +
+                      "No hay ningún entorno escaneado (con imagen de referencia) todavía. " +
                       "el ritual necesita conocer tu espacio real antes de empezar a jugar.",
                       T.Estilo(T.FElite, 14, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
 
@@ -317,8 +353,8 @@ namespace Gameplay
                     GUI.Label(new Rect(r.x, r.y + 12f, r.width, 34f), (i + 1).ToString(),
                               T.Estilo(T.FBebas, 26, T.Disabled, TextAnchor.MiddleCenter));
                     T.Candado(new Rect(r.center.x - 8f, r.y + 46f, 16f, 18f), T.Disabled);
-                    GUI.Label(new Rect(r.x, r.y + 66f, r.width, 16f), "bloqueada",
-                              T.Estilo(T.FMono, 9, T.Disabled, TextAnchor.MiddleCenter));
+                    GUI.Label(new Rect(r.x, r.y + 66f, r.width, 18f), "Bloqueada",
+                              T.Estilo(T.FMono, 12, T.Disabled, TextAnchor.MiddleCenter));
                     continue;
                 }
                 if (!existe)
@@ -341,8 +377,8 @@ namespace Gameplay
                         fillOverride: sel ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.14f) : (Color?)null);
                 GUI.Label(new Rect(r.x, r.y + 12f, r.width, 34f), (i + 1).ToString(),
                           T.Estilo(T.FBebas, 26, T.Cream, TextAnchor.MiddleCenter));
-                GUI.Label(new Rect(r.x, r.y + 50f, r.width, 18f), sel ? "elegida" : "disponible",
-                          T.Estilo(T.FMono, 10, sel ? T.Tan : T.Dim, TextAnchor.MiddleCenter));
+                GUI.Label(new Rect(r.x, r.y + 50f, r.width, 20f), sel ? "Elegida" : "Disponible",
+                          T.Estilo(T.FMono, 13, sel ? T.Tan : T.Dim, TextAnchor.MiddleCenter));
             }
 
             bool haySel = _nocheSel >= 0 && nights != null && _nocheSel < nights.Length &&
@@ -351,8 +387,8 @@ namespace Gameplay
             {
                 string nombre = string.IsNullOrEmpty(nights[_nocheSel].displayName)
                     ? $"NOCHE {_nocheSel + 1}" : nights[_nocheSel].displayName;
-                GUI.Label(new Rect(Pad, vh - 44f - 58f - 30f, vw - Pad * 2f, 24f), nombre,
-                          T.Estilo(T.FElite, 13, T.Muted, TextAnchor.MiddleCenter));
+                GUI.Label(new Rect(Pad, vh - 44f - 58f - 30f, vw - Pad * 2f, 26f), nombre,
+                          T.Estilo(T.FElite, 16, T.Muted, TextAnchor.MiddleCenter));
                 T.Boton(_nav, new Rect(Pad, vh - 44f - 58f, vw - Pad * 2f, 58f),
                         "CONTINUAR", primario: true, () => _pantalla = Pantalla.Entorno);
             }
@@ -364,9 +400,9 @@ namespace Gameplay
 
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "ELEGÍ EL ENTORNO",
                       T.Estilo(T.FBebas, 28, T.Cream));
-            GUI.Label(new Rect(Pad, 132f, vw - Pad * 2f, 22f),
-                      "seleccioná un escaneo guardado para esta noche",
-                      T.Estilo(T.FElite, 12, T.Dim));
+            GUI.Label(new Rect(Pad, 132f, vw - Pad * 2f, 38f),
+                      "Seleccioná un escaneo guardado para esta noche",
+                      T.Estilo(T.FElite, 14, T.Dim, wrap: true));
 
             // "Avanzado" (puerto) anclado al borde inferior, arriba del CONFIRMAR.
             // Sólo para host multijugador (en un jugador el puerto no importa).
@@ -401,7 +437,7 @@ namespace Gameplay
                           T.Estilo(T.FMono, 14, ok ? T.Cream : T.Disabled));
                 GUI.Label(new Rect(fila.x + 14f, y, w - 28f, rowH),
                           $"{(_itemCount.TryGetValue(name, out var c) ? c : 0)} elementos",
-                          T.Estilo(T.FMono, 11, T.Dim, TextAnchor.MiddleRight));
+                          T.Estilo(T.FMono, 14, T.Dim, TextAnchor.MiddleRight));
                 y += rowH + gap;
             }
             GUI.EndScrollView();
@@ -422,21 +458,21 @@ namespace Gameplay
             bool foco = Gamepad.ImguiGamepadMenu.NextHasFocus;
             if (foco) T.Fill(header, new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.12f));
             _nav.Button(header, $"AVANZADO {(_avanzadoOpen ? "(-)" : "(+)")}",
-                        T.Estilo(T.FMono, 12, foco ? T.Cream : T.Muted, TextAnchor.MiddleLeft),
+                        T.Estilo(T.FMono, 15, foco ? T.Cream : T.Muted, TextAnchor.MiddleLeft),
                         () => { AudioManager.Sonar(c => c.uiConfirmar); _avanzadoOpen = !_avanzadoOpen; });
             y += 32f;
 
             if (!_avanzadoOpen) return;
 
-            GUI.Label(new Rect(Pad, y, 120f, 20f), "PUERTO", T.Estilo(T.FMono, 11, T.Muted));
+            GUI.Label(new Rect(Pad, y, 120f, 22f), "PUERTO", T.Estilo(T.FMono, 14, T.Muted));
             y += 22f;
             _portText = T.CampoTexto(new Rect(Pad, y, 150f, 46f), _portText,
                                      NetworkConfig.DefaultPort.ToString());
             bool custom = PuertoElegido() != NetworkConfig.DefaultPort;
-            GUI.Label(new Rect(Pad + 162f, y, w - 162f, 46f),
-                      custom ? "puerto custom: NO se autoanuncia; los demás deben escribir ip:puerto"
-                             : "por defecto: se autoanuncia por LAN (los demás lo encuentran solos)",
-                      T.Estilo(T.FMono, 10, custom ? T.Tan : T.Dim, TextAnchor.UpperLeft, wrap: true));
+            GUI.Label(new Rect(Pad + 162f, y, w - 162f, 54f),
+                      custom ? "Puerto custom: NO se autoanuncia; los demás deben escribir ip:puerto"
+                             : "Por defecto: se autoanuncia por LAN (los demás lo encuentran solos)",
+                      T.Estilo(T.FMono, 12, custom ? T.Tan : T.Dim, TextAnchor.UpperLeft, wrap: true));
         }
 
         // Puerto válido del campo (o el por defecto si está vacío/inválido).
@@ -467,9 +503,9 @@ namespace Gameplay
 
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "ESCANEO DE ENTORNO",
                       T.Estilo(T.FBebas, 28, T.Cream));
-            GUI.Label(new Rect(Pad, 132f, vw - Pad * 2f, 22f),
-                      "continuá editando un escaneo guardado o empezá uno nuevo",
-                      T.Estilo(T.FElite, 12, T.Dim));
+            GUI.Label(new Rect(Pad, 132f, vw - Pad * 2f, 38f),
+                      "Continuá editando un escaneo guardado o empezá uno nuevo",
+                      T.Estilo(T.FElite, 14, T.Dim, wrap: true));
 
             float rowH = 64f, gap = 10f;
             float listaY = 170f;
@@ -494,13 +530,13 @@ namespace Gameplay
                           T.Estilo(T.FMono, 15, T.Cream));
                 GUI.Label(new Rect(fila.x + 14f, y, zonaBorrar.x - fila.x - 22f, rowH),
                           $"{(_itemCount.TryGetValue(n, out var c) ? c : 0)} elementos · editar",
-                          T.Estilo(T.FMono, 11, T.Dim, TextAnchor.MiddleRight));
+                          T.Estilo(T.FMono, 14, T.Dim, TextAnchor.MiddleRight));
 
                 // Pedir confirmación de borrado es destructivo: alerta, no confirmación.
                 T.Celda(_nav, zonaBorrar, primario: false,
                         () => { AudioManager.Sonar(c2 => c2.uiAlerta); _confirmarBorrar = n; },
                         bordeOverride: T.Red);
-                GUI.Label(zonaBorrar, "borrar", T.Estilo(T.FMono, 11, T.Red, TextAnchor.MiddleCenter));
+                GUI.Label(zonaBorrar, "Borrar", T.Estilo(T.FMono, 14, T.Red, TextAnchor.MiddleCenter));
 
                 y += rowH + gap;
             }
@@ -520,8 +556,8 @@ namespace Gameplay
 
             GUI.Label(new Rect(panel.x + 22f, panel.y + 20f, pw - 44f, 30f),
                       $"¿ELIMINAR \"{_confirmarBorrar}\"?", T.Estilo(T.FBebas, 20, T.Cream));
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 56f, pw - 44f, 22f),
-                      "esta acción no se puede deshacer", T.Estilo(T.FMono, 12, T.Muted));
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 56f, pw - 44f, 24f),
+                      "Esta acción no se puede deshacer", T.Estilo(T.FMono, 15, T.Muted));
 
             float bw = (pw - 44f - 10f) / 2f;
             T.Boton(_nav, new Rect(panel.x + 22f, panel.yMax - 70f, bw, 48f),
@@ -669,16 +705,29 @@ namespace Gameplay
             // Anchor points extra: opción por dispositivo (ver AnchorPointManager).
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
                          "PUNTOS DE ANCLAJE",
-                         "colocá anclas en tu cuarto antes de empezar (menos deriva)",
+                         "Colocá anclas en tu cuarto antes de empezar (menos deriva)",
                          GameOptions.PuntosAncla,
                          () => GameOptions.PuntosAncla = !GameOptions.PuntosAncla);
             y += 68f;
+
+            // Detección automática de paredes: WIP desconectado, ver
+            // GameOptions.AutoWallScanBetaEnabled — no mostrar esta fila hasta que
+            // esté cableado y probado en dispositivo (no borrar, solo ocultar).
+            if (GameOptions.AutoWallScanBetaEnabled)
+            {
+                T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
+                             "PARED AUTOMÁTICA (BETA)",
+                             "En el escáner, sugiere paredes detectadas por la cámara para confirmar/ajustar",
+                             GameOptions.EscaneoAutoBeta,
+                             () => GameOptions.EscaneoAutoBeta = !GameOptions.EscaneoAutoBeta);
+                y += 68f;
+            }
 
             // US-11.1: el filtro VHS en la PARTIDA es parte de la atmósfera y no se
             // apaga; sobre los menús es opcional (gusto y legibilidad).
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
                          "FILTRO VHS EN MENÚS",
-                         "el grano y las líneas de cinta también sobre esta pantalla",
+                         "El grano y las líneas de cinta también sobre esta pantalla",
                          GameOptions.VhsEnMenus,
                          () => GameOptions.VhsEnMenus = !GameOptions.VhsEnMenus);
             y += 68f;
@@ -686,12 +735,12 @@ namespace Gameplay
             // Estado del mando + botón para ir al visualizador.
             var gm = Gamepad.GamepadManager.Instance;
             string estado = (gm != null && gm.IsConnected)
-                ? $"joystick: {gm.DisplayName}\nestado: conectado"
-                : "joystick: ninguno\nconectá un mando por Bluetooth desde el sistema";
+                ? $"Joystick: {gm.DisplayName}\nestado: conectado"
+                : "Joystick: ninguno\nconectá un mando por Bluetooth desde el sistema";
             var caja = new Rect(Pad, y, vw - Pad * 2f, 56f);
             T.Borde(caja, T.Border);
             GUI.Label(new Rect(caja.x + 14f, caja.y + 8f, caja.width - 28f, caja.height - 16f),
-                      estado, T.Estilo(T.FMono, 12, gm != null && gm.IsConnected ? T.CreamDim : T.Muted, TextAnchor.UpperLeft, wrap: true));
+                      estado, T.Estilo(T.FMono, 15, gm != null && gm.IsConnected ? T.CreamDim : T.Muted, TextAnchor.UpperLeft, wrap: true));
             y += 68f;
             T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 52f), "CONTROL (MANDO)", false,
                     () => _pantalla = Pantalla.Control);
@@ -708,7 +757,7 @@ namespace Gameplay
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f), "DESARROLLO", T.Estilo(T.FMono, 11, T.Red));
             y += 22f;
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f),
-                      $"progreso: {NightProgress.Desbloqueadas} de {total} noches desbloqueadas",
+                      $"Progreso: {NightProgress.Desbloqueadas} de {total} noches desbloqueadas",
                       T.Estilo(T.FMono, 11, T.CreamDim));
             y += 26f;
 
@@ -745,18 +794,18 @@ namespace Gameplay
 
             var gm = Gamepad.GamepadManager.Instance;
             string status = (gm != null && gm.IsConnected)
-                ? $"joystick: {gm.DisplayName}  ·  {gm.Brand}"
-                : "ningún mando conectado";
-            GUI.Label(new Rect(Pad, 136f, vw - Pad * 2f, 24f), status,
-                      T.Estilo(T.FMono, 12, gm != null && gm.IsConnected ? T.Green : T.Muted));
+                ? $"Joystick: {gm.DisplayName}  ·  {gm.Brand}"
+                : "Ningún mando conectado";
+            GUI.Label(new Rect(Pad, 136f, vw - Pad * 2f, 26f), status,
+                      T.Estilo(T.FMono, 15, gm != null && gm.IsConnected ? T.Green : T.Muted));
 
             float y = 168f;
             if (gm != null && gm.IsConnected)
             {
                 bool present = gm.TryGetBattery(out float lvl);
-                string bat = present ? $"batería: {Mathf.RoundToInt(lvl * 100f)}%" : "batería: N/D";
-                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), bat,
-                          T.Estilo(T.FMono, 12, T.Muted));
+                string bat = present ? $"Batería: {Mathf.RoundToInt(lvl * 100f)}%" : "Batería: N/D";
+                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f), bat,
+                          T.Estilo(T.FMono, 15, T.Muted));
                 y += 30f;
             }
 
