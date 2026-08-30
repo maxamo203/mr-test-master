@@ -119,6 +119,61 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &2684987
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2684989}
+  - component: {fileID: 2684988}
+  m_Layer: 0
+  m_Name: CollectibleSpawnManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2684988
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2684987}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ae32d8e057d13f4fa52f6c4b8e0afc0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Collectibles.CollectibleSpawnManager
+  pickupMaxDistance: 1
+  useFurnitureTops: 0
+  minFurnitureTopArea: 0.05
+  surfaceOffset: 0.06
+  scatterOnFloor: 1
+  floorOnlyIfClearAbove: 1
+  floorSpacing: 1.5
+  floorRadius: 3
+  maxSpawnPoints: 16
+  minDistanceFromBatteries: 0.6
+  _showDebugHud: 0
+--- !u!4 &2684989
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2684987}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.09585, y: 1.01782, z: -0.24605}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &40919614 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6704683610357316520, guid: 45413bf37c849e7448b9260175c42bc6, type: 3}
@@ -183,9 +238,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MRCardboardController
   arCamera: {fileID: 0}
-  _ipd: 0.064
-  _cropLeft: {fileID: 2100000, guid: 3f212dad20874ad692177c79d929666b, type: 2}
-  _cropRight: {fileID: 2100000, guid: c77acf90d735413d916c0a8e5d9057ac, type: 2}
 --- !u!4 &56462986
 Transform:
   m_ObjectHideFlags: 0
@@ -213,8 +265,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a58469bd2b5ce3139bd811688e4c007, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CardboardCalibrationUI
-  _cropLeft: {fileID: 2100000, guid: 3f212dad20874ad692177c79d929666b, type: 2}
-  _cropRight: {fileID: 2100000, guid: c77acf90d735413d916c0a8e5d9057ac, type: 2}
 --- !u!1 &65284393
 GameObject:
   m_ObjectHideFlags: 0
@@ -410,7 +460,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameBootstrapper
   _host: 127.0.0.1
-  _port: 7777
 --- !u!114 &193648692
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1007,7 +1056,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d3e4f5a6b7c84d9e0f12a3b4c5d6e7f8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SanityHUD
-  _barWidth: 220
 --- !u!114 &862056580
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1035,6 +1083,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Gameplay.GameDirector
   _debugHud: 1
   _practiceMode: 0
+  _enterClearance: 0.5
 --- !u!4 &862056582
 Transform:
   m_ObjectHideFlags: 0
@@ -1125,7 +1174,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Bateries.BatteryPickupAction
   priority: 100
   showActionButton: 1
-  aimMaxDistance: 2.5
+  aimMaxDistance: 1
   aimAngle: 12
   aimCheckInterval: 0.1
   blockThroughWalls: 1
@@ -1274,6 +1323,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6589cd2334914ae47931b1016e48f3e6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARLobbyUI
+  _briefingDuration: 3
+  _ghostAlpha: 0.35
 --- !u!114 &1828601338
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1586,3 +1637,4 @@ SceneRoots:
   - {fileID: 1202678327}
   - {fileID: 2141795406}
   - {fileID: 862056582}
+  - {fileID: 2684989}

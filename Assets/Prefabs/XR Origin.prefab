@@ -52,8 +52,18 @@ MonoBehaviour:
   darknessAmount: 0.957
   createRealLight: 1
   realLightIntensityMultiplier: 1
+  maxCharge: 100
+  currentCharge: 100
+  drainPerSecond: 2
+  flickerChargeThreshold: 0.4
+  flickerMaxChancePerSecond: 1.2
+  flickerDurationMin: 0.05
+  flickerDurationMax: 0.35
+  flickerDipMin: 0.05
+  flickerDipMax: 0.6
   isOn: 1
   toggleWithTwoFingers: 1
+  requireMatchToOperate: 1
 --- !u!1 &6704683610357316520
 GameObject:
   m_ObjectHideFlags: 0
@@ -402,12 +412,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cf12af516cdb229db8a3147ee5576f59, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MRCardboardController
-  gyroTracking: {fileID: 876770688803727703}
   arCamera: {fileID: 4247777932462926091}
-  arCameraBackground: {fileID: 8817273415659160956}
-  arCameraManager: {fileID: 5943044092711665192}
-  camWidth: 1280
-  camHeight: 720
 --- !u!114 &7745527467477412750
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -469,11 +474,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a4f2c8e1b7d365a9c4e8b1f7a2d5e6c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARPlaneOccluder
-  occludeAllPlanes: 0
+  _occluderMaterial: {fileID: 0}
+  _debugMaterial: {fileID: 0}
+  _occludePlanes: 1
+  _showDebug: 0
+  _showHUD: 1
+  _smoothSpeed: 6
+  _minPlaneSize: 0.02
   alignmentFilter: 0
-  showPlanesForDebug: 0
-  debugMaterial: {fileID: 0}
-  showDebugHUD: 0
 --- !u!114 &6526540536115211872
 MonoBehaviour:
   m_ObjectHideFlags: 0

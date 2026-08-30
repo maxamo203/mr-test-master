@@ -161,6 +161,21 @@ namespace Gameplay
                         return Mathf.Max(0f, m.chanceMultiplier);
             return 1f;
         }
+
+        [Header("Coleccionables (reliquias del ritual)")]
+        [Tooltip("Master switch. Desactivado por defecto: ninguna noche existente " +
+                 "cambia de comportamiento sola.")]
+        public bool collectiblesActive = false;
+        [Tooltip("Demora (s) antes de que aparezca la PRIMERA reliquia de la noche.")]
+        public float collectibleInitialDelaySeconds = 5f;
+        [Tooltip("Espera aleatoria (s), medida desde que se RECOGIÓ la última reliquia " +
+                 "(no desde que apareció), antes de que aparezca la siguiente.")]
+        public float collectibleIntervalMin = 40f;
+        public float collectibleIntervalMax = 80f;
+        [Tooltip("Cuantas reliquias como maximo aparecen en TODA la noche (recogidas o no: " +
+                 "cuenta apariciones, no pickups). Al llegar al limite no aparecen mas, aunque " +
+                 "falte tiempo para el amanecer. 0 = sin limite.")]
+        public int collectibleMaxPerNight = 5;
     }
 
     // Ajuste de una rareza de bateria para esta noche (multiplica su probabilidad base).

@@ -66,6 +66,7 @@ public class NetworkManager : MonoBehaviour
     public event Action<float>  OnRitualBook;          // client: oscuridad del libro ritual (0..1)
     public event Action<byte[]> OnMapReceived;         // client: recibió el .mscn del mapa
     public event Action<byte, float> OnBatteryCollected; // client: recogió pila (rarityIndex, charge)
+    public event Action<int>    OnCollectibleTotal;   // todos: total de reliquias recogidas esta noche
     public event Action<float, float> OnSanityUpdated;    // client: cordura autoritativa (valor, max)
     public event Action               OnPlayerDied;        // client: fui atrapado (pantalla de muerte)
     public event Action<uint, byte[]> OnVoiceData;         // todos: frame de voz de (emisor, adpcm)
@@ -320,6 +321,13 @@ public class NetworkManager : MonoBehaviour
     }
 
     // Client: pedir al servidor recoger una pila apuntada (el server valida cercanía).
+    public void ClientSendCollectiblePickup(uint collectibleNetId)
+    {
+        if (_cli == null) return;
+        var body = new Collectibles.CollectiblePickupMsg { NetworkId = collectibleNetId }.Serialize();
+        _cli.Send(MsgHelper.Frame(MessageType.CollectiblePickup, body));
+    }
+
     public void ClientSendBatteryPickup(uint batteryNetId)
     {
         if (_cli == null) return;
@@ -446,6 +454,18 @@ public class NetworkManager : MonoBehaviour
         if (_srv == null) return;
         var body = new Bateries.BatteryCollectedMsg { RarityIndex = rarityIndex, Charge = charge }.Serialize();
         _srv.Send(clientId, MsgHelper.Frame(MessageType.BatteryCollected, body));
+    }
+
+    // Server → TODOS: nuevo total de reliquias recogidas esta noche. El broadcast no
+    // le vuelve al host por red, así que se invoca también localmente (mismo patrón
+    // que ServerNightSurvived).
+    public void ServerBroadcastCollectibleTotal(int total)
+    {
+        if (_srv == null) return;
+        byte t = (byte)Mathf.Clamp(total, 0, 255);
+        var body = new Collectibles.CollectibleTotalMsg { Total = t }.Serialize();
+        _srv.Broadcast(MsgHelper.Frame(MessageType.CollectibleTotal, body));
+        OnCollectibleTotal?.Invoke(t);
     }
 
     // ── Tick ──────────────────────────────────────────────────────────────
@@ -601,6 +621,13 @@ public class NetworkManager : MonoBehaviour
                 Bateries.BatterySpawnManager.Instance?.ServerHandlePickup(incoming.ClientId, pick.NetworkId);
                 break;
             }
+            case MessageType.CollectiblePickup:
+            {
+                if (!GameStarted) return;
+                var pick = Collectibles.CollectiblePickupMsg.Deserialize(incoming.Body);
+                Collectibles.CollectibleSpawnManager.Instance?.ServerHandlePickup(incoming.ClientId, pick.NetworkId);
+                break;
+            }
             case MessageType.VoiceData:
             {
                 // Reenviar al resto de la sala poniendo el emisor REAL (el cliente no
@@ -750,6 +777,12 @@ public class NetworkManager : MonoBehaviour
             {
                 var m = Bateries.BatteryCollectedMsg.Deserialize(msg.Body);
                 OnBatteryCollected?.Invoke(m.RarityIndex, m.Charge);
+                break;
+            }
+            case MessageType.CollectibleTotal:
+            {
+                var m = Collectibles.CollectibleTotalMsg.Deserialize(msg.Body);
+                OnCollectibleTotal?.Invoke(m.Total);
                 break;
             }
             case MessageType.PlayerSanity:

@@ -21,4 +21,6 @@ public enum MessageType : ushort
     RitualBook      = 19,  // server → all: oscuridad del libro ritual (0..1, ~5 Hz)
     VoiceData       = 20,  // client → server → resto: frame de voz (ADPCM, ~30 ms)
     PlayerRoster    = 21,  // server → all: quiénes están en la sala (para el chat de voz)
+    CollectibleTotal  = 22, // server → all: total de reliquias recogidas esta noche
+    CollectiblePickup = 23, // client → server: pedido de recoger la reliquia apuntada
 }
