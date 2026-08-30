@@ -125,7 +125,7 @@ public class GameBootstrapper : MonoBehaviour
         int encontradas = hosts != null ? hosts.Count : 0;
 
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f),
-                  encontradas > 0 ? "salas en tu red:" : "buscando salas en tu red…",
+                  encontradas > 0 ? "Salas en tu red:" : "Buscando salas en tu red…",
                   T.Estilo(T.FElite, 12, T.Dim));
         y += 28f;
 
@@ -155,7 +155,7 @@ public class GameBootstrapper : MonoBehaviour
         _host = T.CampoTexto(new Rect(Pad, y, vw - Pad * 2f, 50f), _host, "192.168.1.42");
         y += 56f;
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 18f),
-                  $"si no ponés puerto se usa el {NetworkConfig.DefaultPort} (o escribí ip:puerto)",
+                  $"Si no ponés puerto se usa el {NetworkConfig.DefaultPort} (o escribí ip:puerto)",
                   T.Estilo(T.FMono, 10, T.Dim));
         y += 30f;
 
@@ -219,11 +219,11 @@ public class GameBootstrapper : MonoBehaviour
             // que están conectados los demás.
             if (_hostIpAlt.Count > 0)
                 GUI.Label(new Rect(Pad, 122f, vw - Pad * 2f, 34f),
-                          "¿no te encuentran? probá: " + string.Join("  ·  ", _hostIpAlt),
+                          "¿No te encuentran? probá: " + string.Join("  ·  ", _hostIpAlt),
                           T.Estilo(T.FMono, 10, T.Dim, TextAnchor.UpperLeft, wrap: true));
             else
                 GUI.Label(new Rect(Pad, 122f, vw - Pad * 2f, 34f),
-                          "compartí la dirección con los demás jugadores",
+                          "Compartí la dirección con los demás jugadores",
                           T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
             yBotones = 164f;
         }

@@ -24,6 +24,8 @@ namespace Scanner
         Origin_Adjust,    // acomodando a mano el 0,0 del mapa — ver ManualCalibration
         Selected,         // hay un objeto seleccionado (panel de edicion visible)
         EditMoveTarget,   // moviendo un objeto/vertice ya colocado
+        AutoWall_Scanning, // BETA: ARPlaneManager activo, candidatos de pared visibles/tappeables — ver AutoWallBuilder
+        AutoWall_Confirm,  // BETA: hay un candidato tocado, panel confirmar/descartar visible
     }
 
     [DefaultExecutionOrder(-50)]

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using T = MortuoriumTheme;
 using UnityEngine.InputSystem;
@@ -22,6 +23,7 @@ namespace Scanner
         [SerializeField] private CubeBuilder _cubeBuilder;
         [SerializeField] private MarkerBuilder _markerBuilder;
         [SerializeField] private ARImageAnchor _imageAnchor;
+        [SerializeField] private AutoWallBuilder _autoWallBuilder;
 
         private ScanStateMachine _fsm;
         private ResolvedHit _lastHit;
@@ -57,6 +59,7 @@ namespace Scanner
             if (_cubeBuilder == null) _cubeBuilder = FindFirstObjectByType<CubeBuilder>();
             if (_markerBuilder == null) _markerBuilder = FindFirstObjectByType<MarkerBuilder>();
             if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
+            if (_autoWallBuilder == null) _autoWallBuilder = FindFirstObjectByType<AutoWallBuilder>();
 
             // Fantasma en vivo de lo que se va a colocar. Lo instanciamos acá para no
             // tener que cablearlo en la escena (encuentra los builders por su cuenta).
@@ -190,7 +193,7 @@ namespace Scanner
                 ? "EDITANDO ESCANEO" : "ESCANEO DE ENTORNO";
             GUI.Label(new Rect(84f, 18f, vw - 100f, 36f), titulo, T.Estilo(T.FBebas, 22, T.Cream));
             GUI.Label(new Rect(84f, 56f, vw - 100f, 40f),
-                      "apuntá con el centro de la pantalla al punto real y tocá COLOCAR",
+                      "Apuntá con el centro de la pantalla al punto real y tocá COLOCAR",
                       T.Estilo(T.FMono, 11, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
         }
 
@@ -266,7 +269,8 @@ namespace Scanner
         {
             var modo = _fsm.Current;
             bool idle = modo == ScannerMode.Idle;
-            bool puedeRecal = !IsPlacingMode(modo);   // recalibrar salvo mientras se coloca
+            bool enAutoWall = modo == ScannerMode.AutoWall_Scanning || modo == ScannerMode.AutoWall_Confirm;
+            bool puedeRecal = !IsPlacingMode(modo) && !enAutoWall;   // recalibrar salvo mientras se coloca
 
             bool enPared  = modo == ScannerMode.Wall_V1 || modo == ScannerMode.Wall_Height || modo == ScannerMode.Wall_Vn;
             bool enCubo   = modo == ScannerMode.Cube_V1 || modo == ScannerMode.Cube_V2 || modo == ScannerMode.Cube_V3;
@@ -280,8 +284,10 @@ namespace Scanner
             // vino de la imagen o de la calibración manual.
             bool hayOrigen = WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady;
 
-            // Entradas de la botonera (en orden).
-            var items = new (string label, MortuoriumIcons.Icon icon, bool activo, bool enabled, Action onTap)[]
+            // Entradas de la botonera (en orden). El item de índice 3 ("IDENTIFICAR")
+            // le cuelga el submenú de marcadores más abajo — si agregás items, hacelo
+            // DESPUÉS de RECALIBRAR para no correr ese índice fijo.
+            var items = new List<(string label, MortuoriumIcons.Icon icon, bool activo, bool enabled, Action onTap)>
             {
                 ("PARED",        MortuoriumIcons.Icon.Pared,  enPared,  idle, () => _wallBuilder?.StartPolyline()),
                 ("CUBO",         MortuoriumIcons.Icon.Cubo,   enCubo,   idle, () => _cubeBuilder?.StartCube()),
@@ -296,8 +302,15 @@ namespace Scanner
                 ("RECALIBRAR\n(+mover)", MortuoriumIcons.Icon.RecalMover, false, puedeRecal, () => Recalibrar(false)),
             };
 
+            // WIP desconectado, ver GameOptions.AutoWallScanBetaEnabled — no mostrar
+            // este botón hasta que AutoWallBuilder esté cableado y probado en
+            // dispositivo (no borrar, solo ocultar).
+            if (GameOptions.AutoWallScanBetaEnabled && GameOptions.EscaneoAutoBeta)
+                items.Add(("PARED AUTO\n(BETA)", MortuoriumIcons.Icon.Pared, enAutoWall, idle,
+                          () => _autoWallBuilder?.StartAutoScan()));
+
             var viewport = new Rect(Pad, y, vw - Pad * 2f, h);
-            float contentW = items.Length * (ToolW + ToolGap) - ToolGap;
+            float contentW = items.Count * (ToolW + ToolGap) - ToolGap;
             float maxScroll = Mathf.Max(0f, contentW - viewport.width);
 
             HandleToolDrag(viewport, maxScroll);
@@ -309,7 +322,7 @@ namespace Scanner
             _identVisible = _identScreenX + ToolW > viewport.x && _identScreenX < viewport.xMax;
 
             GUI.BeginGroup(viewport);
-            for (int i = 0; i < items.Length; i++)
+            for (int i = 0; i < items.Count; i++)
             {
                 float bx = i * (ToolW + ToolGap) - _toolScroll;
                 if (bx + ToolW < 0f || bx > viewport.width) continue;   // fuera de vista
@@ -433,7 +446,7 @@ namespace Scanner
 
             if (n == 0)
             {
-                GUI.Label(new Rect(x, y, bw, 44f), "catálogo vacío",
+                GUI.Label(new Rect(x, y, bw, 44f), "Catálogo vacío",
                           T.Estilo(T.FMono, 12, T.Dim, TextAnchor.MiddleCenter));
                 return;
             }
@@ -469,18 +482,20 @@ namespace Scanner
 
             string hint = modo switch
             {
-                ScannerMode.Wall_V1        => "apuntá al primer vértice de la pared (piso) y tocá COLOCAR",
-                ScannerMode.Wall_Height    => "apuntá arriba (cielorraso) y tocá COLOCAR para fijar la altura",
+                ScannerMode.Wall_V1        => "Apuntá al primer vértice de la pared (piso) y tocá COLOCAR",
+                ScannerMode.Wall_Height    => "Apuntá arriba (cielorraso) y tocá COLOCAR para fijar la altura",
                 ScannerMode.Wall_Vn        => $"altura de la polilínea: {(_wallBuilder != null ? _wallBuilder.CurrentPolylineHeight : 0f):F2} m — siguiente vértice y COLOCAR",
-                ScannerMode.DoorPickWall   => "tocá la pared donde va el agujero de la puerta",
-                ScannerMode.Door_V1        => "apuntá a la esquina inferior de la puerta y tocá COLOCAR",
-                ScannerMode.Door_V2        => "apuntá a la esquina superior opuesta y tocá COLOCAR",
-                ScannerMode.Cube_V1        => "apuntá a la 1ra esquina del cubo y tocá COLOCAR",
-                ScannerMode.Cube_V2        => "apuntá a la esquina opuesta (diagonal) y tocá COLOCAR",
-                ScannerMode.Cube_V3        => "apuntá a un 3er punto para fijar la rotación y tocá COLOCAR",
-                ScannerMode.Floor_Place    => "apuntá al piso real y tocá COLOCAR (después podés arrastrarlo)",
+                ScannerMode.DoorPickWall   => "Tocá la pared donde va el agujero de la puerta",
+                ScannerMode.Door_V1        => "Apuntá a la esquina inferior de la puerta y tocá COLOCAR",
+                ScannerMode.Door_V2        => "Apuntá a la esquina superior opuesta y tocá COLOCAR",
+                ScannerMode.Cube_V1        => "Apuntá a la 1ra esquina del cubo y tocá COLOCAR",
+                ScannerMode.Cube_V2        => "Apuntá a la esquina opuesta (diagonal) y tocá COLOCAR",
+                ScannerMode.Cube_V3        => "Apuntá a un 3er punto para fijar la rotación y tocá COLOCAR",
+                ScannerMode.Floor_Place    => "Apuntá al piso real y tocá COLOCAR (después podés arrastrarlo)",
                 ScannerMode.Marker_Place   => $"apuntá a la PARED donde hay {(_markerBuilder != null && _markerBuilder.PendingType != null ? _markerBuilder.PendingType.DisplayName : "el punto")} y tocá COLOCAR",
-                ScannerMode.EditMoveTarget => "apuntá a la nueva posición y tocá COLOCAR",
+                ScannerMode.EditMoveTarget => "Apuntá a la nueva posición y tocá COLOCAR",
+                ScannerMode.AutoWall_Scanning => "BETA: movete y mirá las paredes; tocá una resaltada para confirmarla",
+                ScannerMode.AutoWall_Confirm  => "¿Confirmar esta pared detectada como pared real?",
                 _ => null,
             };
             if (hint == null) return;
@@ -488,7 +503,7 @@ namespace Scanner
             // Altura del panel según los controles extra del modo.
             float hExtra = 0f;
             if (enPared) hExtra = 44f /*slider ancho*/ + 48f /*terminar*/ + 34f /*cerrar*/;
-            if (modo == ScannerMode.Cube_V3) hExtra = 48f;
+            if (modo == ScannerMode.Cube_V3 || modo == ScannerMode.AutoWall_Confirm) hExtra = 48f;
             float hPanel = 30f /*hint*/ + hExtra + 48f /*cancelar*/ + 24f;
 
             var panel = new Rect(Pad, yBase - hPanel, vw - Pad * 2f, hPanel);
@@ -507,7 +522,7 @@ namespace Scanner
             {
                 // Ancho (grosor) de la pared en vivo: propaga a toda la polilinea.
                 GUI.Label(new Rect(x, y, w * 0.55f, 20f),
-                          $"ancho pared: {_wallBuilder.CurrentPolylineWidth:F2} m",
+                          $"Ancho pared: {_wallBuilder.CurrentPolylineWidth:F2} m",
                           T.Estilo(T.FMono, 11, T.CreamDim));
                 float nuevoW = T.Slider(new Rect(x + w * 0.58f, y - 4f, w * 0.42f, 26f),
                                         _wallBuilder.CurrentPolylineWidth, 0.05f, 0.5f);
@@ -522,7 +537,7 @@ namespace Scanner
                 if (_closePolyline) T.Fill(new Rect(box.x + 4f, box.y + 4f, 10f, 10f), T.Tan);
                 if (GUI.Button(rCerrar, GUIContent.none, GUIStyle.none))
                     _closePolyline = !_closePolyline;
-                GUI.Label(new Rect(x + 26f, y, w - 26f, 26f), "cerrar (unir al inicio)",
+                GUI.Label(new Rect(x + 26f, y, w - 26f, 26f), "Cerrar (unir al inicio)",
                           T.Estilo(T.FMono, 11, T.CreamDim));
                 y += 32f;
 
@@ -538,9 +553,26 @@ namespace Scanner
                 y += 48f;
             }
 
-            T.Boton(null, new Rect(x, y, w, 40f), "CANCELAR", primario: false,
-                    () => _fsm.SetMode(ScannerMode.Idle), fontSize: 14,
-                    textColor: T.Muted);
+            if (modo == ScannerMode.AutoWall_Confirm)
+            {
+                T.Boton(null, new Rect(x, y, w, 40f), "CONFIRMAR PARED", primario: true,
+                        () => _autoWallBuilder?.ConfirmSelected(), fontSize: 15);
+                y += 48f;
+            }
+
+            // El botón de cierre cambia de rol en el modo BETA: "terminar" corta el
+            // ARPlaneManager entero (AutoWall_Scanning); "descartar" solo suelta el
+            // candidato tocado y vuelve a escanear (AutoWall_Confirm).
+            if (modo == ScannerMode.AutoWall_Scanning)
+                T.Boton(null, new Rect(x, y, w, 40f), "TERMINAR", primario: false,
+                        () => _autoWallBuilder?.EndAutoScan(), fontSize: 14, textColor: T.Muted);
+            else if (modo == ScannerMode.AutoWall_Confirm)
+                T.Boton(null, new Rect(x, y, w, 40f), "DESCARTAR", primario: false,
+                        () => _autoWallBuilder?.DiscardSelected(), fontSize: 14, textColor: T.Muted);
+            else
+                T.Boton(null, new Rect(x, y, w, 40f), "CANCELAR", primario: false,
+                        () => _fsm.SetMode(ScannerMode.Idle), fontSize: 14,
+                        textColor: T.Muted);
         }
 
         // Panel del flujo de anclas: contador, motivo del último rechazo y los dos
@@ -562,14 +594,14 @@ namespace Scanner
             float y = panel.y + 10f;
 
             GUI.Label(new Rect(x, y, w, 30f),
-                      "colocá anclas repartidas por el cuarto y tocá COLOCAR; " +
+                      "Colocá anclas repartidas por el cuarto y tocá COLOCAR; " +
                       "sirven para que el escaneo no se corra al alejarte",
                       T.Estilo(T.FElite, 12, T.Tan, TextAnchor.UpperLeft, wrap: true));
             y += 32f;
 
             string estado = mgr.Count < AnchorPointManager.MinAnclas
-                ? $"anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
-                : $"anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
+                ? $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
+                : $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
             GUI.Label(new Rect(x, y, w * 0.6f, 22f), estado,
                       T.Estilo(T.FMono, 12, mgr.PuedeCerrar ? T.Green : T.Tan));
             if (!string.IsNullOrEmpty(_errorAnclas))

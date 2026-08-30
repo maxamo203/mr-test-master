@@ -103,6 +103,12 @@ InitTestScene*.unity*
 # /Assets/AddressableAssetsData/OSX/addressables_content_state.bin
 /[Aa]ssets/AddressableAssetsData/*/*.bin*
 
+# Caché escratch de AR Foundation XR Simulation (regenerable, no es contenido real)
+/[Aa]ssets/XR/Temp*
+
+# Escenas de auto-recuperación de Unity tras un cierre anormal del Editor
+/[Aa]ssets/_Recovery/
+
 # Visual Scripting auto-generated files
 /[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db
 /[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db.meta

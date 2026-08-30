@@ -79,11 +79,11 @@ namespace Scanner
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "GUARDAR ESCANEO",
                       T.Estilo(T.FBebas, 28, T.Cream));
             GUI.Label(new Rect(Pad, 132f, vw - Pad * 2f, 22f),
-                      "nombrá este entorno para encontrarlo luego",
+                      "Nombrá este entorno para encontrarlo luego",
                       T.Estilo(T.FElite, 12, T.Dim));
 
             _nombre = T.CampoTexto(new Rect(Pad, 170f, vw - Pad * 2f, 52f),
-                                   _nombre, "ej: living de casa");
+                                   _nombre, "Ej: living de casa");
 
             // Aviso si el escaneo no tiene imagen de referencia asociada (sin ella
             // no se puede sincronizar en multijugador).
@@ -91,7 +91,7 @@ namespace Scanner
                              (!string.IsNullOrEmpty(NombreEdicion) && ScanSerializer.HasRefImage(NombreEdicion));
             if (!hayImagen)
                 GUI.Label(new Rect(Pad, 234f, vw - Pad * 2f, 44f),
-                          "ojo: este escaneo no tiene imagen de referencia; sin ella no " +
+                          "Ojo: este escaneo no tiene imagen de referencia; sin ella no " +
                           "se puede usar en multijugador.",
                           T.Estilo(T.FMono, 11, T.Tan, TextAnchor.UpperLeft, wrap: true));
 
@@ -110,8 +110,8 @@ namespace Scanner
         private void Guardar()
         {
             var nombre = (_nombre ?? "").Trim();
-            if (string.IsNullOrEmpty(nombre)) { Flash("poné un nombre"); return; }
-            if (SceneRegistry.Instance == null) { Flash("no hay nada que guardar"); return; }
+            if (string.IsNullOrEmpty(nombre)) { Flash("Poné un nombre"); return; }
+            if (SceneRegistry.Instance == null) { Flash("No hay nada que guardar"); return; }
 
             var data = SceneRegistry.Instance.Capture(nombre);
             // Persistimos también la imagen de referencia capturada en esta sesión
@@ -130,9 +130,9 @@ namespace Scanner
         private void Compartir()
         {
             var path = ScanPackage.WriteTempFile(NombreEdicion);
-            if (string.IsNullOrEmpty(path)) { Flash("no se pudo exportar"); return; }
+            if (string.IsNullOrEmpty(path)) { Flash("No se pudo exportar"); return; }
             MscnShare.Share(path);
-            Flash($"compartiendo '{NombreEdicion}'…");
+            Flash($"Compartiendo '{NombreEdicion}'…");
         }
 
         private void Flash(string msg)
