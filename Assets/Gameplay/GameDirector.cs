@@ -106,24 +106,6 @@ namespace Gameplay
             ArbmosDirector.Ensure().StartRun();      // alucinacion de cordura (individual por jugador)
             RitualBookDirector.Ensure().StartRun();  // libro sobre la imagen: eventos de oscuridad
             _running = true;
-
-            // DIAGNÓSTICO TEMPORAL (solo dev build): spawnea un Sorken pegado a la cámara
-            // para confirmar a ojo si el problema es de renderizado. No usa _sorken/
-            // _sorkenNetId, así que no interfiere con el intento real — sacar una vez
-            // resuelto el bug de visibilidad (ver conversación).
-            if (Debug.isDebugBuild && Camera.main != null)
-            {
-                var cam = Camera.main.transform;
-                var debugPos = cam.position + cam.forward * 2f;
-                var debugId = NetworkManager.Instance.ServerSpawn(EntityTypeIds.Sorken, debugPos, 0);
-                var debugSorken = GetSorken(debugId);
-                if (debugSorken != null)
-                {
-                    debugSorken.FaceDirection(-cam.forward);
-                    debugSorken.SetState(SorkenState.Chasing);
-                }
-                Debug.Log($"[GameDirector] DEBUG: Sorken de prueba a 2m frente a cámara (netId={debugId}).");
-            }
         }
 
         // El reloj local (host) + el broadcast a los clientes, que no conocen la
