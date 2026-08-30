@@ -382,12 +382,14 @@ namespace Gameplay
 
                 // Récord de reliquias de ESTA noche, por dispositivo (ver
                 // CollectibleProgress) — es por noche, no un número global. Sólo se
-                // muestra si ya se consiguió alguna vez.
-                int recordReliquias = CollectibleProgress.Record(i);
-                if (recordReliquias > 0)
+                // muestra si la noche tiene reliquias habilitadas.
+                if (nights[i].collectiblesActive)
                 {
+                    int recordReliquias = CollectibleProgress.Record(i);
+                    int maxReliquias    = nights[i].collectibleMaxPerNight;
+                    string max = maxReliquias > 0 ? maxReliquias.ToString() : "∞";
                     GUI.Label(new Rect(r.x, r.y + 60f, r.width, 16f),
-                              $"Récord: {recordReliquias}",
+                              $"Reliquias {recordReliquias}/{max}",
                               T.Estilo(T.FMono, 11, T.Tan, TextAnchor.MiddleCenter));
                 }
             }
