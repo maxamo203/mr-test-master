@@ -113,6 +113,14 @@ public class AnchorPointManager : MonoBehaviour
     // ARLobbyUI en vez de resolver el raycast por su cuenta otra vez).
     public ResolvedHit UltimoHit { get; private set; }
 
+    // Hay un marco de referencia usable para medir contra él. Antes alcanzaba con
+    // preguntar por la imagen; con la calibración manual (ManualCalibration) el mapa
+    // puede estar anclado sin que la imagen se haya visto nunca. Sigue siendo false
+    // mientras hay una búsqueda de imagen en curso (RestartTracking desparenta
+    // WorldOrigin a propósito y quien lanza la búsqueda descarta el anchor manual).
+    private bool HayCalibracion =>
+        (_imageAnchor != null && _imageAnchor.IsFound) || ManualCalibration.Calibrado;
+
     // ── Ciclo de vida ─────────────────────────────────────────────────────
 
     public static AnchorPointManager Ensure()
@@ -177,7 +185,7 @@ public class AnchorPointManager : MonoBehaviour
 
         var wo = WorldOrigin.Instance;
         if (wo == null || !wo.IsReady) { error = "todavía no hay calibración"; return false; }
-        if (_imageAnchor == null || !_imageAnchor.IsFound) { error = "buscando la imagen…"; return false; }
+        if (!HayCalibracion) { error = "buscando la imagen…"; return false; }
         if (_anclas.Count >= MaxAnclas) { error = $"máximo {MaxAnclas} anclas"; return false; }
         if (CardboardBloquea) { error = "salí de Cardboard para colocar anclas"; return false; }
 
@@ -323,9 +331,7 @@ public class AnchorPointManager : MonoBehaviour
 #if UNITY_EDITOR
         NudgeCamaraEditor();
 #endif
-        bool colocando = Colocando
-                         && _imageAnchor != null && _imageAnchor.IsFound
-                         && !CardboardBloquea;
+        bool colocando = Colocando && HayCalibracion && !CardboardBloquea;
 
         var calidad = AnchorQuality.Instance;
         if (!colocando)
@@ -380,7 +386,11 @@ public class AnchorPointManager : MonoBehaviour
 
         // Nunca pelear con una búsqueda de imagen en curso: RestartTracking desparenta
         // WorldOrigin a propósito y re-ancla al detectar.
-        if (_imageAnchor != null && !_imageAnchor.IsFound) return;
+        if (!HayCalibracion) return;
+
+        // Ni con el jugador acomodando el 0,0 a mano: re-enraizar en medio del ajuste
+        // le movería el mapa justo mientras lo está alineando.
+        if (ManualCalibration.Ajustando) return;
 
         // Tras una relocalización (app resume) las poses se mueven en bloque.
         if (!SesionEstable()) return;
@@ -468,14 +478,27 @@ public class AnchorPointManager : MonoBehaviour
         var wo = WorldOrigin.Instance;
         if (wo == null || !wo.IsReady) return;
 
-        CapturarImagen();
         _ultimoResetImagen = Time.time;
+        RecalibrarCadena();
+    }
+
+    // Re-mide TODA la cadena contra las poses del mundo tal como están AHORA y vuelve
+    // a derivar las relaciones cacheadas. Se llama cuando algo movió WorldOrigin por
+    // fuera de esta clase y lo cacheado quedó viejo:
+    //   - la imagen se re-detectó (ARImageAnchor ya reparentó a su anchor nuevo);
+    //   - el jugador terminó de acomodar el 0,0 a mano (ManualCalibration.Listo).
+    // Sin esto, el primer cambio de ancla devuelve el mapa de un salto a la pose vieja.
+    public void RecalibrarCadena()
+    {
+        var wo = WorldOrigin.Instance;
+        if (wo == null || !wo.IsReady) return;
+
+        // T(a0←WO) también quedó viejo si el ajuste manual corrió el origen estando
+        // colgado del anchor de la imagen (es no-op si el padre es otro).
+        CapturarImagen();
 
         if (_anclas.Count == 0) return;
 
-        // ARImageAnchor ya reparentó WorldOrigin al anchor nuevo, así que las poses del
-        // mundo están frescas: re-medimos la cadena entera contra ellas. Con eso todas
-        // las relaciones cacheadas vuelven a valer contra la imagen de una sola vez.
         var raiz = _anclas[0].Trackeando ? _anclas[0] : PrimeraTrackeando();
         if (raiz == null) return;   // sin nada trackeando dejamos lo cacheado como está
 
@@ -490,7 +513,7 @@ public class AnchorPointManager : MonoBehaviour
             Derivar(a);
         }
 
-        // Que se quede unos segundos en el marco de la imagen antes de volver a saltar.
+        // Que se quede unos segundos en el marco recién medido antes de volver a saltar.
         _ultimoCambio = Time.time;
         _activaId     = 0;
     }
@@ -533,6 +556,7 @@ public class AnchorPointManager : MonoBehaviour
     // hay ScanStateMachine y el chequeo se saltea.
     private static bool EnFlujoMultiPaso(ScannerMode m) =>
         m == ScannerMode.Calibrating   || m == ScannerMode.Anchor_Place ||
+        m == ScannerMode.Origin_Adjust ||
         m == ScannerMode.Wall_V1       || m == ScannerMode.Wall_Height  || m == ScannerMode.Wall_Vn ||
         m == ScannerMode.DoorPickWall  || m == ScannerMode.Door_V1      || m == ScannerMode.Door_V2 ||
         m == ScannerMode.Cube_V1       || m == ScannerMode.Cube_V2      || m == ScannerMode.Cube_V3 ||
@@ -614,7 +638,19 @@ public class AnchorPointManager : MonoBehaviour
             wo.SetOriginLocal(o.Go.transform, o.WoLocalPos, o.WoLocalRot);
             return;
         }
+        if (ReanclarEnManual(wo)) return;
         wo.transform.SetParent(null, worldPositionStays: true);
+    }
+
+    // Sin imagen ni anclas queda el anchor de la calibración manual: mejor colgar de
+    // él (sigue las correcciones de pose del SLAM) que dejar el mapa en el root.
+    // worldPositionStays de por medio: la escena no se mueve ni un milímetro.
+    private static bool ReanclarEnManual(WorldOrigin wo)
+    {
+        var manual = ManualCalibration.Instance != null ? ManualCalibration.Instance.AnchorManual : null;
+        if (manual == null) return false;
+        wo.transform.SetParent(manual, worldPositionStays: true);
+        return true;
     }
 
     // Igual que SoltarSiEsPadre pero para cuando se van TODAS las anclas: el único
@@ -626,7 +662,7 @@ public class AnchorPointManager : MonoBehaviour
 
         var img = _imageAnchor != null ? _imageAnchor.CurrentAnchor : null;
         if (_tieneImg && img != null) wo.SetOriginLocal(img, _imgLocalPos, _imgLocalRot);
-        else                          wo.transform.SetParent(null, worldPositionStays: true);
+        else if (!ReanclarEnManual(wo)) wo.transform.SetParent(null, worldPositionStays: true);
     }
 
     private bool EsNuestro(Transform t)
@@ -648,14 +684,7 @@ public class AnchorPointManager : MonoBehaviour
         return _camT;
     }
 
-    // El RaycastResolver vive en ScannerScene; en SampleScene lo creamos acá, y recién
-    // en la primera colocación para que Camera.main y ARRaycastManager ya existan.
-    private static RaycastResolver EnsureResolver()
-    {
-        if (RaycastResolver.Instance != null) return RaycastResolver.Instance;
-        new GameObject("RaycastResolver").AddComponent<RaycastResolver>();
-        return RaycastResolver.Instance;
-    }
+    private static RaycastResolver EnsureResolver() => RaycastResolver.Ensure();
 
     private static GameObject CrearVisual(Transform padre, bool esPrimera)
     {

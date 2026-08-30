@@ -76,6 +76,7 @@ public class ARImageAnchor : MonoBehaviour
     public void StartTracking()
     {
         _searchSince = Time.time;
+        _buscando    = true;
         ResetSampling();
 #if UNITY_EDITOR
         StartCoroutine(EditorStub());
@@ -101,6 +102,11 @@ public class ARImageAnchor : MonoBehaviour
         if (WorldOrigin.Instance != null)
             WorldOrigin.Instance.transform.SetParent(null, worldPositionStays: true);
 
+        // Una búsqueda de imagen en curso y un anchor manual sosteniendo el mapa no
+        // pueden convivir: se pelearían por WorldOrigin. Este es el único camino hacia
+        // una búsqueda nueva, así que centralizamos acá el descarte del manual.
+        ManualCalibration.Instance?.Descartar();
+
         if (_anchorVisual != null) Destroy(_anchorVisual);
         _anchorVisual = null;
 
@@ -108,6 +114,7 @@ public class ARImageAnchor : MonoBehaviour
         _anchor = null;
 
         _searchSince = Time.time;
+        _buscando    = true;
         ResetSampling();
 #if UNITY_EDITOR
         StartCoroutine(EditorStub());
@@ -116,6 +123,26 @@ public class ARImageAnchor : MonoBehaviour
 #endif
         Debug.Log("[ARImageAnchor] RestartTracking — buscando imagen otra vez.");
     }
+
+    // Corta la búsqueda de la imagen sin tocar el anchor actual. La usa la
+    // calibración manual (ManualCalibration): el jugador declaró que no tiene la
+    // imagen física, así que una detección tardía no debe moverle el mapa después
+    // de haberlo acomodado a mano. Cualquier Start/RestartTracking la reanuda.
+    public void StopTracking()
+    {
+        _buscando = false;
+#if UNITY_EDITOR
+        StopAllCoroutines();
+#else
+        _imageManager.enabled = false;
+#endif
+        ResetSampling();
+    }
+
+    // Hay una búsqueda de imagen en curso (todavía sin anclar). Lo consulta la UI
+    // para distinguir "buscando la imagen…" de "calibrado a mano".
+    public bool Buscando => _buscando && !IsFound;
+    private bool _buscando;
 
     private void Update()
     {
@@ -345,14 +372,24 @@ public class ARImageAnchor : MonoBehaviour
 
     private void SpawnVisual(Transform anchorTransform)
     {
-        // EN PARTIDA el visual del anchor es el LIBRO RITUAL: no es un marcador sino una
-        // mecánica (se cierra solo y hay que alumbrarlo). Fuera de partida —escáner,
+        // El visual cuelga de WORLDORIGIN, no del anchor. Marca el 0,0 DEL MAPA: es lo
+        // que define dónde y con qué rotación quedó el entorno escaneado, así que tiene
+        // que moverse con él. Colgándolo del anchor se quedaba clavado en la pose de
+        // detección y no seguía ni el ajuste manual del origen (ManualCalibration) ni
+        // una recalibración "mantener escena fija" (keepVisualPosition: true), con lo
+        // que el libro terminaba lejos del mapa que supuestamente ancla.
+        // Fallback al anchor sólo si WorldOrigin no está (no debería pasar: SetOrigin
+        // corre justo antes que esto).
+        var origen = WorldOrigin.Instance != null ? WorldOrigin.Instance.transform : anchorTransform;
+
+        // EN PARTIDA el visual es el LIBRO RITUAL: no es un marcador sino una mecánica
+        // (se cierra solo y hay que alumbrarlo). Fuera de partida —escáner,
         // calibración— siguen las esferas de siempre, que es cuando sirven de referencia.
-        _anchorVisual = Gameplay.RitualBookView.TrySpawn(anchorTransform);
+        _anchorVisual = Gameplay.RitualBookView.TrySpawn(origen);
         if (_anchorVisual != null) return;
 
         _anchorVisual = new GameObject("AnchorVisual");
-        _anchorVisual.transform.SetParent(anchorTransform, worldPositionStays: false);
+        _anchorVisual.transform.SetParent(origen, worldPositionStays: false);
         _anchorVisual.transform.localPosition = Vector3.up * 0.05f;
         _anchorVisual.transform.localRotation = Quaternion.identity;
 

@@ -64,11 +64,44 @@ namespace Scanner
             // Fantasma en vivo de lo que se va a colocar. Lo instanciamos acá para no
             // tener que cablearlo en la escena (encuentra los builders por su cuenta).
             if (GetComponent<PlacementPreview>() == null) gameObject.AddComponent<PlacementPreview>();
+
+            // Tocar el marcador del 0,0 abre el ajuste, igual que la herramienta
+            // AJUSTAR ORIGEN. Sólo con el escáner en reposo: en medio de una polilínea
+            // (o de cualquier flujo de colocación) el tap es del flujo, no del origen.
+            var cal = ManualCalibration.Ensure();
+            cal.PuedeAbrirPorTap = () => _fsm != null &&
+                                         (_fsm.Current == ScannerMode.Idle ||
+                                          _fsm.Current == ScannerMode.Selected);
+            cal.OnTapEnOrigen += AlAbrirAjustePorTap;
+        }
+
+        private void OnDestroy()
+        {
+            var cal = ManualCalibration.Instance;
+            if (cal == null) return;
+            cal.OnTapEnOrigen -= AlAbrirAjustePorTap;
+            cal.PuedeAbrirPorTap = null;
+        }
+
+        private void AlAbrirAjustePorTap()
+        {
+            _markerSubmenuOpen = false;
+            _fsm.ClearSelection();
+            _fsm.SetMode(ScannerMode.Origin_Adjust);
         }
 
         private void Update()
         {
             if (_fsm == null || RaycastResolver.Instance == null) return;
+
+            // Ajustando el 0,0 la mira sigue viva (RECENTRAR ancla donde apuntás) pero
+            // no hay COLOCAR: resolvemos el hit y salimos.
+            if (_fsm.Current == ScannerMode.Origin_Adjust)
+            {
+                _lastHit = RaycastResolver.Instance.ResolveFromScreenCenter();
+                return;
+            }
+
             if (!IsPlacingMode(_fsm.Current)) return;
 
             // En modo anclas el hit lo resuelve AnchorPointManager (además mide la
@@ -116,7 +149,7 @@ namespace Scanner
         // calidad/fuente del hit (feedback útil al escanear).
         private void DrawReticula(float vw, float vh)
         {
-            if (!IsPlacingMode(_fsm.Current)) return;
+            if (!IsPlacingMode(_fsm.Current) && _fsm.Current != ScannerMode.Origin_Adjust) return;
 
             float cx = vw * 0.5f, cy = vh * 0.5f;
             var color = _fsm.Current switch
@@ -245,6 +278,11 @@ namespace Scanner
             bool enMarker = modo == ScannerMode.Marker_Place;
             bool enPiso   = modo == ScannerMode.Floor_Place;
             bool enAncla  = modo == ScannerMode.Anchor_Place;
+            bool enOrigen = modo == ScannerMode.Origin_Adjust;
+
+            // Acomodar el 0,0 necesita que ya haya un origen del que colgar: da igual si
+            // vino de la imagen o de la calibración manual.
+            bool hayOrigen = WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady;
 
             // Entradas de la botonera (en orden). El item de índice 3 ("IDENTIFICAR")
             // le cuelga el submenú de marcadores más abajo — si agregás items, hacelo
@@ -259,6 +297,7 @@ namespace Scanner
                 (FloorPoint.Instance != null ? "PISO\n(REUBICAR)" : "PISO", MortuoriumIcons.Icon.Piso, enPiso, idle,
                                  () => _fsm.SetMode(ScannerMode.Floor_Place)),
                 ("ANCLAS",       MortuoriumIcons.Icon.Ancla,  enAncla,  idle, AbrirColocacionAnclas),
+                ("AJUSTAR\nORIGEN", MortuoriumIcons.Icon.Origen, enOrigen, idle && hayOrigen, AbrirAjusteOrigen),
                 ("RECALIBRAR\n(fijo)", MortuoriumIcons.Icon.RecalFijo, false, puedeRecal, () => Recalibrar(true)),
                 ("RECALIBRAR\n(+mover)", MortuoriumIcons.Icon.RecalMover, false, puedeRecal, () => Recalibrar(false)),
             };
@@ -364,11 +403,23 @@ namespace Scanner
             _fsm.SetMode(ScannerMode.Anchor_Place);
         }
 
+        // Herramienta AJUSTAR ORIGEN: engancha el gizmo al 0,0 del mapa para acomodarlo
+        // a mano. Sirve igual con la imagen detectada (corregir una pose que quedó
+        // corrida) que con calibración manual. Ver ManualCalibration.
+        private void AbrirAjusteOrigen()
+        {
+            _markerSubmenuOpen = false;
+            _fsm.ClearSelection();   // el gizmo es uno solo: no puede estar en dos targets
+            ManualCalibration.Ensure().AbrirAjuste();
+            _fsm.SetMode(ScannerMode.Origin_Adjust);
+        }
+
         private void Recalibrar(bool keepVisualPosition)
         {
             if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
             if (_imageAnchor == null) return;
             _markerSubmenuOpen = false;
+            // RestartTracking descarta solo el anchor manual si lo había.
             ScanStateMachine.Instance?.SetMode(ScannerMode.Calibrating);
             _imageAnchor.RestartTracking(keepVisualPosition);
         }
@@ -420,7 +471,8 @@ namespace Scanner
             var modo = _fsm.Current;
 
             // El flujo de anclas tiene su propio panel (contador + LISTO / OMITIR).
-            if (modo == ScannerMode.Anchor_Place) { DrawContextualAnclas(vw, yBase); return; }
+            if (modo == ScannerMode.Anchor_Place)  { DrawContextualAnclas(vw, yBase); return; }
+            if (modo == ScannerMode.Origin_Adjust) { DrawContextualOrigen(vw, yBase); return; }
 
             bool enPared = modo == ScannerMode.Wall_V1 || modo == ScannerMode.Wall_Height || modo == ScannerMode.Wall_Vn;
             bool enCubo  = modo == ScannerMode.Cube_V1 || modo == ScannerMode.Cube_V2 || modo == ScannerMode.Cube_V3;
@@ -564,6 +616,70 @@ namespace Scanner
 
             T.Boton(null, new Rect(x, y, w, 32f), "OMITIR ANCLAS", primario: false,
                     () => CerrarAnclas(cerrar: false), fontSize: 12, textColor: T.Muted);
+        }
+
+        // Panel del ajuste del 0,0: el gizmo hace el trabajo (arrastrar flechas / anillo),
+        // acá van el hint, RECENTRAR (re-ancla donde apunta la mira) y los dos cierres.
+        private string _errorOrigen;
+
+        private void DrawContextualOrigen(float vw, float yBase)
+        {
+            const float hPanel = 44f + 26f + 48f + 48f + 20f;
+            var panel = new Rect(Pad, yBase - hPanel, vw - Pad * 2f, hPanel);
+            UIBlocker.AddVirtualRect(panel);
+            T.Fill(panel, new Color(0f, 0f, 0f, 0.65f));
+            T.Borde(panel, T.BorderDim);
+
+            float x = panel.x + 12f, w = panel.width - 24f;
+            float y = panel.y + 10f;
+
+            GUI.Label(new Rect(x, y, w, 44f),
+                      "arrastrá las flechas para mover el mapa y el anillo para girarlo; " +
+                      "con RECENTRAR lo llevás al punto que estés apuntando",
+                      T.Estilo(T.FElite, 12, T.Tan, TextAnchor.UpperLeft, wrap: true));
+            y += 46f;
+
+            if (!string.IsNullOrEmpty(_errorOrigen))
+                GUI.Label(new Rect(x, y, w, 22f), _errorOrigen, T.Estilo(T.FMono, 11, T.Red));
+            else
+                GUI.Label(new Rect(x, y, w, 22f),
+                          ManualCalibration.Calibrado ? "calibrado a mano (sin imagen)"
+                                                      : "calibrado con la imagen de referencia",
+                          T.Estilo(T.FMono, 11, T.CreamDim));
+            y += 26f;
+
+            T.Boton(null, new Rect(x, y, w, 40f), "RECENTRAR ACÁ", primario: false,
+                    () => _errorOrigen = ManualCalibration.Ensure().CentrarBajoLaMira(out var err) ? null : err,
+                    fontSize: 15);
+            y += 48f;
+
+            float bw = (w - 10f) * 0.5f;
+            T.Boton(null, new Rect(x, y, bw, 40f), "CANCELAR", primario: false,
+                    () => CerrarAjusteOrigen(conservar: false), fontSize: 14, textColor: T.Muted);
+            T.Boton(null, new Rect(x + bw + 10f, y, bw, 40f), "LISTO", primario: true,
+                    () => CerrarAjusteOrigen(conservar: true), fontSize: 14);
+        }
+
+        private void CerrarAjusteOrigen(bool conservar)
+        {
+            var cal = ManualCalibration.Ensure();
+            if (conservar) cal.Listo(); else cal.Cancelar();
+            _errorOrigen = null;
+
+            // Mismo camino que tras sincronizar con la imagen (ver ScannerSceneBootstrap):
+            // con la opción de anclas activada y todavía sin colocar, se entra directo a
+            // colocarlas — es el momento en que la alineación está fresca.
+            if (conservar && GameOptions.PuntosAncla)
+            {
+                var anclas = AnchorPointManager.Ensure();
+                if (!anclas.Listo)
+                {
+                    anclas.AbrirColocacion();
+                    _fsm.SetMode(ScannerMode.Anchor_Place);
+                    return;
+                }
+            }
+            _fsm.SetMode(ScannerMode.Idle);
         }
 
         private void CerrarAnclas(bool cerrar)

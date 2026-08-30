@@ -10,11 +10,12 @@ using UnityEngine;
 //
 // Uso: menú  Mortuorium > Configurar splash  (una sola vez). Queda guardado en
 // Player Settings (ProjectSettings.asset). La imagen vive en
-// Assets/Splash/mortuorium_splash.png (fondo transparente para componer sobre el
-// color de fondo oscuro del tema).
+// Assets/Resources/Logo/mortuorium.png (fondo transparente, letras blancas) — el
+// MISMO archivo que usa el título del menú principal (MortuoriumTheme.LogoGlitch),
+// así splash y menú muestran siempre el mismo wordmark.
 public static class MortuoriumSplashSetup
 {
-    private const string LogoPath = "Assets/Splash/mortuorium_splash.png";
+    private const string LogoPath = "Assets/Resources/Logo/mortuorium.png";
 
     [MenuItem("Mortuorium/Configurar splash")]
     public static void Setup()
