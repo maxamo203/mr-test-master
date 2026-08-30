@@ -69,10 +69,23 @@ public static class GameOptions
         }
     }
 
+    // WIP — desconectado a propósito, ver AutoWallBuilder.cs (Assets/Scanner/):
+    // el componente no está pegado a ningún GameObject de ninguna escena todavía
+    // (no se probó en dispositivo), así que hoy el botón/toggle no harían nada si
+    // se mostraran. Interruptor maestro: en false, ni el toggle de Opciones ni el
+    // botón "PARED AUTO (BETA)" de la botonera del escáner se dibujan — el resto
+    // del código (FSM, AutoWallBuilder, GameOptions.EscaneoAutoBeta) queda intacto
+    // para retomarlo. Para reactivar: 1) cablear AutoWallBuilder a ScannerRoot en
+    // ScannerScene.unity (ver comentario de ScannerSceneBootstrap), 2) probar la
+    // detección real en un Android con ARCore, 3) poner esto en true.
+    public const bool AutoWallScanBetaEnabled = false;
+
     // ¿Está habilitado el modo BETA de detección automática de paredes (ARCore
     // detecta planos verticales y el jugador confirma/descarta cada uno)? Opt-in
     // y apagado por defecto: es experimental, así que solo aparece el botón en la
-    // botonera del escáner (ver ReticleController) si esto está activo.
+    // botonera del escáner (ver ReticleController) si esto está activo. Ver
+    // también AutoWallScanBetaEnabled arriba — mientras esté en false, esta
+    // opción ni siquiera se muestra en Opciones.
     public static bool EscaneoAutoBeta
     {
         get => PlayerPrefs.GetInt(KeyEscaneoAutoBeta, 0) == 1;

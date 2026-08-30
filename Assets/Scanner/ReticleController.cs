@@ -302,7 +302,10 @@ namespace Scanner
                 ("RECALIBRAR\n(+mover)", MortuoriumIcons.Icon.RecalMover, false, puedeRecal, () => Recalibrar(false)),
             };
 
-            if (GameOptions.EscaneoAutoBeta)
+            // WIP desconectado, ver GameOptions.AutoWallScanBetaEnabled — no mostrar
+            // este botón hasta que AutoWallBuilder esté cableado y probado en
+            // dispositivo (no borrar, solo ocultar).
+            if (GameOptions.AutoWallScanBetaEnabled && GameOptions.EscaneoAutoBeta)
                 items.Add(("PARED AUTO\n(BETA)", MortuoriumIcons.Icon.Pared, enAutoWall, idle,
                           () => _autoWallBuilder?.StartAutoScan()));
 
