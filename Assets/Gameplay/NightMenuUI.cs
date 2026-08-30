@@ -53,6 +53,9 @@ namespace Gameplay
         private readonly Dictionary<string, int>  _itemCount = new();
         private readonly Dictionary<string, bool> _hasImg    = new();
         private string _confirmarBorrar;       // nombre del escaneo a borrar (overlay Escaneos)
+        // WIP (ver LiveWallDetector): popup de "jugar sin entorno pre-escaneado" al
+        // tocar CONFIRMAR sin haber elegido ninguno.
+        private bool _confirmarSinEntorno;
         private Vector2 _scroll;
 
         // US-1.1: chequeo de versión mínima de SO (Android 14 / iOS 17). A diferencia
@@ -113,6 +116,7 @@ namespace Gameplay
             if (_mostrarAvisoVersionDesconocida) { CerrarAvisoVersionDesconocida(); return; }
             if (_mostrarAvisoIos) { CerrarAvisoIos(); return; }
             if (_confirmarBorrar != null) { _confirmarBorrar = null; return; }
+            if (_confirmarSinEntorno) { _confirmarSinEntorno = false; return; }
 
             switch (_pantalla)
             {
@@ -158,18 +162,17 @@ namespace Gameplay
         }
 
         // Arranca el sub-flujo Noche->Entorno para el modo dado (un jugador o host).
+        // Antes, sin ningún entorno guardado jugable, esto redirigía a Pantalla.
+        // SinEntorno (callejón sin salida, solo ofrecía ir a escanear). Ahora que
+        // "Elegí el entorno" admite confirmar sin elegir nada (ver DrawEntorno/
+        // DrawConfirmarSinEntorno — detección en vivo, WIP), ya no hace falta
+        // bloquear acá: siempre se sigue a Noches, con o sin escaneos guardados.
+        // Pantalla.SinEntorno/DrawSinEntorno quedan sin usar (no se borraron por si
+        // se decide reintroducir el bloqueo más adelante).
         private void ConfigurarPartida(GameSession.SessionMode mode)
         {
             _pendingMode = mode;
             RefrescarScans();
-            // Falta un entorno escaneado: es un callejón sin salida, se avisa con el
-            // sonido de alerta y no con el de confirmación que ya sonó al tocar el botón.
-            if (!HayEntornoJugable())
-            {
-                AudioManager.Sonar(c => c.uiAlerta);
-                _pantalla = Pantalla.SinEntorno;
-                return;
-            }
             _nocheSel = -1;
             _mapSel = null;
             _pantalla = Pantalla.Noches;
@@ -202,6 +205,10 @@ namespace Gameplay
             else if (_confirmarBorrar != null)
             {
                 DrawConfirmarBorrar(vw, vh);
+            }
+            else if (_confirmarSinEntorno)
+            {
+                DrawConfirmarSinEntorno(vw, vh);
             }
             else
             {
@@ -444,9 +451,46 @@ namespace Gameplay
 
             if (host) DrawAvanzadoPuerto(vw, avanzadoY);
 
-            bool puedeConfirmar = !string.IsNullOrEmpty(_mapSel);
+            // Sin entorno elegido, CONFIRMAR sigue habilitado — abre un popup
+            // preguntando si querés jugar en modo detección en vivo (WIP, ver
+            // LiveWallDetector) en vez de bloquear el botón.
             T.Boton(_nav, new Rect(Pad, vh - 44f - confirmH, vw - Pad * 2f, confirmH),
-                    "CONFIRMAR", primario: true, Confirmar, enabled: puedeConfirmar);
+                    "CONFIRMAR", primario: true, OnConfirmarEntorno);
+        }
+
+        private void OnConfirmarEntorno()
+        {
+            if (string.IsNullOrEmpty(_mapSel)) _confirmarSinEntorno = true;
+            else IniciarPartida(_mapSel, liveWallMode: false);
+        }
+
+        // Popup de "jugar sin entorno pre-escaneado" (WIP, ver LiveWallDetector):
+        // mismo estilo que DrawConfirmarBorrar.
+        private void DrawConfirmarSinEntorno(float vw, float vh)
+        {
+            T.Fill(new Rect(0, 0, vw, vh), new Color(0f, 0f, 0f, 0.7f));
+
+            float pw = vw - 56f, ph = 250f;
+            var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
+            T.Panel(panel, T.BgPanel, T.Tan);
+
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 20f, pw - 44f, 30f),
+                      "¿JUGAR SIN ENTORNO?", T.Estilo(T.FBebas, 20, T.Cream));
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 56f, pw - 44f, 100f),
+                      "No elegiste ningún escaneo. Podés seguir igual: la cámara va a ir " +
+                      "detectando paredes durante la noche misma (BETA, experimental) en " +
+                      "vez de usar un entorno guardado.",
+                      T.Estilo(T.FMono, 14, T.Muted, wrap: true));
+
+            float bw = (pw - 44f - 10f) / 2f;
+            T.Boton(_nav, new Rect(panel.x + 22f, panel.yMax - 70f, bw, 48f),
+                    "CANCELAR", false, () => _confirmarSinEntorno = false, fontSize: 16);
+            T.Boton(_nav, new Rect(panel.x + 22f + bw + 10f, panel.yMax - 70f, bw, 48f),
+                    "CONTINUAR", true, () =>
+                    {
+                        _confirmarSinEntorno = false;
+                        IniciarPartida(null, liveWallMode: true);
+                    }, fontSize: 16);
         }
 
         // Sección "Avanzado" (host): puerto TCP. Se dibuja desde 'y' hacia abajo.
@@ -480,13 +524,14 @@ namespace Gameplay
             int.TryParse((_portText ?? "").Trim(), out int p) && p > 0 && p < 65536
                 ? p : NetworkConfig.DefaultPort;
 
-        private void Confirmar()
+        // mapa == null implica liveWallMode (ver DrawConfirmarSinEntorno / OnConfirmarEntorno).
+        private void IniciarPartida(string mapa, bool liveWallMode)
         {
-            if (string.IsNullOrEmpty(_mapSel)) return;
             var s = GameSession.Ensure();
             s.Mode          = _pendingMode;
             s.SelectedNight = Nights[_nocheSel];
-            s.SelectedMap   = _mapSel;
+            s.SelectedMap   = mapa;
+            s.LiveWallMode  = liveWallMode;
             // Catálogo + índice: dejan pasar a la siguiente noche desde la partida,
             // sin volver acá (ver Gameplay.NightTransition).
             s.Nights        = Nights;

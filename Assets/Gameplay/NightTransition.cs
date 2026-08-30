@@ -113,6 +113,7 @@ namespace Gameplay
             VelethDirector.Instance?.StopRun();
             SanitySystem.Instance?.StopRun();
             Bateries.BatterySpawnManager.Instance?.StopRun();
+            LiveWallDetector.Instance?.StopRun();
         }
 
         // Amaneció. Lo corren el host y cada cliente al recibir NightSurvived.

@@ -186,51 +186,12 @@ namespace Scanner
         }
 
         // ── Conversión plano → WallObject ───────────────────────────────────────
+        // Geometría compartida con LiveWallDetector (Assets/Gameplay/) — ver PlaneWallMath.
 
         private void CreateWallFromPlane(ARPlane plane)
         {
-            if (WorldOrigin.Instance == null) return;
-
-            var boundary = plane.boundary;
-            if (boundary.Length < 2) return;
-
-            // ARPlane siempre guarda su boundary en espacio local XZ con normal =
-            // +Y local, sea el plano horizontal o vertical — TransformPoint da los
-            // vértices reales en mundo aunque el plano sea una pared.
-            var normalHoriz = new Vector3(plane.transform.up.x, 0f, plane.transform.up.z);
-            if (normalHoriz.sqrMagnitude < 1e-6f) return; // demasiado inclinado: no es una pared
-            normalHoriz.Normalize();
-            var baseHat = Vector3.Cross(Vector3.up, normalHoriz).normalized;
-            float perp = Vector3.Dot(plane.transform.position, normalHoriz);
-
-            float minProj = float.MaxValue, maxProj = float.MinValue;
-            float minY = float.MaxValue, maxY = float.MinValue;
-            foreach (var pt in boundary)
-            {
-                var world = plane.transform.TransformPoint(new Vector3(pt.x, 0f, pt.y));
-                float proj = Vector3.Dot(world, baseHat);
-                if (proj < minProj) minProj = proj;
-                if (proj > maxProj) maxProj = proj;
-                if (world.y < minY) minY = world.y;
-                if (world.y > maxY) maxY = world.y;
-            }
-            if (maxProj - minProj < 0.05f) return;
-
-            var aWorld = normalHoriz * perp + baseHat * minProj; aWorld.y = minY;
-            var bWorld = normalHoriz * perp + baseHat * maxProj; bWorld.y = minY;
-            float height = Mathf.Max(0.1f, maxY - minY);
-
-            var aLocal = WorldOrigin.Instance.ToRelative(aWorld);
-            var bLocal = WorldOrigin.Instance.ToRelative(bWorld);
-
-            // Lado de extrusión: a diferencia de WallBuilder.DecideSide (que adivina
-            // con la posición de la cámara), acá ya tenemos la normal REAL sensada
-            // por ARCore — side es el que hace coincidir WallObject.Normal con ella.
-            var baseHatLocal = (bLocal - aLocal).normalized;
-            var n0Local = Vector3.Cross(Vector3.up, baseHatLocal);
-            var targetNormalLocal = WorldOrigin.Instance.ToRelativeDir(normalHoriz);
-            int side = n0Local.sqrMagnitude > 1e-6f && Vector3.Dot(n0Local.normalized, targetNormalLocal) >= 0f ? 1 : -1;
-
+            if (!PlaneWallMath.TryComputeWallFromPlane(plane, out var aLocal, out var bLocal, out var height, out var side))
+                return;
             WallObject.Create(aLocal, bLocal, height, _defaultWidth, side);
         }
 
