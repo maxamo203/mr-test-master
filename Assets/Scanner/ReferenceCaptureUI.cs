@@ -171,7 +171,8 @@ namespace Scanner
         {
             if (_phase == Phase.Adjust)
             {
-                if (CaptureBtn().Contains(p)) StartCoroutine(CaptureRoutine());
+                if (CaptureBtn().Contains(p))        StartCoroutine(CaptureRoutine());
+                else if (SinImagenBtn().Contains(p)) CalibrarSinImagen();
             }
             else if (_phase == Phase.Confirm)
             {
@@ -284,6 +285,23 @@ namespace Scanner
             return Mathf.Clamp(meters, MinCm / 100f, MaxCm / 100f);
         }
 
+        // ── Escape: calibrar sin la imagen ───────────────────────────────────────
+        // El jugador no tiene (o perdió) la imagen física. Centramos el 0,0 del mapa
+        // en el punto que está apuntando y pasamos a la fase de ajuste manual, donde
+        // lo acomoda con el gizmo. Ver ManualCalibration.
+        private string _errorSinImagen;
+
+        private void CalibrarSinImagen()
+        {
+            var fsm = ScanStateMachine.Instance;
+            if (fsm == null) return;
+
+            if (!ManualCalibration.Ensure().CentrarBajoLaMira(out _errorSinImagen)) return;
+
+            _errorSinImagen = null;
+            fsm.SetMode(ScannerMode.Origin_Adjust);
+        }
+
         private void BackToAdjust()
         {
             if (_fragment != null) { Destroy(_fragment); _fragment = null; }
@@ -345,6 +363,18 @@ namespace Scanner
 
                 DrawTopLabel("ajustá el recuadro sobre una zona con detalle y tocá CAPTURAR");
                 DrawBtn(CaptureBtn(), "CAPTURAR", primario: true);
+
+                // Retícula mínima al centro: el escape de abajo ancla el mapa donde
+                // apunta, así que hay que ver a dónde se está apuntando.
+                DrawMira();
+                DrawBtn(SinImagenBtn(), "NO TENGO LA IMAGEN", primario: false);
+                if (!string.IsNullOrEmpty(_errorSinImagen))
+                {
+                    var e = SinImagenBtn();
+                    GUI.Label(new Rect(e.x, e.y - Screen.height * 0.035f, e.width, Screen.height * 0.03f),
+                              _errorSinImagen,
+                              T.Estilo(T.FMono, FsLabel, T.Red, TextAnchor.MiddleCenter));
+                }
             }
             else // Confirm
             {
@@ -424,6 +454,13 @@ namespace Scanner
         // Adjust: un botón CAPTURAR centrado.
         private Rect CaptureBtn() => new Rect(Screen.width * 0.25f, BtnY, Screen.width * 0.5f, BtnH);
 
+        // Adjust: escape "no tengo la imagen", arriba de CAPTURAR y más chico (es la
+        // salida secundaria; el camino bueno sigue siendo capturar la referencia).
+        private float SinImagenH => BtnH * 0.72f;
+        private Rect SinImagenBtn() => new Rect(Screen.width * 0.18f,
+                                                BtnY - SinImagenH - Screen.height * 0.018f,
+                                                Screen.width * 0.64f, SinImagenH);
+
         // Confirm: RECAPTURAR (izq) + CONFIRMAR (der).
         private Rect RecaptureBtn() => new Rect(Screen.width * 0.06f, BtnY, Screen.width * 0.42f, BtnH);
         private Rect ConfirmBtn()   => new Rect(Screen.width * 0.52f, BtnY, Screen.width * 0.42f, BtnH);
@@ -442,6 +479,19 @@ namespace Scanner
                                : new Color(0f, 0f, 0f, 0.5f));
             T.Borde(r, primario ? T.Red : T.Border);
             GUI.Label(r, label, T.Estilo(T.FBebas, FsBtn, T.Cream, TextAnchor.MiddleCenter));
+        }
+
+        // Cruz fina en el centro exacto de la pantalla: es el punto que usa
+        // "NO TENGO LA IMAGEN" para anclar el 0,0 del mapa.
+        private void DrawMira()
+        {
+            float cx = Screen.width * 0.5f, cy = Screen.height * 0.5f;
+            float r = Screen.height * 0.022f, g = r * 0.3f, w = Mathf.Max(2f, Screen.height * 0.002f);
+            var c = new Color(T.Cream.r, T.Cream.g, T.Cream.b, 0.75f);
+            T.Fill(new Rect(cx - r, cy - w * 0.5f, r - g, w), c);
+            T.Fill(new Rect(cx + g, cy - w * 0.5f, r - g, w), c);
+            T.Fill(new Rect(cx - w * 0.5f, cy - r, w, r - g), c);
+            T.Fill(new Rect(cx - w * 0.5f, cy + g, w, r - g), c);
         }
 
         private void DrawTopLabel(string msg)

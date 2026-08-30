@@ -10,7 +10,7 @@ using UnityEngine;
 // y verificaron en un preview aparte; acá se replica ese rasterizado.
 public static class MortuoriumIcons
 {
-    public enum Icon { Pared, Cubo, Puerta, Marca, Piso, RecalFijo, RecalMover, Ancla, Pentagrama }
+    public enum Icon { Pared, Cubo, Puerta, Marca, Piso, RecalFijo, RecalMover, Ancla, Pentagrama, Origen }
 
     private const int N = 128;
     private static readonly Dictionary<Icon, Texture2D> _cache = new();
@@ -221,6 +221,25 @@ public static class MortuoriumIcons
                 Poly(tan, new Vector2(0.96f, 0.5f), new Vector2(0.83f, 0.42f), new Vector2(0.83f, 0.58f));
                 Disc(0.5f, 0.5f, 0.05f, tan);
                 break;
+            // Origen del mapa: los tres ejes del gizmo saliendo de un nodo, sobre el
+            // plano isométrico del piso. Se distingue de las dos RECALIBRAR (anillos)
+            // porque acá no se busca nada: se agarra el 0,0 y se lo mueve.
+            case Icon.Origen:
+            {
+                const float kx = 0.60f, ky = 0.33f;
+                var o = new Vector2(0.5f, 0.62f);
+                Vector2 P(float x, float z, float y) => new Vector2(o.x + (x - z) * kx, o.y + (x + z) * ky - y);
+
+                // Baldosa del piso (para leer la perspectiva).
+                Poly(new Color32(255, 255, 255, 26), P(-0.28f, -0.28f, 0), P(0.28f, -0.28f, 0),
+                                                     P(0.28f, 0.28f, 0), P(-0.28f, 0.28f, 0));
+                // Ejes X (rojo) / Z (azul) sobre el piso y Y (verde) hacia arriba.
+                Line(o, P(0.30f, 0f, 0f), 0.045f, red);
+                Line(o, P(0f, 0.30f, 0f), 0.045f, blue);
+                Line(o, P(0f, 0f, 0.30f), 0.045f, green);
+                Disc(o.x, o.y, 0.065f, cream);
+                break;
+            }
             // Sello de brujería: pentagrama invertido (una punta hacia abajo) dentro
             // de un círculo, como ⛧.
             case Icon.Pentagrama:
