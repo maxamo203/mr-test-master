@@ -382,10 +382,23 @@ namespace Gameplay
                 T.Celda(_nav, r, primario: false, () => _nocheSel = idx,
                         bordeOverride: sel ? T.Red : (Color?)null,
                         fillOverride: sel ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.14f) : (Color?)null);
-                GUI.Label(new Rect(r.x, r.y + 12f, r.width, 34f), (i + 1).ToString(),
-                          T.Estilo(T.FBebas, 26, T.Cream, TextAnchor.MiddleCenter));
-                GUI.Label(new Rect(r.x, r.y + 50f, r.width, 20f), sel ? "Elegida" : "Disponible",
+                GUI.Label(new Rect(r.x, r.y + 8f, r.width, 30f), (i + 1).ToString(),
+                          T.Estilo(T.FBebas, 24, T.Cream, TextAnchor.MiddleCenter));
+                GUI.Label(new Rect(r.x, r.y + 38f, r.width, 18f), sel ? "Elegida" : "Disponible",
                           T.Estilo(T.FMono, 13, sel ? T.Tan : T.Dim, TextAnchor.MiddleCenter));
+
+                // Récord de reliquias de ESTA noche, por dispositivo (ver
+                // CollectibleProgress) — es por noche, no un número global. Sólo se
+                // muestra si la noche tiene reliquias habilitadas.
+                if (nights[i].collectiblesActive)
+                {
+                    int recordReliquias = CollectibleProgress.Record(i);
+                    int maxReliquias    = nights[i].collectibleMaxPerNight;
+                    string max = maxReliquias > 0 ? maxReliquias.ToString() : "∞";
+                    GUI.Label(new Rect(r.x, r.y + 60f, r.width, 16f),
+                              $"Reliquias {recordReliquias}/{max}",
+                              T.Estilo(T.FMono, 11, T.Tan, TextAnchor.MiddleCenter));
+                }
             }
 
             bool haySel = _nocheSel >= 0 && nights != null && _nocheSel < nights.Length &&

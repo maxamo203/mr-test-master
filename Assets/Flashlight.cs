@@ -31,6 +31,23 @@ public class Flashlight : MonoBehaviour
     [Tooltip("Carga consumida por segundo mientras isOn.")]
     public float drainPerSecond = 2f;
 
+    [Header("Titileo por batería baja")]
+    // Puramente visual (afecta solo la intensidad renderizada, nunca isOn): a nadie que
+    // compruebe si esta linterna está "alumbrando" algo (PlayerLights,
+    // NetworkManager.LocalFlashlightOn) le importa, porque esos chequeos leen isOn, no
+    // la intensidad.
+    [Tooltip("Fracción de carga por debajo de la cual puede empezar a titilar (0..1).")]
+    [Range(0f, 1f)] public float flickerChargeThreshold = 0.35f;
+    [Tooltip("Probabilidad de que arranque un titileo, por segundo, con la batería en 0%. " +
+             "Escala linealmente a 0 en flickerChargeThreshold.")]
+    [Range(0f, 5f)] public float flickerMaxChancePerSecond = 1.2f;
+    [Tooltip("Duración mínima/máxima de cada titileo individual, en segundos.")]
+    public float flickerDurationMin = 0.05f;
+    public float flickerDurationMax = 0.35f;
+    [Tooltip("Rango de multiplicador de intensidad durante un titileo (1 = sin cambio, 0 = apagada).")]
+    [Range(0f, 1f)] public float flickerDipMin = 0.05f;
+    [Range(0f, 1f)] public float flickerDipMax = 0.6f;
+
     [Header("Control")]
     public bool isOn = true;
     [Tooltip("Toggle con touch (toca con 2 dedos para alternar)")]
@@ -64,6 +81,7 @@ public class Flashlight : MonoBehaviour
         currentCharge     = maxCharge;
         isOn              = true;
         _avisoBateriaBaja = false;
+        _flickerTimer     = 0f;
     }
 
     // Suma carga (al recoger una pila). Vuelve a permitir encender si estaba agotada.
@@ -98,6 +116,7 @@ public class Flashlight : MonoBehaviour
     static readonly int ID_COS_OUTER = Shader.PropertyToID("_FlashlightCosOuter");
     static readonly int ID_COS_INNER = Shader.PropertyToID("_FlashlightCosInner");
     static readonly int ID_INTENSITY = Shader.PropertyToID("_FlashlightIntensity");
+    static readonly int ID_FLICKER   = Shader.PropertyToID("_FlashlightFlicker");
     static readonly int ID_COLOR     = Shader.PropertyToID("_FlashlightColor");
     static readonly int ID_DARKNESS  = Shader.PropertyToID("_DarknessAmount");
 
@@ -110,6 +129,37 @@ public class Flashlight : MonoBehaviour
     private const float AvisoBateriaBaja  = 0.20f;
     private const float RearmeBateriaBaja = 0.30f;
     private bool _avisoBateriaBaja;
+
+    // Estado del titileo actual (si _flickerTimer > 0, hay uno en curso).
+    private float _flickerTimer;
+    private float _flickerDepth = 1f;
+
+    // Multiplicador de intensidad (0..1) a aplicar este frame. Sólo toca el render:
+    // isOn y las comprobaciones de "estoy alumbrando algo" (PlayerLights, NetworkManager)
+    // ni se enteran de que existe.
+    private float UpdateFlicker(float dt)
+    {
+        if (!isOn) { _flickerTimer = 0f; return 1f; }
+
+        float lowFactor = Mathf.InverseLerp(flickerChargeThreshold, 0f, Charge01);
+        if (lowFactor <= 0f) { _flickerTimer = 0f; return 1f; }
+
+        if (_flickerTimer > 0f)
+        {
+            _flickerTimer -= dt;
+            // Jitter rápido dentro del dip para que no se vea como un escalón plano.
+            float jitter = Mathf.PerlinNoise(Time.time * 45f, 0.37f);
+            return Mathf.Lerp(_flickerDepth, 1f, jitter * 0.3f);
+        }
+
+        float chance = flickerMaxChancePerSecond * lowFactor * dt;
+        if (Random.value < chance)
+        {
+            _flickerTimer = Random.Range(flickerDurationMin, flickerDurationMax);
+            _flickerDepth = Random.Range(flickerDipMin, flickerDipMax);
+        }
+        return 1f;
+    }
 
     void Awake()
     {
@@ -145,6 +195,7 @@ public class Flashlight : MonoBehaviour
         if (!CanOperate)
         {
             Shader.SetGlobalFloat(ID_INTENSITY, 0f);
+            Shader.SetGlobalFloat(ID_FLICKER, 0f);
             Shader.SetGlobalFloat(ID_DARKNESS, 1f);
             if (_light != null) _light.enabled = false;
             return;
@@ -178,7 +229,13 @@ public class Flashlight : MonoBehaviour
         if (innerAngleDeg > outerAngleDeg - 1f)
             innerAngleDeg = Mathf.Max(0f, outerAngleDeg - 1f);
 
-        float effectiveIntensity = isOn ? intensity : 0f;
+        // El titileo es puro maquillaje visual: multiplica la intensidad renderizada,
+        // nunca isOn ni el campo intensity en sí. Los chequeos de "esto está siendo
+        // alumbrado" (PlayerLights.Alcanza, NetworkManager.LocalFlashlightOn) sólo leen
+        // isOn, así que un objeto que deba reaccionar a la linterna la sigue viendo
+        // "prendida" aunque visualmente esté tintineando.
+        float flicker = UpdateFlicker(Time.deltaTime);
+        float effectiveIntensity = isOn ? intensity * flicker : 0f;
 
         Shader.SetGlobalVector(ID_POS, transform.position);
         Shader.SetGlobalVector(ID_DIR, transform.forward);
@@ -186,8 +243,9 @@ public class Flashlight : MonoBehaviour
         Shader.SetGlobalFloat(ID_COS_OUTER, Mathf.Cos(outerAngleDeg * Mathf.Deg2Rad));
         Shader.SetGlobalFloat(ID_COS_INNER, Mathf.Cos(innerAngleDeg * Mathf.Deg2Rad));
         Shader.SetGlobalFloat(ID_INTENSITY, effectiveIntensity);
+        Shader.SetGlobalFloat(ID_FLICKER, isOn ? flicker : 0f);
         Shader.SetGlobalColor(ID_COLOR, color);
-        Shader.SetGlobalFloat(ID_DARKNESS, isOn ? darknessAmount : 1f);
+        Shader.SetGlobalFloat(ID_DARKNESS, isOn ? Mathf.Lerp(1f, darknessAmount, flicker) : 1f);
 
         if (_light != null)
         {
@@ -196,7 +254,7 @@ public class Flashlight : MonoBehaviour
             _light.range = range;
             _light.spotAngle = outerAngleDeg * 2f;
             _light.innerSpotAngle = innerAngleDeg * 2f;
-            _light.intensity = intensity * realLightIntensityMultiplier;
+            _light.intensity = intensity * realLightIntensityMultiplier * flicker;
         }
     }
 
@@ -221,6 +279,7 @@ public class Flashlight : MonoBehaviour
     void OnDisable()
     {
         Shader.SetGlobalFloat(ID_INTENSITY, 0f);
+        Shader.SetGlobalFloat(ID_FLICKER, 0f);
         EnhancedTouchSupport.Disable();
 
         if (_suscritoAPartida && NetworkManager.Instance != null)

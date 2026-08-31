@@ -64,6 +64,7 @@ namespace Gameplay
         public static void ResetLocal()
         {
             ServerDeaths.Reset();
+            NightLoot.Reset();
             LocalDeath.Instance?.Revive();
             LocalSanity.Instance?.Reiniciar();
             NightResult.Limpiar();
@@ -97,6 +98,7 @@ namespace Gameplay
         {
             DetenerSistemas();
             ServerDeaths.Reset();
+            NightLoot.Reset();
             LocalDeath.Instance?.Revive();
             LocalSanity.Instance?.Reiniciar();
             NightResult.Limpiar();
@@ -113,6 +115,7 @@ namespace Gameplay
             VelethDirector.Instance?.StopRun();
             SanitySystem.Instance?.StopRun();
             Bateries.BatterySpawnManager.Instance?.StopRun();
+            Collectibles.CollectibleSpawnManager.Instance?.StopRun();
             LiveWallDetector.Instance?.StopRun();
         }
 
@@ -125,12 +128,15 @@ namespace Gameplay
             if (LocalDeath.Instance != null && LocalDeath.Instance.IsDead) return;
 
             NightResult.MarcarSobrevivida();
+            NightResult.MarcarObjetosRecolectados(NightLoot.Total);
+
+            // El récord es por dispositivo y por noche, y necesita saber QUÉ noche era. Un
+            // cliente que se unió por LAN no pasó por el menú de noches (NightIndex
+            // queda en -1), así que ve la victoria pero no mueve ni récord ni progresión.
+            var s = GameSession.Instance;
+            CollectibleProgress.RegistrarIntento(s != null ? s.NightIndex : -1, NightLoot.Total);
             AudioManager.Musica(c => c.victoriaAmanecer, fade: 0.5f);
 
-            // El desbloqueo es por dispositivo y necesita saber QUÉ noche era. Un
-            // cliente que se unió por LAN no pasó por el menú de noches (NightIndex
-            // queda en -1), así que ve la victoria pero no mueve su progresión.
-            var s = GameSession.Instance;
             if (s != null && s.NightIndex >= 0 &&
                 NightProgress.RegistrarNocheSuperada(s.NightIndex))
                 NightResult.MarcarDesbloqueo(s.NightIndex + 2);   // la siguiente, en base 1

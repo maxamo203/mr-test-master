@@ -15,6 +15,12 @@ namespace Bateries
     //
     // Wiring: poner este componente en un GameObject de la escena multijugador y
     // asignarle el BatteryRaritySet. No requiere nada en los clientes.
+    //
+    // Orden de ejecución ANTES que CollectibleSpawnManager (orden 0 por defecto): las
+    // reliquias evitan los puntos de pilas ya derivados (ver IsNear más abajo), así que
+    // esta lista tiene que existir cuando Collectibles.CollectibleSpawnManager arma la
+    // suya en el mismo evento OnGameStarted.
+    [DefaultExecutionOrder(-10)]
     public class BatterySpawnManager : MonoBehaviour
     {
         public static BatterySpawnManager Instance { get; private set; }
@@ -291,6 +297,17 @@ namespace Bateries
         private void AddPointRel(Vector3 relPos)
         {
             _points.Add(new SpawnPoint { relPos = relPos });
+        }
+
+        // ¿Hay un punto de spawn de PILA a menos de minDist de relPos (anchor-relative)?
+        // Lo usa Collectibles.CollectibleSpawnManager para que las reliquias tengan sus
+        // propios lugares y no compartan literalmente el mismo punto que una pila.
+        public bool IsNear(Vector3 relPos, float minDist)
+        {
+            float d2 = minDist * minDist;
+            foreach (var p in _points)
+                if ((p.relPos - relPos).sqrMagnitude <= d2) return true;
+            return false;
         }
 
         // ── Loop de reaparicion (server) ──────────────────────────────────────
