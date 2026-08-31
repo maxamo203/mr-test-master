@@ -1,0 +1,151 @@
+---
+/**
+ * Sección 04 — "Descargar". Las dos tiendas están puestas pero INACTIVAS a
+ * propósito: el juego todavía no salió, así que son tarjetas con el sello
+ * PRÓXIMAMENTE y no links (no hay a dónde ir, y un link muerto se siente roto).
+ */
+---
+
+<section class="section stores" id="descargar">
+  <div class="wrap">
+    <p class="eyebrow" data-reveal>04 — Descargar</p>
+
+    <h2 class="title" data-reveal>El ritual todavía<br />no abrió sus puertas</h2>
+
+    <p class="lead" data-reveal style="--reveal-delay:90ms">
+      Estamos terminando de encerrar a las entidades. Cuando estén listas, Mortuorium va a estar
+      acá abajo.
+    </p>
+
+    <div class="cards">
+      <div class="store" aria-disabled="true" data-reveal>
+        <span class="store__badge">Próximamente</span>
+        <span class="store__logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M3.6 2.3c-.3.3-.5.7-.5 1.3v16.8c0 .6.2 1 .5 1.3l.1.1 9.4-9.4v-.2L3.7 2.2l-.1.1z"
+              opacity="0.75"></path>
+            <path d="M16.3 15.5l-3.2-3.1v-.2l3.2-3.2.1.1 3.7 2.1c1.1.6 1.1 1.6 0 2.2l-3.8 2.1z"
+            ></path>
+            <path d="M16.4 15.4L13.1 12.2 3.6 21.7c.4.4 1 .4 1.7.1l11.1-6.4" opacity="0.9"></path>
+            <path d="M16.4 8.6L5.3 2.2c-.7-.4-1.3-.3-1.7.1l9.5 9.5 3.3-3.2z" opacity="0.6"></path>
+          </svg>
+        </span>
+        <div class="store__text">
+          <span class="store__pre">Disponible en</span>
+          <span class="store__name">Google Play</span>
+        </div>
+      </div>
+
+      <div class="store" aria-disabled="true" data-reveal style="--reveal-delay:110ms">
+        <span class="store__badge">Próximamente</span>
+        <span class="store__logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M16.2 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.9-1.4-.1-2.8.8-3.5.8-.7 0-1.8-.8-3-.8-1.5 0-2.9.9-3.7 2.3-1.6 2.7-.4 6.8 1.1 9 .7 1.1 1.6 2.3 2.8 2.3 1.1 0 1.5-.7 2.9-.7 1.3 0 1.7.7 2.9.7 1.2 0 2-1.1 2.7-2.2.9-1.2 1.2-2.4 1.2-2.5 0 0-2.4-.9-2.4-3.5z"
+            ></path>
+            <path
+              d="M14.1 5.6c.6-.8 1-1.8.9-2.9-.9 0-2 .6-2.6 1.4-.6.7-1.1 1.7-.9 2.8 1 .1 2-.5 2.6-1.3z"
+            ></path>
+          </svg>
+        </span>
+        <div class="store__text">
+          <span class="store__pre">Disponible en</span>
+          <span class="store__name">App Store</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="stores__note" data-reveal>
+      Mientras tanto, seguí las novedades en
+      <a href="https://www.mortuorium.com">www.mortuorium.com</a>
+    </p>
+  </div>
+</section>
+
+<style>
+  .cards {
+    margin-top: clamp(2.5rem, 6vh, 4rem);
+    display: grid;
+    gap: 1.2rem;
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  }
+
+  .store {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    padding: 1.5rem 1.6rem;
+    border: 1px solid var(--rule-soft);
+    background-image: var(--card-bg);
+    /* Deshabilitada a propósito: se ve, no se toca */
+    cursor: not-allowed;
+    filter: saturate(0.4);
+    opacity: 0.72;
+    transition:
+      opacity 0.4s var(--ease-out),
+      filter 0.4s var(--ease-out),
+      border-color 0.4s var(--ease-out);
+  }
+
+  .store:hover {
+    opacity: 0.92;
+    filter: saturate(0.7);
+    border-color: var(--rule);
+  }
+
+  .store__badge {
+    position: absolute;
+    top: -0.62rem;
+    right: 1.2rem;
+    padding: 0.18rem 0.7rem;
+    background-color: var(--bg);
+    border: 1px solid var(--accent-deep);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .store__logo {
+    flex: none;
+    width: 2.3rem;
+    height: 2.3rem;
+    color: var(--text-soft);
+  }
+
+  .store__logo svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .store__text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+  }
+
+  .store__pre {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .store__name {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    letter-spacing: 0.04em;
+    color: var(--text);
+  }
+
+  .stores__note {
+    margin-top: 2.2rem;
+    color: var(--text-faint);
+    font-size: 0.88em;
+  }
+</style>

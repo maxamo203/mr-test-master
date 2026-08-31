@@ -1,0 +1,477 @@
+---
+/**
+ * Hero con el grimorio que se abre al scrollear.
+ *
+ * Cómo funciona: la sección mide 240vh y adentro hay un "escenario" sticky de
+ * 100vh. El script calcula cuánto avanzaste dentro de esa pista (0 → 1) y lo
+ * publica como la variable CSS --p; todo el movimiento (las tapas girando, el
+ * arte que aparece, el halo) es CSS leyendo esa variable. No hay animación por
+ * JS: JS sólo escribe un número por frame.
+ *
+ * Las dos tapas son mitades de una MISMA portada: cada mitad recorta (overflow)
+ * una copia de la portada al doble de ancho, así el sigilo y el texto quedan
+ * partidos justo por el lomo y se separan al abrirse.
+ *
+ * Detalle 3D: el recorte va en una capa interna plana (.cover__side) y no en la
+ * que rota, porque overflow:hidden aplana el contexto 3D y rompería el reverso.
+ */
+import { Image } from 'astro:assets';
+import icon from '../assets/book-icon.png';
+import wordmark from '../assets/wordmark.png';
+---
+
+<section class="hero" id="inicio">
+  <div class="hero__track" data-book-track>
+    <div class="hero__stage" data-book-stage>
+      <div class="hero__halo" aria-hidden="true"></div>
+
+      <div class="hero__inner">
+        <Image
+          class="hero__wordmark"
+          src={wordmark}
+          alt="Mortuorium"
+          widths={[480, 720, 1100]}
+          sizes="(max-width: 40rem) 80vw, 34rem"
+          loading="eager"
+        />
+
+        <div class="book" data-book>
+          <div class="book__art">
+            <Image
+              src={icon}
+              alt="Una entidad sostiene abierto el libro del ritual"
+              widths={[320, 520, 780]}
+              sizes="(max-width: 40rem) 62vw, 22rem"
+              loading="eager"
+            />
+          </div>
+
+          <div class="book__seam" aria-hidden="true"></div>
+
+          {/* --- tapa izquierda --- */}
+          <div class="cover cover--l" aria-hidden="true">
+            <div class="cover__side cover__side--front">
+              <div class="cover__face">
+                <span class="cover__frame"></span>
+                <svg class="cover__sigil" viewBox="0 0 100 100" fill="none">
+                  <circle cx="50" cy="50" r="34" stroke="currentColor" stroke-width="0.8"></circle>
+                  <circle cx="50" cy="50" r="27" stroke="currentColor" stroke-width="0.4"></circle>
+                  <path
+                    d="M50 18 L68 72 L22 38 L78 38 L32 72 Z"
+                    stroke="currentColor"
+                    stroke-width="0.7"
+                    stroke-linejoin="round"></path>
+                  <circle cx="50" cy="50" r="41" stroke="currentColor" stroke-width="0.3"
+                    stroke-dasharray="1 5"></circle>
+                </svg>
+                <span class="cover__title">Mortuorium</span>
+              </div>
+            </div>
+            <div class="cover__side cover__side--back"></div>
+          </div>
+
+          {/* --- tapa derecha --- */}
+          <div class="cover cover--r" aria-hidden="true">
+            <div class="cover__side cover__side--front">
+              <div class="cover__face">
+                <span class="cover__frame"></span>
+                <svg class="cover__sigil" viewBox="0 0 100 100" fill="none">
+                  <circle cx="50" cy="50" r="34" stroke="currentColor" stroke-width="0.8"></circle>
+                  <circle cx="50" cy="50" r="27" stroke="currentColor" stroke-width="0.4"></circle>
+                  <path
+                    d="M50 18 L68 72 L22 38 L78 38 L32 72 Z"
+                    stroke="currentColor"
+                    stroke-width="0.7"
+                    stroke-linejoin="round"></path>
+                  <circle cx="50" cy="50" r="41" stroke="currentColor" stroke-width="0.3"
+                    stroke-dasharray="1 5"></circle>
+                </svg>
+                <span class="cover__title">Mortuorium</span>
+              </div>
+            </div>
+            <div class="cover__side cover__side--back"></div>
+          </div>
+        </div>
+
+        <h1 class="hero__tagline">El ritual empieza en tu mundo</h1>
+        <p class="hero__kicker">AR · Cooperativo · Horror</p>
+      </div>
+
+      <div class="hero__hint" aria-hidden="true">
+        <span>Deslizá para abrir el libro</span>
+        <span class="hero__hint-line"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero__track {
+    position: relative;
+    height: 240vh; /* pista de scroll que alimenta la apertura */
+  }
+
+  .hero__stage {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem var(--pad-x);
+    overflow: hidden;
+    /* --p lo escribe el script (0 cerrado → 1 abierto); --exit es el tramo final */
+    transform: scale(calc(1 + var(--exit, 0) * 0.16));
+    opacity: calc(1 - var(--exit, 0));
+    will-change: transform, opacity;
+  }
+
+  .hero__halo {
+    position: absolute;
+    width: min(52rem, 130vw);
+    aspect-ratio: 1;
+    background-image: var(--grad-halo);
+    opacity: calc(0.22 + var(--p, 0) * 0.78);
+    transform: scale(calc(0.75 + var(--p, 0) * 0.5));
+    transition: none;
+    pointer-events: none;
+  }
+
+  .hero__inner {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(0.9rem, 2.2vh, 1.6rem);
+    text-align: center;
+  }
+
+  .hero__wordmark {
+    width: min(29rem, 74vw);
+    height: auto;
+    /* Aberración cromática roja/teal: la misma firma que el splash del juego */
+    filter: drop-shadow(-2px 0 0 var(--glitch-red)) drop-shadow(2px 0 0 var(--glitch-teal));
+  }
+
+  /* =====================================================================
+     EL LIBRO
+     ===================================================================== */
+  .book {
+    position: relative;
+    width: min(clamp(12rem, 34vh, 22rem), 66vw);
+    aspect-ratio: 894 / 907;
+    perspective: 1600px;
+    transform-style: preserve-3d;
+    animation: float 7s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(-0.35rem);
+    }
+    50% {
+      transform: translateY(0.35rem);
+    }
+  }
+
+  .book__art {
+    position: absolute;
+    inset: 0;
+    border-radius: 1.1rem;
+    overflow: hidden;
+    box-shadow: var(--shadow-book);
+    opacity: calc(0.2 + var(--p, 0) * 0.8);
+    filter: brightness(calc(0.55 + var(--p, 0) * 0.45));
+    transform: scale(calc(0.95 + var(--p, 0) * 0.05));
+  }
+
+  .book__art :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Doble función: con el libro cerrado es el lomo (tapa la juntura entre las
+     dos mitades) y al abrirse es la luz que se escapa. Se apaga del todo en
+     p=1, si no queda una raya dorada cruzando la ilustración. */
+  .book__seam {
+    position: absolute;
+    top: 6%;
+    bottom: 6%;
+    left: 50%;
+    width: 0.5rem;
+    translate: -50% 0;
+    background-image: var(--grad-spine);
+    filter: blur(calc(1px + var(--p, 0) * 7px));
+    opacity: calc((1 - var(--p, 0)) * 0.6 + var(--p, 0) * (1 - var(--p, 0)) * 2.2);
+    pointer-events: none;
+  }
+
+  /* --- tapas --------------------------------------------------------- */
+  .cover {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 50%;
+    transform-style: preserve-3d;
+    will-change: transform, opacity;
+    /* Ya casi abiertas (p > 0.72) las tapas se disuelven en la oscuridad. Si no,
+       quedan dos losas oscuras planas a los costados que ensucian el remate. */
+    opacity: clamp(0, calc((0.95 - var(--p, 0)) / 0.23), 1);
+  }
+
+  .cover--l {
+    left: 0;
+    transform-origin: left center;
+    transform: translateZ(1px) rotateY(calc(var(--p, 0) * -172deg));
+  }
+
+  .cover--r {
+    right: 0;
+    transform-origin: right center;
+    transform: translateZ(1px) rotateY(calc(var(--p, 0) * 172deg));
+  }
+
+  /* Cada cara es una capa PLANA: acá sí se puede recortar sin romper el 3D */
+  .cover__side {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    backface-visibility: hidden;
+  }
+
+  .cover__side--front {
+    box-shadow: var(--shadow-book);
+  }
+
+  /* Reverso: el interior de la tapa, liso */
+  .cover__side--back {
+    transform: rotateY(180deg);
+    background-image: var(--grad-cover-inner);
+  }
+
+  .cover--l .cover__side--front {
+    border-radius: 1.1rem 0 0 1.1rem;
+  }
+  .cover--r .cover__side--front {
+    border-radius: 0 1.1rem 1.1rem 0;
+  }
+  .cover--l .cover__side--back {
+    border-radius: 0 1.1rem 1.1rem 0;
+  }
+  .cover--r .cover__side--back {
+    border-radius: 1.1rem 0 0 1.1rem;
+  }
+
+  /* La portada completa, al doble de ancho: cada mitad la recorta */
+  .cover__face {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 200%;
+    display: grid;
+    place-items: center;
+    gap: 0.6rem;
+    grid-auto-flow: row;
+    background-image: var(--grad-cover-sheen), var(--grad-cover);
+    background-blend-mode: screen, normal;
+  }
+
+  .cover--l .cover__face {
+    left: 0;
+  }
+  .cover--r .cover__face {
+    right: 0;
+  }
+
+  /* Sombra que gana la tapa mientras gira (la de la derecha, espejada) */
+  .cover__side--front::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: var(--grad-cover-shade);
+    opacity: calc(var(--p, 0) * 0.85);
+    pointer-events: none;
+  }
+
+  .cover--r .cover__side--front::after {
+    transform: scaleX(-1);
+  }
+
+  /* Filete dorado del marco, igual que el borde del ícono de la app */
+  .cover__frame {
+    position: absolute;
+    inset: 5.5%;
+    border-radius: 0.7rem;
+    padding: 1px;
+    background-image: var(--grad-frame);
+    opacity: 0.55;
+    -webkit-mask:
+      linear-gradient(var(--c-white) 0 0) content-box,
+      linear-gradient(var(--c-white) 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(var(--c-white) 0 0) content-box,
+      linear-gradient(var(--c-white) 0 0);
+    mask-composite: exclude;
+  }
+
+  .cover__sigil {
+    width: 46%;
+    color: var(--accent);
+    opacity: 0.5;
+    grid-row: 1;
+  }
+
+  .cover__title {
+    grid-row: 2;
+    font-family: var(--font-display);
+    font-size: clamp(0.9rem, 2.4vh, 1.5rem);
+    letter-spacing: 0.36em;
+    text-indent: 0.36em;
+    color: var(--accent-soft);
+    opacity: 0.85;
+  }
+
+  /* =====================================================================
+     TEXTO
+     ===================================================================== */
+  .hero__tagline {
+    font-family: var(--font-display);
+    font-size: clamp(1.5rem, 4.4vw, 2.9rem);
+    letter-spacing: 0.06em;
+    color: var(--text);
+  }
+
+  .hero__kicker {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .hero__hint {
+    position: absolute;
+    bottom: 1.6rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    opacity: calc(1 - var(--p, 0) * 3);
+    pointer-events: none;
+  }
+
+  .hero__hint-line {
+    width: 1px;
+    height: 2.2rem;
+    background-image: var(--grad-spine);
+    animation: drop 2.4s ease-in-out infinite;
+  }
+
+  @keyframes drop {
+    0%,
+    100% {
+      opacity: 0.25;
+      transform: scaleY(0.5);
+      transform-origin: top;
+    }
+    50% {
+      opacity: 1;
+      transform: scaleY(1);
+      transform-origin: top;
+    }
+  }
+
+  /* =====================================================================
+     ACCESIBILIDAD: sin movimiento, el libro ya arranca abierto
+     ===================================================================== */
+  @media (prefers-reduced-motion: reduce) {
+    .hero__track {
+      height: auto;
+    }
+
+    .hero__stage {
+      position: static;
+      height: auto;
+      min-height: 100vh;
+      transform: none;
+      opacity: 1;
+    }
+
+    .book {
+      animation: none;
+    }
+
+    .hero__hint-line {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  const track = document.querySelector<HTMLElement>('[data-book-track]');
+  const stage = document.querySelector<HTMLElement>('[data-book-stage]');
+
+  if (track && stage) {
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+
+    /** Abre el libro de una y no engancha nada al scroll. */
+    const openStatic = () => {
+      stage.style.setProperty('--p', '1');
+      stage.style.setProperty('--exit', '0');
+    };
+
+    let ticking = false;
+
+    const measure = () => {
+      ticking = false;
+      const r = track.getBoundingClientRect();
+      const total = r.height - window.innerHeight;
+      // Cuánto recorrimos de la pista: 0 arriba de todo, 1 al final.
+      const raw = total > 0 ? -r.top / total : 0;
+      const p = Math.min(1, Math.max(0, raw));
+
+      // El libro termina de abrirse al 72%; el resto es la salida del hero.
+      const open = Math.min(1, p / 0.72);
+      const exit = Math.min(1, Math.max(0, (p - 0.78) / 0.22));
+
+      stage.style.setProperty('--p', open.toFixed(4));
+      stage.style.setProperty('--exit', exit.toFixed(4));
+    };
+
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(measure);
+    };
+
+    const attach = () => {
+      addEventListener('scroll', onScroll, { passive: true });
+      addEventListener('resize', onScroll);
+      measure();
+    };
+
+    const detach = () => {
+      removeEventListener('scroll', onScroll);
+      removeEventListener('resize', onScroll);
+    };
+
+    const apply = () => {
+      if (reduce.matches) {
+        detach();
+        openStatic();
+      } else {
+        attach();
+      }
+    };
+
+    apply();
+    reduce.addEventListener('change', apply);
+  }
+</script>

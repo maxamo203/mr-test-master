@@ -1,0 +1,414 @@
+/* ===========================================================================
+   MORTUORIUM — hoja global y ÚNICA fuente de color del sitio.
+   ---------------------------------------------------------------------------
+   REGLA DEL PROYECTO: ningún componente define un color. Ni un hex, ni un
+   rgb()/rgba(), ni un gradiente con colores adentro. Todo eso vive acá como
+   token y los componentes lo consumen con var(--token). Si hace falta un color
+   nuevo, se agrega en este archivo — no en el .astro.
+
+   La paleta base NO es inventada: son los mismos valores que usa la UI del
+   juego en Assets/UI/MortuoriumTheme.cs, más los del arte del ícono (vino,
+   dorado del marco, pergamino). Así la web y la app se ven de la misma familia.
+   =========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ---------------------------------------------------------------------
+     1) PALETA CRUDA — espejo de MortuoriumTheme.cs
+     --------------------------------------------------------------------- */
+  --c-bg: #060504;           /* Bg        — fondo general */
+  --c-bg-2: #0b0908;         /* un escalón por encima del fondo */
+  --c-panel: #141110;        /* BgPanel   — paneles/modales */
+  --c-panel-2: #1a1513;      /* panel elevado */
+  --c-field: #131010;        /* BgField   — campos */
+  --c-cream: #e9e3d6;        /* Cream     — texto principal */
+  --c-cream-dim: #c9c2b4;    /* CreamDim  — texto secundario */
+  --c-muted: #a89e90;        /* Muted     — texto apagado */
+  --c-dim: #6b6459;          /* Dim       — texto muy apagado */
+  --c-disabled: #4a443c;     /* Disabled  — deshabilitado */
+  --c-border: #3a322a;       /* Border    — borde estándar */
+  --c-border-dim: #2a231c;   /* BorderDim — borde apagado */
+  --c-red: #a3222c;          /* Red       — acento principal */
+  --c-gold: #c98a3d;         /* Tan       — acento dorado (foco) */
+
+  /* Extensiones tomadas del arte del ícono (el libro y su marco) */
+  --c-red-bright: #c9303c;   /* rojo encendido, para brillos */
+  --c-gold-soft: #e0b876;    /* dorado claro del filete del marco */
+  --c-gold-dim: #8a5f2b;     /* dorado apagado */
+  --c-wine: #5a1220;         /* vino del fondo del ícono (centro) */
+  --c-wine-deep: #2b0a12;    /* vino profundo (bordes del ícono) */
+  --c-parchment: #e8d9b5;    /* pergamino de las páginas */
+  --c-teal: #00dbc7;         /* aberración cromática del splash (glitch) */
+  --c-black: #000000;
+  --c-white: #ffffff;
+
+  /* Canales sueltos: sólo para componer transparencias sin volver a escribir
+     el color. Se usan como rgb(var(--rgb-x) / <alpha>) más abajo. */
+  --rgb-black: 0 0 0;
+  --rgb-white: 255 255 255;
+  --rgb-cream: 233 227 214;
+  --rgb-red: 163 34 44;
+  --rgb-red-bright: 201 48 60;
+  --rgb-gold: 201 138 61;
+  --rgb-gold-soft: 224 184 118;
+  --rgb-wine: 90 18 32;
+  --rgb-teal: 0 219 199;
+  --rgb-parchment: 232 217 181;
+
+  /* ---------------------------------------------------------------------
+     2) TOKENS SEMÁNTICOS — lo que nombran los componentes
+     --------------------------------------------------------------------- */
+  --bg: var(--c-bg);
+  --bg-alt: var(--c-bg-2);
+  --surface: var(--c-panel);
+  --surface-2: var(--c-panel-2);
+
+  --text: var(--c-cream);
+  --text-soft: var(--c-cream-dim);
+  --text-muted: var(--c-muted);
+  --text-faint: var(--c-dim);
+  --text-disabled: var(--c-disabled);
+  --text-on-accent: var(--c-bg);
+
+  --rule: var(--c-border);
+  --rule-soft: var(--c-border-dim);
+
+  --accent: var(--c-gold);
+  --accent-soft: var(--c-gold-soft);
+  --accent-deep: var(--c-gold-dim);
+  --danger: var(--c-red);
+  --danger-bright: var(--c-red-bright);
+
+  --selection-bg: rgb(var(--rgb-red) / 0.55);
+  --selection-text: var(--c-cream);
+  --focus-ring: rgb(var(--rgb-gold) / 0.75);
+
+  /* ---------------------------------------------------------------------
+     3) EFECTOS — velos, brillos, sombras y gradientes ya compuestos
+     --------------------------------------------------------------------- */
+  --scrim-soft: rgb(var(--rgb-black) / 0.35);
+  --scrim-strong: rgb(var(--rgb-black) / 0.72);
+
+  --tint-hover: rgb(var(--rgb-gold) / 0.09);
+  --tint-active: rgb(var(--rgb-gold) / 0.16);
+  --tint-danger: rgb(var(--rgb-red) / 0.14);
+
+  --hairline: rgb(var(--rgb-cream) / 0.08);
+  --hairline-strong: rgb(var(--rgb-cream) / 0.16);
+
+  --glow-red: rgb(var(--rgb-red) / 0.45);
+  --glow-red-soft: rgb(var(--rgb-red) / 0.18);
+  --glow-gold: rgb(var(--rgb-gold) / 0.4);
+  --glow-gold-soft: rgb(var(--rgb-gold) / 0.14);
+
+  /* Glitch cromático del wordmark (mismo par rojo/teal que el menú del juego) */
+  --glitch-red: rgb(var(--rgb-red-bright) / 0.55);
+  --glitch-teal: rgb(var(--rgb-teal) / 0.35);
+
+  /* Fondo de página: vino muy tenue arriba, negro abajo */
+  --grad-page: radial-gradient(
+      120% 80% at 50% -10%,
+      rgb(var(--rgb-wine) / 0.5) 0%,
+      rgb(var(--rgb-wine) / 0.12) 38%,
+      transparent 68%
+    ),
+    linear-gradient(180deg, var(--c-bg-2) 0%, var(--c-bg) 60%);
+
+  /* Halo detrás del libro en el hero */
+  --grad-halo: radial-gradient(
+    circle at 50% 50%,
+    rgb(var(--rgb-red) / 0.34) 0%,
+    rgb(var(--rgb-wine) / 0.26) 32%,
+    transparent 70%
+  );
+
+  /* Tapa del grimorio (cara exterior del libro cerrado) */
+  --grad-cover: linear-gradient(
+    155deg,
+    var(--c-wine) 0%,
+    var(--c-wine-deep) 46%,
+    var(--c-black) 100%
+  );
+  /* Brillo especular que recorre la tapa */
+  --grad-cover-sheen: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgb(var(--rgb-gold-soft) / 0.14) 48%,
+    transparent 62%
+  );
+  /* Sombra que gana la tapa a medida que gira hacia afuera */
+  --grad-cover-shade: linear-gradient(
+    90deg,
+    rgb(var(--rgb-black) / 0.85) 0%,
+    rgb(var(--rgb-black) / 0.15) 100%
+  );
+  /* Canto interior de las tapas al abrirse */
+  --grad-cover-inner: linear-gradient(
+    90deg,
+    var(--c-wine-deep) 0%,
+    var(--c-black) 100%
+  );
+
+  /* Lomo dorado que separa las dos mitades cuando está cerrado */
+  --grad-spine: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgb(var(--rgb-gold) / 0.55) 18%,
+    rgb(var(--rgb-gold-soft) / 0.8) 50%,
+    rgb(var(--rgb-gold) / 0.55) 82%,
+    transparent 100%
+  );
+
+  /* Filete dorado del marco (igual que el borde del ícono de la app) */
+  --grad-frame: linear-gradient(
+    140deg,
+    var(--c-gold-soft) 0%,
+    var(--c-gold) 30%,
+    var(--c-gold-dim) 55%,
+    var(--c-gold) 78%,
+    var(--c-gold-soft) 100%
+  );
+
+  /* Superficies de tarjeta */
+  --card-bg: linear-gradient(
+    170deg,
+    rgb(var(--rgb-white) / 0.045) 0%,
+    rgb(var(--rgb-black) / 0.25) 100%
+  );
+  --card-bg-hover: linear-gradient(
+    170deg,
+    rgb(var(--rgb-gold) / 0.1) 0%,
+    rgb(var(--rgb-black) / 0.2) 100%
+  );
+
+  /* Divisores y remates */
+  --grad-rule: linear-gradient(
+    90deg,
+    transparent,
+    var(--c-border),
+    transparent
+  );
+  --grad-rule-gold: linear-gradient(
+    90deg,
+    transparent,
+    rgb(var(--rgb-gold) / 0.6),
+    transparent
+  );
+
+  /* Sombras */
+  --shadow-book: 0 2.4rem 5rem rgb(var(--rgb-black) / 0.75);
+  --shadow-card: 0 1rem 2.4rem rgb(var(--rgb-black) / 0.45);
+  --shadow-inset-frame: inset 0 0 0 1px rgb(var(--rgb-gold) / 0.28);
+
+  /* Ruido de grano (el color vive acá dentro a propósito: es parte del token) */
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E");
+
+  /* ---------------------------------------------------------------------
+     4) TIPOGRAFÍA Y MEDIDAS — las tres fuentes del juego
+     --------------------------------------------------------------------- */
+  --font-display: 'Bebas Neue', 'Arial Narrow', system-ui, sans-serif;
+  --font-body: 'Special Elite', 'Courier New', Courier, monospace;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --rail-w: 5.5rem;      /* ancho del riel lateral en desktop */
+  --rail-w-open: 15rem;  /* ancho al desplegarse (hover/foco) */
+  --dock-h: 4.25rem;     /* alto del dock inferior en mobile */
+  --content-max: 68rem;
+  --pad-x: clamp(1.25rem, 4vw, 3.5rem);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-book: cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+/* ===========================================================================
+   RESET / BASE
+   =========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* 1rem = 16px, pero acompaña el zoom del usuario */
+  font-size: 100%;
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--bg);
+  background-image: var(--grad-page);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: clamp(0.95rem, 0.9rem + 0.25vw, 1.05rem);
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* Grano sutil sobre todo el sitio: le saca el aspecto "plano" al fondo negro. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+  background-image: var(--noise);
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+  margin: 0;
+  color: var(--text);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.2s var(--ease-out);
+}
+
+a:hover {
+  color: var(--accent-soft);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+::selection {
+  background: var(--selection-bg);
+  color: var(--selection-text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+/* ===========================================================================
+   UTILIDADES COMPARTIDAS
+   =========================================================================== */
+
+/* Contenido saltando el riel lateral */
+.shell {
+  padding-left: var(--rail-w);
+}
+
+@media (max-width: 60rem) {
+  .shell {
+    padding-left: 0;
+    padding-bottom: var(--dock-h);
+  }
+}
+
+.section {
+  padding: clamp(4.5rem, 11vh, 8.5rem) var(--pad-x);
+}
+
+.wrap {
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+}
+
+/* Antetítulo numerado: "01 — EL RITUAL" */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.4rem;
+}
+
+.eyebrow::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-image: var(--grad-rule);
+}
+
+.title {
+  font-size: clamp(2.4rem, 6vw, 4.5rem);
+}
+
+.lead {
+  color: var(--text-soft);
+  max-width: 46ch;
+  margin-top: 1.4rem;
+  font-size: 1.05em;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+/* Aparición al entrar en viewport (la activa el script de Base.astro).
+   OJO con el `.js`: el estado oculto sólo se aplica si el script inline del
+   <head> pudo marcar el documento. Sin JS —o si algo falla antes de que corra
+   el IntersectionObserver— el contenido se ve igual, en vez de quedar en
+   opacity:0 y dejar la página en blanco. */
+.js [data-reveal] {
+  opacity: 0;
+  transform: translateY(1.5rem);
+  transition:
+    opacity 0.8s var(--ease-out),
+    transform 0.8s var(--ease-out);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.js [data-reveal].is-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .js [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Sólo para lectores de pantalla */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
