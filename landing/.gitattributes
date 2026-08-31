@@ -1,0 +1,19 @@
+# Los binarios de la landing NO van por Git LFS.
+#
+# El .gitattributes de la raíz (plantilla de Unity) manda `*.png lfs` para TODO
+# el repo, y eso rompe cualquier deploy automático: Vercel, GitHub Pages/Actions
+# y en general todo CI hace el checkout SIN bajar los objetos LFS, así que en
+# lugar del PNG queda un puntero de texto de ~130 bytes. Astro (sharp) intenta
+# leerlo como imagen y el build muere con:
+#
+#   [NoImageMetadata] Could not process image metadata for .../wordmark.png
+#
+# Son dos archivos de ~1,2 MB en total: no justifican LFS y sí necesitan viajar
+# como blobs normales para que el build funcione en cualquier lado.
+#
+# OJO: esto vale sólo para landing/. Los assets de Assets/ siguen con LFS.
+*.png  !filter !diff !merge -text
+*.jpg  !filter !diff !merge -text
+*.jpeg !filter !diff !merge -text
+*.webp !filter !diff !merge -text
+*.gif  !filter !diff !merge -text
