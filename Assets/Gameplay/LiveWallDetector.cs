@@ -35,9 +35,6 @@ namespace Gameplay
     {
         public static LiveWallDetector Instance { get; private set; }
 
-        [Header("Defaults (igual que WallBuilder)")]
-        [SerializeField] private float _defaultWidth = 0.15f;
-
         [Header("Muestreo de puntos")]
         [Tooltip("Cada cuánto (s) se toma una muestra del centro de pantalla.")]
         [SerializeField] private float _muestreoIntervalo = 0.35f;
@@ -49,8 +46,19 @@ namespace Gameplay
         [Tooltip("Qué tan vertical tiene que ser la superficie (0 = da igual, 1 = perfectamente vertical, descarta piso/techo).")]
         [Range(0f, 1f)]
         [SerializeField] private float _verticalidadMinima = 0.7f;
+        [Tooltip("Diferencia máxima de altura (m) entre el celular y el punto detectado. Una " +
+                 "pared real, mirando más o menos derecho, pega cerca de tu propia altura; algo " +
+                 "mucho más bajo (una silla, una mesa) o mucho más alto (el techo) casi seguro no " +
+                 "es pared, aunque su superficie sea bastante vertical (el respaldo de una silla, " +
+                 "por ejemplo, engaña al filtro de verticalidad de arriba).")]
+        [SerializeField] private float _diferenciaAlturaMaxima = 0.8f;
         [Tooltip("Cantidad máxima de puntos guardados a la vez. Al superarla se olvida el más viejo (FIFO).")]
         [SerializeField] private int _maxPuntos = 12;
+        [Tooltip("Caída mínima (m) de la cámara al piso para aceptar la muestra como piso real. " +
+                 "Descarta mesas/escritorios cerca de la cámara (un jugador de pie sostiene el " +
+                 "teléfono bastante más arriba que eso; alguien agachado o muy bajo de estatura " +
+                 "no es el caso típico que este modo intenta soportar).")]
+        [SerializeField] private float _caidaMinimaPiso = 1.1f;
 
         // Orden de creación (para el límite FIFO): posición (chequeo de distancia
         // mínima) + la pared que representa ese punto (para poder borrarla).
@@ -58,14 +66,36 @@ namespace Gameplay
         private bool _running;
         private float _timer;
 
+        // ── Altura del piso (para que Sorken no quede flotando) ───────────────
+        // Los puntos se detectan a la altura de la MIRA (buena para evitar muebles
+        // en el medio), pero un marcador ahí deja a Sorken flotando a esa altura.
+        // Estimamos el piso con un rayo recto hacia abajo desde la cámara, cada
+        // muestra, y promediamos: el usuario asume (con razón) que el piso es
+        // plano y no cambia durante la noche, así que un promedio de varias
+        // lecturas reales es más confiable que una sola.
+        private float _floorYSum;
+        private int   _floorYCount;
+        private float? FloorY => _floorYCount > 0 ? _floorYSum / _floorYCount : (float?)null;
+
+        // Altura de piso estimada, en coordenadas LOCALES a WorldOrigin — mismo contrato
+        // que FloorPoint.LocalY, para que sistemas que hoy solo miran FloorPoint (ej.
+        // BatterySpawnManager) tengan de dónde sacar una referencia de piso también en
+        // modo detección en vivo, donde nunca hay un FloorPoint (es un objeto del
+        // escáner, y acá no hay ningún escaneo). El anchor solo tiene rumbo horizontal
+        // (nunca inclinación — ver ARImageAnchor/ManualCalibration), así que restar la Y
+        // del mundo alcanza, sin pasar por WorldOrigin.ToRelative.
+        public static bool TryGetFloorLocalY(out float localY)
+        {
+            localY = 0f;
+            if (Instance == null || !Instance.FloorY.HasValue || WorldOrigin.Instance == null) return false;
+            localY = Instance.FloorY.Value - WorldOrigin.Instance.transform.position.y;
+            return true;
+        }
+
         public static LiveWallDetector Ensure()
         {
             if (Instance != null) return Instance;
             var go = new GameObject("LiveWallDetector");
-            // DontDestroyOnLoad igual que SorkerNav/ArbmosDirector/etc. — si no,
-            // sobrevive la escena pero no la SESIÓN, y NightTransition.StopRun()
-            // (pensado justo para este caso, ver CLAUDE.md) no tendría nada que apagar
-            // entre partidas.
             DontDestroyOnLoad(go);
             return go.AddComponent<LiveWallDetector>();
         }
@@ -93,44 +123,74 @@ namespace Gameplay
             StartDetecting();
         }
 
-        // ── Activación / salida ──────────────────────────────────────────────
-
         public void StartDetecting()
         {
             if (_running) return;
             _puntos.Clear();
+            _floorYSum = 0f; _floorYCount = 0;
             _timer = 0f;
             _running = true;
 
-            // Ver comentario de SpawnSyntheticStarterMarker: sin esto, GameDirector
-            // no tiene ningún marcador hasta la primera muestra aceptada — el
-            // usuario pidió explícitamente que Sorken pueda aparecer igual en los
-            // primeros segundos.
+            MuestrearPiso();
             SpawnSyntheticStarterMarker();
         }
 
-        // Mismo nombre que GameDirector/ArbmosDirector/etc. — ver
-        // NightTransition.DetenerSistemas, que los llama a todos por igual.
         public void StopRun()
         {
             _running = false;
-            // Borrar las paredes/marcadores de esta noche: la escena NO se recarga
-            // entre noches (ver corolario de NightTransition en CLAUDE.md), así que
-            // si no se limpian acá quedan pisando la próxima noche de la sesión.
             foreach (var (_, wall) in _puntos)
                 if (wall != null) wall.Delete();
             _puntos.Clear();
+            _floorYSum = 0f; _floorYCount = 0;
         }
-
-        // ── Muestreo continuo ────────────────────────────────────────────────
 
         private void Update()
         {
             if (!_running) return;
+
+            // Ver LiveWallDetectorViz: solo Debug.isDebugBuild, no cuesta nada en release.
+            if (Debug.isDebugBuild) DibujarDebug();
+
             _timer -= Time.deltaTime;
             if (_timer > 0f) return;
             _timer = _muestreoIntervalo;
+            MuestrearPiso();
             MuestrearPunto();
+        }
+
+        // Wireframe de diagnóstico: un puntito por cada muestra guardada (para ver dónde
+        // está "creyendo" que hay pared) y un anillo a la altura de piso estimada, para
+        // compararla a ojo contra el piso real — ver conversación (mesa cerca de la
+        // cámara confundida con el piso).
+        private void DibujarDebug()
+        {
+            foreach (var (p, _) in _puntos)
+                LiveWallDetectorViz.DibujarPunto(p);
+
+            var cam = Camera.main;
+            if (cam == null) return;
+            float y = FloorY ?? (cam.transform.position.y - 1.5f);
+            LiveWallDetectorViz.DibujarPiso(cam.transform.position, y);
+        }
+
+        private void MuestrearPiso()
+        {
+            var cam = Camera.main;
+            var resolver = RaycastResolver.Ensure();
+            if (cam == null || resolver == null) return;
+
+            var hit = resolver.ResolveFromRay(new Ray(cam.transform.position, Vector3.down));
+            if (!hit.Hit || hit.Source == RaycastSource.Fallback) return;
+
+            // Sanity check: si lo que pegó está a menos de _caidaMinimaPiso de la
+            // cámara, lo más probable es que sea una mesa/escritorio, no el piso
+            // real — un solo dato así contaminando el promedio ya alcanza para que
+            // Sorken aparezca "más alto" (ver conversación).
+            float caida = cam.transform.position.y - hit.Position.y;
+            if (caida < _caidaMinimaPiso) return;
+
+            _floorYSum += hit.Position.y;
+            _floorYCount++;
         }
 
         private void MuestrearPunto()
@@ -141,18 +201,15 @@ namespace Gameplay
             var resolver = RaycastResolver.Ensure();
             if (resolver == null) return;
             var hit = resolver.ResolveFromScreenCenter();
-            // Solo datos REALMENTE sensados (malla LiDAR / profundidad AR / plano AR /
-            // feature points) — el Fallback es un punto inventado sobre el rayo
-            // cuando no se sensó nada real, no sirve como "acá hay una pared".
             if (!hit.Hit || hit.Source == RaycastSource.Fallback) return;
 
             float dist = Vector3.Distance(cam.transform.position, hit.Position);
             if (dist < _distanciaMin || dist > _distanciaMax) return;
 
-            // Superficie vertical (pared) y no piso/techo: la normal casi no
-            // apunta hacia arriba/abajo.
             float verticalidad = 1f - Mathf.Abs(Vector3.Dot(hit.Normal.normalized, Vector3.up));
             if (verticalidad < _verticalidadMinima) return;
+
+            if (Mathf.Abs(hit.Position.y - cam.transform.position.y) > _diferenciaAlturaMaxima) return;
 
             foreach (var (p, _) in _puntos)
                 if (Vector3.Distance(p, hit.Position) < _distanciaMinimaEntrePuntos) return;
@@ -160,20 +217,19 @@ namespace Gameplay
             CrearPuntoMarcador(hit.Position, hit.Normal);
         }
 
-        // ── Creación del punto (pared invisible chiquita + marcador genérico) ──
-
         private void CrearPuntoMarcador(Vector3 worldPos, Vector3 worldNormal)
         {
             if (WorldOrigin.Instance == null) return;
 
             var normalHoriz = new Vector3(worldNormal.x, 0f, worldNormal.z);
-            if (normalHoriz.sqrMagnitude < 1e-6f) return; // normal casi vertical: no debería pasar (ya filtrado), red de seguridad
+            if (normalHoriz.sqrMagnitude < 1e-6f) return;
             normalHoriz.Normalize();
             var baseHat = Vector3.Cross(Vector3.up, normalHoriz).normalized;
 
-            const float halfWidth = 0.4f, height = 2.2f;
-            var aWorld = worldPos - baseHat * halfWidth; aWorld.y = worldPos.y - height * 0.5f;
-            var bWorld = worldPos + baseHat * halfWidth; bWorld.y = aWorld.y;
+            const float halfWidth = 0.005f, height = 0.1f, grosor = 0.02f;
+            float floorY = FloorY ?? (worldPos.y - 1.5f);
+            var aWorld = worldPos - baseHat * halfWidth; aWorld.y = floorY;
+            var bWorld = worldPos + baseHat * halfWidth; bWorld.y = floorY;
 
             var aLocal = WorldOrigin.Instance.ToRelative(aWorld);
             var bLocal = WorldOrigin.Instance.ToRelative(bWorld);
@@ -185,15 +241,13 @@ namespace Gameplay
             WallObject wall = null;
             ScanLoader.RunDisplayOnly(() =>
             {
-                wall = WallObject.Create(aLocal, bLocal, height, _defaultWidth, side);
+                wall = WallObject.Create(aLocal, bLocal, height, grosor, side);
                 if (wall == null) return;
-                MarkerObject.Create(null, wall, wall.Length * 0.5f, height * 0.5f, faceSign: 1);
+                MarkerObject.Create(null, wall, wall.Length * 0.5f, 0f, faceSign: 1);
             });
             if (wall == null) return;
 
             _puntos.Enqueue((worldPos, wall));
-            // Límite fijo: se olvida el punto más viejo (FIFO) — borra su pared
-            // (que de paso borra su marcador, ver WallObject.Delete/DeleteMarkers).
             while (_puntos.Count > _maxPuntos)
             {
                 var (_, viejo) = _puntos.Dequeue();
@@ -203,10 +257,6 @@ namespace Gameplay
             Debug.Log($"[LiveWallDetector] Punto registrado a {Vector3.Distance(Camera.main.transform.position, worldPos):F1}m ({_puntos.Count}/{_maxPuntos}).");
         }
 
-        // Punto de spawn disponible desde el primer instante, antes de que se
-        // acepte ninguna muestra real: 2m adelante de la cámara del host, con la
-        // normal apuntando HACIA el jugador (mismo criterio "mira hacia adentro"
-        // que un punto real). Se crea una sola vez por noche.
         private void SpawnSyntheticStarterMarker()
         {
             var cam = Camera.main;

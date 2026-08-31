@@ -370,6 +370,17 @@ public class ARImageAnchor : MonoBehaviour
         return dst;
     }
 
+    // Wrapper público: ManualCalibration.CentrarBajoLaMira arma el anchor manual sin
+    // pasar por PlaceAnchorAndSpawn (no hay imagen que rastrear), así que sin esto el
+    // 0,0 manual quedaba sin ningún marcador — ni las esferas en escáner/lobby, ni el
+    // libro ritual en partida. Mismo try/catch que los otros dos call sites: el visual
+    // es cosmético, no debe impedir que el origen quede confirmado.
+    public void SpawnVisualEnOrigen(Transform origen)
+    {
+        try { SpawnVisual(origen); }
+        catch (Exception e) { Debug.LogWarning($"[ARImageAnchor] SpawnVisual falló: {e.Message}"); }
+    }
+
     private void SpawnVisual(Transform anchorTransform)
     {
         // El visual cuelga de WORLDORIGIN, no del anchor. Marca el 0,0 DEL MAPA: es lo

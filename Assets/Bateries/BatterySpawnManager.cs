@@ -211,7 +211,18 @@ namespace Bateries
             // Fallback: sin muebles ni piso util, unos puntos en anillo alrededor del anchor.
             if (_points.Count == 0)
             {
-                float y = FloorPoint.Instance != null ? FloorPoint.Instance.LocalY : 0f;
+                // FloorPoint es un objeto del ESCÁNER (no existe sin un escaneo real, ej.
+                // modo detección en vivo — ver Gameplay.LiveWallDetector); sin él, antes se
+                // caía a y=0 (LOCAL a WorldOrigin), o sea la altura del propio anchor — que
+                // en detección en vivo puede ser cualquier superficie donde el jugador haya
+                // ubicado el origen a mano (ej. una mesa), dejando las pilas flotando ahí en
+                // vez de en el piso real.
+                float y = 0f;
+                if (FloorPoint.Instance != null)
+                    y = FloorPoint.Instance.LocalY;
+                else if (Gameplay.LiveWallDetector.TryGetFloorLocalY(out var liveFloorY))
+                    y = liveFloorY;
+
                 int n = Mathf.Min(6, maxSpawnPoints);
                 for (int i = 0; i < n; i++)
                 {
