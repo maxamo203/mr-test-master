@@ -24,6 +24,12 @@ namespace Gameplay
         public NightConfig SelectedNight { get; set; }
         public string      SelectedMap   { get; set; }
 
+        // Modo alternativo (WIP, ver LiveWallDetector): jugar sin ningún entorno
+        // pre-escaneado — SelectedMap queda null/vacío a propósito (ARLobbyManager.
+        // BeginHostFlow ya sabe arrancar sin mapa) y LiveWallDetector va detectando
+        // paredes durante la noche en vez de cargarlas de un ScanData.
+        public bool LiveWallMode { get; set; }
+
         // Catálogo ordenado de noches + índice de la actual, para poder pasar a la
         // SIGUIENTE sin volver al menú (NightTransition). Lo llena NightMenuUI al
         // confirmar, ya resuelto entre el set prod y el dev.

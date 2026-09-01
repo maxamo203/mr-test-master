@@ -116,6 +116,7 @@ namespace Gameplay
             SanitySystem.Instance?.StopRun();
             Bateries.BatterySpawnManager.Instance?.StopRun();
             Collectibles.CollectibleSpawnManager.Instance?.StopRun();
+            LiveWallDetector.Instance?.StopRun();
         }
 
         // Amaneció. Lo corren el host y cada cliente al recibir NightSurvived.

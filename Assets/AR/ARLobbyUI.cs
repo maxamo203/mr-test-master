@@ -115,10 +115,11 @@ public class ARLobbyUI : MonoBehaviour
                   T.Estilo(T.FBebas, 26, T.Cream));
         y += 38f;
 
-        string entorno = Gameplay.GameSession.Instance != null &&
-                         !string.IsNullOrEmpty(Gameplay.GameSession.Instance.SelectedMap)
-            ? $"Entorno: {Gameplay.GameSession.Instance.SelectedMap}"
-            : "Entorno compartido por el host";
+        var sesion = Gameplay.GameSession.Instance;
+        string entorno =
+            sesion != null && !string.IsNullOrEmpty(sesion.SelectedMap) ? $"Entorno: {sesion.SelectedMap}" :
+            sesion != null && sesion.LiveWallMode                      ? "Detección en vivo (BETA)" :
+                                                                           "Entorno compartido por el host";
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), entorno,
                   T.Estilo(T.FElite, 13, T.CreamDim));
         y += 26f;

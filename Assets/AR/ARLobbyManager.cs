@@ -100,6 +100,12 @@ public class ARLobbyManager : MonoBehaviour
         {
             Debug.LogWarning("[ARLobby] BeginHostFlow sin mapa: el host no comparte mapa.");
             _imageAnchor?.StartTracking();
+            // Sin mapa (modo detección en vivo, WIP) nunca hubo una imagen de
+            // referencia para escanear — no hay nada que ARImageAnchor pueda
+            // encontrar, así que "buscando la imagen" giraría para siempre. Marcar
+            // _mapaListo acá habilita "NO TENGO LA IMAGEN" (calibración manual del
+            // origen), la única forma de avanzar en este caso.
+            _mapaListo = true;
             return;
         }
 

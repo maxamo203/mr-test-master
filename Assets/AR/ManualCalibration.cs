@@ -203,6 +203,11 @@ public class ManualCalibration : MonoBehaviour
 
         if (anterior != null) Destroy(anterior);
 
+        // Mismo marcador del 0,0 que deja la imagen al detectarse (esferas en
+        // escáner/lobby, libro ritual en partida — ver ARImageAnchor.SpawnVisual):
+        // sin esto, calibrar a mano dejaba el origen sin ningún visual.
+        _imageAnchor?.SpawnVisualEnOrigen(go.transform);
+
         // El jugador declaró que no tiene la imagen: cortamos la búsqueda para que
         // una detección tardía no le mueva el mapa después de haberlo acomodado.
         _imageAnchor?.StopTracking();

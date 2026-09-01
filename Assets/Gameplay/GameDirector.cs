@@ -54,6 +54,15 @@ namespace Gameplay
         private uint         _sorkenNetId;
         private MarkerObject _marker;
 
+        // Últimas posiciones de emerge: evita elegir un marcador pegado a alguna de
+        // ellas, para que no parezca que Sorken sale siempre de la misma zona (se
+        // nota más con pocos marcadores, ej. detección en vivo recién arrancada,
+        // pero aplica siempre). Si ningún marcador cumple la distancia (pocos
+        // disponibles), no bloquea: cae a elegir entre todos igual.
+        private const int RecentSpawnMemory = 3;
+        private const float MinDistanciaDeReciente = 2.5f;
+        private readonly List<Vector3> _recentSpawns = new();
+
         // Chase.
         private readonly List<Vector3> _path = new();
         private int   _pathIndex;
@@ -105,6 +114,10 @@ namespace Gameplay
             SorkerNav.Ensure();
             ArbmosDirector.Ensure().StartRun();      // alucinacion de cordura (individual por jugador)
             RitualBookDirector.Ensure().StartRun();  // libro sobre la imagen: eventos de oscuridad
+            // Detección en vivo (WIP, BETA): solo si el jugador eligió "jugar sin
+            // entorno" en vez de un escaneo guardado — ver NightMenuUI/GameSession.
+            if (GameSession.Instance != null && GameSession.Instance.LiveWallMode)
+                LiveWallDetector.Ensure().StartDetecting();
             _running = true;
         }
 
@@ -192,8 +205,9 @@ namespace Gameplay
                 return;
             }
 
-            _marker = markers[UnityEngine.Random.Range(0, markers.Count)];
+            _marker = ElegirMarcadorEvitandoRecientes(markers);
             if (_marker == null) { _attemptTimer = 1f; return; }
+            RecordarSpawnReciente(_marker.transform.position);
 
             // Spawn ya a la altura del piso (EmergePosition con _sorken null usa depth 0);
             // luego lo reposicionamos aplicando el EmergeDepth del modelo.
@@ -216,6 +230,35 @@ namespace Gameplay
             _repel = 0f; _grace = 0f;
             _phase = Phase.Entering;
             Debug.Log($"[GameDirector] Emerge netId={_sorkenNetId} en marcador {_marker.name}.");
+        }
+
+        // Prefiere un marcador lejos de las últimas posiciones de emerge; si
+        // ninguno cumple (pocos marcadores disponibles, ej. detección en vivo
+        // recién arrancada), no bloquea el spawn: cae a elegir entre todos.
+        private readonly List<MarkerObject> _candidatosBuffer = new();
+        private MarkerObject ElegirMarcadorEvitandoRecientes(IReadOnlyList<MarkerObject> markers)
+        {
+            _candidatosBuffer.Clear();
+            foreach (var m in markers)
+            {
+                if (m == null) continue;
+                bool cerca = false;
+                foreach (var reciente in _recentSpawns)
+                    if (Vector3.Distance(m.transform.position, reciente) < MinDistanciaDeReciente) { cerca = true; break; }
+                if (!cerca) _candidatosBuffer.Add(m);
+            }
+            if (_candidatosBuffer.Count == 0)
+                foreach (var m in markers) if (m != null) _candidatosBuffer.Add(m);
+
+            return _candidatosBuffer.Count > 0
+                ? _candidatosBuffer[UnityEngine.Random.Range(0, _candidatosBuffer.Count)]
+                : null;
+        }
+
+        private void RecordarSpawnReciente(Vector3 pos)
+        {
+            _recentSpawns.Add(pos);
+            while (_recentSpawns.Count > RecentSpawnMemory) _recentSpawns.RemoveAt(0);
         }
 
         // --- Entering ---

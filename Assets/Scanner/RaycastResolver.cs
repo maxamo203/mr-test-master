@@ -122,5 +122,54 @@ namespace Scanner
                 Source   = RaycastSource.Fallback,
             };
         }
+
+        // Misma cascada que ResolveFromScreenPoint, pero para un rayo arbitrario en
+        // espacio mundo (ej. recto hacia abajo desde la cámara, para estimar la
+        // altura del piso — ver LiveWallDetector) en vez de un punto de pantalla.
+        // Están separados (con algo de lógica repetida) a propósito: así un rayo
+        // que cae fuera de la vista de la cámara no puede afectar el camino de
+        // ResolveFromScreenPoint, que ya usan el escáner y el resto del juego.
+        public ResolvedHit ResolveFromRay(Ray ray)
+        {
+            if (_lidarLayerMask != 0 && Physics.Raycast(ray, out var phHit, _lidarMaxDistance, _lidarLayerMask))
+            {
+                return new ResolvedHit
+                {
+                    Hit      = true,
+                    Position = phHit.point,
+                    Normal   = phHit.normal,
+                    Source   = RaycastSource.LidarMesh,
+                };
+            }
+
+            if (_arRaycast != null)
+            {
+                _arHits.Clear();
+                var flags = TrackableType.PlaneWithinPolygon | TrackableType.Depth | TrackableType.FeaturePoint;
+                if (_arRaycast.Raycast(ray, _arHits, flags) && _arHits.Count > 0)
+                {
+                    var h = _arHits[0];
+                    var src = RaycastSource.ArPlane;
+                    if ((h.hitType & TrackableType.Depth)        != 0) src = RaycastSource.ArDepth;
+                    else if ((h.hitType & TrackableType.FeaturePoint) != 0) src = RaycastSource.ArFeaturePoint;
+
+                    return new ResolvedHit
+                    {
+                        Hit      = true,
+                        Position = h.pose.position,
+                        Normal   = h.pose.up,
+                        Source   = src,
+                    };
+                }
+            }
+
+            return new ResolvedHit
+            {
+                Hit      = true,
+                Position = ray.origin + ray.direction * _fallbackDistance,
+                Normal   = -ray.direction,
+                Source   = RaycastSource.Fallback,
+            };
+        }
     }
 }

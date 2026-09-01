@@ -23,6 +23,17 @@ namespace Scanner
             finally { DisplayOnly = false; }
         }
 
+        // Igual que LoadForDisplay pero para código que crea WallObject/MarkerObject
+        // por su cuenta (no desde un ScanData) y quiere el mismo resultado "solo
+        // visual, sin handles de edición" — ej. LiveWallDetector (Assets/Gameplay/),
+        // paredes detectadas en vivo durante la partida, no editables.
+        public static void RunDisplayOnly(System.Action accion)
+        {
+            DisplayOnly = true;
+            try { accion(); }
+            finally { DisplayOnly = false; }
+        }
+
         public static bool Load(string name, ARImageAnchor imageAnchor = null)
         {
             var data = ScanSerializer.Load(name);
