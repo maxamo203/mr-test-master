@@ -1,0 +1,296 @@
+---
+/**
+ * Página dedicada del "SABER MÁS". Acá sí entra el detalle que la home evita:
+ * escaneo, ancla, qué pasa durante la noche, las entidades y el cooperativo.
+ */
+import Base from '../layouts/Base.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { howItems } from '../nav';
+
+const bloques = [
+  {
+    id: 'escaneo',
+    num: '01',
+    titulo: 'El escaneo',
+    copete: 'Una vez, y queda.',
+    parrafos: [
+      'Antes de la primera noche recorrés tu habitación con la cámara y vas marcando lo que hay: las paredes, los muebles, las puertas. No es un mapa genérico ni una sala prefabricada — es tu cuarto, con sus medidas.',
+      'El escaneo se guarda en el teléfono y se reusa en cada partida. Podés tener varios entornos guardados y elegir en cuál jugar.',
+    ],
+  },
+  {
+    id: 'ancla',
+    num: '02',
+    titulo: 'El ancla',
+    copete: 'Una imagen fija que ordena todo lo demás.',
+    parrafos: [
+      'Pegás en la pared una imagen de referencia y la fotografiás desde el juego. Esa imagen pasa a ser el punto cero del mapa: cuando volvés a jugar, apuntás la cámara y todo el escaneo vuelve a caer exactamente donde estaba.',
+      'Es también lo que sincroniza a varios jugadores: si todos miran la misma imagen, todos comparten el mismo mundo. Y si perdiste la imagen, podés ubicar el entorno a mano y arrancar igual.',
+    ],
+  },
+  {
+    id: 'noche',
+    num: '03',
+    titulo: 'La noche',
+    copete: 'Luz que se acaba, cordura que se gasta.',
+    parrafos: [
+      'La linterna es tu única herramienta y tiene carga limitada. Hay pilas repartidas por los muebles de tu propia habitación: las levantás apuntando y apretando un botón.',
+      'Quedarte a oscuras te va comiendo la cordura. En el centro del ritual está el libro, y la oscuridad viene a apagarlo: iluminarlo a tiempo es lo que lo salva.',
+      'Repartidas por el cuarto también aparecen reliquias del ritual. No son obligatorias — son el puntaje, y el récord de cada noche queda guardado.',
+    ],
+  },
+  {
+    id: 'entidades',
+    num: '04',
+    titulo: 'Las entidades',
+    copete: 'Tres, y ninguna se resuelve igual.',
+    entidades: [
+      {
+        nombre: 'Sorken',
+        texto: 'Busca la manera de entrar. Si lo iluminás a tiempo lo repelés; si no, entra y te persigue.',
+      },
+      {
+        nombre: 'Arbmos',
+        texto: 'La alucinación de la cordura baja. Es individual: aparece sólo para vos, y le gusta que te quedes quieto.',
+      },
+      {
+        nombre: 'Veleth',
+        texto: 'Se invoca cuando el libro se pierde. Contra ella la linterna no sirve para nada.',
+      },
+    ],
+  },
+  {
+    id: 'companeros',
+    num: '05',
+    titulo: 'Compañeros',
+    copete: 'El ritual no se completa solo.',
+    parrafos: [
+      'El modo cooperativo corre por red local: uno crea la sala y los demás se unen desde el mismo WiFi. El escaneo lo comparte el anfitrión, así que nadie tiene que volver a medir la casa.',
+      'Todos ven las mismas entidades en el mismo lugar del cuarto — salvo las que son alucinación de uno solo.',
+    ],
+  },
+  {
+    id: 'inmersion',
+    num: '06',
+    titulo: 'Inmersión',
+    copete: 'Alcanza con el teléfono. Con más, es peor.',
+    parrafos: [
+      'Se juega entero con el celular en la mano. Pero si tenés un visor Cardboard, el juego pasa a visión estéreo y te lo podés calzar en la cara; si tenés un joystick bluetooth, lo controlás desde ahí.',
+      'Con auriculares, el audio es espacial: vas a escuchar de qué lado de tu habitación viene lo que todavía no ves.',
+    ],
+  },
+];
+---
+
+<Base
+  title="Cómo funciona — Mortuorium"
+  description="El escaneo, el ancla, la noche, las entidades y el cooperativo: cómo se arma el ritual de Mortuorium paso por paso."
+  items={howItems}
+  back={{ href: '/', label: 'Volver' }}
+>
+  <header class="phead">
+    <div class="wrap">
+      <p class="eyebrow">Cómo funciona</p>
+      <h1 class="title phead__title">Cómo se arma<br />el ritual</h1>
+      <p class="lead">
+        La versión larga. Qué hace el juego con tu habitación, qué pasa durante la noche y por qué
+        conviene no quedarse quieto.
+      </p>
+    </div>
+  </header>
+
+  <div class="blocks">
+    {
+      bloques.map((b) => (
+        <section class="section block" id={b.id}>
+          <div class="wrap block__grid">
+            <div class="block__aside">
+              <span class="block__num">{b.num}</span>
+              <h2 class="block__title">{b.titulo}</h2>
+            </div>
+
+            <div class="block__body" data-reveal>
+              <p class="block__kicker">{b.copete}</p>
+
+              {b.parrafos?.map((p) => <p class="block__p">{p}</p>)}
+
+              {b.entidades && (
+                <ul class="beings">
+                  {b.entidades.map((e) => (
+                    <li class="being">
+                      <h3 class="being__name">{e.nombre}</h3>
+                      <p class="being__text">{e.texto}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </section>
+      ))
+    }
+  </div>
+
+  <section class="section back">
+    <div class="wrap back__inner">
+      <p class="back__creed">Solo tu fe puede salvarte</p>
+      <a class="btn" href="/#descargar">
+        <span class="btn__arrow" aria-hidden="true">&larr;</span>
+        <span>Volver al inicio</span>
+      </a>
+    </div>
+  </section>
+
+  <SiteFooter />
+</Base>
+
+<style>
+  .phead {
+    padding: clamp(5rem, 16vh, 9rem) var(--pad-x) clamp(2rem, 5vh, 3.5rem);
+  }
+
+  .phead__title {
+    margin-bottom: 0.5rem;
+  }
+
+  .blocks {
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  .block {
+    border-bottom: 1px solid var(--rule-soft);
+    padding-block: clamp(3rem, 8vh, 5.5rem);
+  }
+
+  .block__grid {
+    display: grid;
+    gap: 1.6rem;
+  }
+
+  @media (min-width: 55rem) {
+    .block__grid {
+      grid-template-columns: 16rem 1fr;
+      gap: 3.5rem;
+    }
+  }
+
+  .block__aside {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+  }
+
+  @media (min-width: 55rem) {
+    .block__aside {
+      position: sticky;
+      top: 3rem;
+      flex-direction: column;
+      align-self: start;
+      gap: 0.4rem;
+    }
+  }
+
+  .block__num {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+  }
+
+  .block__title {
+    font-size: clamp(1.8rem, 5vw, 2.6rem);
+    letter-spacing: 0.04em;
+  }
+
+  .block__kicker {
+    font-size: 1.15em;
+    color: var(--text);
+    margin-bottom: 1.2rem;
+  }
+
+  .block__p {
+    color: var(--text-muted);
+    max-width: 62ch;
+  }
+
+  .block__p + .block__p {
+    margin-top: 1rem;
+  }
+
+  /* --- entidades ------------------------------------------------------ */
+  .beings {
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 1px;
+    background: var(--rule-soft);
+    border: 1px solid var(--rule-soft);
+  }
+
+  .being {
+    padding: 1.4rem 1.5rem;
+    background-color: var(--bg);
+    background-image: var(--card-bg);
+  }
+
+  .being__name {
+    font-size: 1.3rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-soft);
+    margin-bottom: 0.35rem;
+  }
+
+  .being__text {
+    color: var(--text-muted);
+    font-size: 0.92em;
+  }
+
+  /* --- cierre --------------------------------------------------------- */
+  .back__inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+  }
+
+  .back__creed {
+    font-size: clamp(1.1rem, 3vw, 1.6rem);
+    color: var(--text-soft);
+    text-shadow: 0 0 2.2rem var(--glow-red);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 1rem 2rem;
+    border: 1px solid var(--accent-deep);
+    background-image: var(--card-bg);
+    color: var(--accent-soft);
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    transition:
+      background-image 0.35s var(--ease-out),
+      border-color 0.35s var(--ease-out),
+      box-shadow 0.35s var(--ease-out);
+  }
+
+  .btn:hover {
+    background-image: var(--card-bg-hover);
+    border-color: var(--accent);
+    box-shadow: 0 0 2rem var(--glow-gold-soft);
+  }
+
+  .btn__arrow {
+    transition: transform 0.35s var(--ease-out);
+  }
+
+  .btn:hover .btn__arrow {
+    transform: translateX(-0.35rem);
+  }
+</style>

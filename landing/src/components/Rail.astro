@@ -1,0 +1,308 @@
+---
+/**
+ * Riel lateral: reemplaza al navbar tradicional.
+ *
+ * Desktop: columna fija a la izquierda, angosta (sólo se ven los números y un
+ * tick por sección). Al pasar el mouse o al tabular se despliega y aparecen las
+ * etiquetas. Lleva una línea de progreso que se llena con el scroll y marca la
+ * sección activa (el scroll-spy lo maneja Base.astro).
+ *
+ * Mobile: la misma navegación se transforma en un dock horizontal abajo.
+ */
+import { Image } from 'astro:assets';
+import icon from '../assets/book-icon.png';
+import type { RailItem } from '../nav';
+
+interface Props {
+  items: RailItem[];
+  back?: { href: string; label: string };
+}
+
+const { items, back } = Astro.props;
+---
+
+<nav class="rail" aria-label="Secciones">
+  <a class="rail__mark" href="/" aria-label="Mortuorium — inicio">
+    <Image src={icon} alt="" width={112} height={114} loading="eager" />
+  </a>
+
+  {
+    back && (
+      <a class="rail__back" href={back.href}>
+        <span class="rail__back-arrow" aria-hidden="true">
+          &larr;
+        </span>
+        <span class="rail__label">{back.label}</span>
+      </a>
+    )
+  }
+
+  <ul class="rail__list">
+    {
+      items.map((item) => (
+        <li>
+          <a class="rail__link" href={item.href} data-rail-link>
+            <span class="rail__tick" aria-hidden="true" />
+            <span class="rail__num">{item.num}</span>
+            <span class="rail__label">{item.label}</span>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+
+  <div class="rail__progress" data-rail-progress aria-hidden="true">
+    <span class="rail__progress-fill"></span>
+  </div>
+
+  <span class="rail__vertical" aria-hidden="true">MORTUORIUM</span>
+</nav>
+
+<style>
+  .rail {
+    position: fixed;
+    inset-block: 0;
+    left: 0;
+    z-index: 50;
+    width: var(--rail-w);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    padding: 1.1rem 0;
+    border-right: 1px solid var(--rule-soft);
+    background: var(--scrim-soft);
+    backdrop-filter: blur(6px);
+    overflow: hidden;
+    transition:
+      width 0.45s var(--ease-out),
+      background-color 0.45s var(--ease-out);
+  }
+
+  .rail:hover,
+  .rail:focus-within {
+    width: var(--rail-w-open);
+    background-color: var(--surface);
+  }
+
+  /* --- ícono / marca ------------------------------------------------- */
+  .rail__mark {
+    flex: none;
+    width: 2.9rem;
+    height: 2.9rem;
+    margin-inline: 1.3rem;
+    border-radius: 0.6rem;
+    overflow: hidden;
+    box-shadow: var(--shadow-inset-frame);
+    opacity: 0.9;
+    transition: opacity 0.3s var(--ease-out);
+  }
+
+  .rail__mark:hover {
+    opacity: 1;
+  }
+
+  .rail__mark :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* --- volver (sólo en páginas internas) ------------------------------ */
+  .rail__back {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 0.5rem 0;
+    padding-left: 1.35rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .rail__back:hover {
+    color: var(--accent);
+  }
+
+  .rail__back-arrow {
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+
+  /* --- lista de secciones -------------------------------------------- */
+  .rail__list {
+    list-style: none;
+    margin: auto 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .rail__link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.62rem 0;
+    padding-left: 1.35rem;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition: color 0.3s var(--ease-out);
+  }
+
+  .rail__link:hover {
+    color: var(--text-soft);
+    background: var(--tint-hover);
+  }
+
+  .rail__link.is-active {
+    color: var(--accent);
+  }
+
+  /* Guioncito que crece cuando la sección está activa */
+  .rail__tick {
+    position: absolute;
+    left: 0;
+    width: 0.55rem;
+    height: 1px;
+    background: var(--text-disabled);
+    transition:
+      width 0.4s var(--ease-out),
+      background-color 0.3s var(--ease-out);
+  }
+
+  .rail__link.is-active .rail__tick {
+    width: 1.05rem;
+    background: var(--accent);
+  }
+
+  .rail__num {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.85;
+  }
+
+  /* La etiqueta sólo existe cuando el riel está desplegado */
+  .rail__label {
+    opacity: 0;
+    transform: translateX(-0.4rem);
+    transition:
+      opacity 0.35s var(--ease-out),
+      transform 0.35s var(--ease-out);
+  }
+
+  .rail:hover .rail__label,
+  .rail:focus-within .rail__label {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* --- progreso vertical --------------------------------------------- */
+  .rail__progress {
+    flex: none;
+    width: 1px;
+    height: 5.5rem;
+    margin-left: 1.6rem;
+    background: var(--rule-soft);
+    position: relative;
+  }
+
+  .rail__progress-fill {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: calc(var(--progress, 0) * 100%);
+    background: var(--accent);
+    transition: height 0.15s linear;
+  }
+
+  /* --- wordmark vertical al pie --------------------------------------- */
+  .rail__vertical {
+    flex: none;
+    margin-left: 1.15rem;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.42em;
+    color: var(--text-disabled);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    white-space: nowrap;
+  }
+
+  /* =====================================================================
+     MOBILE: el riel se vuelve un dock horizontal abajo
+     ===================================================================== */
+  @media (max-width: 60rem) {
+    .rail {
+      inset-block: auto 0;
+      inset-inline: 0;
+      width: 100%;
+      height: var(--dock-h);
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-around;
+      gap: 0;
+      padding: 0 0.5rem;
+      border-right: 0;
+      border-top: 1px solid var(--rule-soft);
+      background-color: var(--surface);
+      backdrop-filter: blur(10px);
+    }
+
+    .rail:hover,
+    .rail:focus-within {
+      width: 100%;
+    }
+
+    .rail__mark,
+    .rail__progress,
+    .rail__vertical {
+      display: none;
+    }
+
+    .rail__list {
+      flex-direction: row;
+      margin: 0;
+      flex: 1;
+      justify-content: space-around;
+      gap: 0;
+    }
+
+    .rail__link,
+    .rail__back {
+      flex-direction: column;
+      gap: 0.2rem;
+      padding: 0.35rem 0.5rem;
+      font-size: 0.58rem;
+      letter-spacing: 0.1em;
+    }
+
+    .rail__back {
+      padding-left: 0.5rem;
+    }
+
+    .rail__tick {
+      display: none;
+    }
+
+    /* En mobile las etiquetas se ven siempre: no hay hover que las revele */
+    .rail__label {
+      opacity: 1;
+      transform: none;
+    }
+
+    .rail__num {
+      font-size: 0.55rem;
+      opacity: 0.6;
+    }
+  }
+</style>

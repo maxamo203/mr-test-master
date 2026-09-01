@@ -1,0 +1,21 @@
+---
+import Base from '../layouts/Base.astro';
+import BookHero from '../components/BookHero.astro';
+import Pillars from '../components/Pillars.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Stores from '../components/Stores.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { homeItems } from '../nav';
+---
+
+<Base
+  title="Mortuorium — El ritual empieza en tu mundo"
+  description="Juego de terror en realidad aumentada: escaneá tu habitación, anclá el ritual y sobreviví hasta el amanecer. Cooperativo, sin hardware dedicado."
+  items={homeItems}
+>
+  <BookHero />
+  <Pillars />
+  <HowItWorks />
+  <Stores />
+  <SiteFooter />
+</Base>

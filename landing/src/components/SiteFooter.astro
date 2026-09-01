@@ -1,0 +1,80 @@
+---
+/**
+ * Pie del sitio. "El ritual no debe parar" es el mismo subtítulo que usa el
+ * menú principal del juego (NightMenuUI), a propósito.
+ */
+import { Image } from 'astro:assets';
+import wordmark from '../assets/wordmark.png';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="foot">
+  <div class="wrap foot__inner">
+    <div class="foot__brand">
+      <Image
+        class="foot__wordmark"
+        src={wordmark}
+        alt="Mortuorium"
+        widths={[280, 460]}
+        sizes="14rem"
+        loading="lazy"
+      />
+      <p class="foot__creed">El ritual no debe parar</p>
+    </div>
+
+    <div class="foot__meta">
+      <a href="https://www.mortuorium.com">www.mortuorium.com</a>
+      <span class="foot__copy">© {year} Mortuorium · Equipo 112</span>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .foot {
+    border-top: 1px solid var(--rule-soft);
+    padding: clamp(2.5rem, 6vh, 4rem) var(--pad-x);
+    background-color: var(--bg-alt);
+  }
+
+  .foot__inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+
+  .foot__wordmark {
+    width: 14rem;
+    max-width: 60vw;
+    height: auto;
+    opacity: 0.85;
+  }
+
+  .foot__creed {
+    margin-top: 0.7rem;
+    color: var(--text-faint);
+    font-size: 0.85em;
+  }
+
+  .foot__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .foot__copy {
+    color: var(--text-disabled);
+  }
+
+  @media (min-width: 45rem) {
+    .foot__meta {
+      text-align: right;
+    }
+  }
+</style>

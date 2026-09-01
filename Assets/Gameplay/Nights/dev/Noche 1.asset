@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   displayName: Noche 1 (DEV)
   briefing: (DEV) Sorken rapido para probar.
-  nightDurationSeconds: 300
+  nightDurationSeconds: 60
   sorkenActive: 1
   attemptIntervalMin: 2
   attemptIntervalMax: 5
