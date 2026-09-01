@@ -30,6 +30,7 @@ import wordmark from '../assets/wordmark.png';
           class="hero__wordmark"
           src={wordmark}
           alt="Mortuorium"
+          width={1100}
           widths={[480, 720, 1100]}
           sizes="(max-width: 40rem) 80vw, 34rem"
           loading="eager"
@@ -40,6 +41,7 @@ import wordmark from '../assets/wordmark.png';
             <Image
               src={icon}
               alt="Una entidad sostiene abierto el libro del ritual"
+              width={780}
               widths={[320, 520, 780]}
               sizes="(max-width: 40rem) 62vw, 22rem"
               loading="eager"
@@ -119,9 +121,13 @@ import wordmark from '../assets/wordmark.png';
     place-items: center;
     padding: 1.5rem var(--pad-x);
     overflow: hidden;
-    /* --p lo escribe el script (0 cerrado → 1 abierto); --exit es el tramo final */
-    transform: scale(calc(1 + var(--exit, 0) * 0.16));
-    opacity: calc(1 - var(--exit, 0));
+    /* --p lo escribe el script (0 cerrado → 1 abierto); --exit es el tramo final.
+       El crecimiento (scale) corre en TODO el tramo de salida, pero el desvanecido
+       (opacity) arranca recién pasado el 45% de ese tramo — así el libro llega a
+       verse notablemente más grande ANTES de empezar a desaparecer, en vez de
+       crecer y desvanecerse al mismo ritmo. */
+    transform: scale(calc(1 + var(--exit, 0) * 0.85));
+    opacity: clamp(0, calc(1 - (var(--exit, 0) - 0.45) / 0.55), 1);
     will-change: transform, opacity;
   }
 
