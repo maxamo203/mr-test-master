@@ -6,26 +6,28 @@
 
 const pilares = [
   {
-    titulo: 'Solo tu teléfono',
-    texto: 'Entrá a la experiencia sin hardware dedicado. Si tenés el celular en la mano, ya estás adentro.',
-    icono: 'phone',
+    titulo: "Solo tu teléfono",
+    texto:
+      "Entrá a la experiencia sin hardware dedicado. Si tenés el celular en la mano, ya estás adentro.",
+    icono: "phone",
   },
   {
-    titulo: 'Más inmersión',
-    texto: 'Probalo con Cardboard, auriculares y joystick. La casa deja de ser tuya.',
-    icono: 'vr',
+    titulo: "Más inmersión",
+    texto:
+      "Probalo con Cardboard, auriculares y joystick. La casa deja de ser tuya.",
+    icono: "vr",
   },
   {
-    titulo: 'Cooperativo',
-    texto: 'Jugá con amigos en la misma sala. El ritual no se completa solo.',
-    icono: 'coop',
+    titulo: "Cooperativo",
+    texto: "Jugá con amigos en la misma sala. El ritual no se completa solo.",
+    icono: "coop",
   },
 ];
 
 const cifras = [
-  { n: '6', label: 'Noches' },
-  { n: '3', label: 'Entidades' },
-  { n: '1', label: 'Ritual' },
+  { n: "6", label: "Noches" },
+  { n: "3", label: "Entidades" },
+  { n: "1", label: "Ritual" },
 ];
 ---
 
@@ -36,8 +38,9 @@ const cifras = [
     <h2 class="title" data-reveal>Tu casa es<br />el escenario</h2>
 
     <p class="lead" data-reveal style="--reveal-delay:90ms">
-      No hay un mapa que memorizar. Mortuorium escanea tu habitación una vez y monta el ritual ahí
-      adentro: tus paredes, tus muebles, tu oscuridad. Después apagás la luz.
+      No hay un mapa que memorizar. Mortuorium escanea tu habitación una vez y
+      monta el ritual ahí adentro: tus paredes, tus muebles, tu oscuridad.
+      Después apagás la luz.
     </p>
 
     <ul class="pillars">
@@ -45,23 +48,38 @@ const cifras = [
         pilares.map((p, i) => (
           <li class="pillar" data-reveal style={`--reveal-delay:${i * 110}ms`}>
             <span class="pillar__icon" aria-hidden="true">
-              {p.icono === 'phone' && (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+              {p.icono === "phone" && (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.2"
+                >
                   <rect x="6" y="2" width="12" height="20" rx="2.5" />
                   <path d="M10.5 18.5h3" />
                   <path d="M9.5 7.5h5M9.5 10.5h5M9.5 13.5h3" opacity="0.55" />
                 </svg>
               )}
-              {p.icono === 'vr' && (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+              {p.icono === "vr" && (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.2"
+                >
                   <rect x="2" y="7" width="20" height="10" rx="3" />
                   <circle cx="7.5" cy="12" r="2.2" />
                   <circle cx="16.5" cy="12" r="2.2" />
                   <path d="M11 13.5c.6-.7 1.4-.7 2 0" />
                 </svg>
               )}
-              {p.icono === 'coop' && (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+              {p.icono === "coop" && (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.2"
+                >
                   <circle cx="9" cy="8" r="3" />
                   <circle cx="17" cy="9.5" r="2.2" />
                   <path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
@@ -76,7 +94,7 @@ const cifras = [
       }
     </ul>
 
-    <div class="figures" data-reveal>
+    <!-- <div class="figures" data-reveal>
       {
         cifras.map((c) => (
           <div class="figure">
@@ -85,7 +103,7 @@ const cifras = [
           </div>
         ))
       }
-    </div>
+    </div> -->
 
     <p class="creed" data-reveal>Solo tu fe puede salvarte</p>
   </div>
@@ -98,14 +116,18 @@ const cifras = [
     padding: 0;
     display: grid;
     gap: 1px; /* la grilla misma dibuja las divisiones */
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    /* min(15rem, 100%): ver la nota en Stores.astro — un mínimo fijo mayor que
+       la columna disponible hace desbordar la grilla en pantallas angostas. */
+    grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
     background: var(--rule-soft);
     border: 1px solid var(--rule-soft);
   }
 
   .pillar {
     padding: 2.2rem 1.9rem;
-    background-color: var(--bg);
+    /* Translúcido, no --bg: detrás corre el video de fondo (BackdropVideo) y
+       un relleno opaco lo taparía entero en toda esta sección. */
+    background-color: var(--card-fill);
     background-image: var(--card-bg);
     transition: background-image 0.45s var(--ease-out);
   }

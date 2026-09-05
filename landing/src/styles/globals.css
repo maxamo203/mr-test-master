@@ -89,6 +89,10 @@
      --------------------------------------------------------------------- */
   --scrim-soft: rgb(var(--rgb-black) / 0.35);
   --scrim-strong: rgb(var(--rgb-black) / 0.72);
+  /* Velo del video de fondo. Es un equilibrio: más oscuro y el video no se ve
+     (vuelve a parecer el gradiente de siempre); más claro y el texto de las
+     secciones deja de leerse sobre las partes brillantes del video. */
+  --scrim-video: rgb(var(--rgb-black) / 0.55);
 
   --tint-hover: rgb(var(--rgb-gold) / 0.09);
   --tint-active: rgb(var(--rgb-gold) / 0.16);
@@ -181,6 +185,9 @@
     rgb(var(--rgb-gold) / 0.1) 0%,
     rgb(var(--rgb-black) / 0.2) 100%
   );
+  /* Relleno de tarjeta sobre el video de fondo: opaco de más taparía el video,
+     transparente de más deja el texto ilegible. Este es el punto medio. */
+  --card-fill: rgb(var(--rgb-black) / 0.55);
 
   /* Divisores y remates */
   --grad-rule: linear-gradient(
@@ -235,6 +242,15 @@ html {
   /* 1rem = 16px, pero acompaña el zoom del usuario */
   font-size: 100%;
   scroll-behavior: smooth;
+  /* Va también en el <html>, no sólo en el body: en iOS Safari el body con
+     `overflow-x: hidden` no alcanza — el desbordamiento se propaga al elemento
+     raíz igual y la página se puede arrastrar de costado. Con los dos puestos,
+     el ancho queda realmente clavado al viewport. */
+  overflow-x: hidden;
+  /* El zoom-out que deja el contenido ocupando media pantalla es esto: sin un
+     ancho máximo explícito, un hijo que desborda ensancha el bloque contenedor
+     inicial y el navegador encoge todo para hacerlo entrar. */
+  max-width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -246,16 +262,40 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: var(--bg);
-  background-image: var(--grad-page);
-  background-attachment: fixed;
+  /* OJO: el fondo NO va acá, va en body::before (abajo). Puesto en el body es
+     opaco y se pinta como fondo del canvas, por debajo de cualquier elemento
+     con z-index negativo — y así tapaba por completo el video de fondo
+     (BackdropVideo, que vive en z-index -1). Como capa propia queda por debajo
+     del video y el video por debajo del contenido, que es el orden que hace
+     falta: gradiente → video → texto. */
+  background-color: var(--c-black);
   color: var(--text);
   font-family: var(--font-body);
   font-size: clamp(0.95rem, 0.9rem + 0.25vw, 1.05rem);
   line-height: 1.75;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  overflow-x: hidden;
+  /* `clip`, NO `hidden`. Los dos contienen el desbordamiento horizontal, pero
+     `overflow-x: hidden` fuerza `overflow-y: auto` y convierte al body en el
+     contenedor de scroll: entonces `position: sticky` deja de pegarse al
+     viewport y el escenario del hero se va hacia arriba con el scroll en vez de
+     quedarse fijo (así estaba antes, y por eso el hero tenía tanto scroll
+     muerto). `overflow-x: clip` recorta sin crear contenedor de scroll, que es
+     exactamente lo que hace falta acá. */
+  overflow-x: clip;
+}
+
+/* El fondo del sitio, como capa propia. Está en z-index -2: por DEBAJO del
+   video de fondo (-1), que a su vez está por debajo del contenido. Es lo que
+   se ve en el hero y detrás del video donde éste no llega. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-color: var(--bg);
+  background-image: var(--grad-page);
 }
 
 /* Grano sutil sobre todo el sitio: le saca el aspecto "plano" al fondo negro. */

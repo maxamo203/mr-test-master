@@ -68,7 +68,9 @@
     margin-top: clamp(2.5rem, 6vh, 4rem);
     display: grid;
     gap: 1.2rem;
-    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+    /* min(17rem, 100%) y no 17rem a secas: en una pantalla angosta el mínimo
+       fijo es más ancho que la columna disponible y la grilla desborda. */
+    grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
   }
 
   .store {

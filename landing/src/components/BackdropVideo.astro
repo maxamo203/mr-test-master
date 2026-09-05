@@ -1,0 +1,667 @@
+---
+/**
+ * Video de fondo del sitio + la sección donde por fin se lo ve limpio.
+ *
+ * UN solo <video>, no dos: se reproduce siempre en la misma capa fija detrás de
+ * todo el contenido, y lo que cambia es cómo se lo presenta.
+ *
+ *   - Durante el hero (el libro) está apagado del todo: el hero es su propia
+ *     escena y el video le robaría protagonismo.
+ *   - Del hero en adelante entra desenfocado y bajo un velo oscuro: es textura,
+ *     no contenido, y el texto de las secciones tiene que seguir leyéndose.
+ *   - Al llegar al final, la sección "05 — El tráiler" abre un marco 16:9 y el
+ *     video se MUEVE ahí dentro (posición y tamaño animados por custom props),
+ *     pierde el blur y el velo, y aparecen los controles.
+ *
+ * El "moverse ahí dentro" es la única parte con truco: en vez de duplicar el
+ * elemento (dos decodificaciones del mismo 1080p en un celular = jank), el
+ * script mide el marco vacío y publica su rect en --v-top/--v-left/--v-w/--v-h.
+ * La capa fija interpola hacia ese rect con --dock (0 = pantalla completa,
+ * 1 = encajado en el marco). Como es la misma pieza, no hay salto de cuadro ni
+ * un segundo arranque de reproducción.
+ *
+ * FORMATO: un único MP4 (H.264 + AAC). Es el que reproduce todo — Chrome,
+ * Firefox, Edge y Safari/iOS — así que un solo archivo alcanza. Un WebM/VP9
+ * pesaría algo menos en los navegadores que lo soportan, pero obligaría a
+ * mantener dos codificaciones del mismo material y Safari necesitaría el MP4
+ * igual.
+ */
+const poster = "/video/mortuorium-poster.jpg";
+---
+
+{/* --- La capa fija: vive detrás de TODO el contenido --- */}
+<div class="bd" data-bd aria-hidden="true">
+  <video
+    class="bd__video"
+    data-bd-video
+    poster={poster}
+    muted
+    loop
+    playsinline
+    preload="auto"
+    disablepictureinpicture
+  >
+    <source src="/video/mortuorium.mp4" type="video/mp4" />
+  </video>
+  <div class="bd__veil"></div>
+</div>
+
+{/* --- La sección final: el hueco al que el video viaja --- */}
+<section class="section trailer" id="trailer">
+  <div class="wrap">
+    <p class="eyebrow" data-reveal>05 — El tráiler</p>
+    <h2 class="title" data-reveal>Mirá lo que<br />te espera</h2>
+
+    <div
+      class="trailer__frame"
+      data-bd-slot
+      data-reveal
+      style="--reveal-delay:90ms"
+    >
+      {
+        /* Reserva el 16:9 exacto al que la capa fija se acopla. Queda vacío
+          mientras el JS maneja el acople; el <noscript> cubre el resto. */
+      }
+      <noscript>
+        <video class="trailer__fallback" poster={poster} controls playsinline>
+          <source src="/video/mortuorium.mp4" type="video/mp4" />
+        </video>
+      </noscript>
+    </div>
+
+    <div class="trailer__bar" data-bd-controls hidden>
+      <button
+        class="tb__btn"
+        data-bd-toggle
+        type="button"
+        aria-label="Reproducir"
+      >
+        <svg
+          class="tb__icon tb__icon--play"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M8 5.5v13l11-6.5z"></path>
+        </svg>
+        <svg
+          class="tb__icon tb__icon--pause"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M7 5h3.2v14H7zM13.8 5H17v14h-3.2z"></path>
+        </svg>
+      </button>
+
+      <input
+        class="tb__seek"
+        data-bd-seek
+        type="range"
+        min="0"
+        max="1000"
+        value="0"
+        step="1"
+        aria-label="Posición del video"
+      />
+
+      <span class="tb__time" data-bd-time>0:00 / 0:00</span>
+
+      <button
+        class="tb__btn"
+        data-bd-mute
+        type="button"
+        aria-label="Activar sonido"
+      >
+        <svg
+          class="tb__icon tb__icon--muted"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M4 9h3.4L12 4.8v14.4L7.4 15H4z"></path>
+          <path
+            d="M15.5 9.5l4 4m0-4l-4 4"
+            stroke="currentColor"
+            stroke-width="1.6"
+            fill="none"
+            stroke-linecap="round"></path>
+        </svg>
+        <svg
+          class="tb__icon tb__icon--sound"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M4 9h3.4L12 4.8v14.4L7.4 15H4z"></path>
+          <path
+            d="M15.4 9a4 4 0 010 6M17.8 6.6a7.4 7.4 0 010 10.8"
+            stroke="currentColor"
+            stroke-width="1.5"
+            fill="none"
+            stroke-linecap="round"></path>
+        </svg>
+      </button>
+
+      <button
+        class="tb__btn"
+        data-bd-full
+        type="button"
+        aria-label="Pantalla completa"
+      >
+        <svg
+          class="tb__icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* =====================================================================
+     CAPA FIJA DEL VIDEO
+     ===================================================================== */
+  .bd {
+    position: fixed;
+    /* --dock: 0 = cubriendo la pantalla; 1 = encajado en el marco final.
+       --v-*: el rect del marco, medido por el script. --show: opacidad global
+       (0 durante el hero). Los tres los escribe JS; los defaults dejan la capa
+       invisible y a pantalla completa, que es el estado seguro. */
+    top: calc(var(--v-top, 0px) * var(--dock, 0));
+    left: calc(var(--v-left, 0px) * var(--dock, 0));
+    /* --vw/--vh los mide el script con el viewport REAL. En iOS `100vw` incluye
+       la barra de scroll y no coincide con el viewport visual, así que una capa
+       fixed de 100vw sobresale unos píxeles y genera scroll horizontal en toda
+       la página. Los valores en px del script no tienen ese problema; los vw/vh
+       quedan sólo como respaldo hasta el primer pintado. */
+    width: calc(var(--vw, 100vw) + (var(--v-w, 100vw) - var(--vw, 100vw)) * var(--dock, 0));
+    height: calc(var(--vh, 100vh) + (var(--v-h, 100vh) - var(--vh, 100vh)) * var(--dock, 0));
+    z-index: -1; /* detrás de todo el contenido, delante del fondo del body */
+    overflow: hidden;
+    opacity: var(--show, 0);
+    pointer-events: none;
+    /* El blur se va con el acople: a --dock 1 el video está limpio. */
+    --blur: calc((1 - var(--dock, 0)) * var(--blur-max, 22px));
+  }
+
+  .bd__video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    filter: blur(var(--blur)) saturate(0.85) brightness(0.9);
+    /* El blur samplea píxeles de afuera del borde y deja un halo transparente;
+       escalar de más lo empuja fuera de cuadro. Al acoplarse ya no hace falta. */
+    scale: calc(1 + (1 - var(--dock, 0)) * 0.08);
+    will-change: filter, scale;
+  }
+
+  /* Velo: es lo que hace legible al texto encima. Se desvanece al acoplarse.
+     NO lleva --grad-page: ese gradiente es justamente el fondo que el video
+     viene a reemplazar, y superpuesto le devolvía el aspecto de siempre. Sólo
+     un negro parejo, lo justo para que el texto contraste — el video tiene que
+     LEERSE como fondo, no adivinarse. */
+  .bd__veil {
+    position: absolute;
+    inset: 0;
+    background-color: var(--scrim-video);
+    opacity: calc(1 - var(--dock, 0));
+  }
+
+  /* Apenas la capa entra en el marco tiene que ir DELANTE del contenido: como
+     fondo va detrás (-1), pero ahí adentro el propio .trailer__frame la taparía
+     y el reproductor se vería vacío. Se activa al 1% del acople, no al final,
+     para que no quede oculta durante todo el viaje hacia el marco. */
+  .bd[data-in-frame] {
+    z-index: 1;
+  }
+
+  /* Ya acoplado del todo: remate de tarjeta y vuelve el puntero, para que anden
+     el doble clic y el menú contextual nativos del video. */
+  .bd[data-docked] {
+    border: 1px solid var(--rule);
+    box-shadow: var(--shadow-card);
+    pointer-events: auto;
+  }
+
+  /* =====================================================================
+     SECCIÓN DEL TRÁILER
+     ===================================================================== */
+  .trailer__frame {
+    position: relative;
+    margin-top: clamp(2.5rem, 6vh, 4rem);
+    aspect-ratio: 16 / 9;
+    width: 100%;
+    background-color: var(--c-black);
+    border: 1px solid var(--rule-soft);
+  }
+
+  .trailer__fallback {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* --- barra de controles --- */
+  .trailer__bar {
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    max-width: 100%;
+    padding: 0.7rem 1rem;
+    border: 1px solid var(--rule-soft);
+    background-image: var(--card-bg);
+    font-family: var(--font-mono);
+  }
+
+  .trailer__bar[hidden] {
+    display: none;
+  }
+
+  .tb__btn {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    padding: 0;
+    border: 1px solid var(--rule-soft);
+    background: transparent;
+    color: var(--text-soft);
+    cursor: pointer;
+    transition:
+      color 0.25s var(--ease-out),
+      border-color 0.25s var(--ease-out),
+      background-color 0.25s var(--ease-out);
+  }
+
+  .tb__btn:hover {
+    color: var(--accent);
+    border-color: var(--accent-deep);
+    background-color: var(--tint-hover);
+  }
+
+  .tb__icon {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  /* Cada botón muestra el ícono del estado OPUESTO al actual */
+  .tb__icon--pause,
+  .tb__icon--sound {
+    display: none;
+  }
+
+  [data-playing] .tb__icon--play,
+  [data-audible] .tb__icon--muted {
+    display: none;
+  }
+
+  [data-playing] .tb__icon--pause,
+  [data-audible] .tb__icon--sound {
+    display: block;
+  }
+
+  .tb__time {
+    flex: none;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- barra de progreso --- */
+  .tb__seek {
+    flex: 1 1 0;
+    /* min-width:0, no 4rem: un flex item se niega a bajar de su tamaño mínimo
+       de contenido, así que un mínimo fijo acá sumado a los cuatro botones
+       desbordaba la barra en pantallas de ~390px. */
+    min-width: 0;
+    height: 1.1rem;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    /* --played (0→1) lo escribe el script: pinta el tramo ya reproducido */
+    --played: 0;
+  }
+
+  .tb__seek::-webkit-slider-runnable-track {
+    height: 2px;
+    background-image: linear-gradient(
+      90deg,
+      var(--accent) 0 calc(var(--played) * 100%),
+      var(--rule) calc(var(--played) * 100%) 100%
+    );
+  }
+
+  .tb__seek::-moz-range-track {
+    height: 2px;
+    background-image: linear-gradient(
+      90deg,
+      var(--accent) 0 calc(var(--played) * 100%),
+      var(--rule) calc(var(--played) * 100%) 100%
+    );
+  }
+
+  .tb__seek::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 0.7rem;
+    height: 0.7rem;
+    margin-top: -0.3rem;
+    border-radius: 50%;
+    background-color: var(--accent);
+    border: none;
+  }
+
+  .tb__seek::-moz-range-thumb {
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    background-color: var(--accent);
+    border: none;
+  }
+
+  .tb__seek:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+  }
+
+  .trailer__note {
+    margin-top: 1.2rem;
+    font-size: 0.85em;
+  }
+
+  @media (max-width: 40rem) {
+    /* En pantalla chica la barra no entra en una línea: el tiempo se va. */
+    .tb__time {
+      display: none;
+    }
+  }
+
+  /* En mobile el riel es un dock fijo abajo (--dock-h) que se superpone al
+     contenido. Sin este respiro extra, el dock tapa la barra de controles del
+     tráiler justo cuando el video termina de acoplarse. */
+  @media (max-width: 60rem) {
+    .trailer {
+      padding-bottom: calc(clamp(4.5rem, 11vh, 8.5rem) + var(--dock-h));
+    }
+  }
+</style>
+
+<script>
+  const layer = document.querySelector<HTMLElement>("[data-bd]");
+  const video = document.querySelector<HTMLVideoElement>("[data-bd-video]");
+  const slot = document.querySelector<HTMLElement>("[data-bd-slot]");
+  const bar = document.querySelector<HTMLElement>("[data-bd-controls]");
+  // La pista del hero: de su altura real sale cuándo entra el video (ver
+  // pintar()). Puede no existir —este componente sólo vive en la home, pero
+  // no depende del hero para funcionar—, así que su uso va con guarda.
+  const hero = document.querySelector<HTMLElement>("[data-book-track]");
+
+  if (layer && video && slot && bar) {
+    const toggle = bar.querySelector<HTMLButtonElement>("[data-bd-toggle]")!;
+    const mute = bar.querySelector<HTMLButtonElement>("[data-bd-mute]")!;
+    const full = bar.querySelector<HTMLButtonElement>("[data-bd-full]")!;
+    const seek = bar.querySelector<HTMLInputElement>("[data-bd-seek]")!;
+    const time = bar.querySelector<HTMLElement>("[data-bd-time]")!;
+
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+    const chica = matchMedia("(max-width: 40rem)");
+
+    // -----------------------------------------------------------------
+    // 1) Acople: dónde está el video y cuánto blur tiene
+    // -----------------------------------------------------------------
+    let acoplado = false; // acople terminado: controles y borde a la vista
+    let enMarco = false; // acople empezado: la capa ya va delante del contenido
+
+    const silenciar = () => {
+      video.muted = true;
+      bar.removeAttribute("data-audible");
+      mute.setAttribute("aria-label", "Activar sonido");
+    };
+
+    const pintar = () => {
+      const r = slot.getBoundingClientRect();
+      const vh = window.innerHeight;
+
+      // El hero es su propia escena: el video entra DURANTE su salida, de modo
+      // que apenas el libro deja el cuadro el fondo ya es el video y no el
+      // gradiente. La referencia es la ALTURA REAL del hero, medida acá y no un
+      // múltiplo fijo de vh: la pista del hero cambió de 240vh a 160vh y unos
+      // umbrales cableados habrían quedado más allá del hero entero, haciendo
+      // aparecer el video recién dentro de la sección 2. El fundido ocupa el
+      // último 35% de la pista.
+      const heroH = hero ? hero.getBoundingClientRect().height : vh * 1.6;
+      const desde = heroH * 0.65;
+      const hasta = heroH;
+      const show = Math.min(
+        1,
+        Math.max(0, (window.scrollY - desde) / (hasta - desde)),
+      );
+
+      // Acople: 0 mientras el marco viene subiendo desde abajo, 1 cuando ya
+      // entró del todo. El aterrizaje termina ANTES de que el marco llegue al
+      // centro (0.15·vh de margen) y de ahí en más se queda en 1 mientras el
+      // marco siga a la vista. Antes el 1 era un punto exacto —el centro del
+      // marco en el centro del viewport— así que en pantallas altas de celular
+      // el video pasaba de largo todavía borroso y sin controles: bastaba un
+      // pelo de scroll para caer al 0.94 y desarmar el acople.
+      const centro = r.top + r.height / 2;
+      const distancia = centro - vh / 2; // >0: el marco todavía viene subiendo
+      const dock = Math.min(1, Math.max(0, 1 - (distancia - vh * 0.15) / (vh * 0.6)));
+
+      // El viewport real, en px. documentElement.clientWidth excluye la barra
+      // de scroll (100vw NO), que es justo la diferencia que en iOS deja la
+      // capa fixed sobresaliendo y genera scroll horizontal en toda la página.
+      layer.style.setProperty("--vw", document.documentElement.clientWidth + "px");
+      layer.style.setProperty("--vh", vh + "px");
+
+      layer.style.setProperty("--show", show.toFixed(3));
+      layer.style.setProperty("--dock", dock.toFixed(3));
+      layer.style.setProperty("--v-top", r.top + "px");
+      layer.style.setProperty("--v-left", r.left + "px");
+      layer.style.setProperty("--v-w", r.width + "px");
+      layer.style.setProperty("--v-h", r.height + "px");
+
+      // Corre sólo mientras se ve. Es la misma señal que la opacidad, así que
+      // no hace falta un observer aparte.
+      sincronizarPlay(show);
+
+      // Dos umbrales distintos, a propósito:
+      //
+      // 1) Apenas EMPIEZA el acople la capa tiene que subir de z-index, porque
+      //    ya se está metiendo dentro del .trailer__frame y éste la taparía
+      //    durante toda la transición (el marco tiene fondo negro).
+      // 2) Los controles y el borde recién al final (0.98), o parpadearían
+      //    mientras el video todavía está viajando hacia el marco.
+      const entrando = dock > 0.01;
+      if (entrando !== enMarco) {
+        enMarco = entrando;
+        layer.toggleAttribute("data-in-frame", enMarco);
+      }
+
+      const ahora = dock > 0.98;
+      if (ahora !== acoplado) {
+        acoplado = ahora;
+        layer.toggleAttribute("data-docked", acoplado);
+        bar.hidden = !acoplado;
+        // Entrar al marco lo pone a velocidad real; salir, de vuelta a la del
+        // fondo. Va fuera del if para cubrir los dos sentidos.
+        ajustarVelocidad();
+        if (!acoplado) {
+          silenciar(); // salirse del marco vuelve a apagar el audio
+          alInicioDeFondo(); // y vuelve al tramo que sirve como fondo
+        }
+      }
+    };
+
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        pintar();
+      });
+    };
+
+    // El blur es caro: en celular se baja, y sin movimiento se saca del todo.
+    const ajustarBlur = () => {
+      const px = reduce.matches ? 0 : chica.matches ? 12 : 22;
+      layer.style.setProperty("--blur-max", px + "px");
+    };
+
+    // -----------------------------------------------------------------
+    // 2) Reproducción: sólo mientras se ve, y sólo si el navegador deja
+    // -----------------------------------------------------------------
+    let permitido = true; // lo apaga el usuario si pausa dentro del marco
+
+    // Cómo se comporta el video MIENTRAS ES FONDO. Nada de esto rige dentro del
+    // marco final: ahí manda el usuario, así que puede rebobinar antes del punto
+    // de arranque y lo ve a velocidad real.
+    const INICIO_FONDO = 8; // los primeros segundos no sirven como fondo
+    const VELOCIDAD_FONDO = 0.5; // media velocidad: más atmosférico, menos ruido visual
+
+    const alInicioDeFondo = () => {
+      // Sólo si hace falta: reasignar currentTime en cada frame cortaría la
+      // reproducción. La ventana de 0.3 s cubre el arranque y el corte del loop.
+      if (!acoplado && video.currentTime < INICIO_FONDO - 0.3) {
+        video.currentTime = INICIO_FONDO;
+      }
+    };
+
+    // La velocidad se reasigna en cada cambio de estado (y no una sola vez)
+    // porque el navegador la resetea a 1 en algunos casos —recarga del media
+    // element, cambio de fuente— y porque el paso fondo↔marco tiene que
+    // moverla en los dos sentidos.
+    const ajustarVelocidad = () => {
+      const q = acoplado ? 1 : VELOCIDAD_FONDO;
+      if (video.playbackRate !== q) video.playbackRate = q;
+    };
+
+    const intentarPlay = () => {
+      if (!permitido || document.hidden) return;
+      alInicioDeFondo();
+      ajustarVelocidad();
+      // El autoplay silencioso puede rechazarse igual (ahorro de datos, etc.).
+      // Si pasa, no insistimos: queda el póster de fondo y los controles del
+      // final siguen andando, porque ahí el play lo pide el usuario.
+      video.play().catch(() => {});
+    };
+
+    // `loop` vuelve a 0 al terminar; de fondo eso mostraría justo el tramo que
+    // estamos salteando. El reenganche va en el handler de `timeupdate` de la
+    // sección 3, que ya corre por la barra de progreso.
+
+    // Con la pestaña en segundo plano no tiene sentido decodificar.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) video.pause();
+      else intentarPlay();
+    });
+
+    // Fuera del tramo donde se ve tampoco decodificamos: es el ahorro grande en
+    // celular. No hace falta IntersectionObserver — la capa es fixed y su
+    // visibilidad es exactamente `show > 0`, que ya calcula pintar(). Un
+    // centinela absoluto sobre el body era además frágil: el body no es
+    // posicionado, así que su `top` no caía donde se pretendía.
+    const sincronizarPlay = (show: number) => {
+      if (show > 0.01) intentarPlay();
+      else if (!video.paused) video.pause();
+    };
+
+    // -----------------------------------------------------------------
+    // 3) Controles del marco final
+    // -----------------------------------------------------------------
+    const mmss = (s: number) => {
+      if (!isFinite(s) || s < 0) s = 0;
+      return (
+        Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0")
+      );
+    };
+
+    toggle.addEventListener("click", () => {
+      if (video.paused) {
+        permitido = true;
+        ajustarVelocidad(); // este play no pasa por intentarPlay()
+        video.play().catch(() => {});
+      } else {
+        permitido = false; // pausa explícita: no la pisamos al volver a scrollear
+        video.pause();
+      }
+    });
+
+    mute.addEventListener("click", () => {
+      video.muted = !video.muted;
+      bar.toggleAttribute("data-audible", !video.muted);
+      mute.setAttribute(
+        "aria-label",
+        video.muted ? "Activar sonido" : "Silenciar",
+      );
+    });
+
+    full.addEventListener("click", () => {
+      // iOS Safari no implementa requestFullscreen en <video>; tiene el suyo.
+      const ios = (video as any).webkitEnterFullscreen;
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (video.requestFullscreen)
+        video.requestFullscreen().catch(() => {});
+      else if (ios) ios.call(video);
+    });
+
+    video.addEventListener("play", () => {
+      bar.setAttribute("data-playing", "");
+      toggle.setAttribute("aria-label", "Pausar");
+    });
+    video.addEventListener("pause", () => {
+      bar.removeAttribute("data-playing");
+      toggle.setAttribute("aria-label", "Reproducir");
+    });
+
+    let arrastrando = false;
+    seek.addEventListener("input", () => {
+      arrastrando = true;
+      seek.style.setProperty("--played", String(Number(seek.value) / 1000));
+    });
+    seek.addEventListener("change", () => {
+      arrastrando = false;
+      if (video.duration)
+        video.currentTime = (Number(seek.value) / 1000) * video.duration;
+    });
+
+    video.addEventListener("timeupdate", () => {
+      // Reenganche del loop: `loop` vuelve a 0 y de fondo hay que saltar al
+      // punto de arranque, no mostrar los segundos que estamos salteando.
+      alInicioDeFondo();
+      ajustarVelocidad(); // red de seguridad: el navegador puede resetearla a 1
+
+      const d = video.duration;
+      time.textContent = mmss(video.currentTime) + " / " + mmss(d);
+      if (arrastrando || !isFinite(d) || d <= 0) return;
+      const p = video.currentTime / d;
+      seek.value = String(Math.round(p * 1000));
+      seek.style.setProperty("--played", p.toFixed(4));
+    });
+
+    // -----------------------------------------------------------------
+    // 4) Arranque
+    // -----------------------------------------------------------------
+    ajustarBlur();
+    pintar();
+    addEventListener("scroll", onScroll, { passive: true });
+    addEventListener("resize", onScroll);
+    reduce.addEventListener("change", ajustarBlur);
+    chica.addEventListener("change", ajustarBlur);
+  }
+</script>

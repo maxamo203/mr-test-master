@@ -298,11 +298,53 @@ const { items, back } = Astro.props;
     .rail__label {
       opacity: 1;
       transform: none;
+      /* Sin esto el dock desborda a lo ancho en pantallas chicas: los <a>
+         heredan `white-space: nowrap` y con cinco secciones —"Cómo funciona",
+         "El tráiler"— la suma de anchos supera los ~390px de un iPhone, empuja
+         el layout y aparece scroll horizontal en TODA la página. Recortamos la
+         etiqueta en vez de dejar que estire el contenedor. */
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* El ítem tampoco puede crecer más allá de su parte del dock. min-width:0
+       es lo que habilita el recorte de arriba: sin él, un flex item usa su
+       tamaño mínimo de contenido y se niega a achicarse. */
+    .rail__link,
+    .rail__back {
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .rail__list > li {
+      min-width: 0;
+      flex: 1 1 0;
+      display: flex;
+      justify-content: center;
     }
 
     .rail__num {
       font-size: 0.55rem;
       opacity: 0.6;
+    }
+  }
+
+  /* Pantallas muy angostas (≤340px: iPhone SE 1ª gen, Galaxy Fold cerrado). Con
+     cinco secciones ni recortando entran las etiquetas de forma legible, así que
+     quedan sólo los números — que es lo que el riel muestra siempre en desktop
+     cuando está colapsado. El corte va acá y no más arriba porque a 360-393px
+     (el grueso de los teléfonos, iPhone 15 incluido) las etiquetas recortadas
+     todavía se leen y ayudan más que los números solos. */
+  @media (max-width: 21.25rem) {
+    .rail__label {
+      display: none;
+    }
+
+    .rail__num {
+      font-size: 0.72rem;
+      opacity: 0.85;
     }
   }
 </style>

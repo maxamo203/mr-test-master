@@ -2,7 +2,7 @@
 /**
  * Hero con el grimorio que se abre al scrollear.
  *
- * Cómo funciona: la sección mide 240vh y adentro hay un "escenario" sticky de
+ * Cómo funciona: la sección mide 175vh y adentro hay un "escenario" sticky de
  * 100vh. El script calcula cuánto avanzaste dentro de esa pista (0 → 1) y lo
  * publica como la variable CSS --p; todo el movimiento (las tapas girando, el
  * arte que aparece, el halo) es CSS leyendo esa variable. No hay animación por
@@ -15,9 +15,9 @@
  * Detalle 3D: el recorte va en una capa interna plana (.cover__side) y no en la
  * que rota, porque overflow:hidden aplana el contexto 3D y rompería el reverso.
  */
-import { Image } from 'astro:assets';
-import icon from '../assets/book-icon.png';
-import wordmark from '../assets/wordmark.png';
+import { Image } from "astro:assets";
+import icon from "../assets/book-icon.png";
+import wordmark from "../assets/wordmark.png";
 ---
 
 <section class="hero" id="inicio">
@@ -56,14 +56,29 @@ import wordmark from '../assets/wordmark.png';
               <div class="cover__face">
                 <span class="cover__frame"></span>
                 <svg class="cover__sigil" viewBox="0 0 100 100" fill="none">
-                  <circle cx="50" cy="50" r="34" stroke="currentColor" stroke-width="0.8"></circle>
-                  <circle cx="50" cy="50" r="27" stroke="currentColor" stroke-width="0.4"></circle>
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="34"
+                    stroke="currentColor"
+                    stroke-width="0.8"></circle>
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="27"
+                    stroke="currentColor"
+                    stroke-width="0.4"></circle>
                   <path
                     d="M50 18 L68 72 L22 38 L78 38 L32 72 Z"
                     stroke="currentColor"
                     stroke-width="0.7"
                     stroke-linejoin="round"></path>
-                  <circle cx="50" cy="50" r="41" stroke="currentColor" stroke-width="0.3"
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="41"
+                    stroke="currentColor"
+                    stroke-width="0.3"
                     stroke-dasharray="1 5"></circle>
                 </svg>
                 <span class="cover__title">Mortuorium</span>
@@ -78,14 +93,29 @@ import wordmark from '../assets/wordmark.png';
               <div class="cover__face">
                 <span class="cover__frame"></span>
                 <svg class="cover__sigil" viewBox="0 0 100 100" fill="none">
-                  <circle cx="50" cy="50" r="34" stroke="currentColor" stroke-width="0.8"></circle>
-                  <circle cx="50" cy="50" r="27" stroke="currentColor" stroke-width="0.4"></circle>
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="34"
+                    stroke="currentColor"
+                    stroke-width="0.8"></circle>
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="27"
+                    stroke="currentColor"
+                    stroke-width="0.4"></circle>
                   <path
                     d="M50 18 L68 72 L22 38 L78 38 L32 72 Z"
                     stroke="currentColor"
                     stroke-width="0.7"
                     stroke-linejoin="round"></path>
-                  <circle cx="50" cy="50" r="41" stroke="currentColor" stroke-width="0.3"
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="41"
+                    stroke="currentColor"
+                    stroke-width="0.3"
                     stroke-dasharray="1 5"></circle>
                 </svg>
                 <span class="cover__title">Mortuorium</span>
@@ -95,7 +125,7 @@ import wordmark from '../assets/wordmark.png';
           </div>
         </div>
 
-        <h1 class="hero__tagline">El ritual empieza en tu mundo</h1>
+        <h1 class="hero__tagline">El ritual no debe parar</h1>
         <p class="hero__kicker">AR · Cooperativo · Horror</p>
       </div>
 
@@ -110,7 +140,14 @@ import wordmark from '../assets/wordmark.png';
 <style>
   .hero__track {
     position: relative;
-    height: 240vh; /* pista de scroll que alimenta la apertura */
+    /* Pista de scroll que alimenta la apertura.
+       OJO con este número: el progreso se mide sobre (altura - 100vh), porque
+       el escenario sticky ocupa la primera pantalla. Con 240vh el recorrido
+       útil era 140vh, la animación terminaba a mitad de camino y quedaba casi
+       una pantalla de scroll con el hero ya invisible antes de la sección 2.
+       A 175vh el recorrido es 75vh: alcanza para que la apertura se sienta
+       gradual y la salida cierra justo cuando termina la pista. */
+    height: 175vh;
   }
 
   .hero__stage {
@@ -149,13 +186,19 @@ import wordmark from '../assets/wordmark.png';
     align-items: center;
     gap: clamp(0.9rem, 2.2vh, 1.6rem);
     text-align: center;
+    /* Ancla el ancho del layout al viewport. Las mitades de la portada
+       (.cover__face, 200% de ancho) son `absolute`, así que no lo estiran, pero
+       el halo y el propio libro sí: sin este tope el hero ensanchaba el
+       documento y aparecía scroll horizontal en toda la página. */
+    max-width: 100%;
   }
 
   .hero__wordmark {
     width: min(29rem, 74vw);
     height: auto;
     /* Aberración cromática roja/teal: la misma firma que el splash del juego */
-    filter: drop-shadow(-2px 0 0 var(--glitch-red)) drop-shadow(2px 0 0 var(--glitch-teal));
+    filter: drop-shadow(-2px 0 0 var(--glitch-red))
+      drop-shadow(2px 0 0 var(--glitch-teal));
   }
 
   /* =====================================================================
@@ -209,7 +252,9 @@ import wordmark from '../assets/wordmark.png';
     translate: -50% 0;
     background-image: var(--grad-spine);
     filter: blur(calc(1px + var(--p, 0) * 7px));
-    opacity: calc((1 - var(--p, 0)) * 0.6 + var(--p, 0) * (1 - var(--p, 0)) * 2.2);
+    opacity: calc(
+      (1 - var(--p, 0)) * 0.6 + var(--p, 0) * (1 - var(--p, 0)) * 2.2
+    );
     pointer-events: none;
   }
 
@@ -292,7 +337,7 @@ import wordmark from '../assets/wordmark.png';
 
   /* Sombra que gana la tapa mientras gira (la de la derecha, espejada) */
   .cover__side--front::after {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     background-image: var(--grad-cover-shade);
@@ -421,16 +466,16 @@ import wordmark from '../assets/wordmark.png';
 </style>
 
 <script>
-  const track = document.querySelector<HTMLElement>('[data-book-track]');
-  const stage = document.querySelector<HTMLElement>('[data-book-stage]');
+  const track = document.querySelector<HTMLElement>("[data-book-track]");
+  const stage = document.querySelector<HTMLElement>("[data-book-stage]");
 
   if (track && stage) {
-    const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)");
 
     /** Abre el libro de una y no engancha nada al scroll. */
     const openStatic = () => {
-      stage.style.setProperty('--p', '1');
-      stage.style.setProperty('--exit', '0');
+      stage.style.setProperty("--p", "1");
+      stage.style.setProperty("--exit", "0");
     };
 
     let ticking = false;
@@ -443,12 +488,15 @@ import wordmark from '../assets/wordmark.png';
       const raw = total > 0 ? -r.top / total : 0;
       const p = Math.min(1, Math.max(0, raw));
 
-      // El libro termina de abrirse al 72%; el resto es la salida del hero.
-      const open = Math.min(1, p / 0.72);
-      const exit = Math.min(1, Math.max(0, (p - 0.78) / 0.22));
+      // El libro se abre en el primer 62% de la pista y el resto es la salida,
+      // que termina JUSTO al final. Antes la salida se completaba al 100% de un
+      // `p` que saturaba mucho antes que la pista, y quedaba casi una pantalla
+      // de scroll con el hero ya invisible antes de llegar a la sección 2.
+      const open = Math.min(1, p / 0.62);
+      const exit = Math.min(1, Math.max(0, (p - 0.62) / 0.38));
 
-      stage.style.setProperty('--p', open.toFixed(4));
-      stage.style.setProperty('--exit', exit.toFixed(4));
+      stage.style.setProperty("--p", open.toFixed(4));
+      stage.style.setProperty("--exit", exit.toFixed(4));
     };
 
     const onScroll = () => {
@@ -458,14 +506,14 @@ import wordmark from '../assets/wordmark.png';
     };
 
     const attach = () => {
-      addEventListener('scroll', onScroll, { passive: true });
-      addEventListener('resize', onScroll);
+      addEventListener("scroll", onScroll, { passive: true });
+      addEventListener("resize", onScroll);
       measure();
     };
 
     const detach = () => {
-      removeEventListener('scroll', onScroll);
-      removeEventListener('resize', onScroll);
+      removeEventListener("scroll", onScroll);
+      removeEventListener("resize", onScroll);
     };
 
     const apply = () => {
@@ -478,6 +526,6 @@ import wordmark from '../assets/wordmark.png';
     };
 
     apply();
-    reduce.addEventListener('change', apply);
+    reduce.addEventListener("change", apply);
   }
 </script>

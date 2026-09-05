@@ -17,3 +17,15 @@
 *.jpeg !filter !diff !merge -text
 *.webp !filter !diff !merge -text
 *.gif  !filter !diff !merge -text
+
+# Mismo motivo para el video de fondo (public/video/). El .gitattributes de la
+# raíz manda `*.mp4 lfs`; si el video viaja como puntero LFS, el CI publica un
+# archivo de texto de 130 bytes con extensión .webm/.mp4 y el <video> queda en
+# negro sin ningún error visible. Acá NO pasa por sharp, así que el build no
+# falla: simplemente no se ve el video, que es peor porque no avisa.
+#
+# Contrapartida a tener en cuenta: el video se guarda como blob normal, así que
+# cada versión que commitees queda entera en la historia del repo. Mantenelo
+# comprimido (ver README) y evitá subir muchas revisiones.
+*.mp4  !filter !diff !merge -text
+*.webm !filter !diff !merge -text
