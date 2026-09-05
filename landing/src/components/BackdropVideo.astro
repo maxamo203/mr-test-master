@@ -182,8 +182,12 @@ const poster = "/video/mortuorium-poster.jpg";
        fixed de 100vw sobresale unos píxeles y genera scroll horizontal en toda
        la página. Los valores en px del script no tienen ese problema; los vw/vh
        quedan sólo como respaldo hasta el primer pintado. */
-    width: calc(var(--vw, 100vw) + (var(--v-w, 100vw) - var(--vw, 100vw)) * var(--dock, 0));
-    height: calc(var(--vh, 100vh) + (var(--v-h, 100vh) - var(--vh, 100vh)) * var(--dock, 0));
+    width: calc(
+      var(--vw, 100vw) + (var(--v-w, 100vw) - var(--vw, 100vw)) * var(--dock, 0)
+    );
+    height: calc(
+      var(--vh, 100vh) + (var(--v-h, 100vh) - var(--vh, 100vh)) * var(--dock, 0)
+    );
     z-index: -1; /* detrás de todo el contenido, delante del fondo del body */
     overflow: hidden;
     opacity: var(--show, 0);
@@ -460,12 +464,18 @@ const poster = "/video/mortuorium-poster.jpg";
       // pelo de scroll para caer al 0.94 y desarmar el acople.
       const centro = r.top + r.height / 2;
       const distancia = centro - vh / 2; // >0: el marco todavía viene subiendo
-      const dock = Math.min(1, Math.max(0, 1 - (distancia - vh * 0.15) / (vh * 0.6)));
+      const dock = Math.min(
+        1,
+        Math.max(0, 1 - (distancia - vh * 0.15) / (vh * 0.6)),
+      );
 
       // El viewport real, en px. documentElement.clientWidth excluye la barra
       // de scroll (100vw NO), que es justo la diferencia que en iOS deja la
       // capa fixed sobresaliendo y genera scroll horizontal en toda la página.
-      layer.style.setProperty("--vw", document.documentElement.clientWidth + "px");
+      layer.style.setProperty(
+        "--vw",
+        document.documentElement.clientWidth + "px",
+      );
       layer.style.setProperty("--vh", vh + "px");
 
       layer.style.setProperty("--show", show.toFixed(3));
@@ -531,7 +541,7 @@ const poster = "/video/mortuorium-poster.jpg";
     // Cómo se comporta el video MIENTRAS ES FONDO. Nada de esto rige dentro del
     // marco final: ahí manda el usuario, así que puede rebobinar antes del punto
     // de arranque y lo ve a velocidad real.
-    const INICIO_FONDO = 8; // los primeros segundos no sirven como fondo
+    const INICIO_FONDO = 11; // los primeros segundos no sirven como fondo
     const VELOCIDAD_FONDO = 0.5; // media velocidad: más atmosférico, menos ruido visual
 
     const alInicioDeFondo = () => {
