@@ -29,12 +29,24 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    {/* Favicon = book-icon.png (el arte del ícono de la app), no un SVG
+        genérico: son recortes a 16/32px generados a partir del original de
+        894×907 (Assets/Logo/icon-logo.png → src/assets/book-icon.png). Un
+        navegador elige el <link> más chico que alcance para el tamaño real que
+        va a pintar, así que se listan los dos; apple-touch-icon es el que usa
+        iOS al "agregar a inicio" y el que Safari prioriza en algunos casos. */}
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <meta property="og:type" content="website" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content="/og.png" />
+    {/* Ancho/alto declarados: así WhatsApp/Facebook arman la vista previa sin
+        tener que descargar la imagen primero para medirla. */}
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:locale" content="es_AR" />
     <meta name="twitter:card" content="summary_large_image" />
     {/* Único color literal del sitio junto con el favicon: es un atributo HTML
