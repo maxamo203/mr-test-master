@@ -133,6 +133,20 @@ namespace Bateries
             Debug.Log($"[Bateries] {_points.Count} puntos de spawn derivados del escaneo.");
         }
 
+        // Dificultad de la noche en curso. Puede ser null si se entra a la escena sin
+        // pasar por el menú (típico en el editor): ahí manda el ajuste del componente.
+        private Gameplay.NightConfig Noche =>
+            Gameplay.GameSession.Instance != null ? Gameplay.GameSession.Instance.SelectedNight : null;
+
+        // Segundos de reaparicion de ESTA noche. NightConfig.batterySpawnRateMultiplier es
+        // "frecuencia": >1 = pilas mas seguido (espera mas corta), <1 = mas escasas.
+        private float RespawnDeLaNoche()
+        {
+            var n = Noche;
+            float mul = n != null ? Mathf.Max(0.05f, n.batterySpawnRateMultiplier) : 1f;
+            return respawnSeconds / mul;
+        }
+
         // Corta la noche sin cerrar la sesión (ver Gameplay.NightTransition). Las pilas
         // vivas ya las despawnea NetworkManager.ServerResetNight; los puntos se
         // reconstruyen desde cero en el próximo HandleGameStarted.
@@ -333,7 +347,13 @@ namespace Bateries
 
         private void Spawn(SpawnPoint p)
         {
-            var rarity = rarities != null ? rarities.WeightedPick() : null;
+            // La noche puede sesgar la mezcla de rarezas (NightConfig.batteryChanceMods):
+            // las ultimas noches reparten mas pilas pero peores, asi el jugador corre mas
+            // por menos carga. Sin NightConfig, la probabilidad base del set.
+            var noche  = Noche;
+            var rarity = rarities != null
+                ? rarities.WeightedPick(noche != null ? noche.BatteryChanceScale : (System.Func<byte, float>)null)
+                : null;
             if (rarity == null)
             {
                 Debug.LogWarning("[Bateries] No hay BatteryRaritySet configurado; no se spawnean pilas.");
@@ -407,7 +427,7 @@ namespace Bateries
             NetworkManager.Instance.ServerDespawn(batteryNetId);
             _byNetId.Remove(batteryNetId);
             point.occupied        = false;
-            point.timer           = respawnSeconds;
+            point.timer           = RespawnDeLaNoche();
             point.blockUntilClear = true;
 
             // Acreditar la carga: el host la aplica local; al cliente se le avisa.

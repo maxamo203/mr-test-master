@@ -11,61 +11,66 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
   m_Name: Noche 5
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier:
   displayName: Noche 5
-  briefing: La cordura se desangra. El Arbmos acecha mas seguido.
-  nightDurationSeconds: 300
+  briefing: El Arbmos acecha mas seguido y se acerca mas. Vas a llegar al amanecer
+    sin cordura.
+  nightDurationSeconds: 360
   sorkenActive: 1
-  attemptIntervalMin: 10
-  attemptIntervalMax: 20
-  entryRepelSeconds: 3
-  entryGraceSeconds: 4.5
-  entryTriggerDistance: 3
+  attemptIntervalMin: 16
+  attemptIntervalMax: 26
+  entryRepelSeconds: 4
+  entryGraceSeconds: 9
+  entryTriggerDistance: 2.5
   chaseRepelSeconds: 6
-  sorkenChaseSpeed: 3.3
-  sorkenRetreatSpeed: 3.5
+  sorkenChaseSpeed: 3.2
+  sorkenRetreatSpeed: 4.3
   grabRange: 1.3
-  flashlightMaxCharge: 75
-  flashlightDrainPerSecond: 2.8
+  flashlightMaxCharge: 100
+  flashlightDrainPerSecond: 2.15
   sanityMax: 100
-  flashlightOffThreshold: 4
-  sanityDrainPerSecond: 6.5
+  flashlightOffThreshold: 5
+  sanityDrainPerSecond: 2.6
   arbmosActive: 1
   arbmosStillInvokeSeconds: 5
-  arbmosStillRadius: 0.5
+  arbmosStillRadius: 0.45
   arbmosStillOutsideGrace: 0.4
-  arbmosPresentSeconds: 6
-  arbmosPresentFollowSpeed: 1.3
+  arbmosPresentSeconds: 7
+  arbmosPresentFollowSpeed: 1.35
   arbmosCooldownMin: 24
   arbmosCooldownMax: 42
-  arbmosSpawnDistance: 2.5
+  arbmosSpawnDistance: 2.2
   arbmosSanityDrainPerSecond: 6.5
-  arbmosSpawnChancePerAttempt: 0.6
-  arbmosFlashlightOffChanceMul: 2
+  arbmosSpawnChancePerAttempt: 0.62
+  arbmosFlashlightOffChanceMul: 2.25
   arbmosLethalStalkSeconds: 3
   arbmosLethalChaseSpeed: 3.8
-  arbmosGrabRange: 1.2
+  arbmosGrabRange: 1.25
   bookActive: 1
-  bookEventDelayMin: 30
-  bookEventDelayMax: 50
-  bookConsumeSeconds: 6
-  bookDefenseSeconds: 4
-  velethChaseSpeed: 3.2
-  velethGrabRange: 1.1
+  bookEventDelayMin: 29
+  bookEventDelayMax: 44
+  bookConsumeSeconds: 8
+  bookDefenseSeconds: 4.5
+  velethChaseSpeed: 3.6
+  velethGrabRange: 1.2
   velethRepathSeconds: 0.2
   velethGrabHoldSeconds: 0.8
-  flashlightConeAngleDeg: 30
-  flashlightRange: 8
-  initialAttemptDelay: 4
-  emergeTimeoutSeconds: 15
+  flashlightConeAngleDeg: 28
+  flashlightRange: 7
+  initialAttemptDelay: 7
+  emergeTimeoutSeconds: 14
   retreatSeconds: 1.5
-  grabHoldSeconds: 1.5
-  flickerAimAngle: 14
+  grabHoldSeconds: 1.8
+  flickerAimAngle: 15
   flickerDistance: 5
-  batterySpawnRateMultiplier: 0.75
-  batteryChanceMods: []
+  batterySpawnRateMultiplier: 0.95
+  batteryChanceMods:
+  - rarityIndex: 0
+    chanceMultiplier: 1.25
+  - rarityIndex: 2
+    chanceMultiplier: 0.6
   collectiblesActive: 1
-  collectibleInitialDelaySeconds: 5
-  collectibleIntervalMin: 40
-  collectibleIntervalMax: 80
-  collectibleMaxPerNight: 5
+  collectibleInitialDelaySeconds: 11
+  collectibleIntervalMin: 50
+  collectibleIntervalMax: 85
+  collectibleMaxPerNight: 7
