@@ -14,6 +14,8 @@ public static class GameOptions
     private const string KeyVozVolumen  = "opt_voz_volumen";
     private const string KeyVozSens     = "opt_voz_sensibilidad";
     private const string KeyCalidadAR   = "opt_calidad_ar";
+    private const string KeyCamaraModo  = "opt_camara_modo";
+    private const string KeyCamaraCat   = "opt_camara_catalogo";
     private const string KeyAvisoIos    = "opt_aviso_ios_visto";
     private const string KeyVhsMenus    = "opt_vhs_menus";
     private const string KeyAvisoVerDesc = "opt_aviso_version_desconocida_visto";
@@ -140,6 +142,33 @@ public static class GameOptions
         set
         {
             PlayerPrefs.SetInt(KeyCalidadAR, Mathf.Clamp(value, 0, 2));
+            PlayerPrefs.Save();
+        }
+    }
+
+    // Con qué modo de captura de la cámara trasera corre el AR. "" = el que elige el
+    // sistema (lo de siempre), "auto" = el más amplio ya medido, o la clave de un modo
+    // concreto ("1600x1200@30"). Es una decisión POR DISPOSITIVO, como PuntosAncla: los
+    // modos disponibles son los que publica ese equipo. Ver CameraSelection.
+    public static string CamaraModo
+    {
+        get => PlayerPrefs.GetString(KeyCamaraModo, "");
+        set
+        {
+            PlayerPrefs.SetString(KeyCamaraModo, value ?? "");
+            PlayerPrefs.Save();
+        }
+    }
+
+    // Catálogo de modos de cámara ya vistos en este aparato, con los ángulos medidos
+    // (JSON de CameraSelection). Se cachea para que el menú principal —donde no hay
+    // sesión AR viva que enumerar— pueda ofrecer la lista igual.
+    public static string CamaraCatalogo
+    {
+        get => PlayerPrefs.GetString(KeyCamaraCat, "");
+        set
+        {
+            PlayerPrefs.SetString(KeyCamaraCat, value ?? "");
             PlayerPrefs.Save();
         }
     }

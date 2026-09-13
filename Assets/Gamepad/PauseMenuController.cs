@@ -27,7 +27,12 @@ namespace Gamepad
         // subcategorías: Control (mando), Cardboard (calibración estéreo), Voz (chat de
         // voz, sólo en sesiones multijugador) y — SOLO en development build — Linterna
         // (tuning) y el toggle del Debug HUD.
-        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, VHS, Arbmos, Audio }
+        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, Camara, VHS, Arbmos, Audio }
+
+        // Cuántos modos de cámara entran en la página sin desbordar el panel (no hay
+        // scroll: el hit-test de tap trabaja con rects crudos). Vienen ordenados del más
+        // amplio al más angosto, así que lo que se recorta es la cola angosta.
+        private const int MaxModosCamara = 6;
 
         public static PauseMenuController Instance { get; private set; }
 
@@ -139,6 +144,7 @@ namespace Gamepad
                 AddButton("control",   new Rect(x, y, w, 64f), "CONTROL (MANDO)"); y += 76f;
                 AddButton("cardboard", new Rect(x, y, w, 64f), "CARDBOARD");       y += 76f;
                 AddButton("arcalidad", new Rect(x, y, w, 64f), "CALIDAD AR");      y += 76f;
+                AddButton("camara",    new Rect(x, y, w, 64f), "CÁMARA");          y += 76f;
                 if (hayVoz) { AddButton("voz", new Rect(x, y, w, 64f), "CHAT DE VOZ"); y += 76f; }
                 // US-11.1: el filtro VHS de la partida no se apaga (es atmósfera); lo
                 // que el jugador decide es si además cubre los menús.
@@ -319,6 +325,60 @@ namespace Gamepad
                 }
 
                 y += 6f;
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+            }
+            else if (_page == Page.Camara)
+            {
+                // Qué modo de captura de la cámara TRASERA usa el AR. En Cardboard el
+                // passthrough es todo lo que se ve del cuarto, así que el ángulo de la
+                // cámara es el campo de visión del juego. Ver CameraSelection: el lente
+                // ultra gran angular no se puede pedir (ARCore/ARKit trackean con el
+                // principal), pero sí el modo más ancho de los que publica el equipo.
+                GUI.Label(new Rect(x, y, w, 50f), "CÁMARA", _title); y += 58f;
+
+                GUI.Label(new Rect(x + 14f, y, w - 28f, 60f),
+                          "Elegí con cuánto ángulo ves el cuarto. Más resolución también " +
+                          "es más batería: si dudás, dejá la predeterminada.", _status);
+                y += 64f;
+
+                GUI.Label(new Rect(x + 14f, y, w - 28f, 38f), EstadoCamara(), _status);
+                y += 42f;
+
+                string sel = CameraSelection.Seleccion;
+                AddButton("cam_def", new Rect(x, y, w, 56f),
+                          (sel == CameraSelection.Predeterminada ? "> " : "") + "PREDETERMINADA");
+                y += 60f;
+                AddButton("cam_auto", new Rect(x, y, w, 56f),
+                          (sel == CameraSelection.MasAncha ? "> " : "") + "MÁS AMPLIA (AUTO)");
+                y += 60f;
+
+                var modos   = CameraSelection.ModosConocidos;
+                string ancha = CameraSelection.ClaveMasAncha();
+                int    n     = Mathf.Min(modos.Count, MaxModosCamara);
+                for (int i = 0; i < n; i++)
+                {
+                    var m = modos[i];
+                    string etiqueta = $"{(sel == m.clave ? "> " : "")}{m.Titulo}  ·  {m.Angulo}" +
+                                      (m.clave == ancha ? "  ·  MÁS AMPLIA" : "");
+                    AddButton("cam_m" + i, new Rect(x, y, w, 56f), etiqueta);
+                    y += 60f;
+                }
+                if (modos.Count == 0)
+                {
+                    GUI.Label(new Rect(x + 14f, y, w - 28f, 36f),
+                              "Todavía no se enumeraron los modos de este equipo: entrá al " +
+                              "escáner o a una partida para que la cámara AR arranque.", _status);
+                    y += 40f;
+                }
+
+                AddButton("cam_medir", new Rect(x, y, w, 56f),
+                          CameraSelection.Midiendo
+                              ? $"MIDIENDO... ({CameraSelection.MedidoN}/{CameraSelection.MedidoTotal})"
+                              : "MEDIR TODOS LOS MODOS");
+                y += 60f;
+                GUI.Label(new Rect(x + 14f, y, w - 28f, 38f), AyudaMedir(), _status);
+                y += 42f;
+
                 AddButton("volver", new Rect(x, y, w, 60f), "Volver");
             }
             else if (_page == Page.VHS)
@@ -533,6 +593,32 @@ namespace Gamepad
             _sliderHits.Add(new SliderHit { id = id, dec = dec, inc = inc, val = valRect });
         }
 
+        // Qué se está viendo ahora mismo por la cámara (o por qué no se puede saber).
+        private static string EstadoCamara()
+        {
+            if (!CameraSelection.CamaraViva)
+                return "La cámara AR no está activa acá. Lo que elijas se aplica al entrar " +
+                       "al escáner o a una partida.";
+
+            string modo = string.IsNullOrEmpty(CameraSelection.ClaveActiva)
+                ? "modo único" : CameraSelection.ClaveActiva;
+            string ang = CameraSelection.FovActualH > 0f
+                ? $"{Mathf.RoundToInt(CameraSelection.FovActualH)}° x {Mathf.RoundToInt(CameraSelection.FovActualV)}°"
+                : "midiendo...";
+            return $"En uso: {modo}  ·  {ang}";
+        }
+
+        private static string AyudaMedir()
+        {
+            if (CameraSelection.Midiendo)
+                return "Probando cada modo. No muevas el teléfono.";
+            if (!CameraSelection.CamaraViva)
+                return "Sólo se puede medir con la cámara AR activa (escáner o partida).";
+            if (NetworkManager.Instance != null && NetworkManager.Instance.GameStarted)
+                return "No se puede medir en medio de una noche: reinicia la captura y sacude el tracking.";
+            return "Prueba cada modo un segundo para saber cuánto ve. Corta la imagen un instante.";
+        }
+
         private Flashlight GetFlashlight()
         {
             if (_fl == null) _fl = FindFirstObjectByType<Flashlight>();
@@ -570,10 +656,17 @@ namespace Gamepad
                 // +64 por el toggle "Filtro VHS en menús" (prod), +76 por "VHS (DEV)" y
                 // +76 por "ARBMOS (DEV)". El volumen dejó de ser un slider acá: ahora es el
                 // botón AUDIO (mismo alto que el slider que reemplazó, +4).
-                case Page.Options:    return (Debug.isDebugBuild ? 992f : 624f) + (hayVoz ? 76f : 0f);
+                // +76 más por el botón CÁMARA.
+                case Page.Options:    return (Debug.isDebugBuild ? 1068f : 700f) + (hayVoz ? 76f : 0f);
                 // 3 sliders + la nota sobre el chat de voz.
                 case Page.Audio:      return 420f;
                 case Page.ARCalidad:  return 490f;
+                // Cabecera + ayuda + estado + 2 fijos + un botón por modo + medir + volver.
+                case Page.Camara:
+                {
+                    int nModos = Mathf.Min(CameraSelection.ModosConocidos.Count, MaxModosCamara);
+                    return 500f + (nModos > 0 ? nModos * 60f : 40f);
+                }
                 // 7 sliders (global + 6 ingredientes) + el toggle del REC.
                 case Page.VHS:        return 760f;
                 // 2 toggles + 3 sliders + la ayuda de arriba.
@@ -963,6 +1056,7 @@ namespace Gamepad
                 case Page.Voice:
                 case Page.DebugPanels:
                 case Page.ARCalidad:
+                case Page.Camara:
                 case Page.VHS:
                 case Page.Arbmos:
                     _page = Page.Options; _focus = 0; _focusLast = true; break;
@@ -991,6 +1085,15 @@ namespace Gamepad
                 return;
             }
 
+            // Un modo de cámara concreto ("cam_m<índice>" en la lista ordenada que se
+            // acaba de dibujar). El botón que abre la página es "camara", sin prefijo.
+            if (id != null && id.StartsWith("cam_m") && int.TryParse(id.Substring(5), out int iModo))
+            {
+                var modos = CameraSelection.ModosConocidos;
+                if (iModo >= 0 && iModo < modos.Count) CameraSelection.Seleccion = modos[iModo].clave;
+                return;
+            }
+
             switch (id)
             {
                 case "opciones":  _page = Page.Options;    _focus = 0; _focusLast = true; break;
@@ -1001,6 +1104,10 @@ namespace Gamepad
                 case "arq_0":     ARQuality.Actual = ARQuality.Nivel.Rendimiento; break;
                 case "arq_1":     ARQuality.Actual = ARQuality.Nivel.Equilibrado; break;
                 case "arq_2":     ARQuality.Actual = ARQuality.Nivel.Calidad;     break;
+                case "camara":    _page = Page.Camara;     _focus = 0; _focusLast = true; break;
+                case "cam_def":   CameraSelection.Seleccion = CameraSelection.Predeterminada; break;
+                case "cam_auto":  CameraSelection.Seleccion = CameraSelection.MasAncha;       break;
+                case "cam_medir": CameraSelection.MedirTodos(); break;
                 case "voz":       _page = Page.Voice;      _focus = 0; _focusLast = true; break;
                 case "vozmic":    GameOptions.VozMic = !GameOptions.VozMic; break;
                 case "estereo3d": { var cb = GetCardboard(); if (cb != null) cb.Estereo3D = !cb.Estereo3D; break; }

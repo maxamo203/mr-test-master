@@ -39,7 +39,7 @@ namespace Gameplay
         private NightConfig[] Nights =>
             (Debug.isDebugBuild && _devNights != null && _devNights.Length > 0) ? _devNights : _nights;
 
-        private enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control }
+        private enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control, Camara }
 
         private Pantalla _pantalla = Pantalla.Menu;
 
@@ -123,6 +123,7 @@ namespace Gameplay
                 case Pantalla.Escaneos:    _pantalla = Pantalla.Menu; break;
                 case Pantalla.Opciones:    _pantalla = Pantalla.Menu; break;
                 case Pantalla.Control:     _pantalla = Pantalla.Opciones; break;
+                case Pantalla.Camara:      _pantalla = Pantalla.Opciones; break;
                 // Pantalla.Menu: pantalla raíz, sin destino — no forzamos salir de
                 // la app, dejamos que el SO maneje el back (minimizar).
             }
@@ -215,6 +216,7 @@ namespace Gameplay
                     case Pantalla.Escaneos:    DrawEscaneos(vw, vh);    break;
                     case Pantalla.Opciones:    DrawOpciones(vw, vh);    break;
                     case Pantalla.Control:     DrawControl(vw, vh);     break;
+                    case Pantalla.Camara:      DrawCamara(vw, vh);      break;
                 }
             }
 
@@ -723,6 +725,20 @@ namespace Gameplay
                          () => GameOptions.PuntosAncla = !GameOptions.PuntosAncla);
             y += 68f;
 
+            // Con qué modo de la cámara trasera corre el AR: en Cardboard el passthrough
+            // es todo lo que se ve del cuarto, así que ese ángulo ES el campo de visión
+            // del juego. También por dispositivo (los modos los publica el equipo).
+            T.Celda(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f), primario: false,
+                    () => _pantalla = Pantalla.Camara);
+            GUI.Label(new Rect(Pad + 14f, y + 8f, vw - Pad * 2f - 150f, 22f), "CÁMARA",
+                      T.Estilo(T.FMono, 14, T.Cream));
+            GUI.Label(new Rect(Pad + 14f, y + 30f, vw - Pad * 2f - 150f, 18f),
+                      "Ángulo de visión del cuarto (más o menos gran angular)",
+                      T.Estilo(T.FMono, 11, T.Dim));
+            GUI.Label(new Rect(vw - Pad - 150f, y, 138f, 56f), CameraSelection.NombreSeleccion(),
+                      T.Estilo(T.FMono, 11, T.Tan, TextAnchor.MiddleRight));
+            y += 68f;
+
             // Detección automática de paredes: WIP desconectado, ver
             // GameOptions.AutoWallScanBetaEnabled — no mostrar esta fila hasta que
             // esté cableado y probado en dispositivo (no borrar, solo ocultar).
@@ -796,6 +812,77 @@ namespace Gameplay
             float nuevo = T.Slider(new Rect(Pad, y, vw - Pad * 2f, 30f), valor, 0f, 1f);
             if (!Mathf.Approximately(nuevo, valor)) set(nuevo);
             return y + 54f;
+        }
+
+        // Modo de captura de la cámara trasera. Acá NO hay sesión AR viva (esta escena no
+        // tiene rig), así que la lista sale del catálogo cacheado por CameraSelection la
+        // última vez que se escaneó o se jugó, y los ángulos se miden allá (Pausa →
+        // OPCIONES → CÁMARA → MEDIR TODOS LOS MODOS). Lo elegido se aplica solo al entrar.
+        private void DrawCamara(float vw, float vh)
+        {
+            T.BotonVolver(_nav, () => _pantalla = Pantalla.Opciones);
+
+            GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "CÁMARA",
+                      T.Estilo(T.FBebas, 28, T.Cream));
+            GUI.Label(new Rect(Pad, 132f, vw - Pad * 2f, 56f),
+                      "Con cuánto ángulo ves el cuarto por el visor. El lente ultra gran " +
+                      "angular no se puede usar para AR, pero muchos equipos ofrecen un " +
+                      "modo más abierto que el que viene puesto.",
+                      T.Estilo(T.FElite, 14, T.Dim, wrap: true));
+
+            float w = vw - Pad * 2f;
+            float y = 200f;
+
+            string sel = CameraSelection.Seleccion;
+
+            y = FilaCamara(vw, y, "PREDETERMINADA", "La que elige el sistema",
+                           sel == CameraSelection.Predeterminada, "",
+                           () => CameraSelection.Seleccion = CameraSelection.Predeterminada);
+            y = FilaCamara(vw, y, "MÁS AMPLIA", "La de mayor ángulo ya medido",
+                           sel == CameraSelection.MasAncha, "AUTO",
+                           () => CameraSelection.Seleccion = CameraSelection.MasAncha);
+
+            var modos = CameraSelection.ModosConocidos;
+            if (modos.Count == 0)
+            {
+                GUI.Label(new Rect(Pad, y + 8f, w, 56f),
+                          "Todavía no se conocen los modos de este equipo. Entrá una vez al " +
+                          "escáner o a una partida y volvé acá.",
+                          T.Estilo(T.FMono, 12, T.Muted, wrap: true));
+                return;
+            }
+
+            string ancha = CameraSelection.ClaveMasAncha();
+            float bottom = vh - 40f;
+            for (int i = 0; i < modos.Count && y + 56f <= bottom; i++)
+            {
+                var m = modos[i];
+                string clave = m.clave;   // captura por iteración
+                y = FilaCamara(vw, y, m.Titulo,
+                               m.clave == ancha ? "El más amplio medido" : "Modo del equipo",
+                               sel == m.clave, m.Angulo,
+                               () => CameraSelection.Seleccion = clave);
+            }
+        }
+
+        // Una fila de la lista de cámaras: título + subtítulo a la izquierda, ángulo a la
+        // derecha, marcada cuando es la elegida. Devuelve la Y siguiente.
+        private float FilaCamara(float vw, float y, string titulo, string subtitulo,
+                                 bool elegida, string derecha, System.Action onClick)
+        {
+            float w = vw - Pad * 2f;
+            var fila = new Rect(Pad, y, w, 56f);
+            T.Celda(_nav, fila, primario: false, onClick,
+                    bordeOverride: elegida ? T.Red : (Color?)null,
+                    fillOverride: elegida ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.14f) : (Color?)null);
+            GUI.Label(new Rect(fila.x + 14f, y + 8f, w - 150f, 22f), titulo,
+                      T.Estilo(T.FMono, 14, elegida ? T.Cream : T.CreamDim));
+            GUI.Label(new Rect(fila.x + 14f, y + 30f, w - 150f, 18f), subtitulo,
+                      T.Estilo(T.FMono, 11, T.Dim));
+            if (!string.IsNullOrEmpty(derecha))
+                GUI.Label(new Rect(fila.xMax - 138f, y, 124f, 56f), derecha,
+                          T.Estilo(T.FMono, 12, T.Tan, TextAnchor.MiddleRight));
+            return y + 66f;
         }
 
         private void DrawControl(float vw, float vh)
