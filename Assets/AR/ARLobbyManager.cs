@@ -171,7 +171,17 @@ public class ARLobbyManager : MonoBehaviour
         && NetworkManager.Instance.IsServer
         && State == LobbyState.WaitingForClients
         && LocalAnchorsReady
-        && AnchorPendingCount == 0;
+        && AnchorPendingCount == 0
+        && SincronizacionPendiente == 0;
+
+    // Clientes conectados que TODAVÍA no ubicaron el entorno (no mandaron
+    // AnchorResolved). Arrancar sin ellos los deja jugando en un mapa que no está
+    // donde su cuarto: ven Sorkers atravesando paredes que para ellos no existen.
+    //
+    // Se nota sobre todo al REINTENTAR: ReiniciarSincronizacion() vacía la lista de
+    // resueltos, pero el host —que en la misma sesión AR ya está calibrado— vuelve a
+    // WaitingForClients al instante, mucho antes de que los clientes recalibren.
+    public int SincronizacionPendiente => Mathf.Max(0, ConnectedCount - ResolvedCount);
 
     // El host también tiene que haber cerrado SUS anclas si tiene la opción activada.
     private bool LocalAnchorsReady
@@ -193,6 +203,9 @@ public class ARLobbyManager : MonoBehaviour
             if (!LocalAnchorsReady) return "colocá tus anclas y pulsá LISTO";
             if (AnchorPendingCount == 1) return "1 jugador todavía prepara sus anclas";
             if (AnchorPendingCount > 1)  return $"{AnchorPendingCount} jugadores todavía preparan sus anclas";
+            int faltan = SincronizacionPendiente;
+            if (faltan == 1) return "1 jugador todavía está ubicando el entorno";
+            if (faltan > 1)  return $"{faltan} jugadores todavía están ubicando el entorno";
             return null;
         }
     }
@@ -265,8 +278,21 @@ public class ARLobbyManager : MonoBehaviour
 
     // ── Reinicio de noche sin cerrar la sesión (ver Gameplay.NightTransition) ──
 
-    // Vuelve a la pantalla de sincronización y re-lanza la búsqueda de la imagen. NO
-    // toca los anchor points: viven en la sesión AR, que no se reinicia.
+    // ¿Este dispositivo ya tiene el entorno ubicado en ESTA sesión AR? El anchor de la
+    // imagen (y los anchor points) viven en la sesión, que el reinicio de noche NO
+    // reinicia a propósito — así que si ya estaba calibrado, sigue estándolo.
+    public bool YaCalibrado =>
+        ManualCalibration.Calibrado ||
+        (_imageAnchor != null && _imageAnchor.IsFound && _imageAnchor.CurrentAnchor != null);
+
+    // Vuelve a la pantalla de sincronización tras reiniciar la noche. NO toca los
+    // anchor points: viven en la sesión AR, que no se reinicia.
+    //
+    // Y tampoco tira la calibración que ya había: volver a hacer buscar la imagen en
+    // cada reintento era trabajo de más para todos (y en multijugador dejaba al host
+    // esperando a que los demás re-apunten una imagen que ya habían encontrado). Si el
+    // entorno ya está ubicado, se sigue de largo; recalibrar queda a un botón de
+    // distancia (RecalibrarConImagen / AJUSTAR ENTORNO) para cuando la pose se corrió.
     public void ReiniciarSincronizacion()
     {
         _resolvedClients.Clear();
@@ -281,6 +307,23 @@ public class ARLobbyManager : MonoBehaviour
             ManualCalibration.Instance.AbrirAjuste();
             return;
         }
+
+        // Anclado a la imagen desde la noche anterior: no hay nada que volver a buscar,
+        // se sigue el mismo camino que tras detectarla (anclas primero si están activadas).
+        if (YaCalibrado)
+        {
+            ContinuarTrasCalibrar();
+            return;
+        }
+
+        RecalibrarConImagen();
+    }
+
+    // Descarta la calibración actual y vuelve a buscar la imagen física. Es el camino
+    // explícito cuando la pose quedó corrida y no alcanza con el ajuste manual.
+    public void RecalibrarConImagen()
+    {
+        if (State == LobbyState.GameStarted) return;
 
         State = LobbyState.Scanning;
 

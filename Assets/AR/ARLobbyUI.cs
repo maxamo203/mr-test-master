@@ -308,12 +308,22 @@ public class ARLobbyUI : MonoBehaviour
     // del cuarto real. La otra vía es tocar directamente el marcador del 0,0 (el
     // libro), pero eso no se ve: este botón es el que lo hace descubrible.
     // Devuelve la Y donde quedó, para apilar lo de arriba.
+    // BUSCAR IMAGEN es la vuelta atrás del atajo del reintento: al reintentar una noche
+    // se conserva la calibración de la sesión AR anterior (no hace falta volver a apuntar
+    // a la imagen), así que este botón es el que descarta esa pose y relanza la búsqueda
+    // cuando el mapa quedó corrido de verdad.
+    //
+    // Los dos van lado a lado a propósito: apilados se comían el alto del panel y se
+    // superponían con el texto de estado.
     private float DrawAjustarEntorno(float vw, float yBase)
     {
         const float h = 42f;
-        float y = yBase - h;
-        T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, h), "AJUSTAR ENTORNO", primario: false,
-                () => { _errorManual = null; _lobby.AbrirAjusteOrigen(); }, fontSize: 14);
+        float y  = yBase - h;
+        float bw = (vw - Pad * 2f - 10f) * 0.5f;
+        T.Boton(_nav, new Rect(Pad, y, bw, h), "AJUSTAR ENTORNO", primario: false,
+                () => { _errorManual = null; _lobby.AbrirAjusteOrigen(); }, fontSize: 13);
+        T.Boton(_nav, new Rect(Pad + bw + 10f, y, bw, h), "BUSCAR IMAGEN", primario: false,
+                () => { _errorManual = null; _lobby.RecalibrarConImagen(); }, fontSize: 13);
         return y;
     }
 

@@ -262,8 +262,11 @@ public class GameBootstrapper : MonoBehaviour
         // Oclusor de paredes: ocultar/mostrar la geometría escaneada durante la
         // partida (antes lo dibujaba SceneOccluderMode abajo a la izquierda). Solo
         // tiene sentido con la partida arrancada (ya hay mapa/Sorken).
+        // El `|| occ.Enabled` es la red de seguridad: si el modo quedara activo fuera de
+        // la partida (p. ej. al volver a sincronizar), sin él no habría forma de volver a
+        // ver las paredes. NightTransition.ResetLocal ya lo apaga en el reinicio.
         var occ = SceneOccluderMode.Instance;
-        if (occ != null && enPartida)
+        if (occ != null && (enPartida || occ.Enabled))
         {
             string label = occ.Enabled ? "PAREDES: OCULTAS" : "PAREDES: VISIBLES";
             var r = new Rect(Pad, yBotones, bw, bh);

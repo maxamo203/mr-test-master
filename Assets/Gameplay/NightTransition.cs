@@ -77,6 +77,14 @@ namespace Gameplay
             var cb = Object.FindAnyObjectByType<MRCardboardController>();
             if (cb != null && cb.CardboardActive) cb.SetCardboard(false);
 
+            // Volver a MOSTRAR las paredes escaneadas. Durante la noche el jugador puede
+            // ocultarlas (SceneOccluderMode, botón PAREDES de la sala), pero ese botón
+            // sólo se dibuja con la partida arrancada: si el modo quedaba activo, al
+            // reintentar se volvía a la pantalla de sincronización sin ver el mapa —
+            // justo cuando hay que verlo para saber si está alineado— y sin botón para
+            // devolverlo.
+            SceneOccluderMode.Instance?.Restore();
+
             DetenerSistemas();
         }
 
@@ -97,6 +105,10 @@ namespace Gameplay
         public static void TeardownSesion()
         {
             DetenerSistemas();
+            // Idem ResetLocal: el modo oclusor es DontDestroyOnLoad y guarda los
+            // materiales originales de renderers de ESTA escena. Restaurarlo antes de
+            // irse evita arrastrar ese estado (y referencias muertas) a la próxima.
+            SceneOccluderMode.Instance?.Restore();
             ServerDeaths.Reset();
             NightLoot.Reset();
             LocalDeath.Instance?.Revive();
