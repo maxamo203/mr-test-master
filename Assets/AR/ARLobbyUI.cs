@@ -22,6 +22,7 @@ public class ARLobbyUI : MonoBehaviour
 
     private ARLobbyManager _lobby;
     private NetworkManager _net;
+    private ARImageAnchor  _imageAnchor;
     private readonly Gamepad.ImguiGamepadMenu _nav = new();
 
     // Briefing: cartel de intro (NOCHE X + texto) que entra deslizándose desde la
@@ -38,8 +39,9 @@ public class ARLobbyUI : MonoBehaviour
 
     private void Start()
     {
-        _lobby = ARLobbyManager.Instance;
-        _net   = NetworkManager.Instance;
+        _lobby       = ARLobbyManager.Instance;
+        _net         = NetworkManager.Instance;
+        _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
     }
 
     private void Update()
@@ -139,9 +141,21 @@ public class ARLobbyUI : MonoBehaviour
             case ARLobbyManager.LobbyState.Scanning:
             {
                 DrawGhostImage(vw, vh);
+                // Mientras junta muestras de la pose se pide quietud: la ventana de
+                // convergencia (ARImageAnchor) se cierra más rápido con el celular quieto.
+                bool afinando = _imageAnchor != null && _imageAnchor.MuestrasActuales > 0;
                 GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f),
-                          $"Buscando la imagen… {Spinner()}",
+                          afinando ? $"Imagen encontrada, afinando… quedate quieto {Spinner()}"
+                                   : $"Buscando la imagen… {Spinner()}",
                           T.Estilo(T.FMono, 13, T.Tan));
+
+                // El sistema AR rechazó la imagen guardada con el escaneo (poco detalle):
+                // el jugador tiene que saberlo, porque así nunca la va a encontrar.
+                string aviso = _imageAnchor != null ? _imageAnchor.AvisoImagen : null;
+                if (!string.IsNullOrEmpty(aviso))
+                    GUI.Label(new Rect(Pad, y + 26f, vw - Pad * 2f, 40f),
+                              aviso + " Podés ubicar el entorno a mano o re-escanearlo.",
+                              T.Estilo(T.FMono, 11, T.Tan, TextAnchor.UpperLeft, wrap: true));
 
                 // Escape: la imagen física se perdió / quedó en otro lado. El entorno
                 // ya está cargado, así que se puede ubicar el 0,0 a mano.

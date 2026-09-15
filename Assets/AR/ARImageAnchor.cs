@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
@@ -9,6 +10,12 @@ public class ARImageAnchor : MonoBehaviour
 {
     public event Action OnImageFound;       // solo la PRIMERA vez (compat con consumidores actuales)
     public event Action OnImageReacquired;  // cada vez que se (re)detecta la imagen, incluida la primera
+
+    // Aviso sobre la imagen de referencia en uso (null si está bien): ARKit/ARCore
+    // la rechazó por falta de detalle, etc. Lo muestran las pantallas de "buscando
+    // la imagen…" para que el jugador sepa que conviene recapturar / re-escanear.
+    public event Action<string> OnAvisoImagen;
+    public string AvisoImagen { get; private set; }
 
     public bool IsFound { get; private set; }
 #if UNITY_EDITOR
@@ -29,9 +36,24 @@ public class ARImageAnchor : MonoBehaviour
     private bool                  _foundEverFired;
     private bool                  _pendingKeepVisual;  // modo elegido en la última recalibración
 
-    // Librería mutable: arranca como copia de la serializada y le agregamos en
-    // runtime las imágenes capturadas con la cámara (ver AddReferenceImage).
+    // Librería mutable con UNA sola imagen: la de referencia en uso. Se crea de cero
+    // en cada AddReferenceImage — acumular las imágenes de toda la sesión (la del
+    // escáner, la del mapa anterior…) hacía que ARKit buscara todas a la vez y que
+    // cualquiera de ellas, si seguía a la vista, anclara el mapa en el lugar
+    // equivocado. Con una sola imagen la búsqueda es más rápida y más barata.
     private MutableRuntimeReferenceImageLibrary _runtimeLib;
+    private Guid   _imagenActual;      // guid de la imagen en uso (Guid.Empty si no se conoce)
+    private string _nombreActual;      // nombre único de esa imagen (fallback del filtro)
+    private int    _contadorImagenes;
+
+    // Orientación física de la imagen en uso (guardada con el escaneo; Desconocida en
+    // escaneos viejos, que se resuelve con la pose detectada). Define de qué eje de
+    // la imagen sale el rumbo — ver ImageAnchorPose.EjeRumbo.
+    public ImageAnchorPose.Orientacion Orientacion { get; private set; }
+
+    // Orientación que se CONFIRMÓ con la última detección real (Desconocida hasta
+    // anclar). Es lo que se persiste al guardar un escaneo nuevo.
+    public ImageAnchorPose.Orientacion OrientacionDetectada { get; private set; }
 
     // True una vez que hay al menos una imagen lista para buscar (capturada o
     // cargada). El bootstrap la usa para no arrancar el tracking en vacío.
@@ -45,21 +67,42 @@ public class ARImageAnchor : MonoBehaviour
     [SerializeField] private float _reacquireDelay = 1.0f;
     private float _searchSince;
 
-    // Al detectar la imagen, ARKit/ARCore sigue refinando su pose unos frames: anclar con
-    // UN solo frame da un rumbo (yaw) ligeramente distinto cada vez y la escena queda
-    // rotada respecto al escaneo original. Promediamos varias muestras de la pose antes de
-    // anclar. NO hace falta que los frames Tracking sean seguidos: si la imagen se ve a
-    // ratos, igual vamos acumulando; así funciona con fragmentos que trackean intermitente.
-    [Tooltip("Muestras (frames en Tracking, NO necesariamente seguidos) a promediar antes de anclar.")]
-    [SerializeField] private int   _minSamples = 5;
-    [Tooltip("Fallback: si la imagen se ve solo a ratos, anclar igual pasado este tiempo " +
-             "(s) desde la 1ª muestra, con lo que se haya juntado.")]
-    [SerializeField] private float _maxSampleWait = 2.5f;
-    private int     _sampleCount;
-    private float   _sampleStart;
-    private Vector3 _accumYaw, _accumPos;
+    // ── Muestreo de la pose ───────────────────────────────────────────────────
+    // Al detectar la imagen, ARKit/ARCore siguen refinando su pose durante los primeros
+    // frames de tracking: las muestras más viejas son las peores. Por eso NO se
+    // promedia todo lo visto desde la primera detección, sino sólo una VENTANA de las
+    // últimas muestras, y se ancla recién cuando esa ventana dejó de moverse (rumbo y
+    // posición estables). Si la imagen se ve mal (de lejos, de canto, intermitente) y
+    // nunca converge, pasado _maxSampleWait se ancla igual con la ventana que haya.
+    //
+    // Para que haya frames en estado Tracking SEGUIDOS el manager se pone en modo
+    // "moving images" (ver ActivarBusqueda): en modo detección pura (max = 0) ARKit
+    // deja la imagen en Limited después del primer frame y sólo vuelve a Tracking
+    // cuando la re-detecta (~1 Hz) — así el muestreo tardaba segundos y solía caer al
+    // timeout con una o dos muestras crudas.
+    [Tooltip("Muestras de la ventana de convergencia.")]
+    [SerializeField] private int   _ventana = 8;
+    [Tooltip("Segundos mínimos entre muestras: con 0.05 la ventana de 8 cubre ~0.4 s, " +
+             "tiempo suficiente para que el tracking refine la pose.")]
+    [SerializeField] private float _intervaloMuestra = 0.05f;
+    [Tooltip("Dispersión máxima del rumbo dentro de la ventana (grados) para dar por convergida la pose.")]
+    [SerializeField] private float _tolRumboGrados = 2f;
+    [Tooltip("Dispersión máxima de la posición dentro de la ventana (m).")]
+    [SerializeField] private float _tolPosMetros = 0.02f;
+    [Tooltip("Fallback: si la ventana no converge, anclar igual pasado este tiempo (s) desde la 1ª muestra.")]
+    [SerializeField] private float _maxSampleWait = 4f;
 
-    private void ResetSampling() { _sampleCount = 0; _accumYaw = Vector3.zero; _accumPos = Vector3.zero; }
+    private readonly List<ImageAnchorPose.Muestra> _muestras = new();
+    private float   _sampleStart, _ultimaMuestraT;
+    private Vector3 _rumboPrevio;
+    private Vector3 _normalUltima;
+
+    private void ResetSampling()
+    {
+        _muestras.Clear();
+        _rumboPrevio = Vector3.zero;
+        _ultimaMuestraT = -1f;
+    }
 
     private void Awake()
     {
@@ -78,11 +121,7 @@ public class ARImageAnchor : MonoBehaviour
         _searchSince = Time.time;
         _buscando    = true;
         ResetSampling();
-#if UNITY_EDITOR
-        StartCoroutine(EditorStub());
-#else
-        _imageManager.enabled = true;
-#endif
+        ActivarBusqueda();
     }
 
     // Vuelve a entrar en modo "buscando imagen". El anchor viejo se destruye, pero
@@ -116,12 +155,24 @@ public class ARImageAnchor : MonoBehaviour
         _searchSince = Time.time;
         _buscando    = true;
         ResetSampling();
+        ActivarBusqueda();
+        Debug.Log("[ARImageAnchor] RestartTracking — buscando imagen otra vez.");
+    }
+
+    // Prende el tracking de la imagen. Sólo corre mientras se busca: en cuanto hay
+    // anchor se apaga (ver Update), así que su costo es acotado al lobby.
+    private void ActivarBusqueda()
+    {
 #if UNITY_EDITOR
         StartCoroutine(EditorStub());
 #else
+        // Tracking continuo de 1 imagen (no detección pura): es lo que da frames en
+        // estado Tracking seguidos, con la pose refinada frame a frame. Ver el bloque
+        // de muestreo arriba. El setter guarda el valor y el manager lo aplica al
+        // habilitarse, así que va ANTES de enabled = true.
+        _imageManager.requestedMaxNumberOfMovingImages = 1;
         _imageManager.enabled = true;
 #endif
-        Debug.Log("[ARImageAnchor] RestartTracking — buscando imagen otra vez.");
     }
 
     // Corta la búsqueda de la imagen sin tocar el anchor actual. La usa la
@@ -144,6 +195,9 @@ public class ARImageAnchor : MonoBehaviour
     public bool Buscando => _buscando && !IsFound;
     private bool _buscando;
 
+    // Muestras juntadas en la búsqueda actual (para la UI / debug: "afinando pose…").
+    public int MuestrasActuales => _muestras.Count;
+
     private void Update()
     {
 #if UNITY_EDITOR
@@ -155,36 +209,50 @@ public class ARImageAnchor : MonoBehaviour
         // Calibrating y ARKit/ARCore actualiza la pose de la imagen antes de anclar.
         if (Time.time - _searchSince < _reacquireDelay) return;
 
-        // Buscar la imagen en estado Tracking (si hay una este frame).
-        Transform tracked = null;
-        foreach (var img in _imageManager.trackables)
-            if (img.trackingState == TrackingState.Tracking) { tracked = img.transform; break; }
+        // Sólo NUESTRA imagen, y sólo en estado Tracking (pose real de este frame).
+        var tracked = BuscarImagenActual();
 
-        // Si la imagen se ve este frame, acumular una muestra. NO reseteamos cuando NO se
-        // ve: seguimos juntando entre frames aunque el tracking sea intermitente.
-        if (tracked != null)
+        if (tracked != null && Time.time - _ultimaMuestraT >= _intervaloMuestra)
         {
-            if (_sampleCount == 0) _sampleStart = Time.time; // primera muestra
+            if (_muestras.Count == 0) _sampleStart = Time.time;   // primera muestra
+            _ultimaMuestraT = Time.time;
 
-            Vector3 yawAxis = HorizontalYawAxis(tracked);
-            // Evitar que un flip de 180° del eje entre frames cancele el promedio.
-            if (_sampleCount > 0 && Vector3.Dot(yawAxis, _accumYaw) < 0f) yawAxis = -yawAxis;
-            _accumYaw += yawAxis;
-            _accumPos += tracked.position;
-            _sampleCount++;
+            var t = tracked.transform;
+            _normalUltima = t.up;
+
+            var orient = ImageAnchorPose.Resolver(Orientacion, _normalUltima);
+            var rumbo  = ImageAnchorPose.EjeRumbo(t.right, t.up, t.forward, orient);
+            // Evitar que un flip de 180° del eje entre muestras cancele el promedio.
+            if (_rumboPrevio != Vector3.zero) rumbo = ImageAnchorPose.AlinearSigno(rumbo, _rumboPrevio);
+            _rumboPrevio = rumbo;
+
+            _muestras.Add(new ImageAnchorPose.Muestra(rumbo, t.position));
+            if (_muestras.Count > _ventana) _muestras.RemoveAt(0);
         }
 
-        if (_sampleCount == 0) return; // todavía no se vio la imagen ni una vez
+        if (_muestras.Count == 0) return; // todavía no se vio la imagen ni una vez
 
-        // Anclar cuando junte suficientes muestras (aunque no hayan sido seguidas), o como
-        // fallback pasado _maxSampleWait desde la primera (para imágenes que trackean poco).
-        bool enough   = _sampleCount >= _minSamples;
-        bool timedOut = (Time.time - _sampleStart) >= _maxSampleWait;
-        if (!enough && !timedOut) return;
+        bool convergio = ImageAnchorPose.Convergio(_muestras, _ventana, _tolRumboGrados, _tolPosMetros);
+        bool timedOut  = (Time.time - _sampleStart) >= _maxSampleWait;
+        if (!convergio && !timedOut) return;
 
-        // Anclar con la pose promediada (más estable/consistente que un solo frame).
-        PlaceAnchorAndSpawn(_accumPos / _sampleCount, UprightFromYaw(_accumYaw));
+        if (!ImageAnchorPose.Promediar(_muestras, out var rumboFinal, out var posFinal)) return;
+
+        OrientacionDetectada = ImageAnchorPose.DesdePose(_normalUltima);
+        var resuelta = ImageAnchorPose.Resolver(Orientacion, _normalUltima);
+        if (resuelta != Orientacion)
+            Debug.Log($"[ARImageAnchor] Orientación guardada={Orientacion}, detectada={resuelta} " +
+                      $"(|normal.y|={Mathf.Abs(_normalUltima.y):0.00}); se usa la detectada.");
+        Debug.Log($"[ARImageAnchor] Anclando con {_muestras.Count} muestras " +
+                  $"({(convergio ? "convergió" : "timeout")}) orientación={resuelta}.");
+
+        // Anclar con la pose promediada de la ventana (Y-up, sólo rumbo).
+        PlaceAnchorAndSpawn(posFinal, ImageAnchorPose.UprightDesdeRumbo(rumboFinal));
         IsFound = true;
+
+        // Confirmar la orientación en el holder de la imagen actual: si este escaneo se
+        // guarda (escáner), se persiste la real y no la estimada al capturar.
+        Scanner.CapturedReference.ConfirmarOrientacion(OrientacionDetectada);
 
         if (!_foundEverFired)
         {
@@ -193,14 +261,37 @@ public class ARImageAnchor : MonoBehaviour
         }
         OnImageReacquired?.Invoke();
 
+        // Imagen anclada: el tracking ya no hace falta (y cuesta). RestartTracking lo
+        // vuelve a prender cuando se recalibra.
         _imageManager.enabled = false;
+    }
+
+    // Trackable en estado Tracking que corresponda a la imagen en uso. Con librería
+    // de una sola imagen debería ser el único, pero el filtro es la garantía: un
+    // trackable viejo (de una librería anterior) nunca puede anclar este mapa.
+    private ARTrackedImage BuscarImagenActual()
+    {
+        foreach (var img in _imageManager.trackables)
+        {
+            if (img.trackingState != TrackingState.Tracking) continue;
+            if (!EsImagenActual(img)) continue;
+            return img;
+        }
+        return null;
+    }
+
+    private bool EsImagenActual(ARTrackedImage img)
+    {
+        var referencia = img.referenceImage;
+        if (_imagenActual != Guid.Empty) return referencia.guid == _imagenActual;
+        return !string.IsNullOrEmpty(_nombreActual) && referencia.name == _nombreActual;
     }
 
     private void PlaceAnchorAndSpawn(Vector3 position, Quaternion rotation)
     {
         var anchorGO = new GameObject("ImageAnchor");
         // El eje Y del anchor SIEMPRE apunta hacia arriba en el mundo; solo conservamos
-        // el rumbo horizontal (ya viene promediado desde Update — ver UprightFromYaw).
+        // el rumbo horizontal (ya viene promediado desde Update — ver ImageAnchorPose).
         anchorGO.transform.SetPositionAndRotation(position, rotation);
         _anchor = anchorGO.AddComponent<ARAnchor>();
         // ARTrackable.destroyOnRemoval arranca en TRUE y ARTrackableManager hace
@@ -219,81 +310,43 @@ public class ARImageAnchor : MonoBehaviour
         catch (Exception e) { Debug.LogWarning($"[ARImageAnchor] SpawnVisual falló: {e.Message}"); }
     }
 
-    // Devuelve una rotación cuyo eje Y es SIEMPRE el up del mundo, con el rumbo
-    // (yaw) derivado de la pose REAL de la imagen + la gravedad — sin usar la cámara
-    // ni la posición desde donde se escaneó.
-    //
-    // ASUNCIÓN: la imagen de referencia SIEMPRE se escanea HORIZONTAL (acostada en
-    // piso/mesa, su normal apuntando hacia arriba). Con eso identificamos la normal
-    // de forma puramente GEOMÉTRICA — es el eje más vertical (mayor |y|) — sin
-    // depender de la convención de ejes de ARFoundation (cuál de +X/+Y/+Z es la
-    // normal), que era el origen de la inconsistencia: cuando intentábamos adivinar
-    // la convención, a veces usábamos la normal (ruidosa) para el rumbo y el yaw
-    // saltaba ~90° entre calibraciones.
-    //
-    // El rumbo sale de un eje del PLANO de la imagen (los otros dos), tomado en un
-    // orden fijo => determinista y estable entre calibraciones de la misma imagen.
-    // Eje de RUMBO horizontal (yaw) de la imagen, en un orden fijo => determinista y
-    // estable entre calibraciones de la misma imagen. Devuelve un vector horizontal
-    // unitario (o forward si degenerado). Update lo acumula por varios frames y promedia.
-    private static Vector3 HorizontalYawAxis(Transform img)
-    {
-        Vector3[] axes = { img.right, img.up, img.forward };
-
-        // 1) La NORMAL es el eje más vertical (en una imagen horizontal apunta arriba).
-        //    Geométrico, no depende de la convención de ejes de ARFoundation.
-        int normalIdx = 0;
-        float maxAbsY = Mathf.Abs(axes[0].y);
-        for (int i = 1; i < axes.Length; i++)
-        {
-            float ay = Mathf.Abs(axes[i].y);
-            if (ay > maxAbsY) { maxAbsY = ay; normalIdx = i; }
-        }
-
-        // 2) El rumbo: el primero de los OTROS dos ejes (en el plano de la imagen),
-        //    proyectado al horizontal. Orden fijo => mismo eje siempre.
-        for (int i = 0; i < axes.Length; i++)
-        {
-            if (i == normalIdx) continue;
-            var h = new Vector3(axes[i].x, 0f, axes[i].z);
-            if (h.sqrMagnitude > 1e-6f) return h.normalized;
-        }
-        return Vector3.forward;
-    }
-
-    // Rotación upright (Y = up del mundo) desde un eje de rumbo horizontal (posiblemente
-    // acumulado/promediado: se aplana a horizontal y se normaliza).
-    private static Quaternion UprightFromYaw(Vector3 horizYawAxis)
-    {
-        horizYawAxis.y = 0f;
-        if (horizYawAxis.sqrMagnitude < 1e-6f) horizYawAxis = Vector3.forward;
-        return Quaternion.LookRotation(horizYawAxis.normalized, Vector3.up);
-    }
-
     // ── Imagen de referencia en runtime ───────────────────────────────────────
     // Agrega una imagen (un fragmento capturado con la cámara, o una cargada de
-    // disco) a la librería mutable y reinicia la detección para que ARKit/ARCore
-    // la busque en el entorno físico. Asíncrono: el job de validación corre en
-    // background; cuando termina, reiniciamos el tracking.
-    public void AddReferenceImage(Texture2D tex, string imageName, float widthMeters, bool keepVisualPosition = false)
+    // disco) a una librería mutable NUEVA y reinicia la detección para que
+    // ARKit/ARCore la busque en el entorno físico. Asíncrono: el job de validación
+    // corre en background; cuando termina, reiniciamos el tracking.
+    //
+    // orientacion: cómo está pegada la imagen (piso/mesa o pared). Desconocida para
+    // escaneos viejos: se infiere de la pose detectada.
+    public void AddReferenceImage(Texture2D tex, string imageName, float widthMeters,
+                                  bool keepVisualPosition = false,
+                                  ImageAnchorPose.Orientacion orientacion = ImageAnchorPose.Orientacion.Desconocida)
     {
         if (tex == null) { Debug.LogWarning("[ARImageAnchor] AddReferenceImage con textura null."); return; }
+        Orientacion          = orientacion;
+        OrientacionDetectada = ImageAnchorPose.Orientacion.Desconocida;
+        SetAviso(null);
 #if UNITY_EDITOR
         // En editor no hay subsistema real: simulamos el anchor con el stub.
         HasReferenceImage = true;
         RestartTracking(keepVisualPosition);
 #else
+        StopAllCoroutines();   // un AddReferenceImage anterior a medio validar no debe pisar a éste
         StartCoroutine(AddReferenceImageRoutine(tex, imageName, widthMeters, keepVisualPosition));
 #endif
     }
 
     private IEnumerator AddReferenceImageRoutine(Texture2D tex, string imageName, float widthMeters, bool keepVisualPosition)
     {
-        // Necesitamos el subsistema corriendo para crear/usar la librería mutable.
+        // Necesitamos el subsistema instanciado para crear la librería mutable. Al
+        // habilitar el manager sin librería se auto-deshabilita, pero deja el
+        // subsistema creado, que es lo que buscamos.
         _imageManager.enabled = true;
         while (_imageManager.subsystem == null) yield return null;
+        // Mientras se valida la imagen nueva NO se busca la vieja.
+        _imageManager.enabled = false;
 
-        if (!EnsureRuntimeLibrary())
+        if (!CrearLibreria())
         {
             Debug.LogError("[ARImageAnchor] No se pudo crear una librería mutable; la imagen no se agrega.");
             yield break;
@@ -302,6 +355,12 @@ public class ARImageAnchor : MonoBehaviour
         if (tex.format != TextureFormat.RGBA32) tex = ToRGBA32(tex);
         if (widthMeters <= 0f) widthMeters = 0.15f;
 
+        // Nombre único por alta: es el fallback del filtro de trackables (el guid lo
+        // asigna la librería al agregar y lo leemos después).
+        _contadorImagenes++;
+        _nombreActual = $"{imageName}#{_contadorImagenes}";
+        _imagenActual = Guid.Empty;
+
         // Construimos el XRReferenceImage con el tamaño físico (ancho, alto) en
         // metros y se lo pasamos a la sobrecarga de instancia del job.
         float aspect = tex.width > 0 ? tex.height / (float)tex.width : 1f;
@@ -309,7 +368,7 @@ public class ARImageAnchor : MonoBehaviour
             new SerializableGuid(0, 0),
             new SerializableGuid(0, 0),
             new Vector2(widthMeters, widthMeters * aspect),
-            imageName,
+            _nombreActual,
             tex);
 
         var jobState = _runtimeLib.ScheduleAddImageWithValidationJob(
@@ -321,10 +380,19 @@ public class ARImageAnchor : MonoBehaviour
         while (jobState.status == AddReferenceImageJobStatus.Pending) yield return null;
 
         if (jobState.status != AddReferenceImageJobStatus.Success)
+        {
             Debug.LogWarning($"[ARImageAnchor] El job de imagen terminó en {jobState.status} " +
                              "(el fragmento puede tener pocos detalles para trackear).");
+            SetAviso(jobState.status == AddReferenceImageJobStatus.ErrorInvalidImage
+                ? "El sistema AR rechazó la imagen: tiene poco detalle o es repetitiva. Conviene recapturarla."
+                : "No se pudo registrar la imagen de referencia en el sistema AR.");
+        }
         else
-            Debug.Log($"[ARImageAnchor] Imagen '{imageName}' agregada a la librería ({_runtimeLib.count} total).");
+        {
+            foreach (var img in _runtimeLib)
+                if (img.name == _nombreActual) { _imagenActual = img.guid; break; }
+            Debug.Log($"[ARImageAnchor] Imagen '{_nombreActual}' agregada (librería de {_runtimeLib.count}).");
+        }
 
         HasReferenceImage = true;
 
@@ -332,23 +400,17 @@ public class ARImageAnchor : MonoBehaviour
         RestartTracking(keepVisualPosition);
     }
 
-    private bool EnsureRuntimeLibrary()
+    // Librería mutable VACÍA nueva (descarta la anterior) y la deja puesta en el manager.
+    private bool CrearLibreria()
     {
-        if (_runtimeLib != null) return true;
         try
         {
-            // CreateRuntimeLibrary toma el asset serializado (XRReferenceImageLibrary).
-            // Si el manager ya tiene una librería serializada, la usamos como base
-            // (conserva las imágenes pre-cargadas); si no, creamos una vacía.
-            var serialized = _imageManager.referenceLibrary as XRReferenceImageLibrary;
-            RuntimeReferenceImageLibrary lib = serialized != null
-                ? _imageManager.CreateRuntimeLibrary(serialized)
-                : _imageManager.CreateRuntimeLibrary();
-            _runtimeLib = lib as MutableRuntimeReferenceImageLibrary;
+            _runtimeLib = _imageManager.CreateRuntimeLibrary() as MutableRuntimeReferenceImageLibrary;
         }
         catch (Exception e)
         {
             Debug.LogError($"[ARImageAnchor] CreateRuntimeLibrary falló: {e.Message}");
+            _runtimeLib = null;
             return false;
         }
 
@@ -360,6 +422,13 @@ public class ARImageAnchor : MonoBehaviour
 
         _imageManager.referenceLibrary = _runtimeLib;
         return true;
+    }
+
+    private void SetAviso(string aviso)
+    {
+        if (AvisoImagen == aviso) return;
+        AvisoImagen = aviso;
+        OnAvisoImagen?.Invoke(aviso);
     }
 
     private static Texture2D ToRGBA32(Texture2D src)
@@ -412,6 +481,9 @@ public class ARImageAnchor : MonoBehaviour
         try { SpawnVisual(go.transform); }
         catch (Exception e) { Debug.LogWarning($"[ARImageAnchor] SpawnVisual falló: {e.Message}"); }
         IsFound = true;
+        OrientacionDetectada = Orientacion == ImageAnchorPose.Orientacion.Desconocida
+            ? ImageAnchorPose.Orientacion.Horizontal : Orientacion;
+        Scanner.CapturedReference.ConfirmarOrientacion(OrientacionDetectada);
         if (!_foundEverFired)
         {
             _foundEverFired = true;

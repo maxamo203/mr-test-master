@@ -235,10 +235,43 @@ public class ARPlaneOccluder : MonoBehaviour
         return _hudBgTex;
     }
 
+    // HUD de diagnóstico: SÓLO en development build / editor. Corría en release con
+    // el prefab en _showHUD = true: una docena de strings interpolados y un GUIStyle
+    // nuevo en cada evento de OnGUI (varios por frame) — basura de GC en cada frame
+    // de la partida por un panel que nadie veía en producción. Además el texto se
+    // rearma a 4 Hz, no por evento.
+    private string _hudTexto = "";
+    private float  _hudProximo;
+    private GUIStyle _hudStyle;
+
     void OnGUI()
     {
-        if (!_showHUD) return;
+        if (!_showHUD || !Debug.isDebugBuild) return;
 
+        if (Time.unscaledTime >= _hudProximo)
+        {
+            _hudProximo = Time.unscaledTime + 0.25f;
+            _hudTexto   = ArmarTextoHud();
+        }
+
+        if (_hudStyle == null)
+        {
+            _hudStyle = new GUIStyle
+            {
+                fontSize = 28,
+                alignment = TextAnchor.UpperLeft,
+                wordWrap = true,
+                padding = new RectOffset(12, 12, 12, 12)
+            };
+            _hudStyle.normal.textColor = Color.yellow;
+            _hudStyle.normal.background = GetHudBg();
+        }
+
+        GUI.Label(new Rect(10, 10, Screen.width - 20, 750), _hudTexto, _hudStyle);
+    }
+
+    private string ArmarTextoHud()
+    {
         int activeTracked = 0, vert = 0, horiz = 0;
         if (_planeManager != null && _planeManager.trackables != null)
         {
@@ -266,7 +299,7 @@ public class ARPlaneOccluder : MonoBehaviour
             occInfo = $"OccMgr EnvDepth: {_occlusionManager.requestedEnvironmentDepthMode} sup={sup}";
         }
 
-        string txt =
+        return
             $"AR Session: {ARSession.state}\n" +
             $"PlaneMgr ena={(_planeManager != null && _planeManager.enabled)} mode={(_planeManager != null ? _planeManager.requestedDetectionMode.ToString() : "n/a")}\n" +
             $"Trackeados ahora: {activeTracked} (H:{horiz} V:{vert})\n" +
@@ -276,17 +309,5 @@ public class ARPlaneOccluder : MonoBehaviour
             $"Occluder: {(_occluderMaterial != null ? _occluderMaterial.shader.name : "NULL")}\n" +
             $"Debug:    {(_debugMaterial != null ? _debugMaterial.shader.name : "NULL")}\n" +
             occInfo;
-
-        var style = new GUIStyle
-        {
-            fontSize = 28,
-            alignment = TextAnchor.UpperLeft,
-            wordWrap = true,
-            padding = new RectOffset(12, 12, 12, 12)
-        };
-        style.normal.textColor = Color.yellow;
-        style.normal.background = GetHudBg();
-
-        GUI.Label(new Rect(10, 10, Screen.width - 20, 750), txt, style);
     }
 }

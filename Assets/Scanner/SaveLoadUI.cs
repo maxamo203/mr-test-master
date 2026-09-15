@@ -117,6 +117,7 @@ namespace Scanner
             // Persistimos también la imagen de referencia capturada en esta sesión
             // (si hay), para reconocer la zona física al recargar.
             data.refImageWidthMeters = CapturedReference.WidthMeters;
+            data.refImageOrientation = (int)CapturedReference.Orientacion;
             if (CapturedReference.HasImage)
                 ScanSerializer.SaveRefImage(nombre, CapturedReference.Texture);
             ScanSerializer.Save(nombre, data);

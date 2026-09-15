@@ -39,8 +39,5 @@ public class GyroscopeTracking : MonoBehaviour
         // Conversión al sistema de coordenadas de Unity
         Quaternion rot = new Quaternion(att.x, att.y, -att.z, -att.w);
         transform.rotation = Quaternion.Euler(90f, 0f, 0f) * rot;
-
-        if (Time.frameCount % 60 == 0)
-            Debug.Log($"Attitude: {att.eulerAngles}");
     }
 }

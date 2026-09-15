@@ -80,6 +80,10 @@ public static class ARQuality
     // Piso innegociable: ver la nota de motion sickness arriba.
     public const int TargetFps = 60;
 
+    // El menú principal no tiene cámara AR ni estéreo: es IMGUI estática. Correrlo a
+    // 60 (o a 120 en un ProMotion) es batería tirada mientras el jugador elige noche.
+    public const int MenuFps = 30;
+
     public static string Descripcion(Nivel n) => n switch
     {
         Nivel.Rendimiento => "Malla gruesa, sin profundidad por píxel, render al 65%. Menos calor y batería.",
@@ -96,16 +100,39 @@ public static class ARQuality
 
     // ── Aplicación ────────────────────────────────────────────────────────
 
+    // Se aplica en CADA carga de escena, no sólo cuando el jugador cambia el nivel:
+    // los managers AR nacen con los valores serializados del prefab (profundidad en
+    // Best, etc.) y nadie más los ajusta — el AdaptiveOcclusion que lo hacía no está
+    // en ninguna escena. Sin esto, el nivel elegido no tenía efecto hasta tocarlo en
+    // el menú de pausa, y cada partida arrancaba con todo al máximo.
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    private static void Init() => AplicarFrameRate();
+    private static void Init()
+    {
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += (s, _) => AplicarAEscena(s.name);
+        AplicarAEscena(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+    }
 
-    private static void AplicarFrameRate()
+    private static void AplicarAEscena(string escena)
+    {
+        bool esMenu = escena == SceneFlow.EscenaMenu;
+
+        AplicarFrameRate(esMenu ? MenuFps : TargetFps);
+
+        // En las escenas AR el jugador no toca la pantalla (Cardboard, o apunta con la
+        // cámara): sin esto iOS/Android bajan el brillo y bloquean a mitad de partida.
+        // En el menú vuelve la política del sistema, que es la que ahorra.
+        Screen.sleepTimeout = esMenu ? SleepTimeout.SystemSetting : SleepTimeout.NeverSleep;
+
+        if (!esMenu) Aplicar();
+    }
+
+    private static void AplicarFrameRate(int fps)
     {
         // vSyncCount tiene que ser 0 para que targetFrameRate mande; con vSync activo
         // Unity ignora el target. Sin esto el render queda suelto y en un equipo
         // ProMotion se va por encima de 60 gastando batería de gusto.
         QualitySettings.vSyncCount   = 0;
-        Application.targetFrameRate  = TargetFps;
+        Application.targetFrameRate  = fps;
     }
 
     // Reconfigura los managers AR vivos. La RenderTexture del Cardboard no hace falta
@@ -113,18 +140,27 @@ public static class ARQuality
     // se rehace sola cuando cambia RenderScale.
     public static void Aplicar()
     {
-        AplicarFrameRate();
+        AplicarFrameRate(TargetFps);
 
         var occ = UnityEngine.Object.FindFirstObjectByType<AROcclusionManager>();
         if (occ != null)
         {
+            // Segmentación de personas: otra red neuronal por frame que acá no sirve
+            // para nada (no hay gente que ocluir). El prefab del escáner la traía
+            // prendida; se apaga siempre, en todos los niveles.
+            occ.requestedHumanStencilMode = HumanSegmentationStencilMode.Disabled;
+            occ.requestedHumanDepthMode   = HumanSegmentationDepthMode.Disabled;
+
             var modo = DepthMode;
             occ.requestedEnvironmentDepthMode = modo;
             occ.enabled = modo != EnvironmentDepthMode.Disabled;
         }
 
+        // La malla de LiDAR sólo se configura si alguien la prendió (FlashlightMeshLighting,
+        // LiDARScanner): en la escena de juego arranca apagada — sin prefab no genera nada
+        // y reconstruir el cuarto a densidad 1 era el grueso del consumo al entrar.
         var mesh = UnityEngine.Object.FindFirstObjectByType<ARMeshManager>();
-        if (mesh != null && mesh.subsystem != null)
+        if (mesh != null && mesh.enabled && mesh.subsystem != null)
             mesh.density = MeshDensity;
 
         Debug.Log($"[ARQuality] {Nombre(Actual)}: density={MeshDensity:0.00} " +

@@ -78,13 +78,50 @@ public static class MortuoriumTheme
     public static Texture2D LogoMortuorium { get { EnsureLogo(); return _logo; } }
 
     // ── Estilos (cacheados por combinación) ───────────────────────────────
-    private static readonly Dictionary<string, GUIStyle> _styles = new();
+    // La clave es un struct, no un string: Estilo() se llama por cada label en cada
+    // evento de OnGUI (varios por frame, en HUDs que viven toda la partida), y armar
+    // un string interpolado + ToHtmlStringRGBA por llamada era basura de GC constante.
+    private readonly struct EstiloKey : IEquatable<EstiloKey>
+    {
+        private readonly int  _font;     // instanceID (0 = default del skin)
+        private readonly int  _size;
+        private readonly Color _color;
+        private readonly TextAnchor _anchor;
+        private readonly bool _wrap;
+
+        public EstiloKey(Font font, int size, Color color, TextAnchor anchor, bool wrap)
+        {
+            _font = font != null ? font.GetInstanceID() : 0;
+            _size = size; _color = color; _anchor = anchor; _wrap = wrap;
+        }
+
+        public bool Equals(EstiloKey o) =>
+            _font == o._font && _size == o._size && _wrap == o._wrap &&
+            _anchor == o._anchor && _color.Equals(o._color);
+
+        public override bool Equals(object obj) => obj is EstiloKey k && Equals(k);
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int h = _font;
+                h = h * 397 ^ _size;
+                h = h * 397 ^ _color.GetHashCode();
+                h = h * 397 ^ (int)_anchor;
+                h = h * 397 ^ (_wrap ? 1 : 0);
+                return h;
+            }
+        }
+    }
+
+    private static readonly Dictionary<EstiloKey, GUIStyle> _styles = new();
 
     public static GUIStyle Estilo(Font font, int size, Color color,
                                   TextAnchor anchor = TextAnchor.MiddleLeft,
                                   bool wrap = false)
     {
-        string key = $"{(font != null ? font.name : "def")}|{size}|{ColorUtility.ToHtmlStringRGBA(color)}|{(int)anchor}|{wrap}";
+        var key = new EstiloKey(font, size, color, anchor, wrap);
         if (_styles.TryGetValue(key, out var st)) return st;
         st = new GUIStyle(GUI.skin.label)
         {

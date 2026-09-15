@@ -478,7 +478,7 @@ MonoBehaviour:
   _debugMaterial: {fileID: 0}
   _occludePlanes: 1
   _showDebug: 0
-  _showHUD: 1
+  _showHUD: 0
   _smoothSpeed: 6
   _minPlaneSize: 0.02
   alignmentFilter: 0

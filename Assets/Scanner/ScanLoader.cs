@@ -51,8 +51,12 @@ namespace Scanner
             var refTex = ScanSerializer.LoadRefImage(name);
             if (refTex != null && imageAnchor != null)
             {
-                CapturedReference.Set(refTex, data.refImageWidthMeters);
-                imageAnchor.AddReferenceImage(refTex, name, data.refImageWidthMeters, keepVisualPosition: true);
+                // Orientación guardada con el escaneo (0 = desconocida en escaneos viejos:
+                // ARImageAnchor la infiere de la pose detectada).
+                var orientacion = (ImageAnchorPose.Orientacion)Mathf.Clamp(data.refImageOrientation, 0, 2);
+                CapturedReference.Set(refTex, data.refImageWidthMeters, orientacion);
+                imageAnchor.AddReferenceImage(refTex, name, data.refImageWidthMeters,
+                                              keepVisualPosition: true, orientacion: orientacion);
                 ScanStateMachine.Instance?.SetMode(ScannerMode.Calibrating);
             }
             return true;
