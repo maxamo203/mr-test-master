@@ -20,6 +20,7 @@ export const homeItems: RailItem[] = [
   { href: '#como', label: 'Cómo funciona', num: '03' },
   { href: '#descargar', label: 'Descargar', num: '04' },
   { href: '#trailer', label: 'El tráiler', num: '05' },
+  { href: '#equipo', label: 'El equipo', num: '06' },
 ];
 
 /** Secciones de la página dedicada (como-funciona.astro). */
