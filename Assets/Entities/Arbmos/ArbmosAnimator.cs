@@ -8,16 +8,21 @@ using UnityEngine.Playables;
 // ArbmosEntity.State. Corre en el UNICO peer que dibuja esta copia (el estado viene
 // del server).
 //
-// El diseño pidio exactamente tres clips: idle, running y chase. Si falta uno, cae a idle.
+// Usa tres variantes idle de aparición y un único clip de persecución. El estado Running
+// conserva la variante idle: ese desplazamiento no letal lo controla el código.
 // Requiere un Animator en el mismo GameObject (con el Avatar del rig del Arbmos).
 [RequireComponent(typeof(Animator))]
 [RequireComponent(typeof(ArbmosEntity))]
 public class ArbmosAnimator : MonoBehaviour
 {
-    [Header("Clips por estado (arrastrar). Si falta uno, cae a idle.")]
-    public AnimationClip idleClip;
-    public AnimationClip runningClip;
+    [Header("Variantes de aparición")]
+    [Tooltip("Se elige una variante válida al azar cada vez que aparece una instancia.")]
+    public AnimationClip[] idleVariants = new AnimationClip[3];
+
+    [Header("Persecución letal")]
     public AnimationClip chaseClip;
+
+    public int SelectedIdleIndex { get; private set; } = -1;
 
     [Tooltip("Velocidad del cross-fade entre clips (unidades de peso por segundo).")]
     [SerializeField] private float _blendSpeed = 6f;
@@ -32,17 +37,32 @@ public class ArbmosAnimator : MonoBehaviour
     {
         _arbmos = GetComponent<ArbmosEntity>();
         var animator = GetComponent<Animator>();
-        animator.applyRootMotion = false; // el codigo controla pos/rot, no la animacion
+        animator.applyRootMotion = false;
 
-        // Un input del mixer por estado (mismo orden que el enum ArbmosState).
+        var validIdles = new System.Collections.Generic.List<int>();
+        if (idleVariants != null)
+        {
+            for (int i = 0; i < idleVariants.Length; i++)
+                if (idleVariants[i] != null) validIdles.Add(i);
+        }
+
+        AnimationClip selectedIdle = null;
+        if (validIdles.Count > 0)
+        {
+            SelectedIdleIndex = validIdles[Random.Range(0, validIdles.Count)];
+            selectedIdle = idleVariants[SelectedIdleIndex];
+        }
+
+        // Running pertenece al desplazamiento no letal: mantiene la pose elegida.
+        // Chasing usa exclusivamente el nuevo ciclo de persecución.
         var clips = new[]
         {
-            idleClip,                                        // Idle
-            runningClip != null ? runningClip : idleClip,    // Running
-            chaseClip   != null ? chaseClip   : idleClip,    // Chasing
+            selectedIdle,
+            selectedIdle,
+            chaseClip != null ? chaseClip : selectedIdle,
         };
         _inputCount = clips.Length;
-        _weights    = new float[_inputCount];
+        _weights = new float[_inputCount];
 
         _graph = PlayableGraph.Create("ArbmosAnim");
         _graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
@@ -55,6 +75,7 @@ public class ArbmosAnimator : MonoBehaviour
             if (clips[i] != null)
             {
                 var cp = AnimationClipPlayable.Create(_graph, clips[i]);
+                cp.SetApplyFootIK(false);
                 _graph.Connect(cp, 0, _mixer, i);
             }
             _mixer.SetInputWeight(i, i == 0 ? 1f : 0f);

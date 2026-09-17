@@ -17,7 +17,8 @@ public class ArbmosDistortionHUD : MonoBehaviour
     private static readonly int ID_DISTORT = Shader.PropertyToID("_ArbmosDistort");
     private static ArbmosDistortionHUD _instance;
 
-    private Texture2D _tex;
+    private Texture2D _maskTex;
+    private Texture2D _whiteTex;
 
     public static ArbmosDistortionHUD Ensure()
     {
@@ -34,7 +35,8 @@ public class ArbmosDistortionHUD : MonoBehaviour
     {
         if (_instance != null && _instance != this) { Destroy(gameObject); return; }
         _instance = this;
-        _tex = Texture2D.whiteTexture;
+        _whiteTex = Texture2D.whiteTexture;
+        _maskTex = BuildSoftMask();
     }
 
     private void OnGUI()
@@ -83,29 +85,27 @@ public class ArbmosDistortionHUD : MonoBehaviour
         float t = Time.unscaledTime;
         var rng = new System.Random((int)(t * 20f));
 
-        // Tinte de base (color configurable, opacidad escala con la intensidad).
+        // La máscara elíptica desvanece completamente el efecto antes del borde del rect.
         var tint = s.tintColor;
         tint.a = s.tintStrength * Mathf.Lerp(0.33f, 1f, intensity);
         GUI.color = tint;
-        GUI.DrawTexture(rect, _tex);
+        GUI.DrawTexture(rect, _maskTex, ScaleMode.StretchToFill, true);
 
-        // Bandas horizontales (rayado / scanlines desplazadas).
         int bands = Mathf.RoundToInt(s.scanlines * Mathf.Lerp(0.4f, 1f, intensity));
         for (int i = 0; i < bands; i++)
         {
-            float y  = rect.y + (float)rng.NextDouble() * rect.height;
+            float y = rect.y + (float)rng.NextDouble() * rect.height;
             float bh = 2f + (float)rng.NextDouble() * (6f + 10f * intensity);
-            float dx = ((float)rng.NextDouble() - 0.5f) * 12f * intensity;   // corrimiento
+            float dx = ((float)rng.NextDouble() - 0.5f) * 12f * intensity;
             GUI.color = new Color(1f, 1f, 1f, 0.04f + (float)rng.NextDouble() * 0.14f * intensity);
-            GUI.DrawTexture(new Rect(rect.x + dx, y, rect.width, bh), _tex);
+            GUI.DrawTexture(new Rect(rect.x + dx, y, rect.width, bh), _maskTex, ScaleMode.StretchToFill, true);
         }
 
-        // Aberracion cromatica: dos rects tenues rojo/cian corridos.
         float ca = s.chromatic * Mathf.Lerp(0.3f, 1f, intensity);
         GUI.color = new Color(1f, 0f, 0f, 0.06f + 0.10f * intensity);
-        GUI.DrawTexture(new Rect(rect.x - ca, rect.y, rect.width, rect.height), _tex);
+        GUI.DrawTexture(new Rect(rect.x - ca, rect.y, rect.width, rect.height), _maskTex, ScaleMode.StretchToFill, true);
         GUI.color = new Color(0f, 1f, 1f, 0.06f + 0.10f * intensity);
-        GUI.DrawTexture(new Rect(rect.x + ca, rect.y, rect.width, rect.height), _tex);
+        GUI.DrawTexture(new Rect(rect.x + ca, rect.y, rect.width, rect.height), _maskTex, ScaleMode.StretchToFill, true);
 
         GUI.color = prev;
     }
@@ -121,23 +121,51 @@ public class ArbmosDistortionHUD : MonoBehaviour
         var jolt = s.lethalColor;
         jolt.a = Mathf.Clamp01((0.12f + 0.30f * d01) * k);
         GUI.color = jolt;
-        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), _tex);
+        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), _whiteTex);
 
         int lines = Mathf.RoundToInt((4f + 16f * d01) * k);
         for (int i = 0; i < lines; i++)
         {
-            float y  = (float)rng.NextDouble() * Screen.height;
+            float y = (float)rng.NextDouble() * Screen.height;
             float bh = 2f + (float)rng.NextDouble() * 22f * d01;
             GUI.color = new Color(1f, 1f, 1f, Mathf.Clamp01((0.05f + (float)rng.NextDouble() * 0.20f * d01) * k));
-            GUI.DrawTexture(new Rect(0, y, Screen.width, bh), _tex);
+            GUI.DrawTexture(new Rect(0, y, Screen.width, bh), _whiteTex);
         }
         GUI.color = prev;
     }
+
+    private static Texture2D BuildSoftMask()
+    {
+        const int size = 128;
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            name = "ArbmosDistortionSoftMask",
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        var pixels = new Color32[size * size];
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float nx = ((x + 0.5f) / size) * 2f - 1f;
+            float ny = ((y + 0.5f) / size) * 2f - 1f;
+            float distance = Mathf.Sqrt(nx * nx + ny * ny);
+            float alpha = 1f - Mathf.SmoothStep(0.35f, 1f, distance);
+            alpha *= alpha;
+            pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(alpha * 255f));
+        }
+        texture.SetPixels32(pixels);
+        texture.Apply(false, true);
+        return texture;
+    }
+
 
     private void OnDisable()  => Shader.SetGlobalFloat(ID_DISTORT, 0f);
     private void OnDestroy()
     {
         Shader.SetGlobalFloat(ID_DISTORT, 0f);
+        if (_maskTex != null) Destroy(_maskTex);
         if (_instance == this) _instance = null;
     }
 }

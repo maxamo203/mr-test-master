@@ -4,11 +4,12 @@ using UnityEngine;
 // (ArbmosNetwork, spawn dirigido) y manejan la animacion (ArbmosAnimator). El
 // ArbmosDirector (server) los fija por jugador.
 //
-// Solo tres clips, como pidio el diseño: idle / running / chase (ver ArbmosAnimator).
+// El prefab usa tres variantes idle de aparición y un ciclo de persecución. Running se
+// conserva en red por compatibilidad, pero visualmente mantiene la pose idle elegida.
 public enum ArbmosState : byte
 {
     Idle    = 0,  // presente, mirando fijo al jugador (quieto)
-    Running = 1,  // se reposiciona / deriva hacia el jugador mientras drena cordura
+    Running = 1,  // deriva no letal; conserva la variante idle elegida
     Chasing = 2,  // secuencia letal: embiste al jugador (cordura en cero)
 }
 
