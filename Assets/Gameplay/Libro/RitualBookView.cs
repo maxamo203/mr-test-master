@@ -66,6 +66,8 @@ namespace Gameplay
         private float _radioLuz;
         private float _radioOscuridad;
         private float _oscuridad01;
+        private bool _preservarDuranteEmergencia;
+        private Coroutine _ocultarTrasEmergencia;
 
         public Vector3 PuntoDeLuz => transform.TransformPoint(_centroLocal);
         public float RadioAproximado => _radioLuz;
@@ -132,7 +134,10 @@ namespace Gameplay
                 SonarSegunOscuridad(antes, _oscuridad01);
             }
 
-            SetDisponible(_oscuridad01 < 1f - 1e-5f);
+            if (_oscuridad01 < 1f - 1e-5f)
+                SetDisponible(true);
+            else if (!_preservarDuranteEmergencia)
+                SetDisponible(false);
             ActualizarShader();
         }
 
@@ -178,10 +183,37 @@ namespace Gameplay
         public void SetDisponible(bool disponible)
         {
             Disponible = disponible;
+            if (disponible)
+            {
+                _preservarDuranteEmergencia = false;
+                if (_ocultarTrasEmergencia != null) StopCoroutine(_ocultarTrasEmergencia);
+                _ocultarTrasEmergencia = null;
+            }
+            SetRenderersVisible(disponible);
+        }
+
+        public void PreservarHastaAparicionDeVeleth(float segundos)
+        {
+            _preservarDuranteEmergencia = true;
+            SetRenderersVisible(true);
+            if (_ocultarTrasEmergencia != null) StopCoroutine(_ocultarTrasEmergencia);
+            _ocultarTrasEmergencia = StartCoroutine(OcultarTrasEmergencia(segundos));
+        }
+
+        private System.Collections.IEnumerator OcultarTrasEmergencia(float segundos)
+        {
+            yield return new WaitForSeconds(Mathf.Max(0f, segundos));
+            _preservarDuranteEmergencia = false;
+            SetRenderersVisible(false);
+            _ocultarTrasEmergencia = null;
+        }
+
+        private void SetRenderersVisible(bool visible)
+        {
             foreach (var renderer in _renderersLibro)
-                if (renderer != null) renderer.enabled = disponible;
+                if (renderer != null) renderer.enabled = visible;
             foreach (var renderer in _capasOscuridad)
-                if (renderer != null) renderer.enabled = disponible;
+                if (renderer != null) renderer.enabled = visible;
         }
 
         // API anterior mantenida para herramientas o escenas aun no reimportadas.
@@ -406,7 +438,7 @@ namespace Gameplay
         {
             if (_humo == null) return;
 
-            bool activo = Disponible && _oscuridad01 > 0.001f;
+            bool activo = (Disponible || _preservarDuranteEmergencia) && _oscuridad01 > 0.001f;
 
             var emission = _humo.emission;
             emission.rateOverTime = activo ? _humoTasaMaxima * _oscuridad01 : 0f;
@@ -473,3 +505,5 @@ namespace Gameplay
 #endif
     }
 }
+
+

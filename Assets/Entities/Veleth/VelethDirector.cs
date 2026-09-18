@@ -84,13 +84,22 @@ public class VelethDirector : MonoBehaviour
         _repathTimer = 0f;
         _grabTimer = 0f;
         CurrentTarget = 0;
-        _running = true;
-        Debug.Log("[Veleth] Invocada: comienza la persecucion inevitable.");
+        if (NearestAlivePlayer(_veleth.Position, out uint targetId, out Vector3 targetPos))
+        {
+            CurrentTarget = targetId;
+            Vector3 lookDirection = targetPos - _veleth.Position;
+            lookDirection.y = 0f;
+            if (lookDirection.sqrMagnitude > 1e-5f)
+                _veleth.SetRotationDirectly(Quaternion.LookRotation(lookDirection, Vector3.up));
+        }
+        StartCoroutine(StartHuntAfterEmergence(_veleth.BeginEmergence()));
+        Debug.Log("[Veleth] Invocada: emerge del libro antes de comenzar la persecucion.");
         return true;
     }
 
     public void StopRun()
     {
+        StopAllCoroutines();
         _running = false;
         CurrentTarget = 0;
         _path.Clear();
@@ -100,6 +109,18 @@ public class VelethDirector : MonoBehaviour
         _netId = 0;
     }
 
+    private System.Collections.IEnumerator StartHuntAfterEmergence(float emergenceDuration)
+    {
+        yield return new WaitForSeconds(Mathf.Max(0f, emergenceDuration));
+        if (_veleth == null || _netId == 0) yield break;
+        _path.Clear();
+        _pathIndex = 0;
+        _repathTimer = 0f;
+        _grabTimer = 0f;
+        CurrentTarget = 0;
+        _running = true;
+        Debug.Log("[Veleth] Emergencia finalizada: comienza la persecucion reptando.");
+    }
     private void Update()
     {
         if (!_running || _veleth == null) return;

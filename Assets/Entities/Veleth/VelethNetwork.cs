@@ -1,5 +1,6 @@
 using System.IO;
 using UnityEngine;
+using Gameplay;
 
 [RequireComponent(typeof(VelethEntity))]
 public class VelethNetwork : NetworkEntity
@@ -20,6 +21,8 @@ public class VelethNetwork : NetworkEntity
 
     public override void OnNetworkSpawn()
     {
+        _veleth.BeginEmergence();
+        RitualBookView.Active?.PreservarHastaAparicionDeVeleth(_veleth.BookDisappearDelay);
         VelethPresentation.PlayInvocation(_veleth.Position);
     }
 
@@ -75,4 +78,5 @@ public class VelethNetwork : NetworkEntity
             Quaternion.Slerp(_fromRelRot, _toRelRot, t)));
     }
 }
+
 

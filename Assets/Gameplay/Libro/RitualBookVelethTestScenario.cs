@@ -45,6 +45,7 @@ namespace Gameplay
 
         private RitualBookFlow _flow;
         private bool _hunting;
+        private bool _emerging;
         private bool _dead;
         private bool _normalInterval;
         private readonly List<Vector3> _path = new();
@@ -129,7 +130,7 @@ namespace Gameplay
 
         private void UpdateHunt()
         {
-            if (!_hunting || _dead || _veleth == null || _player == null) return;
+            if (!_hunting || _emerging || _dead || _veleth == null || _player == null) return;
 
             _repathTimer -= Time.deltaTime;
             if (_repathTimer <= 0f || _pathIndex >= _path.Count)
@@ -301,6 +302,7 @@ namespace Gameplay
             _flow = new RitualBookFlow(() => delay);
             _flow.Restart();
             _hunting = false;
+            _emerging = false;
             _dead = false;
             _aimingPlayers = 0;
             _path.Clear();
@@ -326,19 +328,35 @@ namespace Gameplay
         {
             if (_dead || _hunting || _veleth == null) return;
 
-            _book?.SetDisponible(false);
             Vector3 spawn = _book != null ? _book.PuntoDeLuz : Vector3.zero;
             spawn.y = 0f;
             _veleth.gameObject.SetActive(true);
             _veleth.SetPositionDirectly(spawn);
+            if (_player != null)
+            {
+                Vector3 lookDirection = _player.position - spawn;
+                lookDirection.y = 0f;
+                if (lookDirection.sqrMagnitude > 1e-5f)
+                    _veleth.SetRotationDirectly(Quaternion.LookRotation(lookDirection, Vector3.up));
+            }
             _veleth.SetState(VelethState.Hunting);
+            float emergenceDuration = _veleth.BeginEmergence();
+            _book?.PreservarHastaAparicionDeVeleth(_veleth.BookDisappearDelay);
             VelethPresentation.PlayInvocation(spawn);
             _hunting = true;
+            _emerging = true;
+            StartCoroutine(EmpezarCaceriaTrasEmergencia(emergenceDuration));
         }
 
 #if UNITY_EDITOR
         public void InvokeVelethForValidation() => InvokeVeleth();
 #endif
+
+        private System.Collections.IEnumerator EmpezarCaceriaTrasEmergencia(float segundos)
+        {
+            yield return new WaitForSeconds(Mathf.Max(0f, segundos));
+            _emerging = false;
+        }
 
         private void PrepareNavigationScenario()
         {
