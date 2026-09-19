@@ -71,7 +71,7 @@ public class AudioEventWatcher : MonoBehaviour
     private void AplicarMusicaDeEscena()
     {
         if (_escenaActual == SceneFlow.EscenaMenu) AudioManager.Musica(c => c.musicaMenu);
-        else if (_escenaActual == SceneFlow.EscenaEscaner) AudioManager.PararMusica();
+        else if (_escenaActual == SceneFlow.EscenaEscaner || _escenaActual == SceneFlow.EscenaEscanerAuto) AudioManager.PararMusica();
     }
 
     private Camera Cam

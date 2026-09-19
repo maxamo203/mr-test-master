@@ -157,6 +157,13 @@ namespace Gameplay
             SceneFlow.GoTo(SceneFlow.EscenaEscaner);
         }
 
+        // Escaneo automático (BETA): arma las paredes solo y después abre el editor del escáner.
+        private void IrAlEscanerAuto()
+        {
+            ScannerLaunchParams.EditScanName = null;
+            SceneFlow.GoTo(SceneFlow.EscenaEscanerAuto);
+        }
+
         // Arranca el sub-flujo Noche->Entorno para el modo dado (un jugador o host).
         private void ConfigurarPartida(GameSession.SessionMode mode)
         {
@@ -522,7 +529,7 @@ namespace Gameplay
 
             float rowH = 64f, gap = 10f;
             float listaY = 170f;
-            float listaH = vh - listaY - 44f - 58f - 20f;
+            float listaH = vh - listaY - 44f - 58f - 10f - 58f - 20f;   // lugar para los 2 botones
             var viewport = new Rect(Pad, listaY, vw - Pad * 2f, listaH);
             float contentH = _scans.Count * (rowH + gap);
 
@@ -555,6 +562,8 @@ namespace Gameplay
             }
             GUI.EndScrollView();
 
+            T.Boton(_nav, new Rect(Pad, vh - 44f - 58f - 10f - 58f, vw - Pad * 2f, 58f),
+                    "+ ESCANEO AUTOMÁTICO (BETA)", primario: false, IrAlEscanerAuto);
             T.Boton(_nav, new Rect(Pad, vh - 44f - 58f, vw - Pad * 2f, 58f),
                     "+ NUEVO ESCANEO", primario: true, () => IrAlEscaner(null));
         }

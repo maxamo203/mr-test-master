@@ -11,6 +11,8 @@ public static class SceneFlow
     public const string EscenaMenu    = "NightMenuScene";
     public const string EscenaJuego   = "SampleScene";
     public const string EscenaEscaner = "ScannerScene";
+    // Escaneo automático por profundidad (BETA): alternativa al escáner manual, ver docs/autoscan.
+    public const string EscenaEscanerAuto = "AutoScanScene";
 
     public static void GoTo(string escena)
     {
