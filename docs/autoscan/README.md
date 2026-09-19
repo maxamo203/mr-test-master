@@ -47,6 +47,9 @@ documentos de este directorio son los de ese proyecto; esta página lista lo que
   (base: `Assets/Prefabs/XR Origin Escaneo.prefab` + los componentes de `Assets/AutoScan`),
   agregarla a Build Settings y probar en dispositivo. Ver `docs/autoscan/wall-sources.md`
   y `tuning-menu.md` para los knobs.
+- En dev build, `ARSessionSetup` dibuja abajo un panel de diagnóstico de profundidad (modo pedido/actual,
+  soporte, textura, modo de fondo y keyword `ARCORE_ENVIRONMENT_DEPTH_ENABLED`): sirve para ver si la
+  oclusión está realmente activa en el dispositivo.
 - iOS (ARKit) sin probar: sólo se ejerció ARCore.
 - El HUD está en inglés y con su propio IMGUI; pasarlo a `MortuoriumTheme`/español es un paso
   posterior.

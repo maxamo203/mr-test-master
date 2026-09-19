@@ -48,9 +48,15 @@ would defeat comparing them. Switch deliberately; there's no undo.
   coverage and were being rejected); raise them back toward Hybrid's bar if that starts
   admitting phantoms.
 
-`FloorRaw`/`FloorConfirmed` are deliberately **pure**: no vertical-plane seeding, no blind
-RANSAC in the same pass, so each isolates the floor-boundary idea for a clean three-way
-comparison against `DepthOnly`/`PlanesOnly`/`Hybrid` on the same scan.
+`FloorRaw` is deliberately **pure**: no vertical-plane seeding, no blind RANSAC. So is
+`FloorConfirmed` by default, with one opt-in exception: `floorDepthFindsInteriorWalls` (off).
+
+**Interior walls.** The floor polygon has no edge where floor continues *behind* a wall (a
+hallway entrance, a partition), so a floor-only source never proposes it. With the knob turned on,
+`FloorConfirmed` also runs `DiscoverWalls` over the strict full-height cells that the
+confirmed floor-edge walls did not explain (cells within `wallRidgeClaimMargin` of them are
+dropped first, so a real wall's ridge doesn't spawn a parallel duplicate). `FloorRaw` has no
+depth, so it cannot find them.
 
 ## The floor's two-stage flow: sweep, confirm, build once
 

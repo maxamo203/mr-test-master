@@ -89,6 +89,7 @@ public static class AutoScanSceneBuilder
 
         SetObject(builder, "wallMaterial", AssetDatabase.LoadAssetAtPath<Material>(WallMatPath));
         ApplyMapperValues(mapper);
+        ApplySourceSceneValues(planeManager, root.GetComponent<CornerDetector>(), builder);
 
         EditorSceneManager.SaveScene(scene, ScenePath);
         AddToBuildSettings();
@@ -103,7 +104,8 @@ public static class AutoScanSceneBuilder
     }
 
     // A plane prefab whose material is the AutoScan grid shader, with the classification
-    // colouring; ARPlaneManager instantiates one of these per detected plane.
+    // colouring and the boundary LineRenderer the source project's plane prefab has;
+    // ARPlaneManager instantiates one of these per detected plane.
     static GameObject EnsurePlanePrefab()
     {
         Directory.CreateDirectory(PlanePrefabDir);
@@ -120,6 +122,12 @@ public static class AutoScanSceneBuilder
         go.AddComponent<MeshFilter>();
         go.AddComponent<MeshCollider>();
         go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+        var line = go.AddComponent<LineRenderer>();
+        line.enabled = false;
+        line.useWorldSpace = false;
+        line.loop = true;
+        line.widthMultiplier = 0.01f;
+        line.sharedMaterial = AssetDatabase.GetBuiltinExtraResource<Material>("Default-Line.mat");
         go.AddComponent<ARPlane>();
         go.AddComponent<ARPlaneMeshVisualizer>();
         go.AddComponent<PlaneClassificationVisualizer>();
@@ -149,6 +157,26 @@ public static class AutoScanSceneBuilder
         so.ApplyModifiedPropertiesWithoutUndo();
         if (missing.Count > 0)
             Debug.LogWarning("[AutoScan] Campos del mapper sin aplicar: " + string.Join(", ", missing));
+    }
+
+    // Values the standalone project's scene carries that the code defaults do not.
+    static void ApplySourceSceneValues(ARPlaneManager planes, CornerDetector corners, RoomBuilder builder)
+    {
+        SetNumber(planes, "m_DetectionMode", 3);
+        SetNumber(corners, "minWallAngle", 35);
+        SetNumber(corners, "minLinePoints", 25);
+        SetNumber(corners, "maxDepth", 5);
+        SetNumber(builder, "duplicateRadius", 0.8f);
+    }
+
+    static void SetNumber(Object target, string field, float value)
+    {
+        var so = new SerializedObject(target);
+        var p = so.FindProperty(field);
+        if (p == null) { Debug.LogWarning($"[AutoScan] {target.GetType().Name}.{field} no existe."); return; }
+        if (p.propertyType == SerializedPropertyType.Float) p.floatValue = value;
+        else p.intValue = (int)value;
+        so.ApplyModifiedPropertiesWithoutUndo();
     }
 
     static void SetObject(Object target, string field, Object value)

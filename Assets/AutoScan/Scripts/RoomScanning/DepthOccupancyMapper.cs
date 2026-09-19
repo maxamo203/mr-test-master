@@ -155,6 +155,10 @@ namespace Mortuorium.RoomScanning
                  "occupancy, for FloorConfirmed. Lower than seedMinDensityFraction by " +
                  "default — the floor boundary is already trusted geometry.")]
         [SerializeField] float floorSeedMinDensityFraction = 0.12f;
+        [Tooltip("FloorConfirmed only: after confirming the floor-boundary edges, also look for " +
+                 "full-height walls the floor does not outline — an interior wall or hallway " +
+                 "entrance with floor continuing behind it. Off: floor edges are the only walls.")]
+        [SerializeField] bool floorDepthFindsInteriorWalls = false;
 
         [Header("Room height (automatic ceiling estimate)")]
         [Tooltip("|normal.y| above this ⇒ horizontal surface (floor / ceiling / table top).")]
@@ -334,6 +338,7 @@ namespace Mortuorium.RoomScanning
             public float floorEdgeMinLength;
             public int floorSeedMinCells;
             public float floorSeedMinDensityFraction;
+            public bool floorDepthFindsInteriorWalls;
             public int minVoxelHits, minSurfaceHits;
             public float surfaceFillFraction;
             public int minSurfaceVoxels;
@@ -353,6 +358,7 @@ namespace Mortuorium.RoomScanning
             wallRidgeClaimMargin = 0.30f, wallRidgeCoreKeep = 0.08f,
             autoAnchorHits = 3, autoAnchorTolerance = 0.20f, autoAnchorMissGrace = 1,
             floorEdgeMinLength = 0.3f, floorSeedMinCells = 2, floorSeedMinDensityFraction = 0.12f,
+            floorDepthFindsInteriorWalls = false,
             minVoxelHits = 3, minSurfaceHits = 2,
             surfaceFillFraction = 0.5f,
             minSurfaceVoxels = 6,
@@ -374,6 +380,7 @@ namespace Mortuorium.RoomScanning
             autoAnchorMissGrace = autoAnchorMissGrace,
             floorEdgeMinLength = floorEdgeMinLength,
             floorSeedMinCells = floorSeedMinCells, floorSeedMinDensityFraction = floorSeedMinDensityFraction,
+            floorDepthFindsInteriorWalls = floorDepthFindsInteriorWalls,
             minVoxelHits = minVoxelHits, minSurfaceHits = minSurfaceHits,
             surfaceFillFraction = surfaceFillFraction,
             minSurfaceVoxels = minSurfaceVoxels,
@@ -396,6 +403,7 @@ namespace Mortuorium.RoomScanning
             autoAnchorMissGrace = t.autoAnchorMissGrace;
             floorEdgeMinLength = t.floorEdgeMinLength;
             floorSeedMinCells = t.floorSeedMinCells; floorSeedMinDensityFraction = t.floorSeedMinDensityFraction;
+            floorDepthFindsInteriorWalls = t.floorDepthFindsInteriorWalls;
             minVoxelHits = t.minVoxelHits; minSurfaceHits = t.minSurfaceHits;
             surfaceFillFraction = t.surfaceFillFraction;
             minSurfaceVoxels = t.minSurfaceVoxels;
@@ -564,6 +572,16 @@ namespace Mortuorium.RoomScanning
                 {
                     var ptsLoose = CollectCells(h * seedMinSpanFraction, h);
                     LastSeededWalls = SeedFloorBoundary(edges, ptsLoose, segments);
+
+                    // The floor polygon has no edge where floor continues behind a wall, so
+                    // those walls are only visible to depth: discover them from the strict
+                    // full-height cells the floor-edge walls did not already explain.
+                    if (floorDepthFindsInteriorWalls)
+                    {
+                        var floorWalls = new List<(Vector2 a, Vector2 b)>(segments);
+                        pts.RemoveAll(p => NearAnySegment(p, floorWalls, Mathf.Max(lineInlierDist, wallRidgeClaimMargin)));
+                        LastDiscoveredWalls = DiscoverWalls(pts, segments);
+                    }
                 }
             }
             else

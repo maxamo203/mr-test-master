@@ -105,6 +105,8 @@ namespace Mortuorium.RoomScanning
                 "Occupancy cells needed to confirm a floor-boundary edge, for FLOOR+DEPTH only (separate from the vertical-plane bar, so this never affects HYBRID). Down: trusts the floor more, confirms edges with weaker depth backing. Up: needs stronger evidence, closer to HYBRID's rigor.");
             FloatRow("floor confirm density", ref _knobs.floorSeedMinDensityFraction, 0.02f, 0.6f,
                 "Fraction of a floor-boundary edge's length that must be backed by occupancy, for FLOOR+DEPTH only. Down: confirms an edge from partial/patchy depth coverage — more aggressive trust in the floor. Up: needs the edge backed almost end-to-end.");
+            BoolRow("floor: find interior walls", ref _knobs.floorDepthFindsInteriorWalls,
+                "FLOOR+DEPTH only. Also builds full-height walls the floor does not outline (interior walls, hallway entrances with floor behind). On: catches them. Off: floor edges are the only walls, interior walls are missed.");
 
             GUILayout.Label("Anchoring", _head);
             IntRow("anchor hits", ref _knobs.autoAnchorHits, 1, 6,
