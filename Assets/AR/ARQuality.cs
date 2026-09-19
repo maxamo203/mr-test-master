@@ -116,6 +116,14 @@ public static class ARQuality
     {
         bool esMenu = escena == SceneFlow.EscenaMenu;
 
+        // El escaneo automático es una operación puntual donde la precisión pesa más que la
+        // batería (ver nota arriba): corre con los valores del prefab, sin el nivel de calidad.
+        if (escena == SceneFlow.EscenaEscanerAuto)
+        {
+            Screen.sleepTimeout = SleepTimeout.NeverSleep;
+            return;
+        }
+
         AplicarFrameRate(esMenu ? MenuFps : TargetFps);
 
         // En las escenas AR el jugador no toca la pantalla (Cardboard, o apunta con la

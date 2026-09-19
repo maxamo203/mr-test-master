@@ -20,6 +20,7 @@ public static class AutoScanSceneBuilder
     const string PlanePrefabPath = PlanePrefabDir + "/AutoScan Plane.prefab";
     const string PlaneMatPath   = PlanePrefabDir + "/AutoScan Plane.mat";
     const string WallMatPath    = "Assets/Shaders/WallEdgeGrid.mat";
+    const string PointCloudPrefabPath = PlanePrefabDir + "/AutoScan Point Cloud.prefab";
 
     // Tuned DepthOccupancyMapper values from the standalone project (docs/autoscan/scene-values.md).
     static readonly (string name, float value)[] MapperValues =
@@ -74,6 +75,11 @@ public static class AutoScanSceneBuilder
         root.name = "XR Origin AutoScan";
         RemovePrefabComponents(root);
 
+        // The manual scanner's prefab scales its camera 10x. ARFoundation multiplies environment
+        // depth by that scale, which pushes every real surface 10x too far and kills occlusion.
+        var cam = root.GetComponentInChildren<Camera>();
+        if (cam != null) cam.transform.localScale = Vector3.one;
+
         var planeManager = root.GetComponent<ARPlaneManager>();
         SetObject(planeManager, "m_PlanePrefab", planePrefab);
 
@@ -90,10 +96,60 @@ public static class AutoScanSceneBuilder
         SetObject(builder, "wallMaterial", AssetDatabase.LoadAssetAtPath<Material>(WallMatPath));
         ApplyMapperValues(mapper);
         ApplySourceSceneValues(planeManager, root.GetComponent<CornerDetector>(), builder);
+        AddSourceSceneExtras(root);
 
         EditorSceneManager.SaveScene(scene, ScenePath);
         AddToBuildSettings();
         Debug.Log($"[AutoScan] Escena creada en {ScenePath} y agregada a Build Settings.");
+    }
+
+    // The standalone scene also has an ARPointCloudManager and the occlusion test cube next
+    // to the plane manager; the game's prefab has neither. Idempotent, works on the open scene.
+    [MenuItem("Mortuorium/AutoScan/Ensure Scene Extras (point cloud, occlusion cube)")]
+    public static void EnsurePointCloudInOpenScene()
+    {
+        var planes = Object.FindFirstObjectByType<ARPlaneManager>();
+        if (planes == null)
+        {
+            EditorUtility.DisplayDialog("AutoScan", "No hay ARPlaneManager en la escena abierta.", "OK");
+            return;
+        }
+        AddSourceSceneExtras(planes.gameObject);
+        EditorSceneManager.MarkSceneDirty(planes.gameObject.scene);
+        EditorSceneManager.SaveScene(planes.gameObject.scene);
+        Debug.Log("[AutoScan] Extras listos en " + planes.gameObject.scene.path);
+    }
+
+    static void AddSourceSceneExtras(GameObject root)
+    {
+        if (!root.TryGetComponent<ARPointCloudManager>(out var manager))
+            manager = root.AddComponent<ARPointCloudManager>();
+        SetObject(manager, "m_PointCloudPrefab", EnsurePointCloudPrefab());
+        if (!root.TryGetComponent<OcclusionCubePlacer>(out _))
+            root.AddComponent<OcclusionCubePlacer>();
+    }
+
+    static GameObject EnsurePointCloudPrefab()
+    {
+        Directory.CreateDirectory(PlanePrefabDir);
+
+        var go = new GameObject("AutoScan Point Cloud");
+        var ps = go.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.playOnAwake = false;
+        main.loop = false;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.startSize = 0.02f;
+        var emission = ps.emission; emission.enabled = false;
+        var shape = ps.shape; shape.enabled = false;
+        var renderer = go.GetComponent<ParticleSystemRenderer>();
+        renderer.sharedMaterial = AssetDatabase.GetBuiltinExtraResource<Material>("Default-ParticleSystem.mat");
+        go.AddComponent<ARPointCloud>();
+        go.AddComponent<ARPointCloudParticleVisualizer>();
+
+        var prefab = PrefabUtility.SaveAsPrefabAsset(go, PointCloudPrefabPath);
+        Object.DestroyImmediate(go);
+        return prefab;
     }
 
     static void RemovePrefabComponents(GameObject root)

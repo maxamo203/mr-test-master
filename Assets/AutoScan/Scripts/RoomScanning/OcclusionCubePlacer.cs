@@ -31,6 +31,8 @@ namespace Mortuorium.RoomScanning
 
         void Awake()
         {
+            // A diagnostic tool: not part of the shipped scan flow.
+            if (!Debug.isDebugBuild) { enabled = false; return; }
             if (arRaycast == null) arRaycast = GetComponent<ARRaycastManager>();
         }
 
@@ -109,6 +111,7 @@ namespace Mortuorium.RoomScanning
 
         void OnGUI()
         {
+            if (!enabled) return;
             EnsureStyle();
 
             if (_placing)
