@@ -53,6 +53,10 @@ documentos de este directorio son los de ese proyecto; esta página lista lo que
 
 ## Armado de `AutoScanScene` (Editor)
 
+**Atajo:** menú **Mortuorium > AutoScan > Build AutoScanScene** (`Assets/AutoScan/Editor/`) hace todo lo de
+abajo solo: escena, prefab de plano, valores del mapper y Build Settings. Es re-ejecutable.
+Sin la escena en Build Settings el botón del menú sólo loguea un error y no navega.
+
 Base: `Assets/Prefabs/XR Origin Escaneo.prefab` (cámara AR, fondo, `AROcclusionManager`) + un
 `ARSession`. En el GameObject del XR Origin agregar: `ARSessionSetup`, `ARPlaneManager`
 (Horizontal + Vertical; su plane prefab lleva `PlaneClassificationVisualizer`), `ARAnchorManager`,

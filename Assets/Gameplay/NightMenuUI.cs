@@ -160,6 +160,13 @@ namespace Gameplay
         // Escaneo automático (BETA): arma las paredes solo y después abre el editor del escáner.
         private void IrAlEscanerAuto()
         {
+            // Sin la escena en Build Settings, LoadScene sólo loguea y el botón parece muerto.
+            if (!Application.CanStreamedLevelBeLoaded(SceneFlow.EscenaEscanerAuto))
+            {
+                Debug.LogError($"[NightMenuUI] '{SceneFlow.EscenaEscanerAuto}' no está en Build Settings. " +
+                               "Editor: Mortuorium > AutoScan > Build AutoScanScene.");
+                return;
+            }
             ScannerLaunchParams.EditScanName = null;
             SceneFlow.GoTo(SceneFlow.EscenaEscanerAuto);
         }
