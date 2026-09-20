@@ -20,6 +20,7 @@ Shader "AR/DarknessOverlay"
             uniform float  _FlashlightCosOuter;
             uniform float  _FlashlightCosInner;
             uniform float  _FlashlightIntensity;
+            uniform float  _FlashlightFlicker;
             uniform float  _OverlayDarkness;
             uniform float4 _FlashlightColor;
 
@@ -45,7 +46,9 @@ Shader "AR/DarknessOverlay"
                 if (_FlashlightIntensity > 0.001)
                 {
                     float coneCos = dot(viewRay, _FlashlightDir.xyz);
-                    coneFactor = smoothstep(_FlashlightCosOuter, _FlashlightCosInner, coneCos);
+                    // _FlashlightFlicker (0..1) es el titileo por batería baja: un dip cierra
+                    // parcialmente el agujero de la linterna, no sólo su brillo sobre la malla.
+                    coneFactor = smoothstep(_FlashlightCosOuter, _FlashlightCosInner, coneCos) * _FlashlightFlicker;
                 }
                 float alpha = _OverlayDarkness * (1.0 - coneFactor);
                 return fixed4(0, 0, 0, alpha);

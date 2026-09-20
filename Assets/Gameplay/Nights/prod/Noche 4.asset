@@ -13,22 +13,23 @@ MonoBehaviour:
   m_Name: Noche 4
   m_EditorClassIdentifier:
   displayName: Noche 4
-  briefing: Algo mas te observa. Quedarte quieto lo invoca.
+  briefing: Algo mas te observa. Quedarte quieto lo invoca, y tu cordura no vuelve.
+  nightDurationSeconds: 330
   sorkenActive: 1
-  attemptIntervalMin: 13
-  attemptIntervalMax: 24
-  entryRepelSeconds: 3
-  entryGraceSeconds: 5
+  attemptIntervalMin: 19
+  attemptIntervalMax: 30
+  entryRepelSeconds: 3.5
+  entryGraceSeconds: 9.5
   entryTriggerDistance: 3
   chaseRepelSeconds: 5.5
-  sorkenChaseSpeed: 3
-  sorkenRetreatSpeed: 3.5
-  grabRange: 1.3
-  flashlightMaxCharge: 85
-  flashlightDrainPerSecond: 2.5
+  sorkenChaseSpeed: 2.9
+  sorkenRetreatSpeed: 4.1
+  grabRange: 1.25
+  flashlightMaxCharge: 105
+  flashlightDrainPerSecond: 2
   sanityMax: 100
-  flashlightOffThreshold: 4.5
-  sanityDrainPerSecond: 5.5
+  flashlightOffThreshold: 6
+  sanityDrainPerSecond: 2.2
   arbmosActive: 1
   arbmosStillInvokeSeconds: 6
   arbmosStillRadius: 0.5
@@ -44,10 +45,29 @@ MonoBehaviour:
   arbmosLethalStalkSeconds: 3.5
   arbmosLethalChaseSpeed: 3.5
   arbmosGrabRange: 1.2
-  flashlightConeAngleDeg: 30
-  flashlightRange: 8
-  initialAttemptDelay: 4
+  bookActive: 1
+  bookEventDelayMin: 33
+  bookEventDelayMax: 50
+  bookConsumeSeconds: 8
+  bookDefenseSeconds: 4
+  velethChaseSpeed: 3.4
+  velethGrabRange: 1.15
+  velethRepathSeconds: 0.22
+  velethGrabHoldSeconds: 0.8
+  flashlightConeAngleDeg: 29
+  flashlightRange: 7.5
+  initialAttemptDelay: 8
+  emergeTimeoutSeconds: 15
+  retreatSeconds: 1.5
+  grabHoldSeconds: 1.6
   flickerAimAngle: 16
-  flickerDistance: 5
+  flickerDistance: 5.5
   batterySpawnRateMultiplier: 0.85
-  batteryChanceMods: []
+  batteryChanceMods:
+  - rarityIndex: 2
+    chanceMultiplier: 0.8
+  collectiblesActive: 1
+  collectibleInitialDelaySeconds: 12
+  collectibleIntervalMin: 45
+  collectibleIntervalMax: 80
+  collectibleMaxPerNight: 7

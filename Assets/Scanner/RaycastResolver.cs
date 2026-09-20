@@ -43,6 +43,16 @@ namespace Scanner
         private int _lidarLayerMask;
         private static readonly List<ARRaycastHit> _arHits = new();
 
+        // El resolver vive en ScannerScene (en ScannerRoot). En SampleScene no existe,
+        // asi que quien lo necesite lo crea con esto — y recien cuando lo necesita, para
+        // que Camera.main y ARRaycastManager ya esten resueltos.
+        public static RaycastResolver Ensure()
+        {
+            if (Instance != null) return Instance;
+            new GameObject("RaycastResolver").AddComponent<RaycastResolver>();
+            return Instance;
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(this); return; }

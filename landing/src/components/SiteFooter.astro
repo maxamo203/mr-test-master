@@ -1,0 +1,126 @@
+---
+/**
+ * Pie del sitio. "El ritual no debe parar" es el mismo subtítulo que usa el
+ * menú principal del juego (NightMenuUI), a propósito.
+ */
+import { Image } from 'astro:assets';
+import wordmark from '../assets/wordmark.png';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="foot">
+  <div class="wrap foot__inner">
+    <div class="foot__brand">
+      <Image
+        class="foot__wordmark"
+        src={wordmark}
+        alt="Mortuorium"
+        width={460}
+        widths={[280, 460]}
+        sizes="14rem"
+        loading="lazy"
+      />
+      <p class="foot__creed">El ritual no debe parar</p>
+    </div>
+
+    <div class="foot__meta">
+      <!-- <a href="https://www.mortuorium.com">www.mortuorium.com</a> -->
+      <a
+        class="foot__ig"
+        href="https://www.instagram.com/mortuorium_unlam/"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="5" />
+          <circle cx="12" cy="12" r="4" />
+          <circle cx="17.2" cy="6.8" r="1" fill="currentColor" stroke="none" />
+        </svg>
+        @mortuorium_unlam</a
+      >
+      <a
+        class="foot__ig"
+        href="https://www.instagram.com/unlamoficial/"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="5" />
+          <circle cx="12" cy="12" r="4" />
+          <circle cx="17.2" cy="6.8" r="1" fill="currentColor" stroke="none" />
+        </svg>
+        @unlamoficial</a
+      >
+      <span class="foot__copy">© {year} Mortuorium · Equipo 112</span>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .foot {
+    border-top: 1px solid var(--rule-soft);
+    padding: clamp(2.5rem, 6vh, 4rem) var(--pad-x);
+    background-color: var(--bg-alt);
+  }
+
+  .foot__inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+
+  .foot__wordmark {
+    width: 14rem;
+    max-width: 60vw;
+    height: auto;
+    opacity: 0.85;
+  }
+
+  .foot__creed {
+    margin-top: 0.7rem;
+    color: var(--text-faint);
+    font-size: 0.85em;
+  }
+
+  .foot__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .foot__ig {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--text-muted);
+  }
+
+  .foot__ig svg {
+    width: 1em;
+    height: 1em;
+    flex: none;
+  }
+
+  @media (min-width: 45rem) {
+    .foot__ig {
+      justify-content: flex-end;
+    }
+  }
+
+  .foot__copy {
+    color: var(--text-disabled);
+  }
+
+  @media (min-width: 45rem) {
+    .foot__meta {
+      text-align: right;
+    }
+  }
+</style>

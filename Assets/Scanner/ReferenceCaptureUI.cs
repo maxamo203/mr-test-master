@@ -31,6 +31,10 @@ namespace Scanner
         [Tooltip("Distancia (m) usada para estimar el tamaño si el raycast no toca nada.")]
         [SerializeField] private float _fallbackDistance = 1.5f;
 
+        [Tooltip("Opacidad (0-1) del fragmento capturado como guía fantasma mientras se " +
+                 "busca la zona en el entorno, para reencuadrar la cámara sobre el punto físico.")]
+        [SerializeField, Range(0.1f, 0.8f)] private float _ghostAlpha = 0.35f;
+
         // Rango del ancho real, en cm. El SLIDER llega hasta SliderMaxCm (lo común);
         // por TEXTO se puede ingresar hasta MaxCm (más grande) si hiciera falta.
         private const float MinCm = 2f, SliderMaxCm = 100f, MaxCm = 300f;
@@ -49,6 +53,17 @@ namespace Scanner
         private float     _widthMeters;
         private bool      _selInit;
 
+        // Orientación física estimada al capturar (por hacia dónde miraba la cámara:
+        // al piso = horizontal, de frente = pared). ARImageAnchor la confirma con la
+        // detección real; se guarda con el escaneo para que todas las sesiones deriven
+        // el rumbo del mapa con la misma regla.
+        private ImageAnchorPose.Orientacion _orientacion;
+
+        // Chequeo de calidad del recorte (detalle / cobertura / simetría). Se calcula
+        // una vez al capturar; el aviso se muestra en la fase de confirmar, sin
+        // bloquear (el jugador decide si recaptura).
+        private string _avisoCalidad;
+
         // Edición numérica del ancho (teclado nativo en device / TextField en editor).
         private bool  _editing;
         private string _editText = "";
@@ -65,6 +80,24 @@ namespace Scanner
             if (_imageAnchor == null) _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
             if (_arCamera == null) _arCamera = Camera.main;
             if (!EnhancedTouchSupport.enabled) EnhancedTouchSupport.Enable();
+        }
+
+        // Al ENTRAR A EDITAR un escaneo guardado, ScanLoader ya registró su imagen de
+        // referencia y ARImageAnchor ya está buscándola: lo que falta es reencontrarla
+        // para reubicarse. Arrancar en Adjust (capturar una imagen nueva) escondía esa
+        // búsqueda — ni el fantasma de la imagen guardada ni el cartel de "buscando la
+        // zona" aparecían, y parecía que el escáner no reconocía nada. ScannerSceneBootstrap
+        // carga el escaneo en su Start, así que esto va en el frame siguiente.
+        private IEnumerator Start()
+        {
+            yield return null;
+            if (_phase == Phase.Adjust && !_busy && CapturedReference.HasImage &&
+                _imageAnchor != null && _imageAnchor.HasReferenceImage && !_imageAnchor.IsFound)
+            {
+                EnsureSelInit();
+                _widthMeters = CapturedReference.WidthMeters;
+                _phase = Phase.Waiting;
+            }
         }
 
         private void EnsureSelInit()
@@ -171,7 +204,8 @@ namespace Scanner
         {
             if (_phase == Phase.Adjust)
             {
-                if (CaptureBtn().Contains(p)) StartCoroutine(CaptureRoutine());
+                if (CaptureBtn().Contains(p))        StartCoroutine(CaptureRoutine());
+                else if (SinImagenBtn().Contains(p)) CalibrarSinImagen();
             }
             else if (_phase == Phase.Confirm)
             {
@@ -179,6 +213,10 @@ namespace Scanner
                 else if (RecaptureBtn().Contains(p)) { CommitEdit(); BackToAdjust(); }
                 else if (ConfirmBtn().Contains(p))   { CommitEdit(); Confirm(); }
                 else if (_editing)                   CommitEdit();   // tap afuera confirma
+            }
+            else if (_phase == Phase.Waiting)
+            {
+                if (CaptureBtn().Contains(p)) RecapturarDesdeEspera();
             }
         }
 
@@ -261,6 +299,15 @@ namespace Scanner
                                        Screen.height - (_sel.y + _sel.height * 0.5f));
             _widthMeters = EstimateWidthMeters(centerBL, w);
 
+            // Orientación: mirando al piso/mesa (o al techo) la imagen es horizontal;
+            // mirando de frente, es una pared. Es sólo la estimación inicial.
+            _orientacion = _arCamera != null
+                ? ImageAnchorPose.DesdeCamara(_arCamera.transform.forward)
+                : ImageAnchorPose.Orientacion.Desconocida;
+
+            // Calidad del recorte: una pasada sobre una versión reducida a gris.
+            _avisoCalidad = ReferenceImageQuality.Analizar(_fragment.GetPixels32(), w, h).Aviso;
+
             _phase = Phase.Confirm;
             _busy = false;
         }
@@ -284,6 +331,23 @@ namespace Scanner
             return Mathf.Clamp(meters, MinCm / 100f, MaxCm / 100f);
         }
 
+        // ── Escape: calibrar sin la imagen ───────────────────────────────────────
+        // El jugador no tiene (o perdió) la imagen física. Centramos el 0,0 del mapa
+        // en el punto que está apuntando y pasamos a la fase de ajuste manual, donde
+        // lo acomoda con el gizmo. Ver ManualCalibration.
+        private string _errorSinImagen;
+
+        private void CalibrarSinImagen()
+        {
+            var fsm = ScanStateMachine.Instance;
+            if (fsm == null) return;
+
+            if (!ManualCalibration.Ensure().CentrarBajoLaMira(out _errorSinImagen)) return;
+
+            _errorSinImagen = null;
+            fsm.SetMode(ScannerMode.Origin_Adjust);
+        }
+
         private void BackToAdjust()
         {
             if (_fragment != null) { Destroy(_fragment); _fragment = null; }
@@ -293,10 +357,19 @@ namespace Scanner
         private void Confirm()
         {
             if (_fragment == null) return;
-            CapturedReference.Set(_fragment, _widthMeters);
-            _imageAnchor.AddReferenceImage(_fragment, "captura", _widthMeters);
+            CapturedReference.Set(_fragment, _widthMeters, _orientacion);
+            _imageAnchor.AddReferenceImage(_fragment, "captura", _widthMeters, orientacion: _orientacion);
             _fragment = null; // ahora es propiedad de CapturedReference
             _phase = Phase.Waiting;
+        }
+
+        // Desde "buscando la zona…": el jugador se dio cuenta de que el recorte no
+        // sirve (o el sistema AR lo rechazó) y vuelve a encuadrar. Se corta la
+        // búsqueda para que una detección tardía no ancle con la imagen vieja.
+        private void RecapturarDesdeEspera()
+        {
+            _imageAnchor.StopTracking();
+            BackToAdjust();
         }
 
         // ── Dibujo ───────────────────────────────────────────────────────────────
@@ -326,10 +399,23 @@ namespace Scanner
 
             if (_phase == Phase.Waiting)
             {
+                DrawGhostOverlay();
+
                 var r = new Rect(0, sh * 0.45f, sw, sh * 0.1f);
                 T.Fill(r, new Color(0f, 0f, 0f, 0.6f));
-                GUI.Label(r, "buscando la zona en el entorno…",
+                // Mientras junta muestras de la pose se avisa que ya la vio: así el
+                // jugador no mueve el celular justo cuando está afinando.
+                bool afinando = _imageAnchor != null && _imageAnchor.MuestrasActuales > 0;
+                GUI.Label(r, afinando ? "Imagen encontrada, afinando la pose… no muevas el celular"
+                                      : "Buscando la zona en el entorno…",
                           T.Estilo(T.FElite, FsBtn, T.Cream, TextAnchor.MiddleCenter));
+
+                // El sistema AR rechazó el recorte (poco detalle): avisar y ofrecer
+                // recapturar en vez de dejar al jugador buscando para siempre.
+                string aviso = _imageAnchor != null ? _imageAnchor.AvisoImagen : null;
+                if (!string.IsNullOrEmpty(aviso))
+                    DrawAviso(aviso, CaptureBtn().y - sh * 0.075f);
+                DrawBtn(CaptureBtn(), "RECAPTURAR", primario: !string.IsNullOrEmpty(aviso));
                 return;
             }
 
@@ -343,16 +429,39 @@ namespace Scanner
                 // Esquina para redimensionar (tan) + guía de las 4 esquinas.
                 T.Fill(HandleRect(), T.Tan);
 
-                DrawTopLabel("ajustá el recuadro sobre una zona con detalle y tocá CAPTURAR");
+                DrawTopLabel("Ajustá el recuadro sobre una zona con detalle y tocá CAPTURAR");
                 DrawBtn(CaptureBtn(), "CAPTURAR", primario: true);
+
+                // Retícula mínima al centro: el escape de abajo ancla el mapa donde
+                // apunta, así que hay que ver a dónde se está apuntando.
+                DrawMira();
+                DrawBtn(SinImagenBtn(), "NO TENGO LA IMAGEN", primario: false);
+                if (!string.IsNullOrEmpty(_errorSinImagen))
+                {
+                    var e = SinImagenBtn();
+                    GUI.Label(new Rect(e.x, e.y - Screen.height * 0.035f, e.width, Screen.height * 0.03f),
+                              _errorSinImagen,
+                              T.Estilo(T.FMono, FsLabel, T.Red, TextAnchor.MiddleCenter));
+                }
             }
             else // Confirm
             {
-                DrawTopLabel("ajustá el ancho real de la imagen y confirmá");
+                DrawTopLabel("Ajustá el ancho real de la imagen y confirmá");
 
                 // Panel inferior para leer los controles sobre la cámara/preview.
                 float panelTop = SliderRow().y - sh * 0.05f;
                 T.Fill(new Rect(0, panelTop, sw, sh - panelTop), new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.82f));
+
+                // Orientación estimada (el jugador la ve y, si no coincide, sabe que tiene
+                // que capturar mirando al piso o de frente a la pared) + aviso de calidad.
+                float yInfo = panelTop - sh * 0.04f;
+                GUI.Label(new Rect(0, yInfo, sw, sh * 0.03f),
+                          _orientacion == ImageAnchorPose.Orientacion.Vertical
+                              ? "IMAGEN EN PARED (vertical)"
+                              : "IMAGEN EN PISO / MESA (horizontal)",
+                          T.Estilo(T.FMono, FsLabel, T.Muted, TextAnchor.MiddleCenter));
+                if (!string.IsNullOrEmpty(_avisoCalidad))
+                    DrawAviso(_avisoCalidad, yInfo - sh * 0.075f);
 
                 // Etiqueta + slider + input numérico (sin botones +/−).
                 var row = SliderRow();
@@ -410,6 +519,22 @@ namespace Scanner
             }
         }
 
+        // Fragmento capturado, semi-transparente, en el mismo rectángulo donde se tomó:
+        // guía para reencuadrar la cámara sobre el punto físico exacto mientras
+        // ARImageAnchor intenta reengancharlo. _sel no se mueve en esta fase (no hay
+        // drag activo), así que queda fijo como referencia en pantalla.
+        private void DrawGhostOverlay()
+        {
+            if (!CapturedReference.HasImage) return;
+
+            var prevColor = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, _ghostAlpha);
+            GUI.DrawTexture(_sel, CapturedReference.Texture, ScaleMode.StretchToFill);
+            GUI.color = prevColor;
+
+            T.Borde(_sel, T.Cream, Mathf.Max(2f, Screen.height * 0.003f));
+        }
+
         // ── Layout (px reales) ───────────────────────────────────────────────────
         private float Hsz() => Mathf.Max(64f, Screen.height * 0.06f);
         private Rect HandleRect()
@@ -423,6 +548,13 @@ namespace Scanner
 
         // Adjust: un botón CAPTURAR centrado.
         private Rect CaptureBtn() => new Rect(Screen.width * 0.25f, BtnY, Screen.width * 0.5f, BtnH);
+
+        // Adjust: escape "no tengo la imagen", arriba de CAPTURAR y más chico (es la
+        // salida secundaria; el camino bueno sigue siendo capturar la referencia).
+        private float SinImagenH => BtnH * 0.72f;
+        private Rect SinImagenBtn() => new Rect(Screen.width * 0.18f,
+                                                BtnY - SinImagenH - Screen.height * 0.018f,
+                                                Screen.width * 0.64f, SinImagenH);
 
         // Confirm: RECAPTURAR (izq) + CONFIRMAR (der).
         private Rect RecaptureBtn() => new Rect(Screen.width * 0.06f, BtnY, Screen.width * 0.42f, BtnH);
@@ -444,11 +576,48 @@ namespace Scanner
             GUI.Label(r, label, T.Estilo(T.FBebas, FsBtn, T.Cream, TextAnchor.MiddleCenter));
         }
 
+        // Aviso sobre la imagen (calidad del recorte / rechazo del sistema AR): franja
+        // oscura con texto dorado, a 2 líneas, en px reales. `y` es el borde superior.
+        private void DrawAviso(string texto, float y)
+        {
+            var r = new Rect(Screen.width * 0.06f, y, Screen.width * 0.88f, Screen.height * 0.07f);
+            T.Fill(r, new Color(0f, 0f, 0f, 0.7f));
+            T.Borde(r, T.Tan, 2f);
+            GUI.Label(new Rect(r.x + 10f, r.y, r.width - 20f, r.height), texto,
+                      T.Estilo(T.FMono, FsLabel, T.Tan, TextAnchor.MiddleCenter, wrap: true));
+        }
+
+        // Cruz fina en el centro exacto de la pantalla: es el punto que usa
+        // "NO TENGO LA IMAGEN" para anclar el 0,0 del mapa.
+        private void DrawMira()
+        {
+            float cx = Screen.width * 0.5f, cy = Screen.height * 0.5f;
+            float r = Screen.height * 0.022f, g = r * 0.3f, w = Mathf.Max(2f, Screen.height * 0.002f);
+            var c = new Color(T.Cream.r, T.Cream.g, T.Cream.b, 0.75f);
+            T.Fill(new Rect(cx - r, cy - w * 0.5f, r - g, w), c);
+            T.Fill(new Rect(cx + g, cy - w * 0.5f, r - g, w), c);
+            T.Fill(new Rect(cx - w * 0.5f, cy - r, w, r - g), c);
+            T.Fill(new Rect(cx - w * 0.5f, cy + g, w, r - g), c);
+        }
+
         private void DrawTopLabel(string msg)
         {
-            var r = new Rect(0, Scanner.SafeArea.Top + Screen.height * 0.02f, Screen.width, Screen.height * 0.05f);
+            // Wrap a 2 líneas: sin esto, con MiddleCenter y una sola línea, mensajes
+            // largos como "ajustá el recuadro..." se recortaban simétrico en los dos
+            // extremos (ej. "Está el recuadro... CAPTURAR" -> "stá el recuadro...
+            // CAPTUR") en vez de bajar a una segunda línea.
+            //
+            // Este overlay dibuja en píxeles reales (GUI.matrix identidad, ver OnGUI),
+            // pero el botón de pausa (PauseMenuController, esquina sup-derecha) usa
+            // coordenadas virtuales de UIScale — convertimos su borde inferior a
+            // píxeles reales para no superponernos.
+            float pauseBottomReal = Scanner.SafeArea.Top + (28f + 60f) * UIScale.Factor + 8f;
+            var r = new Rect(0, pauseBottomReal, Screen.width, Screen.height * 0.065f);
             T.Fill(r, new Color(0f, 0f, 0f, 0.5f));
-            GUI.Label(r, msg, T.Estilo(T.FElite, FsLabel, T.CreamDim, TextAnchor.MiddleCenter));
+            // Blanco puro solo en Android: ahí T.CreamDim se ve apagado/gris (mismo
+            // motivo que el resto de los ajustes de esta rama — ver MortuoriumTheme).
+            var color = Application.platform == RuntimePlatform.Android ? Color.white : T.CreamDim;
+            GUI.Label(r, msg, T.Estilo(T.FElite, FsLabel, color, TextAnchor.MiddleCenter, wrap: true));
         }
     }
 }

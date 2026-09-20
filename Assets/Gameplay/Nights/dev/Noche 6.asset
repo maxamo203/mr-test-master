@@ -64,3 +64,8 @@ MonoBehaviour:
   flickerDistance: 6
   batterySpawnRateMultiplier: 1.5
   batteryChanceMods: []
+  collectiblesActive: 1
+  collectibleInitialDelaySeconds: 5
+  collectibleIntervalMin: 40
+  collectibleIntervalMax: 80
+  collectibleMaxPerNight: 5

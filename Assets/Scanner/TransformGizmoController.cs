@@ -80,7 +80,11 @@ namespace Scanner
         // pared lo realinea al plano mientras rota). Surte efecto el frame siguiente.
         public void SetOrientation(Quaternion? orientation) => _orientation = orientation;
 
-        public void Attach(Transform target, bool moveOnly = false, Quaternion? orientation = null)
+        // sinEscala oculta SOLO los cubos de escala (deja mover + rotar en Y). Lo usa
+        // la calibracion manual sobre WorldOrigin: escalar el origen deformaria todo
+        // el mapa escaneado de una, que nunca es lo que se quiere.
+        public void Attach(Transform target, bool moveOnly = false, Quaternion? orientation = null,
+                           bool sinEscala = false)
         {
             _target      = target;
             _moveOnly    = moveOnly;
@@ -88,7 +92,7 @@ namespace Scanner
             _root.SetActive(target != null);
             // Mostrar/ocultar handles segun el modo.
             foreach (var h in _moveHandles)   if (h != null) h.SetActive(true);
-            foreach (var h in _scaleHandles)  if (h != null) h.SetActive(!moveOnly);
+            foreach (var h in _scaleHandles)  if (h != null) h.SetActive(!moveOnly && !sinEscala);
             foreach (var h in _rotateHandles) if (h != null) h.SetActive(!moveOnly);
         }
 

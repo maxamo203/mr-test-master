@@ -17,12 +17,12 @@ using Gamepad;
 public static class MortuoriumTheme
 {
     // ── Paleta (hex del prototipo) ────────────────────────────────────────
-    public static readonly Color Bg        = Hex("0c0a08");   // fondo general
+    public static readonly Color Bg        = Hex("060504");   // fondo general
     public static readonly Color BgPanel   = Hex("141110");   // paneles/modales
     public static readonly Color BgField   = Hex("131010");   // campos de texto
     public static readonly Color Cream     = Hex("e9e3d6");   // texto principal
     public static readonly Color CreamDim  = Hex("c9c2b4");   // texto secundario
-    public static readonly Color Muted     = Hex("8a8074");   // texto apagado
+    public static readonly Color Muted     = Hex("a89e90");   // texto apagado
     public static readonly Color Dim       = Hex("6b6459");   // texto muy apagado
     public static readonly Color Disabled  = Hex("4a443c");   // deshabilitado
     public static readonly Color Border    = Hex("3a322a");   // borde estándar
@@ -54,18 +54,83 @@ public static class MortuoriumTheme
     public static Font FElite { get { EnsureFonts(); return _elite; } }
     public static Font FMono  { get { EnsureFonts(); return _mono; } }
 
+    // ── Logo (wordmark MORTUORIUM) ──────────────────────────────────────────
+    // Assets/Resources/Logo/mortuorium.png: letras blancas sobre fondo transparente.
+    // Mismo archivo que usa MortuoriumSplashSetup para el Splash Screen.
+    private static Texture2D _logo;
+    private static bool _logoLoaded;
+
+    private static void EnsureLogo()
+    {
+        if (_logoLoaded) return;
+        _logoLoaded = true;
+        _logo = Resources.Load<Texture2D>("Logo/mortuorium");
+        // Si el import quedó como Sprite (lo hace MortuoriumSplashSetup para el
+        // Splash Screen), Resources.Load<Texture2D> igual debería resolverlo; esto
+        // es sólo una red de seguridad por si alguna vez no lo hace.
+        if (_logo == null)
+        {
+            var sprite = Resources.Load<Sprite>("Logo/mortuorium");
+            if (sprite != null) _logo = sprite.texture;
+        }
+    }
+
+    public static Texture2D LogoMortuorium { get { EnsureLogo(); return _logo; } }
+
     // ── Estilos (cacheados por combinación) ───────────────────────────────
-    private static readonly Dictionary<string, GUIStyle> _styles = new();
+    // La clave es un struct, no un string: Estilo() se llama por cada label en cada
+    // evento de OnGUI (varios por frame, en HUDs que viven toda la partida), y armar
+    // un string interpolado + ToHtmlStringRGBA por llamada era basura de GC constante.
+    private readonly struct EstiloKey : IEquatable<EstiloKey>
+    {
+        private readonly int  _font;     // instanceID (0 = default del skin)
+        private readonly int  _size;
+        private readonly Color _color;
+        private readonly TextAnchor _anchor;
+        private readonly bool _wrap;
+
+        public EstiloKey(Font font, int size, Color color, TextAnchor anchor, bool wrap)
+        {
+            _font = font != null ? font.GetInstanceID() : 0;
+            _size = size; _color = color; _anchor = anchor; _wrap = wrap;
+        }
+
+        public bool Equals(EstiloKey o) =>
+            _font == o._font && _size == o._size && _wrap == o._wrap &&
+            _anchor == o._anchor && _color.Equals(o._color);
+
+        public override bool Equals(object obj) => obj is EstiloKey k && Equals(k);
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int h = _font;
+                h = h * 397 ^ _size;
+                h = h * 397 ^ _color.GetHashCode();
+                h = h * 397 ^ (int)_anchor;
+                h = h * 397 ^ (_wrap ? 1 : 0);
+                return h;
+            }
+        }
+    }
+
+    private static readonly Dictionary<EstiloKey, GUIStyle> _styles = new();
 
     public static GUIStyle Estilo(Font font, int size, Color color,
                                   TextAnchor anchor = TextAnchor.MiddleLeft,
                                   bool wrap = false)
     {
-        string key = $"{(font != null ? font.name : "def")}|{size}|{ColorUtility.ToHtmlStringRGBA(color)}|{(int)anchor}|{wrap}";
+        var key = new EstiloKey(font, size, color, anchor, wrap);
         if (_styles.TryGetValue(key, out var st)) return st;
         st = new GUIStyle(GUI.skin.label)
         {
-            font      = Application.platform == RuntimePlatform.Android ? null : font,
+            // PRUEBA: antes forzaba null en Android ("no renderizan" — commit 6892163).
+            // Se sospecha que ese diagnóstico se hizo sin el contenido real de Git LFS
+            // descargado (los .ttf eran punteros de ~130 bytes, no la fuente real — ver
+            // conversación). Ahora que el LFS está bien, probamos la fuente real en
+            // Android también. Si vuelve a verse mal, revertir a la condición de antes.
+            font      = font,
             fontSize  = size,
             alignment = anchor,
             wordWrap  = wrap,
@@ -265,6 +330,17 @@ public static class MortuoriumTheme
     // Título con "glitch" cromático (sombra roja/teal) tipo MORTUORIUM.
     public static void TituloGlitch(Rect r, string texto, int size)
     {
+        // "size" es un tamaño MÁXIMO deseado: si el texto no entra en r.width lo
+        // encogemos hasta que entre. Hace falta porque en Android Estilo() apaga
+        // las fuentes custom (Bebas Neue no renderiza bien ahí — ver EnsureFonts)
+        // y cae al font default del skin, bastante más ancho a igual tamaño de
+        // punto; sin este ajuste, con TextAnchor.MiddleCenter y sin wrap, el título
+        // se recorta simétrico por los dos extremos (p. ej. "MORTUORIUM" -> "ORTUORIU").
+        float anchoTexto = Estilo(FBebas, size, Color.white, TextAnchor.MiddleCenter)
+                           .CalcSize(new GUIContent(texto)).x;
+        if (anchoTexto > r.width * 0.98f && anchoTexto > 0f)
+            size = Mathf.Max(8, Mathf.FloorToInt(size * (r.width * 0.98f / anchoTexto)));
+
         var rojo = new Color(1f, 0.12f, 0.20f, 0.55f);
         var teal = new Color(0f, 0.86f, 0.78f, 0.35f);
         // El desplazamiento del glitch escala con el tamaño (para que se vea igual
@@ -273,6 +349,72 @@ public static class MortuoriumTheme
         GUI.Label(new Rect(r.x + off, r.y, r.width, r.height), texto, Estilo(FBebas, size, rojo, TextAnchor.MiddleCenter));
         GUI.Label(new Rect(r.x - off, r.y, r.width, r.height), texto, Estilo(FBebas, size, teal, TextAnchor.MiddleCenter));
         GUI.Label(r, texto, Estilo(FBebas, size, Cream, TextAnchor.MiddleCenter));
+    }
+
+    // Wordmark MORTUORIUM como imagen (LogoMortuorium), con el mismo glitch
+    // cromático rojo/teal de TituloGlitch pero VIVO en vez de estático: el
+    // corrimiento "respira" con ruido y cada pocos segundos da un salto de
+    // tracking tipo VHS (glitch más marcado + un par de franjas de estática).
+    // r.width manda (el logo ocupa ese ancho, centrado); r.height es sólo un
+    // límite generoso por si el aspect ratio no entra. Devuelve el alto final
+    // usado, para que el que llama pueda ubicar lo que va debajo.
+    //
+    // Si falta el recurso (Resources/Logo/mortuorium.png), cae al wordmark de
+    // texto para no dejar el menú sin título.
+    public static float LogoGlitch(Rect r)
+    {
+        EnsureLogo();
+        if (_logo == null)
+        {
+            float size = Mathf.RoundToInt(r.height * 0.62f);
+            TituloGlitch(r, "MORTUORIUM", (int)size);
+            return r.height;
+        }
+
+        float aspect = (float)_logo.width / _logo.height;
+        float w = r.width, h = w / aspect;
+        if (h > r.height) { h = r.height; w = h * aspect; }
+        var logoRect = new Rect(r.x + (r.width - w) * 0.5f, r.y, w, h);
+
+        float t = Time.unscaledTime;
+        const float cycle = 3.6f, pulseDur = 0.14f;
+        float phase = Mathf.Repeat(t, cycle);
+        bool  pulsing = phase < pulseDur;
+        float pulseK  = pulsing ? 1f - phase / pulseDur : 0f; // 1 -> 0 durante el pulso
+
+        // Corrimiento cromático: "respira" con ruido; durante el pulso se dispara.
+        float baseOff = w * 0.006f;
+        float wander  = Mathf.PerlinNoise(t * 0.6f, 0f) - 0.5f;
+        float off     = baseOff * (1f + wander * 1.4f) + w * 0.05f * pulseK;
+
+        var prev = GUI.color;
+        GUI.color = new Color(1f, 0.12f, 0.20f, 0.55f + 0.3f * pulseK);
+        GUI.DrawTexture(new Rect(logoRect.x + off, logoRect.y, w, h), _logo, ScaleMode.StretchToFill, true);
+        GUI.color = new Color(0f, 0.86f, 0.78f, 0.35f + 0.3f * pulseK);
+        GUI.DrawTexture(new Rect(logoRect.x - off, logoRect.y, w, h), _logo, ScaleMode.StretchToFill, true);
+
+        // Capa principal: durante el pulso, un parpadeo breve de opacidad (drop de tracking).
+        GUI.color = new Color(Cream.r, Cream.g, Cream.b, pulsing ? Mathf.Lerp(1f, 0.55f, pulseK) : 1f);
+        GUI.DrawTexture(logoRect, _logo, ScaleMode.StretchToFill, true);
+
+        // Estática: un par de franjas finas durante el pulso (mismo truco que
+        // ArbmosDistortionHUD.DrawLocalizedGlitch, con Texture2D.whiteTexture).
+        if (pulsing)
+        {
+            var rng = new System.Random(Mathf.FloorToInt(t / cycle));
+            int bands = 1 + rng.Next(2);
+            for (int i = 0; i < bands; i++)
+            {
+                float y  = logoRect.y + (float)rng.NextDouble() * h;
+                float bh = 2f + (float)rng.NextDouble() * 4f;
+                float dx = ((float)rng.NextDouble() - 0.5f) * w * 0.04f;
+                GUI.color = new Color(1f, 1f, 1f, 0.10f + 0.18f * pulseK);
+                GUI.DrawTexture(new Rect(logoRect.x + dx, y, w, bh), Texture2D.whiteTexture);
+            }
+        }
+
+        GUI.color = prev;
+        return h;
     }
 
     // Botón estándar del tema: borde 2px + texto Bebas centrado.
@@ -371,7 +513,11 @@ public static class MortuoriumTheme
     {
         var st = new GUIStyle(GUI.skin.textField)
         {
-            font = FMono, fontSize = 15, alignment = TextAnchor.MiddleLeft,
+            // En Android las fuentes custom no renderizan bien (ver Estilo()) — con
+            // FMono directo el texto se actualiza pero el glyph no se pinta, así que
+            // parece que "no se ve lo que escribís" aunque el valor sí cambie.
+            font = Application.platform == RuntimePlatform.Android ? null : FMono,
+            fontSize = 15, alignment = TextAnchor.MiddleLeft,
         };
         st.normal.textColor = st.focused.textColor = st.hover.textColor = st.active.textColor = Cream;
         st.normal.background = st.focused.background = st.hover.background = st.active.background = null;

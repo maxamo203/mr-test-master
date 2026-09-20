@@ -40,6 +40,7 @@ namespace Bateries
             // sin wiring y podés pre-configurarlas o sumar nuevas al mismo GameObject.
             EnsureComponent<FlashlightToggleAction>();
             EnsureComponent<BatteryPickupAction>();
+            EnsureComponent<Collectibles.CollectiblePickupAction>();
         }
 
         private void Start()

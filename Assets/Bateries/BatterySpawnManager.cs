@@ -15,6 +15,12 @@ namespace Bateries
     //
     // Wiring: poner este componente en un GameObject de la escena multijugador y
     // asignarle el BatteryRaritySet. No requiere nada en los clientes.
+    //
+    // Orden de ejecución ANTES que CollectibleSpawnManager (orden 0 por defecto): las
+    // reliquias evitan los puntos de pilas ya derivados (ver IsNear más abajo), así que
+    // esta lista tiene que existir cuando Collectibles.CollectibleSpawnManager arma la
+    // suya en el mismo evento OnGameStarted.
+    [DefaultExecutionOrder(-10)]
     public class BatterySpawnManager : MonoBehaviour
     {
         public static BatterySpawnManager Instance { get; private set; }
@@ -125,6 +131,20 @@ namespace Bateries
 
             _status  = $"{_points.Count} puntos derivados del escaneo.";
             Debug.Log($"[Bateries] {_points.Count} puntos de spawn derivados del escaneo.");
+        }
+
+        // Dificultad de la noche en curso. Puede ser null si se entra a la escena sin
+        // pasar por el menú (típico en el editor): ahí manda el ajuste del componente.
+        private Gameplay.NightConfig Noche =>
+            Gameplay.GameSession.Instance != null ? Gameplay.GameSession.Instance.SelectedNight : null;
+
+        // Segundos de reaparicion de ESTA noche. NightConfig.batterySpawnRateMultiplier es
+        // "frecuencia": >1 = pilas mas seguido (espera mas corta), <1 = mas escasas.
+        private float RespawnDeLaNoche()
+        {
+            var n = Noche;
+            float mul = n != null ? Mathf.Max(0.05f, n.batterySpawnRateMultiplier) : 1f;
+            return respawnSeconds / mul;
         }
 
         // Corta la noche sin cerrar la sesión (ver Gameplay.NightTransition). Las pilas
@@ -282,6 +302,17 @@ namespace Bateries
             _points.Add(new SpawnPoint { relPos = relPos });
         }
 
+        // ¿Hay un punto de spawn de PILA a menos de minDist de relPos (anchor-relative)?
+        // Lo usa Collectibles.CollectibleSpawnManager para que las reliquias tengan sus
+        // propios lugares y no compartan literalmente el mismo punto que una pila.
+        public bool IsNear(Vector3 relPos, float minDist)
+        {
+            float d2 = minDist * minDist;
+            foreach (var p in _points)
+                if ((p.relPos - relPos).sqrMagnitude <= d2) return true;
+            return false;
+        }
+
         // ── Loop de reaparicion (server) ──────────────────────────────────────
 
         private void Update()
@@ -316,7 +347,13 @@ namespace Bateries
 
         private void Spawn(SpawnPoint p)
         {
-            var rarity = rarities != null ? rarities.WeightedPick() : null;
+            // La noche puede sesgar la mezcla de rarezas (NightConfig.batteryChanceMods):
+            // las ultimas noches reparten mas pilas pero peores, asi el jugador corre mas
+            // por menos carga. Sin NightConfig, la probabilidad base del set.
+            var noche  = Noche;
+            var rarity = rarities != null
+                ? rarities.WeightedPick(noche != null ? noche.BatteryChanceScale : (System.Func<byte, float>)null)
+                : null;
             if (rarity == null)
             {
                 Debug.LogWarning("[Bateries] No hay BatteryRaritySet configurado; no se spawnean pilas.");
@@ -390,7 +427,7 @@ namespace Bateries
             NetworkManager.Instance.ServerDespawn(batteryNetId);
             _byNetId.Remove(batteryNetId);
             point.occupied        = false;
-            point.timer           = respawnSeconds;
+            point.timer           = RespawnDeLaNoche();
             point.blockUntilClear = true;
 
             // Acreditar la carga: el host la aplica local; al cliente se le avisa.

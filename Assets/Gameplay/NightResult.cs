@@ -40,6 +40,14 @@ namespace Gameplay
 
         public static void MarcarSobrevivida() => Sobrevivio = true;
 
+        // Reliquias recogidas ESTA noche, tal como estaban al momento en que se
+        // "cerró" el resultado de este dispositivo (ver NightTransition.NocheSuperada
+        // / LocalDeath.Die). Es la cifra que muestra el menú (junto con el récord de
+        // CollectibleProgress).
+        public static int ObjetosRecolectados { get; private set; }
+
+        public static void MarcarObjetosRecolectados(int cantidad) => ObjetosRecolectados = cantidad;
+
         public static void MarcarDesbloqueo(int numeroBase1)
         {
             NocheDesbloqueada = numeroBase1;
@@ -65,8 +73,9 @@ namespace Gameplay
         // no está garantizado, así que limpiarlo acá podría pisar el valor recién puesto.
         public static void LimpiarResultado()
         {
-            Sobrevivio        = false;
-            NocheDesbloqueada = 0;
+            Sobrevivio          = false;
+            NocheDesbloqueada   = 0;
+            ObjetosRecolectados = 0;
         }
 
         public static void Limpiar()

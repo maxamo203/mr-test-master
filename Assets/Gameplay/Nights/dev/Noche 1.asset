@@ -14,18 +14,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   displayName: Noche 1 (DEV)
   briefing: (DEV) Sorken rapido para probar.
-  nightDurationSeconds: 300
+  nightDurationSeconds: 60
   sorkenActive: 1
   attemptIntervalMin: 2
   attemptIntervalMax: 5
   entryRepelSeconds: 2
-  entryGraceSeconds: 8
-  entryAnimationSeconds: 3
+  entryGraceSeconds: 4
   entryTriggerDistance: 3
   chaseRepelSeconds: 3
   sorkenChaseSpeed: 2.5
-  sorkenCoverStartSeconds: 3
-  sorkenCoverWalkSpeedMultiplier: 0.7
   sorkenRetreatSpeed: 3.5
   grabRange: 1.2
   flashlightMaxCharge: 200
@@ -67,3 +64,8 @@ MonoBehaviour:
   flickerDistance: 6
   batterySpawnRateMultiplier: 1.5
   batteryChanceMods: []
+  collectiblesActive: 1
+  collectibleInitialDelaySeconds: 5
+  collectibleIntervalMin: 2
+  collectibleIntervalMax: 4
+  collectibleMaxPerNight: 5

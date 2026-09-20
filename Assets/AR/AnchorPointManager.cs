@@ -43,6 +43,11 @@ public class AnchorPointManager : MonoBehaviour
     private const float MaxCorreccionM   = 1.5f;   // salto mayor = ancla mala; en estéreo marea
     private const float MaxCorreccionDeg = 30f;
 
+    // Mirar un ancla la favorece como ancla activa (ver Puntaje): medio ángulo del
+    // cono "la estoy mirando" y cuántos metros de ventaja le da estar a la vista.
+    private const float AnguloVistaGrados = 30f;
+    private const float BonusVista        = 2f;
+
     private class Ancla
     {
         public int          Id;
@@ -113,6 +118,14 @@ public class AnchorPointManager : MonoBehaviour
     // ARLobbyUI en vez de resolver el raycast por su cuenta otra vez).
     public ResolvedHit UltimoHit { get; private set; }
 
+    // Hay un marco de referencia usable para medir contra él. Antes alcanzaba con
+    // preguntar por la imagen; con la calibración manual (ManualCalibration) el mapa
+    // puede estar anclado sin que la imagen se haya visto nunca. Sigue siendo false
+    // mientras hay una búsqueda de imagen en curso (RestartTracking desparenta
+    // WorldOrigin a propósito y quien lanza la búsqueda descarta el anchor manual).
+    private bool HayCalibracion =>
+        (_imageAnchor != null && _imageAnchor.IsFound) || ManualCalibration.Calibrado;
+
     // ── Ciclo de vida ─────────────────────────────────────────────────────
 
     public static AnchorPointManager Ensure()
@@ -177,7 +190,7 @@ public class AnchorPointManager : MonoBehaviour
 
         var wo = WorldOrigin.Instance;
         if (wo == null || !wo.IsReady) { error = "todavía no hay calibración"; return false; }
-        if (_imageAnchor == null || !_imageAnchor.IsFound) { error = "buscando la imagen…"; return false; }
+        if (!HayCalibracion) { error = "buscando la imagen…"; return false; }
         if (_anclas.Count >= MaxAnclas) { error = $"máximo {MaxAnclas} anclas"; return false; }
         if (CardboardBloquea) { error = "salí de Cardboard para colocar anclas"; return false; }
 
@@ -323,9 +336,7 @@ public class AnchorPointManager : MonoBehaviour
 #if UNITY_EDITOR
         NudgeCamaraEditor();
 #endif
-        bool colocando = Colocando
-                         && _imageAnchor != null && _imageAnchor.IsFound
-                         && !CardboardBloquea;
+        bool colocando = Colocando && HayCalibracion && !CardboardBloquea;
 
         var calidad = AnchorQuality.Instance;
         if (!colocando)
@@ -380,7 +391,11 @@ public class AnchorPointManager : MonoBehaviour
 
         // Nunca pelear con una búsqueda de imagen en curso: RestartTracking desparenta
         // WorldOrigin a propósito y re-ancla al detectar.
-        if (_imageAnchor != null && !_imageAnchor.IsFound) return;
+        if (!HayCalibracion) return;
+
+        // Ni con el jugador acomodando el 0,0 a mano: re-enraizar en medio del ajuste
+        // le movería el mapa justo mientras lo está alineando.
+        if (ManualCalibration.Ajustando) return;
 
         // Tras una relocalización (app resume) las poses se mueven en bloque.
         if (!SesionEstable()) return;
@@ -393,32 +408,32 @@ public class AnchorPointManager : MonoBehaviour
         var actual = wo.CurrentAnchor;
         bool parentPerdido = actual == null;
 
-        Transform  mejorT   = null;
-        Vector3    mejorPos = Vector3.zero;
-        Quaternion mejorRot = Quaternion.identity;
-        int        mejorId  = 0;
-        float      mejorD2  = float.MaxValue;
+        Transform  mejorT     = null;
+        Vector3    mejorPos   = Vector3.zero;
+        Quaternion mejorRot   = Quaternion.identity;
+        int        mejorId    = 0;
+        float      mejorScore = float.MaxValue;
 
         // Candidato #0: el anchor de la imagen (el marco más confiable si estás cerca).
         if (_tieneImg && _imageAnchor != null && _imageAnchor.CurrentAnchor != null)
         {
-            mejorT   = _imageAnchor.CurrentAnchor;
-            mejorPos = _imgLocalPos;
-            mejorRot = _imgLocalRot;
-            mejorD2  = (mejorT.position - camT.position).sqrMagnitude;
+            mejorT     = _imageAnchor.CurrentAnchor;
+            mejorPos   = _imgLocalPos;
+            mejorRot   = _imgLocalRot;
+            mejorScore = Puntaje(mejorT.position, camT);
         }
 
         for (int i = 0; i < _anclas.Count; i++)
         {
             var a = _anclas[i];
             if (!a.Trackeando) continue;
-            float d2 = (a.Go.transform.position - camT.position).sqrMagnitude;
-            if (d2 >= mejorD2) continue;
-            mejorD2  = d2;
-            mejorT   = a.Go.transform;
-            mejorPos = a.WoLocalPos;
-            mejorRot = a.WoLocalRot;
-            mejorId  = a.Id;
+            float s = Puntaje(a.Go.transform.position, camT);
+            if (s >= mejorScore) continue;
+            mejorScore = s;
+            mejorT     = a.Go.transform;
+            mejorPos   = a.WoLocalPos;
+            mejorRot   = a.WoLocalRot;
+            mejorId    = a.Id;
         }
 
         if (mejorT == null) return;             // nada trackeando: dejamos todo como está
@@ -426,9 +441,8 @@ public class AnchorPointManager : MonoBehaviour
 
         if (!parentPerdido)
         {
-            // Histéresis: sólo cambiamos si el candidato está CLARAMENTE más cerca.
-            float dActual = Vector3.Distance(actual.position, camT.position);
-            if (Mathf.Sqrt(mejorD2) > dActual - HisteresisM) return;
+            // Histéresis: sólo cambiamos si el candidato gana CLARAMENTE.
+            if (mejorScore > Puntaje(actual.position, camT) - HisteresisM) return;
 
             if (Time.time - _ultimoCambio < CooldownS) return;
         }
@@ -461,6 +475,28 @@ public class AnchorPointManager : MonoBehaviour
             Debug.Log($"[Anclas] WorldOrigin → ancla #{mejorId} (corrección {dPos * 100f:0} cm / {dAng:0.0}°)");
     }
 
+    // Puntaje de un candidato a ancla activa: metros a la cámara, con una REBAJA si el
+    // jugador lo está MIRANDO. Elegir sólo por cercanía dejaba el feature invisible: el
+    // ancla activa cambia al CAMINAR, así que mirar una ancla desalineada no hacía nada,
+    // que es justo el gesto con el que uno espera que el entorno se reacomode. Y mirarla
+    // además es la mejor señal técnica: un ancla a la vista es la que el tracker acaba de
+    // volver a observar (su pose es la más fresca) y es contra la que el jugador ve el
+    // desfasaje. Menor es mejor.
+    private static float Puntaje(Vector3 pos, Transform camT)
+    {
+        var dir = pos - camT.position;
+        float d = dir.magnitude;
+        if (d < 1e-3f) return 0f;
+        bool aLaVista = Vector3.Angle(camT.forward, dir) <= AnguloVistaGrados;
+        return aLaVista ? Mathf.Max(0f, d - BonusVista) : d;
+    }
+
+    private static bool ALaVista(Vector3 pos, Transform camT)
+    {
+        var dir = pos - camT.position;
+        return dir.sqrMagnitude > 1e-6f && Vector3.Angle(camT.forward, dir) <= AnguloVistaGrados;
+    }
+
     // ── Reset con la imagen (la única fuente de verdad) ────────────────────
 
     private void OnImageReacquired()
@@ -468,14 +504,27 @@ public class AnchorPointManager : MonoBehaviour
         var wo = WorldOrigin.Instance;
         if (wo == null || !wo.IsReady) return;
 
-        CapturarImagen();
         _ultimoResetImagen = Time.time;
+        RecalibrarCadena();
+    }
+
+    // Re-mide TODA la cadena contra las poses del mundo tal como están AHORA y vuelve
+    // a derivar las relaciones cacheadas. Se llama cuando algo movió WorldOrigin por
+    // fuera de esta clase y lo cacheado quedó viejo:
+    //   - la imagen se re-detectó (ARImageAnchor ya reparentó a su anchor nuevo);
+    //   - el jugador terminó de acomodar el 0,0 a mano (ManualCalibration.Listo).
+    // Sin esto, el primer cambio de ancla devuelve el mapa de un salto a la pose vieja.
+    public void RecalibrarCadena()
+    {
+        var wo = WorldOrigin.Instance;
+        if (wo == null || !wo.IsReady) return;
+
+        // T(a0←WO) también quedó viejo si el ajuste manual corrió el origen estando
+        // colgado del anchor de la imagen (es no-op si el padre es otro).
+        CapturarImagen();
 
         if (_anclas.Count == 0) return;
 
-        // ARImageAnchor ya reparentó WorldOrigin al anchor nuevo, así que las poses del
-        // mundo están frescas: re-medimos la cadena entera contra ellas. Con eso todas
-        // las relaciones cacheadas vuelven a valer contra la imagen de una sola vez.
         var raiz = _anclas[0].Trackeando ? _anclas[0] : PrimeraTrackeando();
         if (raiz == null) return;   // sin nada trackeando dejamos lo cacheado como está
 
@@ -490,7 +539,7 @@ public class AnchorPointManager : MonoBehaviour
             Derivar(a);
         }
 
-        // Que se quede unos segundos en el marco de la imagen antes de volver a saltar.
+        // Que se quede unos segundos en el marco recién medido antes de volver a saltar.
         _ultimoCambio = Time.time;
         _activaId     = 0;
     }
@@ -533,6 +582,7 @@ public class AnchorPointManager : MonoBehaviour
     // hay ScanStateMachine y el chequeo se saltea.
     private static bool EnFlujoMultiPaso(ScannerMode m) =>
         m == ScannerMode.Calibrating   || m == ScannerMode.Anchor_Place ||
+        m == ScannerMode.Origin_Adjust ||
         m == ScannerMode.Wall_V1       || m == ScannerMode.Wall_Height  || m == ScannerMode.Wall_Vn ||
         m == ScannerMode.DoorPickWall  || m == ScannerMode.Door_V1      || m == ScannerMode.Door_V2 ||
         m == ScannerMode.Cube_V1       || m == ScannerMode.Cube_V2      || m == ScannerMode.Cube_V3 ||
@@ -614,7 +664,19 @@ public class AnchorPointManager : MonoBehaviour
             wo.SetOriginLocal(o.Go.transform, o.WoLocalPos, o.WoLocalRot);
             return;
         }
+        if (ReanclarEnManual(wo)) return;
         wo.transform.SetParent(null, worldPositionStays: true);
+    }
+
+    // Sin imagen ni anclas queda el anchor de la calibración manual: mejor colgar de
+    // él (sigue las correcciones de pose del SLAM) que dejar el mapa en el root.
+    // worldPositionStays de por medio: la escena no se mueve ni un milímetro.
+    private static bool ReanclarEnManual(WorldOrigin wo)
+    {
+        var manual = ManualCalibration.Instance != null ? ManualCalibration.Instance.AnchorManual : null;
+        if (manual == null) return false;
+        wo.transform.SetParent(manual, worldPositionStays: true);
+        return true;
     }
 
     // Igual que SoltarSiEsPadre pero para cuando se van TODAS las anclas: el único
@@ -626,7 +688,7 @@ public class AnchorPointManager : MonoBehaviour
 
         var img = _imageAnchor != null ? _imageAnchor.CurrentAnchor : null;
         if (_tieneImg && img != null) wo.SetOriginLocal(img, _imgLocalPos, _imgLocalRot);
-        else                          wo.transform.SetParent(null, worldPositionStays: true);
+        else if (!ReanclarEnManual(wo)) wo.transform.SetParent(null, worldPositionStays: true);
     }
 
     private bool EsNuestro(Transform t)
@@ -648,14 +710,7 @@ public class AnchorPointManager : MonoBehaviour
         return _camT;
     }
 
-    // El RaycastResolver vive en ScannerScene; en SampleScene lo creamos acá, y recién
-    // en la primera colocación para que Camera.main y ARRaycastManager ya existan.
-    private static RaycastResolver EnsureResolver()
-    {
-        if (RaycastResolver.Instance != null) return RaycastResolver.Instance;
-        new GameObject("RaycastResolver").AddComponent<RaycastResolver>();
-        return RaycastResolver.Instance;
-    }
+    private static RaycastResolver EnsureResolver() => RaycastResolver.Ensure();
 
     private static GameObject CrearVisual(Transform padre, bool esPrimera)
     {
@@ -717,7 +772,12 @@ public class AnchorPointManager : MonoBehaviour
             var a = _anclas[i];
             sb.Append("\n #").Append(a.Id).Append(' ').Append(a.Estado);
             if (camT != null && a.Go != null)
+            {
                 sb.Append("  ").Append(Vector3.Distance(a.Go.transform.position, camT.position).ToString("0.0")).Append(" m");
+                // "vista" = entra en el cono de Puntaje, o sea que ahora mismo pesa
+                // BonusVista a favor. Es lo que hay que mirar si parece que no corrige.
+                if (ALaVista(a.Go.transform.position, camT)) sb.Append(" vista");
+            }
             sb.Append("  ").Append(a.Fuente).Append("  cal ").Append((a.Calidad * 100f).ToString("0")).Append('%');
             if (a.Go != null)
             {

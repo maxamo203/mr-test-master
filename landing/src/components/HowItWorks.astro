@@ -1,0 +1,180 @@
+---
+/**
+ * Sección 03 — "Cómo funciona": la versión corta, tres pasos y afuera. El
+ * detalle real (escaneo, ancla, entidades, cooperativo) vive en /como-funciona,
+ * a donde lleva el botón SABER MÁS.
+ */
+
+const pasos = [
+  {
+    n: '01',
+    titulo: 'Escaneá tu cuarto',
+    texto: 'Marcás paredes, muebles y puertas una sola vez. El escaneo queda guardado en el teléfono.',
+  },
+  {
+    n: '02',
+    titulo: 'Anclá el ritual',
+    texto: 'Una imagen física pegada en la pared le dice al juego dónde está cada cosa, sesión tras sesión.',
+  },
+  {
+    n: '03',
+    titulo: 'Sobreviví al amanecer',
+    texto: 'Una linterna que se gasta, una cordura que se agota y un libro que la oscuridad quiere apagar.',
+  },
+];
+---
+
+<section class="section how" id="como">
+  <div class="wrap">
+    <p class="eyebrow" data-reveal>03 — Cómo funciona</p>
+
+    <div class="how__head">
+      <h2 class="title" data-reveal>Tres pasos<br />y ya estás adentro</h2>
+      <p class="lead" data-reveal style="--reveal-delay:90ms">
+        Lo justo para entender de qué se trata. Si querés el detalle fino —el escaneo, el ancla, las
+        entidades— hay una página entera para eso.
+      </p>
+    </div>
+
+    <ol class="steps">
+      {
+        pasos.map((p, i) => (
+          <li class="step" data-reveal style={`--reveal-delay:${i * 110}ms`}>
+            <span class="step__n">{p.n}</span>
+            <div class="step__body">
+              <h3 class="step__title">{p.titulo}</h3>
+              <p class="step__text">{p.texto}</p>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+
+    <div class="how__cta" data-reveal>
+      <a class="btn" href="/como-funciona">
+        <span>Saber más</span>
+        <span class="btn__arrow" aria-hidden="true">&rarr;</span>
+      </a>
+      <p class="how__cta-note">Cómo se arma el ritual, paso por paso.</p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .how__head {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 55rem) {
+    .how__head {
+      grid-template-columns: 1fr 1fr;
+      align-items: end;
+      gap: 3rem;
+    }
+
+    .how__head .lead {
+      margin-top: 0;
+    }
+  }
+
+  .steps {
+    list-style: none;
+    margin: clamp(3rem, 7vh, 5rem) 0 0;
+    padding: 0;
+    counter-reset: paso;
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1.4rem;
+    padding: 2rem 0;
+    border-top: 1px solid var(--rule-soft);
+    transition: background-color 0.4s var(--ease-out);
+  }
+
+  .step:last-child {
+    border-bottom: 1px solid var(--rule-soft);
+  }
+
+  .step:hover {
+    background-color: var(--tint-hover);
+  }
+
+  .step__n {
+    font-family: var(--font-display);
+    font-size: clamp(1.9rem, 5vw, 2.8rem);
+    line-height: 0.9;
+    color: var(--accent);
+    opacity: 0.75;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .step__title {
+    font-size: clamp(1.35rem, 3.4vw, 1.9rem);
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+  }
+
+  .step__text {
+    color: var(--text-muted);
+    max-width: 52ch;
+    font-size: 0.94em;
+  }
+
+  @media (min-width: 55rem) {
+    .step {
+      grid-template-columns: 6rem 1fr;
+      gap: 2.5rem;
+      align-items: baseline;
+    }
+  }
+
+  /* --- CTA ------------------------------------------------------------ */
+  .how__cta {
+    margin-top: clamp(2.5rem, 6vh, 4rem);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.2rem 1.8rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 1rem 2rem;
+    border: 1px solid var(--accent-deep);
+    background-image: var(--card-bg);
+    color: var(--accent-soft);
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    transition:
+      background-image 0.35s var(--ease-out),
+      border-color 0.35s var(--ease-out),
+      box-shadow 0.35s var(--ease-out);
+  }
+
+  .btn:hover {
+    background-image: var(--card-bg-hover);
+    border-color: var(--accent);
+    box-shadow: 0 0 2rem var(--glow-gold-soft);
+  }
+
+  .btn__arrow {
+    transition: transform 0.35s var(--ease-out);
+  }
+
+  .btn:hover .btn__arrow {
+    transform: translateX(0.35rem);
+  }
+
+  .how__cta-note {
+    color: var(--text-faint);
+    font-size: 0.85em;
+  }
+</style>

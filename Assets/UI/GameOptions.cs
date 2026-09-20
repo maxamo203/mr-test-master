@@ -9,6 +9,7 @@ public static class GameOptions
     private const string KeyVolMusica   = "opt_volumen_musica";
     private const string KeyVolEfectos  = "opt_volumen_efectos";
     private const string KeyPuntosAncla = "opt_puntos_ancla";
+    private const string KeyEscaneoAutoBeta = "opt_escaneo_auto_beta";
     private const string KeyVozMic      = "opt_voz_mic";
     private const string KeyVozVolumen  = "opt_voz_volumen";
     private const string KeyVozSens     = "opt_voz_sensibilidad";
@@ -64,6 +65,33 @@ public static class GameOptions
         set
         {
             PlayerPrefs.SetInt(KeyPuntosAncla, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    // WIP — desconectado a propósito, ver AutoWallBuilder.cs (Assets/Scanner/):
+    // el componente no está pegado a ningún GameObject de ninguna escena todavía
+    // (no se probó en dispositivo), así que hoy el botón/toggle no harían nada si
+    // se mostraran. Interruptor maestro: en false, ni el toggle de Opciones ni el
+    // botón "PARED AUTO (BETA)" de la botonera del escáner se dibujan — el resto
+    // del código (FSM, AutoWallBuilder, GameOptions.EscaneoAutoBeta) queda intacto
+    // para retomarlo. Para reactivar: 1) cablear AutoWallBuilder a ScannerRoot en
+    // ScannerScene.unity (ver comentario de ScannerSceneBootstrap), 2) probar la
+    // detección real en un Android con ARCore, 3) poner esto en true.
+    public const bool AutoWallScanBetaEnabled = false;
+
+    // ¿Está habilitado el modo BETA de detección automática de paredes (ARCore
+    // detecta planos verticales y el jugador confirma/descarta cada uno)? Opt-in
+    // y apagado por defecto: es experimental, así que solo aparece el botón en la
+    // botonera del escáner (ver ReticleController) si esto está activo. Ver
+    // también AutoWallScanBetaEnabled arriba — mientras esté en false, esta
+    // opción ni siquiera se muestra en Opciones.
+    public static bool EscaneoAutoBeta
+    {
+        get => PlayerPrefs.GetInt(KeyEscaneoAutoBeta, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeyEscaneoAutoBeta, value ? 1 : 0);
             PlayerPrefs.Save();
         }
     }

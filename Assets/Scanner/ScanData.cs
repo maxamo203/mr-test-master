@@ -98,5 +98,13 @@ namespace Scanner
         // la cámara. La imagen en sí se guarda como PNG hermano (<name>.png);
         // refImageWidthMeters > 0 indica que hay imagen asociada al escaneo.
         public float refImageWidthMeters;
+
+        // Orientación física de la imagen de referencia: 0 = desconocida (escaneos
+        // viejos: se infiere de la pose detectada), 1 = horizontal (piso / mesa),
+        // 2 = vertical (pared). Ver ImageAnchorPose.Orientacion. Define de qué eje
+        // de la imagen sale el rumbo del mapa, así que todas las sesiones (y todos
+        // los jugadores, viaja en el .mscn) tienen que usar el mismo valor.
+        // Campo aditivo: JsonUtility deja 0 en los escaneos que no lo tienen.
+        public int refImageOrientation;
     }
 }

@@ -64,6 +64,7 @@ namespace Gameplay
         public static void ResetLocal()
         {
             ServerDeaths.Reset();
+            NightLoot.Reset();
             LocalDeath.Instance?.Revive();
             LocalSanity.Instance?.Reiniciar();
             NightResult.Limpiar();
@@ -75,6 +76,14 @@ namespace Gameplay
             // centro de la pantalla no es lo que ve ninguno de los dos ojos).
             var cb = Object.FindAnyObjectByType<MRCardboardController>();
             if (cb != null && cb.CardboardActive) cb.SetCardboard(false);
+
+            // Volver a MOSTRAR las paredes escaneadas. Durante la noche el jugador puede
+            // ocultarlas (SceneOccluderMode, botón PAREDES de la sala), pero ese botón
+            // sólo se dibuja con la partida arrancada: si el modo quedaba activo, al
+            // reintentar se volvía a la pantalla de sincronización sin ver el mapa —
+            // justo cuando hay que verlo para saber si está alineado— y sin botón para
+            // devolverlo.
+            SceneOccluderMode.Instance?.Restore();
 
             DetenerSistemas();
         }
@@ -96,7 +105,12 @@ namespace Gameplay
         public static void TeardownSesion()
         {
             DetenerSistemas();
+            // Idem ResetLocal: el modo oclusor es DontDestroyOnLoad y guarda los
+            // materiales originales de renderers de ESTA escena. Restaurarlo antes de
+            // irse evita arrastrar ese estado (y referencias muertas) a la próxima.
+            SceneOccluderMode.Instance?.Restore();
             ServerDeaths.Reset();
+            NightLoot.Reset();
             LocalDeath.Instance?.Revive();
             LocalSanity.Instance?.Reiniciar();
             NightResult.Limpiar();
@@ -113,6 +127,7 @@ namespace Gameplay
             VelethDirector.Instance?.StopRun();
             SanitySystem.Instance?.StopRun();
             Bateries.BatterySpawnManager.Instance?.StopRun();
+            Collectibles.CollectibleSpawnManager.Instance?.StopRun();
         }
 
         // Amaneció. Lo corren el host y cada cliente al recibir NightSurvived.
@@ -124,12 +139,15 @@ namespace Gameplay
             if (LocalDeath.Instance != null && LocalDeath.Instance.IsDead) return;
 
             NightResult.MarcarSobrevivida();
+            NightResult.MarcarObjetosRecolectados(NightLoot.Total);
+
+            // El récord es por dispositivo y por noche, y necesita saber QUÉ noche era. Un
+            // cliente que se unió por LAN no pasó por el menú de noches (NightIndex
+            // queda en -1), así que ve la victoria pero no mueve ni récord ni progresión.
+            var s = GameSession.Instance;
+            CollectibleProgress.RegistrarIntento(s != null ? s.NightIndex : -1, NightLoot.Total);
             AudioManager.Musica(c => c.victoriaAmanecer, fade: 0.5f);
 
-            // El desbloqueo es por dispositivo y necesita saber QUÉ noche era. Un
-            // cliente que se unió por LAN no pasó por el menú de noches (NightIndex
-            // queda en -1), así que ve la victoria pero no mueve su progresión.
-            var s = GameSession.Instance;
             if (s != null && s.NightIndex >= 0 &&
                 NightProgress.RegistrarNocheSuperada(s.NightIndex))
                 NightResult.MarcarDesbloqueo(s.NightIndex + 2);   // la siguiente, en base 1

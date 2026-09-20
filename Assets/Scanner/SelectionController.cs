@@ -17,6 +17,7 @@ namespace Scanner
     {
         [SerializeField] private Camera _camera;
         [SerializeField] private DoorBuilder _doorBuilder;
+        [SerializeField] private AutoWallBuilder _autoWallBuilder;
         [Tooltip("Mostrar HUD de diagnostico (input state) en pantalla.")]
         [SerializeField] private bool _showDebugHud = false;
 
@@ -34,6 +35,7 @@ namespace Scanner
         {
             if (_camera == null) _camera = Camera.main;
             if (_doorBuilder == null) _doorBuilder = FindFirstObjectByType<DoorBuilder>();
+            if (_autoWallBuilder == null) _autoWallBuilder = FindFirstObjectByType<AutoWallBuilder>();
 
             int placedLayer = LayerMask.NameToLayer("Placed");
             _placedLayerMask = placedLayer >= 0 ? (1 << placedLayer) : 0;
@@ -137,6 +139,15 @@ namespace Scanner
             // asi soltar el gizmo no selecciona/deselecciona nada.
             var gizmo = TransformGizmoController.Instance;
             if (gizmo != null && gizmo.ActiveHandle != null) { _lastPickResult = "gizmo-drag"; return; }
+
+            // Modo BETA de pared automática: el tap elige un candidato de ARPlane,
+            // no pasa por el picking de ISelectable de más abajo.
+            if (fsm.Current == ScannerMode.AutoWall_Scanning)
+            {
+                _autoWallBuilder?.TryPickCandidate(screenPoint);
+                _lastPickResult = "autowall pick";
+                return;
+            }
 
             Physics.SyncTransforms();
 

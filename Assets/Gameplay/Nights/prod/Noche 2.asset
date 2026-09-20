@@ -13,27 +13,64 @@ MonoBehaviour:
   m_Name: Noche 2
   m_EditorClassIdentifier:
   displayName: Noche 2
-  briefing: El Sorken insiste. Menos bateria, menos margen.
+  briefing: Insiste mas seguido y aguanta mas la luz. La bateria ya no alcanza para
+    todo.
+  nightDurationSeconds: 270
   sorkenActive: 1
-  attemptIntervalMin: 20
-  attemptIntervalMax: 34
+  attemptIntervalMin: 26
+  attemptIntervalMax: 40
   entryRepelSeconds: 3
-  entryGraceSeconds: 6
-  entryTriggerDistance: 3
+  entryGraceSeconds: 10.5
+  entryTriggerDistance: 3.5
   chaseRepelSeconds: 4.5
-  sorkenChaseSpeed: 2.4
-  sorkenRetreatSpeed: 3.5
-  grabRange: 1.2
-  flashlightMaxCharge: 105
-  flashlightDrainPerSecond: 1.9
+  sorkenChaseSpeed: 2.3
+  sorkenRetreatSpeed: 3.7
+  grabRange: 1.15
+  flashlightMaxCharge: 120
+  flashlightDrainPerSecond: 1.7
   sanityMax: 100
-  flashlightOffThreshold: 6
-  sanityDrainPerSecond: 3.5
+  flashlightOffThreshold: 7
+  sanityDrainPerSecond: 1.7
   arbmosActive: 0
-  flashlightConeAngleDeg: 30
-  flashlightRange: 8
-  initialAttemptDelay: 4
-  flickerAimAngle: 18
-  flickerDistance: 6
-  batterySpawnRateMultiplier: 1.1
-  batteryChanceMods: []
+  arbmosStillInvokeSeconds: 6
+  arbmosStillRadius: 0.5
+  arbmosStillOutsideGrace: 0.4
+  arbmosPresentSeconds: 6
+  arbmosPresentFollowSpeed: 1.2
+  arbmosCooldownMin: 30
+  arbmosCooldownMax: 50
+  arbmosSpawnDistance: 2.5
+  arbmosSanityDrainPerSecond: 5
+  arbmosSpawnChancePerAttempt: 0.5
+  arbmosFlashlightOffChanceMul: 2
+  arbmosLethalStalkSeconds: 3.5
+  arbmosLethalChaseSpeed: 3.5
+  arbmosGrabRange: 1.2
+  bookActive: 1
+  bookEventDelayMin: 44
+  bookEventDelayMax: 66
+  bookConsumeSeconds: 8.5
+  bookDefenseSeconds: 3.5
+  velethChaseSpeed: 3
+  velethGrabRange: 1.1
+  velethRepathSeconds: 0.28
+  velethGrabHoldSeconds: 0.8
+  flashlightConeAngleDeg: 31
+  flashlightRange: 8.5
+  initialAttemptDelay: 10
+  emergeTimeoutSeconds: 17
+  retreatSeconds: 1.5
+  grabHoldSeconds: 1.5
+  flickerAimAngle: 20
+  flickerDistance: 6.5
+  batterySpawnRateMultiplier: 1.15
+  batteryChanceMods:
+  - rarityIndex: 0
+    chanceMultiplier: 0.85
+  - rarityIndex: 2
+    chanceMultiplier: 1.3
+  collectiblesActive: 1
+  collectibleInitialDelaySeconds: 14
+  collectibleIntervalMin: 38
+  collectibleIntervalMax: 70
+  collectibleMaxPerNight: 6

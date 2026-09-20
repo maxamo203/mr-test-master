@@ -52,4 +52,9 @@ public static class EntityTypeIds
     // typeId 10/11/12. El typeId encodea la rareza para que el cliente instancie el
     // prefab correcto (SpawnEntityMsg solo lleva typeId, sin payload extra).
     public const byte BatteryBase = 10;
+
+    // Reliquias del ritual: una variante VISUAL por typeId a partir de esta base
+    // (variantIndex 0/1/2… => typeId 20/21/22…), igual mecanismo que las pilas, pero
+    // acá ninguna variante vale mas que otra — es solo estetica (ver CollectibleEntity).
+    public const byte CollectibleReliquia = 20;
 }

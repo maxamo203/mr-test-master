@@ -41,6 +41,13 @@ namespace Gameplay
         {
             if (IsDead) return;      // el server puede reenviar; no repetir el sonido
             IsDead = true;
+            // Momento en el que se "cierra" el resultado de ESTE dispositivo (igual
+            // que NocheSuperada en el otro desenlace): si los compañeros siguen
+            // juntando reliquias después, no se refleja acá — mismo criterio
+            // personal/local que ya tiene Sobrevivio/DeathScreenUI.
+            NightResult.MarcarObjetosRecolectados(NightLoot.Total);
+            CollectibleProgress.RegistrarIntento(GameSession.Instance != null ? GameSession.Instance.NightIndex : -1,
+                                                  NightLoot.Total);
             AudioManager.Musica(c => c.derrotaMuerte, fade: 0.4f);
         }
 
