@@ -43,6 +43,11 @@ public class AnchorPointManager : MonoBehaviour
     private const float MaxCorreccionM   = 1.5f;   // salto mayor = ancla mala; en estéreo marea
     private const float MaxCorreccionDeg = 30f;
 
+    // Mirar un ancla la favorece como ancla activa (ver Puntaje): medio ángulo del
+    // cono "la estoy mirando" y cuántos metros de ventaja le da estar a la vista.
+    private const float AnguloVistaGrados = 30f;
+    private const float BonusVista        = 2f;
+
     private class Ancla
     {
         public int          Id;
@@ -403,32 +408,32 @@ public class AnchorPointManager : MonoBehaviour
         var actual = wo.CurrentAnchor;
         bool parentPerdido = actual == null;
 
-        Transform  mejorT   = null;
-        Vector3    mejorPos = Vector3.zero;
-        Quaternion mejorRot = Quaternion.identity;
-        int        mejorId  = 0;
-        float      mejorD2  = float.MaxValue;
+        Transform  mejorT     = null;
+        Vector3    mejorPos   = Vector3.zero;
+        Quaternion mejorRot   = Quaternion.identity;
+        int        mejorId    = 0;
+        float      mejorScore = float.MaxValue;
 
         // Candidato #0: el anchor de la imagen (el marco más confiable si estás cerca).
         if (_tieneImg && _imageAnchor != null && _imageAnchor.CurrentAnchor != null)
         {
-            mejorT   = _imageAnchor.CurrentAnchor;
-            mejorPos = _imgLocalPos;
-            mejorRot = _imgLocalRot;
-            mejorD2  = (mejorT.position - camT.position).sqrMagnitude;
+            mejorT     = _imageAnchor.CurrentAnchor;
+            mejorPos   = _imgLocalPos;
+            mejorRot   = _imgLocalRot;
+            mejorScore = Puntaje(mejorT.position, camT);
         }
 
         for (int i = 0; i < _anclas.Count; i++)
         {
             var a = _anclas[i];
             if (!a.Trackeando) continue;
-            float d2 = (a.Go.transform.position - camT.position).sqrMagnitude;
-            if (d2 >= mejorD2) continue;
-            mejorD2  = d2;
-            mejorT   = a.Go.transform;
-            mejorPos = a.WoLocalPos;
-            mejorRot = a.WoLocalRot;
-            mejorId  = a.Id;
+            float s = Puntaje(a.Go.transform.position, camT);
+            if (s >= mejorScore) continue;
+            mejorScore = s;
+            mejorT     = a.Go.transform;
+            mejorPos   = a.WoLocalPos;
+            mejorRot   = a.WoLocalRot;
+            mejorId    = a.Id;
         }
 
         if (mejorT == null) return;             // nada trackeando: dejamos todo como está
@@ -436,9 +441,8 @@ public class AnchorPointManager : MonoBehaviour
 
         if (!parentPerdido)
         {
-            // Histéresis: sólo cambiamos si el candidato está CLARAMENTE más cerca.
-            float dActual = Vector3.Distance(actual.position, camT.position);
-            if (Mathf.Sqrt(mejorD2) > dActual - HisteresisM) return;
+            // Histéresis: sólo cambiamos si el candidato gana CLARAMENTE.
+            if (mejorScore > Puntaje(actual.position, camT) - HisteresisM) return;
 
             if (Time.time - _ultimoCambio < CooldownS) return;
         }
@@ -469,6 +473,28 @@ public class AnchorPointManager : MonoBehaviour
 
         if (Debug.isDebugBuild)
             Debug.Log($"[Anclas] WorldOrigin → ancla #{mejorId} (corrección {dPos * 100f:0} cm / {dAng:0.0}°)");
+    }
+
+    // Puntaje de un candidato a ancla activa: metros a la cámara, con una REBAJA si el
+    // jugador lo está MIRANDO. Elegir sólo por cercanía dejaba el feature invisible: el
+    // ancla activa cambia al CAMINAR, así que mirar una ancla desalineada no hacía nada,
+    // que es justo el gesto con el que uno espera que el entorno se reacomode. Y mirarla
+    // además es la mejor señal técnica: un ancla a la vista es la que el tracker acaba de
+    // volver a observar (su pose es la más fresca) y es contra la que el jugador ve el
+    // desfasaje. Menor es mejor.
+    private static float Puntaje(Vector3 pos, Transform camT)
+    {
+        var dir = pos - camT.position;
+        float d = dir.magnitude;
+        if (d < 1e-3f) return 0f;
+        bool aLaVista = Vector3.Angle(camT.forward, dir) <= AnguloVistaGrados;
+        return aLaVista ? Mathf.Max(0f, d - BonusVista) : d;
+    }
+
+    private static bool ALaVista(Vector3 pos, Transform camT)
+    {
+        var dir = pos - camT.position;
+        return dir.sqrMagnitude > 1e-6f && Vector3.Angle(camT.forward, dir) <= AnguloVistaGrados;
     }
 
     // ── Reset con la imagen (la única fuente de verdad) ────────────────────
@@ -746,7 +772,12 @@ public class AnchorPointManager : MonoBehaviour
             var a = _anclas[i];
             sb.Append("\n #").Append(a.Id).Append(' ').Append(a.Estado);
             if (camT != null && a.Go != null)
+            {
                 sb.Append("  ").Append(Vector3.Distance(a.Go.transform.position, camT.position).ToString("0.0")).Append(" m");
+                // "vista" = entra en el cono de Puntaje, o sea que ahora mismo pesa
+                // BonusVista a favor. Es lo que hay que mirar si parece que no corrige.
+                if (ALaVista(a.Go.transform.position, camT)) sb.Append(" vista");
+            }
             sb.Append("  ").Append(a.Fuente).Append("  cal ").Append((a.Calidad * 100f).ToString("0")).Append('%');
             if (a.Go != null)
             {
