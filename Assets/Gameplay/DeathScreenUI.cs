@@ -61,9 +61,14 @@ namespace Gameplay
                                  : "El ritual te reclamó… por ahora.",
                       T.Estilo(T.FElite, 14, T.Muted, TextAnchor.MiddleCenter));
 
+            // Fin de la demo: superaste la última noche de esta variante. Reemplaza al
+            // aviso de desbloqueo porque en la demo ese aviso mentiría — la progresión
+            // desbloquea la noche siguiente igual, pero la variante no la habilita.
+            if (sobrevivio && FinDeLaDemo())
+                DrawFinDemo(vw, vh);
             // Aviso de desbloqueo (sólo si esta victoria movió de verdad la progresión;
             // rejugar una noche ya superada no desbloquea nada).
-            if (sobrevivio && NightResult.NocheDesbloqueada > 0)
+            else if (sobrevivio && NightResult.NocheDesbloqueada > 0)
                 GUI.Label(new Rect(Pad, vh * 0.28f + 126f, vw - Pad * 2f, 24f),
                           $"Noche {NightResult.NocheDesbloqueada} desbloqueada",
                           T.Estilo(T.FMono, 12, T.Tan, TextAnchor.MiddleCenter));
@@ -102,6 +107,38 @@ namespace Gameplay
             }
 
             _nav.End();
+        }
+
+        // ¿La noche recién superada era la ÚLTIMA que habilita la demo, y hay más en el
+        // catálogo? Lo segundo importa: sin noches de más no hay nada que ofrecer y el
+        // cartel sería puro ruido. En la build completa es const false y se compila afuera.
+        private static bool FinDeLaDemo()
+        {
+            if (!BuildVariant.EsDemo) return false;
+
+            var s = GameSession.Instance;
+            if (s == null || s.NightIndex < 0) return false;
+
+            int sig = s.NightIndex + 1;
+            return s.Nights != null && sig < s.Nights.Length && s.Nights[sig] != null &&
+                   !BuildVariant.NocheHabilitada(sig);
+        }
+
+        // Cartel de cierre de la demo. Se apoya justo debajo del subtítulo; los botones
+        // arrancan recién en vh-234, así que no hay riesgo de pisarlos.
+        private static void DrawFinDemo(float vw, float vh)
+        {
+            var caja = new Rect(Pad, vh * 0.28f + 122f, vw - Pad * 2f, 132f);
+            T.Fill(caja, new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.07f));
+            T.Borde(caja, T.Tan);
+
+            GUI.Label(new Rect(caja.x, caja.y + 12f, caja.width, 30f), "FIN DE LA DEMO",
+                      T.Estilo(T.FBebas, 24, T.Tan, TextAnchor.MiddleCenter));
+
+            GUI.Label(new Rect(caja.x + 14f, caja.y + 46f, caja.width - 28f, 74f),
+                      $"Podés seguir jugando estas {BuildVariant.NochesDemo} noches todas las veces " +
+                      "que quieras. La versión completa suma más noches y modo multijugador.",
+                      T.Estilo(T.FMono, 12, T.CreamDim, TextAnchor.UpperCenter, wrap: true));
         }
 
         // ¿La noche recién superada dejó desbloqueada una siguiente que existe?

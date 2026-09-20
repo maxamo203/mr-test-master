@@ -205,6 +205,12 @@ namespace Gameplay
             }
             else
             {
+                // Red de seguridad de la demo: ningún camino debería llevar a la
+                // pantalla de sesión compartida con el botón oculto, pero si alguno
+                // apareciera, cae al menú en vez de dejar entrar al multijugador.
+                if (!BuildVariant.Multijugador && _pantalla == Pantalla.CrearUnirse)
+                    _pantalla = Pantalla.Menu;
+
                 switch (_pantalla)
                 {
                     case Pantalla.Menu:        DrawMenu(vw, vh);        break;
@@ -233,20 +239,27 @@ namespace Gameplay
             GUI.Label(new Rect(0, titleY + logoH + 4f, vw, 34f), "El ritual no debe parar",
                       T.Estilo(T.FElite, 21, T.Muted, TextAnchor.MiddleCenter));
 
+            // La demo no tiene multijugador (ver BuildVariant): un botón menos, y el
+            // bloque arranca más abajo para que siga apoyado contra el pie de pantalla.
+            int botones = BuildVariant.Multijugador ? 4 : 3;
             float bw = vw - Pad * 2f, bh = 56f, x = Pad;
-            float y = vh - 44f - (bh + 14f) * 4f - 24f;
+            float y = vh - 44f - (bh + 14f) * botones - 24f;
 
             T.Boton(_nav, new Rect(x, y, bw, bh), "UN JUGADOR", primario: true,
                     () => ConfigurarPartida(GameSession.SessionMode.SinglePlayer), fontSize: 22);
             y += bh + 14f;
-            T.Boton(_nav, new Rect(x, y, bw, bh), "MULTIJUGADOR", false,
-                    () => _pantalla = Pantalla.CrearUnirse);
-            y += bh + 14f;
+            if (BuildVariant.Multijugador)
+            {
+                T.Boton(_nav, new Rect(x, y, bw, bh), "MULTIJUGADOR", false,
+                        () => _pantalla = Pantalla.CrearUnirse);
+                y += bh + 14f;
+            }
             T.Boton(_nav, new Rect(x, y, bw, bh), "ESCANEAR ENTORNO", false, OnEscanear);
             y += bh + 14f;
             T.Boton(_nav, new Rect(x, y, bw, bh), "OPCIONES", false, () => _pantalla = Pantalla.Opciones);
 
-            GUI.Label(new Rect(0, vh - 36f, vw, 20f), "Build interna · equipo 112",
+            GUI.Label(new Rect(0, vh - 36f, vw, 20f),
+                      BuildVariant.EsDemo ? "DEMO · equipo 112" : "Build interna · equipo 112",
                       T.Estilo(T.FMono, 10, T.Disabled, TextAnchor.MiddleCenter));
         }
 
@@ -345,6 +358,22 @@ namespace Gameplay
                 var r = new Rect(Pad + col * (cw + gap), y0 + fila * (ch + gap), cw, ch);
 
                 bool existe = nights != null && i < nights.Length && nights[i] != null;
+
+                // Recorte de la demo: la noche existe y está en el build, pero esta
+                // variante no la habilita. Candado con otro texto — no es que te falte
+                // ganar la anterior, es que te falta el juego completo.
+                if (existe && !BuildVariant.NocheHabilitada(i))
+                {
+                    T.Fill(r, new Color(1f, 1f, 1f, 0.02f));
+                    T.Borde(r, T.BorderDim);
+                    GUI.Label(new Rect(r.x, r.y + 12f, r.width, 34f), (i + 1).ToString(),
+                              T.Estilo(T.FBebas, 26, T.Disabled, TextAnchor.MiddleCenter));
+                    T.Candado(new Rect(r.center.x - 8f, r.y + 46f, 16f, 18f), T.Tan);
+                    GUI.Label(new Rect(r.x, r.y + 66f, r.width, 18f), "Versión completa",
+                              T.Estilo(T.FMono, 11, T.Tan, TextAnchor.MiddleCenter));
+                    continue;
+                }
+
                 if (existe && !NightProgress.Desbloqueada(i))
                 {
                     // Configurada pero todavía no ganada la anterior: candado real.

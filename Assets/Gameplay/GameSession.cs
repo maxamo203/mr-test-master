@@ -44,8 +44,12 @@ namespace Gameplay
 
         // ¿Esa posición del catálogo es una noche jugable? (las que faltan se dibujan
         // como celdas bloqueadas, igual que en el menú principal).
+        // BuildVariant.NocheHabilitada recorta el catálogo en la demo (ver BuildVariant):
+        // acá porque es el gate que ya consultan las dos grillas de noches (el menú y la
+        // de fin de noche) y la selección.
         public bool NocheDisponible(int index) =>
-            Nights != null && index >= 0 && index < Nights.Length && Nights[index] != null;
+            Nights != null && index >= 0 && index < Nights.Length && Nights[index] != null &&
+            BuildVariant.NocheHabilitada(index);
 
         // Deja esa noche como la activa. False si el índice no es jugable.
         public bool SeleccionarNoche(int index)
