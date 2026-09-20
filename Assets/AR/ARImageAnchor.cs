@@ -42,9 +42,21 @@ public class ARImageAnchor : MonoBehaviour
     // cualquiera de ellas, si seguía a la vista, anclara el mapa en el lugar
     // equivocado. Con una sola imagen la búsqueda es más rápida y más barata.
     private MutableRuntimeReferenceImageLibrary _runtimeLib;
-    private Guid   _imagenActual;      // guid de la imagen en uso (Guid.Empty si no se conoce)
-    private string _nombreActual;      // nombre único de esa imagen (fallback del filtro)
-    private int    _contadorImagenes;
+    private Guid      _imagenActual;   // guid de la imagen en uso (Guid.Empty si no se conoce)
+    private string    _nombreActual;   // nombre único de esa imagen (fallback del filtro)
+    private int       _contadorImagenes;
+    private Coroutine _rutinaAlta;     // alta de imagen en curso (una sola a la vez)
+
+    // Tope de espera a que el loader XR tenga listo el subsistema de imágenes.
+    private const float EsperaSubsistema = 10f;
+
+    // Gracia antes de aceptar una detección que NO matchea la imagen en uso. El filtro
+    // es una garantía contra anclar con una imagen vieja, no una condición de anclaje:
+    // si el proveedor no nos deja resolver el guid/nombre del trackable, preferimos
+    // anclar (que es lo que se hacía antes) a dejar la búsqueda colgada para siempre
+    // sin decir nada — que es como se ve este bug desde la UI.
+    private const float GraciaFiltro = 3f;
+    private bool _avisoFiltro;
 
     // Orientación física de la imagen en uso (guardada con el escaneo; Desconocida en
     // escaneos viejos, que se resuelve con la pose detectada). Define de qué eje de
@@ -102,6 +114,7 @@ public class ARImageAnchor : MonoBehaviour
         _muestras.Clear();
         _rumboPrevio = Vector3.zero;
         _ultimaMuestraT = -1f;
+        _avisoFiltro = false;
     }
 
     private void Awake()
@@ -271,11 +284,28 @@ public class ARImageAnchor : MonoBehaviour
     // trackable viejo (de una librería anterior) nunca puede anclar este mapa.
     private ARTrackedImage BuscarImagenActual()
     {
+        ARTrackedImage otra = null;
         foreach (var img in _imageManager.trackables)
         {
             if (img.trackingState != TrackingState.Tracking) continue;
-            if (!EsImagenActual(img)) continue;
-            return img;
+            if (EsImagenActual(img)) return img;
+            otra ??= img;
+        }
+
+        // Hay una imagen trackeando pero no la reconocemos como la nuestra. Pasada la
+        // gracia la aceptamos igual (ver GraciaFiltro): con una librería de una sola
+        // imagen, lo más probable es que sea la nuestra y que lo que falló sea la
+        // resolución del guid/nombre del trackable, no la detección.
+        if (otra != null && Time.time - _searchSince >= GraciaFiltro)
+        {
+            if (!_avisoFiltro)
+            {
+                _avisoFiltro = true;
+                Debug.LogWarning($"[ARImageAnchor] Detección que no matchea la imagen en uso " +
+                                 $"(esperaba '{_nombreActual}' / {_imagenActual}, llegó " +
+                                 $"'{otra.referenceImage.name}' / {otra.referenceImage.guid}); se acepta igual.");
+            }
+            return otra;
         }
         return null;
     }
@@ -331,24 +361,51 @@ public class ARImageAnchor : MonoBehaviour
         HasReferenceImage = true;
         RestartTracking(keepVisualPosition);
 #else
-        StopAllCoroutines();   // un AddReferenceImage anterior a medio validar no debe pisar a éste
-        StartCoroutine(AddReferenceImageRoutine(tex, imageName, widthMeters, keepVisualPosition));
+        // Un alta anterior a medio validar no debe pisar a ésta. Se corta SOLO esa
+        // corrutina (StopAllCoroutines se llevaba puesta cualquier otra del componente).
+        if (_rutinaAlta != null) StopCoroutine(_rutinaAlta);
+        _rutinaAlta = StartCoroutine(AddReferenceImageRoutine(tex, imageName, widthMeters, keepVisualPosition));
 #endif
     }
 
     private IEnumerator AddReferenceImageRoutine(Texture2D tex, string imageName, float widthMeters, bool keepVisualPosition)
     {
-        // Necesitamos el subsistema instanciado para crear la librería mutable. Al
-        // habilitar el manager sin librería se auto-deshabilita, pero deja el
-        // subsistema creado, que es lo que buscamos.
-        _imageManager.enabled = true;
-        while (_imageManager.subsystem == null) yield return null;
-        // Mientras se valida la imagen nueva NO se busca la vieja.
+        // EL MANAGER QUEDA APAGADO DURANTE TODA LA PREPARACIÓN. Es la diferencia entre
+        // la PRIMERA alta del proceso y las siguientes: el subsistema de imágenes
+        // sobrevive a los cambios de escena (el componente no), así que en la 2ª escena
+        // `subsystem.imageLibrary` todavía apunta a la librería de la escena anterior.
+        // Habilitando el manager acá, ARFoundation arrancaba el subsistema con ESA
+        // librería vieja (OnBeforeStart sólo se auto-apaga si la librería es null, que
+        // es el caso únicamente la primera vez) y después el ciclo
+        // apagar → cambiar librería → prender quedaba expuesto a que `Start()` fuera
+        // un no-op (`if (running) return`), con lo que el `OnStart()` que empuja la
+        // librería al proveedor — el SetDatabase nativo — nunca corría: ARKit/ARCore
+        // seguían buscando la imagen vieja y la nueva no aparecía nunca.
         _imageManager.enabled = false;
 
-        if (!CrearLibreria())
+        // No hace falta habilitar el manager para conseguir el subsistema:
+        // CreateRuntimeLibrary lo resuelve por su cuenta (EnsureSubsystemInstanceSet) y
+        // tira NotSupportedException mientras el loader no lo tenga listo. Reintentamos.
+        float t0 = Time.realtimeSinceStartup;
+        AltaLibreria estado;
+        while ((estado = IntentarCrearLibreria()) == AltaLibreria.SinSubsistema)
+        {
+            if (Time.realtimeSinceStartup - t0 > EsperaSubsistema)
+            {
+                Debug.LogError("[ARImageAnchor] El subsistema de imágenes nunca estuvo listo; la imagen no se agrega.");
+                SetAviso("El dispositivo no pudo iniciar el seguimiento de imágenes.");
+                yield break;
+            }
+            // Espaciado: cada intento fallido loguea un warning de ARFoundation
+            // ("No active XRImageTrackingSubsystem is available"). Realtime, para que
+            // un timeScale 0 (pausa) no lo deje colgado.
+            yield return new WaitForSecondsRealtime(0.25f);
+        }
+
+        if (estado != AltaLibreria.Ok)
         {
             Debug.LogError("[ARImageAnchor] No se pudo crear una librería mutable; la imagen no se agrega.");
+            SetAviso("El dispositivo no pudo iniciar el seguimiento de imágenes.");
             yield break;
         }
 
@@ -396,32 +453,47 @@ public class ARImageAnchor : MonoBehaviour
 
         HasReferenceImage = true;
 
+        // RECIÉN ACÁ se le entrega la librería al manager: ya tiene la imagen adentro.
+        // Así el ciclo prender → OnBeforeStart → Start → OnStart empuja al proveedor
+        // (SetDatabase) una librería COMPLETA, y nunca se busca con una vacía ni con
+        // la que quedó de la escena anterior.
+        _imageManager.referenceLibrary = _runtimeLib;
+
         // Reiniciamos la detección para que busque la imagen recién agregada.
+        _rutinaAlta = null;
         RestartTracking(keepVisualPosition);
     }
 
-    // Librería mutable VACÍA nueva (descarta la anterior) y la deja puesta en el manager.
-    private bool CrearLibreria()
+    private enum AltaLibreria { Ok, SinSubsistema, NoSoportado }
+
+    // Crea una librería mutable VACÍA nueva (descarta la anterior). NO se la pasa al
+    // manager todavía: eso pasa al final del alta, con la imagen ya adentro.
+    private AltaLibreria IntentarCrearLibreria()
     {
         try
         {
             _runtimeLib = _imageManager.CreateRuntimeLibrary() as MutableRuntimeReferenceImageLibrary;
         }
+        catch (NotSupportedException)
+        {
+            // Todavía no hay subsistema (el loader XR sigue arrancando): reintentar.
+            _runtimeLib = null;
+            return AltaLibreria.SinSubsistema;
+        }
         catch (Exception e)
         {
             Debug.LogError($"[ARImageAnchor] CreateRuntimeLibrary falló: {e.Message}");
             _runtimeLib = null;
-            return false;
+            return AltaLibreria.NoSoportado;
         }
 
         if (_runtimeLib == null)
         {
             Debug.LogWarning("[ARImageAnchor] El subsistema no soporta librerías mutables.");
-            return false;
+            return AltaLibreria.NoSoportado;
         }
 
-        _imageManager.referenceLibrary = _runtimeLib;
-        return true;
+        return AltaLibreria.Ok;
     }
 
     private void SetAviso(string aviso)

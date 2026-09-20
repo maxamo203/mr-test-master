@@ -82,6 +82,24 @@ namespace Scanner
             if (!EnhancedTouchSupport.enabled) EnhancedTouchSupport.Enable();
         }
 
+        // Al ENTRAR A EDITAR un escaneo guardado, ScanLoader ya registró su imagen de
+        // referencia y ARImageAnchor ya está buscándola: lo que falta es reencontrarla
+        // para reubicarse. Arrancar en Adjust (capturar una imagen nueva) escondía esa
+        // búsqueda — ni el fantasma de la imagen guardada ni el cartel de "buscando la
+        // zona" aparecían, y parecía que el escáner no reconocía nada. ScannerSceneBootstrap
+        // carga el escaneo en su Start, así que esto va en el frame siguiente.
+        private IEnumerator Start()
+        {
+            yield return null;
+            if (_phase == Phase.Adjust && !_busy && CapturedReference.HasImage &&
+                _imageAnchor != null && _imageAnchor.HasReferenceImage && !_imageAnchor.IsFound)
+            {
+                EnsureSelInit();
+                _widthMeters = CapturedReference.WidthMeters;
+                _phase = Phase.Waiting;
+            }
+        }
+
         private void EnsureSelInit()
         {
             if (_selInit) return;
