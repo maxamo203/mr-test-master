@@ -32,3 +32,12 @@ export const howItems: RailItem[] = [
   { href: '#companeros', label: 'Compañeros', num: '05' },
   { href: '#inmersion', label: 'Inmersión', num: '06' },
 ];
+
+/** Secciones de la política de privacidad. */
+export const privacyItems: RailItem[] = [
+  { href: '#alcance', label: 'Alcance', num: '01' },
+  { href: '#datos', label: 'Datos', num: '02' },
+  { href: '#comparticion', label: 'Compartición', num: '03' },
+  { href: '#retencion', label: 'Retención', num: '04' },
+  { href: '#contacto', label: 'Contacto', num: '05' },
+];

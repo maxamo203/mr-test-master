@@ -1,0 +1,219 @@
+---
+import Base from '../layouts/Base.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { privacyItems } from '../nav';
+---
+
+<Base
+  title="Política de privacidad — Mortuorium"
+  description="Política de privacidad de Mortuorium: cómo se accede, usa, comparte y conserva la información dentro del juego."
+  items={privacyItems}
+  back={{ href: '/', label: 'Volver' }}
+>
+  <header class="phead">
+    <div class="wrap">
+      <p class="eyebrow">Información legal</p>
+      <h1 class="title phead__title">Política de<br />privacidad</h1>
+      <p class="lead">
+        Última actualización: 24 de septiembre de 2026. Esta política explica cómo
+        Mortuorium maneja la información durante una partida.
+      </p>
+    </div>
+  </header>
+
+  <div class="privacy">
+    <section class="section privacy__section" id="alcance">
+      <div class="wrap privacy__grid">
+        <div class="privacy__aside">
+          <span class="privacy__num">01</span>
+          <h2>Alcance</h2>
+        </div>
+        <div class="privacy__body" data-reveal>
+          <p class="privacy__kicker">Sin nube. Sin perfiles. Sin publicidad.</p>
+          <p>
+            Mortuorium es un proyecto del Equipo 112 de la materia Proyecto Final de
+            Ingeniería en Informática de la Universidad Nacional de La Matanza (UNLaM).
+            La aplicación está diseñada para funcionar sin cuentas de usuario, sin
+            servidores propios y sin procesamiento de información en la nube.
+          </p>
+          <p>
+            Esta política se aplica a la aplicación móvil Mortuorium y describe las
+            prácticas de privacidad vigentes en la fecha indicada arriba.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section privacy__section" id="datos">
+      <div class="wrap privacy__grid">
+        <div class="privacy__aside">
+          <span class="privacy__num">02</span>
+          <h2>Datos que usa</h2>
+        </div>
+        <div class="privacy__body" data-reveal>
+          <p>
+            Para que el juego funcione, Mortuorium puede solicitar acceso a la cámara
+            del dispositivo. La cámara se utiliza durante el escaneo de la habitación
+            y para reconocer la imagen de anclaje del juego. El análisis se realiza en
+            el propio dispositivo; las imágenes y el escaneo no se envían a nuestros
+            servidores ni a servicios externos.
+          </p>
+          <p>
+            La aplicación puede guardar en el dispositivo información necesaria para
+            jugar, como el escaneo del entorno, la configuración, el progreso y los
+            resultados de las partidas. Estos datos no se asocian con un nombre, correo,
+            teléfono ni cuenta de usuario.
+          </p>
+          <p>
+            Mortuorium no solicita ni recopila ubicación, contactos, mensajes, datos de
+            salud, información financiera, identificadores personales, micrófono ni
+            información de otras aplicaciones para sus funciones de juego.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section privacy__section" id="comparticion">
+      <div class="wrap privacy__grid">
+        <div class="privacy__aside">
+          <span class="privacy__num">03</span>
+          <h2>Partidas cooperativas</h2>
+        </div>
+        <div class="privacy__body" data-reveal>
+          <p>
+            El modo cooperativo funciona mediante la red local, por ejemplo, el mismo
+            Wi-Fi. Durante la partida, la aplicación puede compartir temporalmente con
+            los demás jugadores conectados a esa sala la información necesaria para
+            sincronizar el entorno y el estado del juego.
+          </p>
+          <p>
+            Esta comunicación ocurre directamente entre los dispositivos participantes
+            y sólo mientras la partida está activa. No se comparte con anunciantes,
+            empresas de análisis, redes sociales ni otros terceros, y no se transmite a
+            un servidor externo para almacenarla o procesarla.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section privacy__section" id="retencion">
+      <div class="wrap privacy__grid">
+        <div class="privacy__aside">
+          <span class="privacy__num">04</span>
+          <h2>Conservación y seguridad</h2>
+        </div>
+        <div class="privacy__body" data-reveal>
+          <p>
+            No conservamos información en servidores externos porque Mortuorium no
+            utiliza servidores propios para sus partidas. La información guardada
+            localmente permanece en el dispositivo hasta que la persona la elimina,
+            borra los datos de la aplicación o desinstala Mortuorium.
+          </p>
+          <p>
+            La información que se comparte entre jugadores deja de transmitirse cuando
+            termina la partida o se desconecta el dispositivo. Como no existe una cuenta
+            de usuario, no hay un perfil remoto ni una cuenta que solicitar eliminar.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section privacy__section" id="contacto">
+      <div class="wrap privacy__grid">
+        <div class="privacy__aside">
+          <span class="privacy__num">05</span>
+          <h2>Contacto</h2>
+        </div>
+        <div class="privacy__body" data-reveal>
+          <p>
+            Para consultas sobre esta política o sobre el tratamiento de información en
+            Mortuorium, podés contactarnos a través de
+            <a href="https://www.instagram.com/mortuorium_unlam/" target="_blank" rel="noopener noreferrer">
+              @mortuorium_unlam en Instagram</a
+            >. El responsable indicado para esta política es el Equipo 112, Proyecto
+            Final de Ingeniería en Informática, UNLaM.
+          </p>
+          <p>
+            Si cambiamos la forma en que la aplicación maneja la información, vamos a
+            actualizar esta página antes o al mismo tiempo que el cambio esté disponible.
+          </p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <SiteFooter />
+</Base>
+
+<style>
+  .phead {
+    padding: clamp(5rem, 16vh, 9rem) var(--pad-x) clamp(2rem, 5vh, 3.5rem);
+  }
+
+  .phead__title {
+    margin-bottom: 0.5rem;
+  }
+
+  .privacy {
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  .privacy__section {
+    border-bottom: 1px solid var(--rule-soft);
+    padding-block: clamp(3rem, 8vh, 5.5rem);
+  }
+
+  .privacy__grid {
+    display: grid;
+    gap: 1.6rem;
+  }
+
+  @media (min-width: 55rem) {
+    .privacy__grid {
+      grid-template-columns: 16rem 1fr;
+      gap: 3.5rem;
+    }
+  }
+
+  .privacy__aside {
+    display: flex;
+    align-items: baseline;
+    gap: 0.9rem;
+  }
+
+  .privacy__aside h2 {
+    font-size: clamp(1.8rem, 3vw, 2.7rem);
+  }
+
+  .privacy__num {
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+  }
+
+  .privacy__body {
+    max-width: 62ch;
+    color: var(--text-soft);
+    line-height: 1.75;
+  }
+
+  .privacy__body p + p {
+    margin-top: 1.25rem;
+  }
+
+  .privacy__kicker {
+    color: var(--accent-soft);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    line-height: 1.5;
+    text-transform: uppercase;
+  }
+
+  .privacy__body a {
+    text-decoration: underline;
+    text-decoration-color: var(--accent-deep);
+    text-underline-offset: 0.2em;
+  }
+</style>
