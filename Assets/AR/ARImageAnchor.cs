@@ -409,7 +409,10 @@ public class ARImageAnchor : MonoBehaviour
             yield break;
         }
 
-        if (tex.format != TextureFormat.RGBA32) tex = ToRGBA32(tex);
+        // Copia temporal si el formato no sirve: es NUESTRA (el llamador conserva la
+        // original) y se destruye en cuanto el job terminó de leer sus píxeles.
+        Texture2D copiaTemporal = null;
+        if (tex.format != TextureFormat.RGBA32) tex = copiaTemporal = ToRGBA32(tex);
         if (widthMeters <= 0f) widthMeters = 0.15f;
 
         // Nombre único por alta: es el fallback del filtro de trackables (el guid lo
@@ -435,6 +438,12 @@ public class ARImageAnchor : MonoBehaviour
             refImage);
 
         while (jobState.status == AddReferenceImageJobStatus.Pending) yield return null;
+
+        // El job ya copió la imagen a la librería nativa: la copia RGBA32 no se usa más.
+        // (Si la corrutina se corta antes —StopCoroutine en un alta nueva— la copia
+        // queda sin referencias y la barre el próximo cambio de escena; destruirla ahí
+        // sería peor: el job podría seguir leyendo su buffer.)
+        if (copiaTemporal != null) Destroy(copiaTemporal);
 
         if (jobState.status != AddReferenceImageJobStatus.Success)
         {

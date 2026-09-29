@@ -33,11 +33,25 @@ public static class AnchorVisuals
         // URP/Lit→Standard: el proyecto es Built-in y 'Standard' no esta incluido en
         // el build => se stripeaba => magenta. LitMarker es de una sola variante, por
         // eso es seguro en device. Ver [[builtin-pipeline-shader-stripping]].
+        mr.sharedMaterial = MaterialPara(color);
+        return go;
+    }
+
+    // Un material COMPARTIDO por color. Antes cada esfera creaba el suyo y nadie lo
+    // destruía al borrar el visual: cada recalibración (2 esferas) y cada anchor point
+    // dejaban materiales huérfanos. Los colores son un puñado de constantes, así que el
+    // caché queda acotado.
+    private static readonly System.Collections.Generic.Dictionary<Color, Material> _mats = new();
+
+    private static Material MaterialPara(Color color)
+    {
+        if (_mats.TryGetValue(color, out var mat) && mat != null) return mat;
+
         var shader = Shader.Find("Custom/LitMarker") ?? Shader.Find("Unlit/Color");
-        var mat = new Material(shader);
+        mat = new Material(shader) { name = "AnchorVisual (runtime)" };
         if (mat.HasProperty("_Color"))     mat.color = color;
         if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
-        mr.material = mat;
-        return go;
+        _mats[color] = mat;
+        return mat;
     }
 }

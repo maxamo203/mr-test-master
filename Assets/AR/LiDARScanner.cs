@@ -246,7 +246,18 @@ public class LiDARScanner : MonoBehaviour
     {
         foreach (var mf in args.added)   ConfigureChunk(mf, isNew: true);
         foreach (var mf in args.updated) ConfigureChunk(mf, isNew: false);
-        // removed: ARMeshManager destruye el GO por nosotros.
+
+        // removed: ARMeshManager destruye el GO por nosotros, pero nuestras tablas lo
+        // seguían referenciando. Mientras se escanea ARKit rehace chunks todo el tiempo,
+        // así que _lastCookTime crecía con colliders muertos durante todo el escaneo.
+        foreach (var mf in args.removed)
+        {
+            if (mf == null) continue;
+            var col = mf.GetComponent<MeshCollider>();
+            if (col != null) _lastCookTime.Remove(col);
+            var mr = mf.GetComponent<MeshRenderer>();
+            if (mr != null) _chunkRenderers.Remove(mr);
+        }
     }
 
     private void ConfigureChunk(MeshFilter mf, bool isNew)
