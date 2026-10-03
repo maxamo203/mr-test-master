@@ -170,13 +170,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SorkenAnimator
   idleClip: {fileID: -7599046162845208736, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
   emergeClip: {fileID: -9140088788670272114, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
-  emergeWindowClip: {fileID: -5881093120525723927, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
+  emergeWindowClip: {fileID: -623603649343465320, guid: 5aafee8ed2d2d9c44b4fcc7e5813b28f, type: 3}
+  windowLandingClip: {fileID: -623603649343465320, guid: 1559261d7224cda45b27d16dd4c1a65d, type: 3}
   chaseClip: {fileID: -4210252291810635023, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
   grabClip: {fileID: 6370830557663677281, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
   retreatClip: {fileID: 7400000, guid: 61fa5437a5509a64f9358a157b956565, type: 2}
   coverStartClip: {fileID: -451874083850841385, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
   coverWalkClip: {fileID: 5564560033215620744, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
   _blendSpeed: 6
+  _entryToChaseBlendSeconds: 0.75
+  _chaseStepsPerLoop: 12
+  _coverStepsPerLoop: 5
+  _plantedSpeedRatio: 0.2
+  _windowEntryFallbackDuration: 5.93
+  _windowEntryRootMotionScale: 1
+  _windowLandingDuration: 2.4
+  _windowLandingSecondsPerMeter: 0.75
+  _landingCompression: 0.14
+  _landingPitch: 10
 --- !u!114 &4963702575883463656
 MonoBehaviour:
   m_ObjectHideFlags: 0

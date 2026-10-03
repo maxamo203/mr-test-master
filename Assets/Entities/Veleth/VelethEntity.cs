@@ -17,6 +17,12 @@ public class VelethEntity : MonoBehaviour
     [SerializeField] private Animator _animator;
     [SerializeField, Min(0.1f)] private float _emergenceDuration = 5f;
 
+    [Header("Desplazamiento sincronizado")]
+    [Tooltip("Impulsos de brazos/piernas contenidos en el loop de reptado.")]
+    [SerializeField, Min(1)] private int _crawlImpulsesPerLoop = 4;
+    [Tooltip("Velocidad relativa conservada durante cada apoyo del reptado.")]
+    [SerializeField, Range(0f, 1f)] private float _plantedSpeedRatio = 0.2f;
+
     private Vector3 _desiredPos;
     private Quaternion _desiredRot;
     private bool _hasDesired;
@@ -26,6 +32,17 @@ public class VelethEntity : MonoBehaviour
 
     // El libro permanece con su oscuridad hasta que termina la emergencia.
     public float BookDisappearDelay => _emergenceDuration;
+
+    public float MovementMultiplier
+    {
+        get
+        {
+            if (State != VelethState.Hunting || _animator == null) return 1f;
+            AnimatorStateInfo state = _animator.GetCurrentAnimatorStateInfo(0);
+            return AnimationMotionSync.EvaluateNormalized(
+                state.normalizedTime, _crawlImpulsesPerLoop, _plantedSpeedRatio);
+        }
+    }
 
     private void Awake()
     {

@@ -137,7 +137,8 @@ namespace Gameplay
                 range = rangeReal;
             }
             Alumbrando = PlayerLights.CountIlluminating(
-                view.PuntoDeLuz, ang, range, view.RadioAproximado);
+                view.PuntoDeLuz, ang, range, view.RadioAproximado,
+                FlashlightMode.Bright);
             int jugadoresVivos = ContarJugadoresVivos(net);
             TodosAlumbrando = jugadoresVivos > 0 && Alumbrando >= jugadoresVivos;
 

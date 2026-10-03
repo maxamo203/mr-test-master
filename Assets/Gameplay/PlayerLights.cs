@@ -42,33 +42,87 @@ namespace Gameplay
         // punto (así se comporta el repel del Sorken de siempre); con el radio real de un
         // objeto, alumbrarle el BORDE también cuenta, que es lo que espera el jugador.
         public static int CountIlluminating(Vector3 target, float angleDeg, float range,
-                                            float radioObjetivo = 0f)
+                                            float radioObjetivo = 0f,
+                                            FlashlightMode minimumMode = FlashlightMode.Dim,
+                                            bool requireLineOfSight = false)
         {
             var net = NetworkManager.Instance;
             if (net == null) return 0;
 
             int n = 0;
 
-            if (Camera.main != null && ServerDeaths.IsAlive(0) && net.LocalFlashlightOn() &&
+            if (Camera.main != null && ServerDeaths.IsAlive(0) &&
+                ModeAtLeast(net.LocalFlashlightMode(), minimumMode) &&
                 Alcanza(Camera.main.transform.position, Camera.main.transform.forward,
-                        target, angleDeg, range, radioObjetivo))
+                        target, angleDeg, range, radioObjetivo) &&
+                (!requireLineOfSight || HasLineOfSight(Camera.main.transform.position,
+                                                       target, radioObjetivo)))
                 n++;
 
             foreach (var cid in net.ConnectedClients)
             {
                 if (ServerDeaths.IsDead(cid)) continue;
-                if (!net.TryGetClientFlashlightOn(cid, out var on) || !on) continue;
+                if (!net.TryGetClientFlashlightMode(cid, out var mode) ||
+                    !ModeAtLeast(mode, minimumMode)) continue;
                 if (!net.TryGetClientWorldPosition(cid, out var pos)) continue;
                 if (!net.TryGetClientForward(cid, out var fwd)) continue;
-                if (Alcanza(pos, fwd, target, angleDeg, range, radioObjetivo)) n++;
+                if (Alcanza(pos, fwd, target, angleDeg, range, radioObjetivo) &&
+                    (!requireLineOfSight || HasLineOfSight(pos, target, radioObjetivo))) n++;
             }
             return n;
         }
 
         // ¿Hay al menos uno? (el repel del Sorken no necesita contarlos).
         public static bool AnyIlluminating(Vector3 target, float angleDeg, float range,
-                                           float radioObjetivo = 0f) =>
-            CountIlluminating(target, angleDeg, range, radioObjetivo) > 0;
+                                           float radioObjetivo = 0f,
+                                           FlashlightMode minimumMode = FlashlightMode.Dim,
+                                           bool requireLineOfSight = false) =>
+            CountIlluminating(target, angleDeg, range, radioObjetivo,
+                              minimumMode, requireLineOfSight) > 0;
+
+        // Consulta aislada para alucinaciones individuales. Nunca permite que la luz de
+        // otro jugador provoque u oculte el Arbmos del propietario.
+        public static bool IsPlayerIlluminating(uint clientId, Vector3 target,
+                                                float angleDeg, float range,
+                                                float radioObjetivo,
+                                                FlashlightMode minimumMode,
+                                                bool requireLineOfSight)
+        {
+            var net = NetworkManager.Instance;
+            if (net == null || ServerDeaths.IsDead(clientId)) return false;
+
+            Vector3 pos;
+            Vector3 forward;
+            FlashlightMode mode;
+            if (clientId == 0)
+            {
+                if (Camera.main == null) return false;
+                pos = Camera.main.transform.position;
+                forward = Camera.main.transform.forward;
+                mode = net.LocalFlashlightMode();
+            }
+            else
+            {
+                if (!net.TryGetClientWorldPosition(clientId, out pos) ||
+                    !net.TryGetClientForward(clientId, out forward) ||
+                    !net.TryGetClientFlashlightMode(clientId, out mode))
+                    return false;
+            }
+
+            return ModeAtLeast(mode, minimumMode) &&
+                   Alcanza(pos, forward, target, angleDeg, range, radioObjetivo) &&
+                   (!requireLineOfSight || HasLineOfSight(pos, target, radioObjetivo));
+        }
+
+        public static FlashlightMode ModeFor(uint clientId)
+        {
+            var net = NetworkManager.Instance;
+            if (net == null) return FlashlightMode.Off;
+            if (clientId == 0) return net.LocalFlashlightMode();
+            return net.TryGetClientFlashlightMode(clientId, out var mode)
+                ? mode
+                : FlashlightMode.Off;
+        }
 
         // ¿El haz que sale de (pos, forward) toca el objetivo?
         public static bool Alcanza(Vector3 pos, Vector3 forward, Vector3 target,
@@ -87,6 +141,22 @@ namespace Gameplay
             // test angular de siempre (perp/along <= tan(ángulo)).
             float perp = Mathf.Sqrt(Mathf.Max(0f, dist * dist - along * along));
             return perp <= along * Mathf.Tan(angleDeg * Mathf.Deg2Rad) + radioObjetivo;
+        }
+
+        private static bool ModeAtLeast(FlashlightMode actual, FlashlightMode minimum) =>
+            actual != FlashlightMode.Off && actual >= minimum;
+
+        private static bool HasLineOfSight(Vector3 origin, Vector3 target, float targetRadius)
+        {
+            Vector3 delta = target - origin;
+            float distance = delta.magnitude;
+            if (distance <= 0.01f) return true;
+            if (!Physics.Raycast(origin, delta / distance, out var hit, distance,
+                                 Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                return true;
+
+            // Un impacto en la superficie del propio objetivo no cuenta como oclusion.
+            return hit.distance >= distance - Mathf.Max(0.05f, targetRadius);
         }
     }
 }

@@ -4,13 +4,14 @@ using UnityEngine;
 // (ArbmosNetwork, spawn dirigido) y manejan la animacion (ArbmosAnimator). El
 // ArbmosDirector (server) los fija por jugador.
 //
-// El prefab usa tres variantes idle de aparición y un ciclo de persecución. Running se
-// conserva en red por compatibilidad, pero visualmente mantiene la pose idle elegida.
+// El prefab usa tres variantes idle de aparición y un ciclo de persecución compartido
+// por el ataque normal y la persecución letal. Running se conserva por compatibilidad.
 public enum ArbmosState : byte
 {
     Idle    = 0,  // presente, mirando fijo al jugador (quieto)
-    Running = 1,  // deriva no letal; conserva la variante idle elegida
-    Chasing = 2,  // secuencia letal: embiste al jugador (cordura en cero)
+    Running = 1,  // reservado por compatibilidad de red; no desplaza en Arbmos V2
+    Chasing = 2,   // secuencia letal: embiste al jugador (cordura en cero)
+    Attacking = 3, // ataque normal: persigue y ejecuta el susto no letal
 }
 
 // Logica pura del Arbmos (sin red). El ArbmosDirector (server) le fija estado/pose y lo
@@ -49,6 +50,12 @@ public class ArbmosEntity : MonoBehaviour
              "parado y mirando al frente. Depende del rig; 0,0,0 si ya viene derecho.")]
     [SerializeField] public Vector3 ModelRotationOffset = Vector3.zero;
 
+    [Header("Gameplay V2")]
+    [Tooltip("Punto de la cabeza usado para comprobar si el propietario lo ilumina.")]
+    [SerializeField] private Transform lookTarget;
+    public Vector3 LookTargetPosition(float fallbackHeight) =>
+        lookTarget != null ? lookTarget.position : Position + Vector3.up * fallbackHeight;
+
     [Header("Distorsion de camara (look — la dibuja ArbmosDistortionHUD)")]
     [Tooltip("Configuracion visual de la distorsion de lente en la zona del Arbmos.")]
     public ArbmosDistortionSettings distortion = new ArbmosDistortionSettings();
@@ -59,9 +66,19 @@ public class ArbmosEntity : MonoBehaviour
     private Vector3    _desiredPos;
     private Quaternion _desiredRot;
     private bool       _hasDesired;
+    private ArbmosAnimator _arbmosAnimator;
+
+    // El director usa este valor para acompasar la traslación con los apoyos del clip.
+    // Si la animación no está disponible conserva el comportamiento anterior.
+    public float ChaseMovementMultiplier =>
+        _arbmosAnimator != null ? _arbmosAnimator.ChaseMovementMultiplier : 1f;
+
+    public float ChaseAverageSpeed =>
+        _arbmosAnimator != null ? _arbmosAnimator.ChaseAverageSpeed : 0f;
 
     private void Awake()
     {
+        _arbmosAnimator = GetComponent<ArbmosAnimator>();
         _desiredPos = transform.position;
         _desiredRot = transform.rotation;
     }
@@ -72,7 +89,12 @@ public class ArbmosEntity : MonoBehaviour
     private void OnDisable() { if (Active == this) Active = null; }
     private void OnDestroy() { if (Active == this) Active = null; }
 
-    public void SetState(ArbmosState s) => State = s;
+    public void SetState(ArbmosState s)
+    {
+        if (State == s) return;
+        State = s;
+        _arbmosAnimator?.SynchronizeState(s);
+    }
     public void SetAura(bool on)         => AuraOn = on;
     public void SetLethal(bool lethal)   => Lethal = lethal;
     public void SetDistort(float d01)    => Distort01 = Mathf.Clamp01(d01);
@@ -91,9 +113,11 @@ public class ArbmosEntity : MonoBehaviour
         var dir = target - transform.position;
         dir.y = 0f;
         if (dir.sqrMagnitude < 1e-4f) { Capture(); return; }
-        dir.Normalize();
+        float distance = dir.magnitude;
+        dir /= distance;
 
-        transform.position += dir * speed * deltaTime;
+        float travel = Mathf.Min(distance, Mathf.Max(0f, speed) * Mathf.Max(0f, deltaTime));
+        transform.position += dir * travel;
         var rot = Quaternion.LookRotation(dir, Vector3.up) * RotOffset;
         transform.rotation = Quaternion.RotateTowards(transform.rotation, rot, TurnSpeed * deltaTime);
         Capture();

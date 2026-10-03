@@ -30,6 +30,12 @@ public class FlashlightHUD : MonoBehaviour
                                  : T.Green;
 
         var r = T.HudBarRect(UIScale.VirtualWidth, UIScale.VirtualHeight, fila: 0);
-        T.Barra(r, pct, fill, "LINTERNA", $"{Mathf.RoundToInt(pct * 100f)}%");
+        string modo = _fl.Mode switch
+        {
+            FlashlightMode.Bright => "INTENSA",
+            FlashlightMode.Dim    => "TENUE",
+            _                     => "APAGADA",
+        };
+        T.Barra(r, pct, fill, $"LINTERNA · {modo}", $"{Mathf.RoundToInt(pct * 100f)}%");
     }
 }

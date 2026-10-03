@@ -21,30 +21,37 @@ MonoBehaviour:
   attemptIntervalMax: 40
   entryRepelSeconds: 3
   entryGraceSeconds: 10.5
+  entryAnimationSeconds: 3
   entryTriggerDistance: 3.5
   chaseRepelSeconds: 4.5
   sorkenChaseSpeed: 2.3
+  sorkenCoverStartSeconds: 3
+  sorkenCoverWalkSpeedMultiplier: 0.7
   sorkenRetreatSpeed: 3.7
   grabRange: 1.15
   flashlightMaxCharge: 120
   flashlightDrainPerSecond: 1.7
+  flashlightBrightDrainPerSecond: 6
   sanityMax: 100
-  flashlightOffThreshold: 7
-  sanityDrainPerSecond: 1.7
   arbmosActive: 0
-  arbmosStillInvokeSeconds: 6
-  arbmosStillRadius: 0.5
-  arbmosStillOutsideGrace: 0.4
-  arbmosPresentSeconds: 6
-  arbmosPresentFollowSpeed: 1.2
+  arbmosForceSpawnAfterCooldown: 0
   arbmosCooldownMin: 30
   arbmosCooldownMax: 50
   arbmosSpawnDistance: 2.5
-  arbmosSanityDrainPerSecond: 5
   arbmosSpawnChancePerAttempt: 0.5
-  arbmosFlashlightOffChanceMul: 2
+  arbmosHideSeconds: 3
+  arbmosExposureSeconds: 0.8
+  arbmosAttackCommitSeconds: 0.35
+  arbmosAttackChaseSpeed: 2.5
+  arbmosAttackMaxSeconds: 14
+  arbmosAttackGrabRange: 1
+  arbmosSanityDamage: 30
+  arbmosLookTargetHeight: 1.65
+  arbmosLookTargetRadius: 0.25
   arbmosLethalStalkSeconds: 3.5
   arbmosLethalChaseSpeed: 3.5
+  arbmosLethalMaxSeconds: 8
+  arbmosLethalRepathSeconds: 0.3
   arbmosGrabRange: 1.2
   bookActive: 1
   bookEventDelayMin: 44

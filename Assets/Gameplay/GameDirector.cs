@@ -25,7 +25,19 @@ namespace Gameplay
                  "reaparece el Sorken para no arrancar detras de la pared. ~medio metro.")]
         [SerializeField] private float _enterClearance = 0.5f;
 
-        private enum Phase { Idle, Entering, Chasing, CoverStarting, Grabbed, Retreating }
+        [Tooltip("Profundidad interior que alcanza al terminar de cruzar una ventana. " +
+                 "El apoyo de los pies agrega despues su pequena compensacion.")]
+        [Min(0f)] [SerializeField] private float _windowPerchClearance = 0.25f;
+
+        [Tooltip("Separacion final respecto del plano interior de la puerta. Solo unos " +
+                 "centimetros: la persecucion agrega el resto del desplazamiento.")]
+        [Min(0f)] [SerializeField] private float _doorInsideClearance = 0.08f;
+
+        [Tooltip("Distancia inicial al plano exterior de la puerta. Debe dejar al cuerpo " +
+                 "completo afuera y visible antes de comenzar a atravesar la pared.")]
+        [Min(0f)] [SerializeField] private float _doorOutsideDepth = 1f;
+
+        private enum Phase { Idle, Entering, WindowLanding, Chasing, CoverStarting, Grabbed, Retreating }
 
         private NightConfig _night;
 
@@ -49,6 +61,7 @@ namespace Gameplay
         private float _grace;          // Entering: cuenta a la entrada
         private float _phaseTimer;     // Grabbed / Retreating
         private bool  _coverStartPlayedThisAttempt;
+        private bool  _firstAttemptPending;
 
         // Sorken actual (null entre intentos).
         private SorkenEntity _sorken;
@@ -59,6 +72,12 @@ namespace Gameplay
         private readonly List<Vector3> _path = new();
         private int   _pathIndex;
         private float _repathTimer;
+
+        // Trayectoria de la ventana al piso. Se guarda al terminar el emerge para que el
+        // movimiento sea continuo aunque el marcador o el origen AR se actualicen.
+        private Vector3 _windowLandingStart;
+        private Vector3 _windowLandingEnd;
+        private float _windowLandingDuration;
 
         // Retirada: direccion (horizontal) hacia la que huye tras ser repelido.
         private Vector3 _retreatDir;
@@ -96,6 +115,7 @@ namespace Gameplay
 
             ServerDeaths.Reset();
             _coverStartPlayedThisAttempt = false;
+            _firstAttemptPending = true;
             _phase = Phase.Idle;
             _attemptTimer = _night.initialAttemptDelay;
 
@@ -163,6 +183,7 @@ namespace Gameplay
             {
                 case Phase.Idle:       TickIdle(dt);       break;
                 case Phase.Entering:   TickEntering(dt);   break;
+                case Phase.WindowLanding: TickWindowLanding(dt); break;
                 case Phase.Chasing:       TickChasing(dt);       break;
                 case Phase.CoverStarting: TickCoverStarting(dt); break;
                 case Phase.Grabbed:    TickGrabbed(dt);    break;
@@ -195,7 +216,16 @@ namespace Gameplay
                 return;
             }
 
-            _marker = markers[UnityEngine.Random.Range(0, markers.Count)];
+            int nightIndex = GameSession.Instance != null ? GameSession.Instance.NightIndex : -1;
+            bool forceFirstDoor = ShouldForceDoorOnFirstAttempt(nightIndex, _firstAttemptPending);
+            _marker = forceFirstDoor ? RandomDoorMarker(markers) : null;
+            if (_marker == null)
+            {
+                if (forceFirstDoor)
+                    Debug.LogWarning("[GameDirector] Noche 1: no hay marcador de puerta; " +
+                                     "el primer intento usara cualquier entrada disponible.");
+                _marker = markers[UnityEngine.Random.Range(0, markers.Count)];
+            }
             if (_marker == null) { _attemptTimer = 1f; return; }
 
             // Spawn ya a la altura del piso (EmergePosition con _sorken null usa depth 0);
@@ -219,19 +249,43 @@ namespace Gameplay
             // solo arranca en el tramo final configurado de la ventana.
             _sorken.SetState(SorkenState.Idle);
             _coverStartPlayedThisAttempt = false;
+            _firstAttemptPending = false;
 
-            _repel = 0f; _grace = 0f;
+            _repel = 0f; _grace = 0f; _windowLandingDuration = 0f;
             _phase = Phase.Entering;
             Debug.Log($"[GameDirector] Emerge netId={_sorkenNetId} en marcador {_marker.name}.");
+        }
+
+        public static bool ShouldForceDoorOnFirstAttempt(int nightIndex, bool firstAttemptPending) =>
+            nightIndex == 0 && firstAttemptPending;
+
+        public static bool IsDoorKind(string kindId)
+        {
+            string kind = kindId != null ? kindId.ToLowerInvariant() : string.Empty;
+            return kind.Contains("door") || kind.Contains("puerta");
+        }
+
+        private static MarkerObject RandomDoorMarker(IReadOnlyList<MarkerObject> markers)
+        {
+            int doorCount = 0;
+            for (int i = 0; i < markers.Count; i++)
+                if (markers[i] != null && IsDoorKind(markers[i].KindId)) doorCount++;
+
+            if (doorCount == 0) return null;
+            int selected = UnityEngine.Random.Range(0, doorCount);
+            for (int i = 0; i < markers.Count; i++)
+            {
+                MarkerObject marker = markers[i];
+                if (marker == null || !IsDoorKind(marker.KindId)) continue;
+                if (selected-- == 0) return marker;
+            }
+            return null;
         }
 
         // --- Entering ---
         private void TickEntering(float dt)
         {
             if (_sorken == null || _marker == null) { EndAttempt(); return; }
-
-            _sorken.SetPositionDirectly(EmergePosition());
-            _sorken.FaceDirection(_marker.transform.forward);
 
             // Repeler: iluminar el PUNTO del marcador (cara de la pared) lo ahuyenta.
             if (AnyIlluminating(_marker.transform.position)) _repel += dt; else _repel = 0f;
@@ -241,24 +295,156 @@ namespace Gameplay
             // el tramo final para la animacion de emergencia, para que no se ejecute
             // completa apenas aparece en el marcador.
             _grace += dt;
-            float animationStart = Mathf.Max(0f, _night.entryGraceSeconds - _night.entryAnimationSeconds);
+            bool window = IsWindowMarker();
+            float animationDuration = window
+                ? Mathf.Max(0.2f, _sorken.WindowEntryDuration)
+                : Mathf.Max(0.2f, _night.entryAnimationSeconds);
+            float animationStart = Mathf.Max(0f, _night.entryGraceSeconds - animationDuration);
             if (_grace >= animationStart &&
                 _sorken.State != SorkenState.EmergingDoor &&
                 _sorken.State != SorkenState.EmergingWindow)
                 _sorken.SetState(EmergingStateForMarker());
-            if (_grace >= _night.entryGraceSeconds) EnterChase();
+
+            Vector3 emergePosition = EmergePosition();
+            if (_grace >= animationStart)
+            {
+                float animationTime = Mathf.Clamp01((_grace - animationStart) / animationDuration);
+                if (window)
+                {
+                    emergePosition = WindowEntryPosition(
+                        emergePosition,
+                        _marker.transform.forward,
+                        animationTime,
+                        _sorken.EmergeDepth + _windowPerchClearance,
+                        _sorken.WindowEntryRootOffset(animationTime));
+                }
+                else
+                {
+                    // La traslacion ocurre junto con el clip: el espectador ve al cuerpo
+                    // atravesar el plano de la pared. Termina apenas dentro, sin el salto
+                    // posterior de medio metro que ocultaba la animacion.
+                    emergePosition = DoorEntryPosition(
+                        emergePosition,
+                        _marker.transform.forward,
+                        animationTime,
+                        _doorOutsideDepth + _doorInsideClearance);
+                }
+            }
+            _sorken.SetPositionDirectly(emergePosition);
+            _sorken.FaceDirection(_marker.transform.forward);
+
+            // Una ventana puede necesitar un clip mas largo que la gracia configurada.
+            // No iniciamos la caida hasta que termino el traspaso y el segundo pie esta
+            // apoyado; asi el cambio de clip no lo despega del marco a mitad de gesto.
+            float entryEnd = window
+                ? Mathf.Max(_night.entryGraceSeconds, animationStart + animationDuration)
+                : _night.entryGraceSeconds;
+            if (_grace >= entryEnd) EnterChase();
         }
 
         private void EnterChase()
         {
-            // Reposicionar al lado del ambiente (donde esta el jugador) y a ras del piso.
-            // El emerge lo dejo empujado hacia adentro de la pared; si arrancara el chase
-            // desde ahi, quedaria del otro lado de la pared.
-            _sorken.SetPositionDirectly(ChaseEntryPosition());
+            Vector3 floorEntry = ChaseEntryPosition();
+            if (IsWindowMarker() && _sorken.Position.y > floorEntry.y + 0.05f)
+            {
+                _windowLandingStart = _sorken.Position;
+                _windowLandingEnd = floorEntry;
+                _phaseTimer = 0f;
+                _sorken.ConfigureWindowLanding(_windowLandingStart.y - _windowLandingEnd.y);
+                _windowLandingDuration = Mathf.Max(0.2f, _sorken.WindowLandingDuration);
+                _sorken.SetState(SorkenState.WindowLanding);
+                _phase = Phase.WindowLanding;
+                Debug.Log($"[GameDirector] El Sorken salio de la ventana: descenso de " +
+                          $"{Mathf.Max(0f, _windowLandingStart.y - _windowLandingEnd.y):0.00} m " +
+                          $"en {_windowLandingDuration:0.00} s.");
+                return;
+            }
+
+            BeginChaseAt(floorEntry);
+        }
+
+        private void TickWindowLanding(float dt)
+        {
+            if (_sorken == null || _marker == null) { EndAttempt(); return; }
+
+            float duration = _windowLandingDuration > 0f
+                ? _windowLandingDuration
+                : Mathf.Max(0.2f, _sorken.WindowLandingDuration);
+            _phaseTimer = Mathf.Min(duration, _phaseTimer + dt);
+            float t = _phaseTimer / duration;
+
+            _sorken.SetPositionDirectly(WindowLandingPosition(
+                _windowLandingStart, _windowLandingEnd, t));
+            _sorken.FaceDirection(_marker.transform.forward);
+
+            if (_phaseTimer >= duration)
+                BeginChaseAt(_windowLandingEnd);
+        }
+
+        private void BeginChaseAt(Vector3 position)
+        {
+            _sorken.SetPositionDirectly(position);
             _sorken.SetState(SorkenState.Chasing);
             _repel = 0f; _path.Clear(); _pathIndex = 0; _repathTimer = 0f;
             _phase = Phase.Chasing;
             Debug.Log("[GameDirector] El Sorken ENTRO: chase.");
+        }
+
+        // Baja de forma controlada: conserva un instante el apoyo de la ventana, desplaza
+        // el peso hacia adentro y desacelera antes de tocar el piso. El tramo final queda
+        // reservado para recuperar la postura y mezclar con la caminata de persecucion.
+        public static Vector3 WindowLandingPosition(Vector3 start, Vector3 end, float normalizedTime)
+        {
+            const float descentStart = 0.05f;
+            const float touchdown = 0.82f;
+            float t = Mathf.Clamp01(normalizedTime);
+            float travel = Mathf.Clamp01(t / touchdown);
+            float descent = Mathf.InverseLerp(descentStart, touchdown, t);
+            float horizontal = Mathf.SmoothStep(0f, 1f, travel);
+            float vertical = Mathf.SmoothStep(0f, 1f, descent);
+            Vector3 position = Vector3.Lerp(start, end, horizontal);
+            position.y = Mathf.Lerp(start.y, end.y, vertical);
+            if (t >= touchdown) position.y = end.y;
+            return position;
+        }
+
+        public static Vector3 DoorEntryPosition(
+            Vector3 outsidePosition, Vector3 markerForward, float normalizedTime,
+            float crossingDistance)
+        {
+            markerForward.y = 0f;
+            if (markerForward.sqrMagnitude <= 1e-6f) return outsidePosition;
+
+            // Deja leer el inicio y el final del gesto: el root empieza a cruzar al 10%
+            // del clip y ya esta asentado al 90%, sin un segundo desplazamiento separado.
+            float t = Mathf.InverseLerp(0.1f, 0.9f, Mathf.Clamp01(normalizedTime));
+            float crossing = Mathf.SmoothStep(0f, 1f, t) * Mathf.Max(0f, crossingDistance);
+            return outsidePosition + markerForward.normalized * crossing;
+        }
+
+        public static Vector3 DoorEmergePosition(
+            Vector3 markerPosition, Vector3 markerForward, float depth, float floorY)
+        {
+            Vector3 position = markerPosition - markerForward * Mathf.Max(0f, depth);
+            position.y = floorY;
+            return position;
+        }
+
+        public static Vector3 WindowEntryPosition(
+            Vector3 outsidePosition, Vector3 markerForward, float normalizedTime,
+            float crossingDistance, float signedSupportOffset)
+        {
+            markerForward.y = 0f;
+            if (markerForward.sqrMagnitude <= 1e-6f) return outsidePosition;
+
+            // El clip anima el cuerpo, pero no puede conocer el grosor ni la orientacion
+            // de la pared real. El root cruza desde el punto exterior hasta una pequena
+            // profundidad interior. Encima se suma la compensacion medida en Blender que
+            // mantiene quieto el pie que esta apoyado en cada tramo.
+            float crossing = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(normalizedTime)) *
+                             Mathf.Max(0f, crossingDistance);
+            return outsidePosition + markerForward.normalized *
+                   (crossing + signedSupportOffset);
         }
 
         // --- Chasing ---
@@ -315,7 +501,8 @@ private void TickChasing(float dt)
                           (_sorken.State == SorkenState.CoverWalking
                               ? _night.sorkenCoverWalkSpeedMultiplier
                               : 1f);
-            _sorken.MoveTo(step, speed, dt);
+            _sorken.MoveTo(step, speed * EntitySpeedSettings.Multiplier *
+                           _sorken.MovementMultiplier, dt);
             if (_pathIndex < _path.Count && HorizDist(_sorken.Position, _path[_pathIndex]) <= 0.2f) _pathIndex++;
         }
 
@@ -359,30 +546,39 @@ private void BeginCoverStart()
             // Centro del torso + radio del cuerpo: evita que el jugador deba apuntar
             // exactamente a un punto infinitesimal y usa el cono real de la linterna.
             return PlayerLights.AnyIlluminating(_sorken.Position + Vector3.up * 1f,
-                                                angle, range, 0.4f);
+                                                angle, range, 0.4f,
+                                                FlashlightMode.Bright);
         }
 
         private SorkenState EmergingStateForMarker()
         {
+            return IsWindowMarker()
+                ? SorkenState.EmergingWindow
+                : SorkenState.EmergingDoor;
+        }
+
+        private bool IsWindowMarker()
+        {
             string kind = _marker != null && _marker.KindId != null
                 ? _marker.KindId.ToLowerInvariant()
                 : string.Empty;
-            return kind.Contains("window") || kind.Contains("ventana")
-                ? SorkenState.EmergingWindow
-                : SorkenState.EmergingDoor;
+            return kind.Contains("window") || kind.Contains("ventana");
         }
 
 
         private void Grab()
         {
+            // Fijar la animación antes de notificar la muerte: si era el último jugador,
+            // la notificación detiene la partida y limpia la referencia al Sorken.
+            _sorken.SetState(SorkenState.Grabbing);
+            _phaseTimer = 0f;
+            _phase = Phase.Grabbed;
+
             if (NearestAlivePlayer(_sorken.Position, out var victim, out _))
             {
                 Debug.Log($"[GameDirector] GRAB: jugador {victim} atrapado.");
                 KillPlayer(victim);
             }
-            _sorken.SetState(SorkenState.Grabbing);
-            _phaseTimer = 0f;
-            _phase = Phase.Grabbed;
         }
 
         private void TickGrabbed(float dt)
@@ -412,7 +608,7 @@ private void BeginCoverStart()
             _phaseTimer += dt;
             // Se da vuelta y sale corriendo en _retreatDir mientras dura la retirada.
             if (_sorken != null && _retreatDir != Vector3.zero)
-                _sorken.MoveTo(_sorken.Position + _retreatDir, _night.sorkenRetreatSpeed, dt);
+                _sorken.MoveTo(_sorken.Position + _retreatDir, _night.sorkenRetreatSpeed * EntitySpeedSettings.Multiplier, dt);
             if (_phaseTimer >= _night.retreatSeconds) EndAttempt();
         }
 
@@ -436,7 +632,7 @@ private void BeginCoverStart()
         private void KillPlayer(uint clientId)
         {
             if (_practiceMode) { Debug.Log($"[GameDirector] (practica) grab {clientId}, no muere."); return; }
-            ServerDeaths.Kill(clientId);   // marca + avisa (host local / cliente por red) una sola vez
+            ServerDeaths.Kill(clientId, _sorken != null ? _sorken.transform : null);   // marca + avisa una sola vez
         }
 
         // --- Jugadores vivos ---
@@ -496,7 +692,9 @@ private void BeginCoverStart()
         // para no cambiar la dificultad del Sorken sin querer — cuando se decida, es
         // pasarle PlayerLights.TryConoReal como hace RitualBookDirector.
         private bool AnyIlluminating(Vector3 target) =>
-            PlayerLights.AnyIlluminating(target, _night.flashlightConeAngleDeg, _night.flashlightRange);
+            PlayerLights.AnyIlluminating(target, _night.flashlightConeAngleDeg,
+                                         _night.flashlightRange, 0f,
+                                         FlashlightMode.Bright);
 
         private static float HorizDist(Vector3 a, Vector3 b) { a.y = 0f; b.y = 0f; return Vector3.Distance(a, b); }
 
@@ -513,18 +711,25 @@ private void BeginCoverStart()
         private Vector3 EmergePosition()
         {
             float depth = _sorken != null ? _sorken.EmergeDepth : 0f;
+            // Una puerta nace y cruza a ras del piso. Antes heredaba la altura del
+            // marcador y al terminar saltaba verticalmente hasta ChaseEntryPosition.
+            if (!IsWindowMarker())
+                return DoorEmergePosition(
+                    _marker.transform.position, _marker.transform.forward,
+                    _doorOutsideDepth, FloorWorldY());
+
             return _marker.transform.position - _marker.transform.forward * depth;
         }
 
-        // Posicion donde reaparece el Sorken al ENTRAR (chase): la XZ del marcador
-        // empujada hacia el AMBIENTE (+normal, donde esta el jugador) por _enterClearance,
-        // a ras del piso. Evita arrancar detras de la pared (el emerge lo empuja adentro).
+        // Posicion exacta donde comienza el chase. La puerta termina apenas separada de
+        // la pared; la ventana conserva un margen mayor para completar el aterrizaje.
         private Vector3 ChaseEntryPosition()
         {
             var mp  = _marker.transform.position;
             var fwd = _marker.transform.forward; fwd.y = 0f;
             if (fwd.sqrMagnitude > 1e-6f) fwd.Normalize();
-            var pos = mp + fwd * _enterClearance;
+            float clearance = IsWindowMarker() ? _enterClearance : _doorInsideClearance;
+            var pos = mp + fwd * clearance;
             pos.y = FloorWorldY();
             return pos;
         }
@@ -535,7 +740,18 @@ private void BeginCoverStart()
             var wo = WorldOrigin.Instance;
             if (FloorPoint.Instance != null && wo != null)
                 return wo.ToWorld(FloorPoint.Instance.LocalPosition).y;
-            return _sorken != null ? _sorken.Position.y : 0f;
+
+            // En el editor y en algunos escaneos antiguos puede no existir FloorPoint.
+            // La base de la pared asociada al marcador sigue siendo una referencia de
+            // piso valida. Usar la altura actual del Sorken (la ventana) hacia que el
+            // director creyera que ya habia aterrizado y saltara esta transicion.
+            if (_marker != null && _marker.Wall != null)
+            {
+                if (wo != null) return wo.ToWorld(_marker.Wall.ALocal).y;
+                return _marker.Wall.transform.position.y;
+            }
+
+            return wo != null ? wo.transform.position.y : 0f;
         }
 
         private int CountAlivePlayers()

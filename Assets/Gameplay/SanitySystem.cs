@@ -4,10 +4,9 @@ using UnityEngine;
 namespace Gameplay
 {
     // Cordura SERVER-AUTHORITATIVE, por jugador. El jugador es la camara AR (no una
-    // entidad), asi que el estado vive en dicts por clientId (0 = host). Cada jugador
-    // drena cordura cuando su linterna esta apagada mas de flashlightOffThreshold; no
-    // se recupera. El server envia a cada cliente su valor (PlayerSanity); al host se
-    // lo setea local en LocalSanity.
+    // entidad), asi que el estado vive en dicts por clientId (0 = host). La oscuridad
+    // no drena cordura: el daño entra de forma explicita desde las amenazas. El server
+    // envia a cada cliente su valor (PlayerSanity); al host se lo setea local.
     //
     // Wiring: poner en un GameObject de SampleScene (junto al BatterySpawnManager).
     // Solo actua en el host. Lee la dificultad de GameSession.SelectedNight.
@@ -19,9 +18,7 @@ namespace Gameplay
                  "acumula con dt real; esto solo limita la frecuencia de red.")]
         [SerializeField] private float _sendInterval = 0.2f;
 
-        private readonly Dictionary<uint, float> _sanity   = new();
-        private readonly Dictionary<uint, float> _offTimer = new();
-        private Flashlight _hostFlashlight;
+        private readonly Dictionary<uint, float> _sanity = new();
         private float _sendTimer;
         private bool  _running;
 
@@ -51,7 +48,6 @@ namespace Gameplay
         {
             if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return;
             _sanity.Clear();
-            _offTimer.Clear();
             _running = true;
             LocalSanity.Ensure();
         }
@@ -61,7 +57,6 @@ namespace Gameplay
         {
             _running = false;
             _sanity.Clear();
-            _offTimer.Clear();
         }
 
         private void Update()
@@ -70,47 +65,21 @@ namespace Gameplay
             var net = NetworkManager.Instance;
             if (net == null || !net.IsServer) return;
 
-            float dt = Time.deltaTime;
-            _sendTimer -= dt;
+            _sendTimer -= Time.deltaTime;
             bool send = _sendTimer <= 0f;
             if (send) _sendTimer = _sendInterval;
 
             var  night = Night;
             float max  = night != null ? night.sanityMax               : 100f;
-            float thr  = night != null ? night.flashlightOffThreshold  : 5f;
-            float rate = night != null ? night.sanityDrainPerSecond     : 4f;
-
-            // Host (clientId 0): linterna local.
-            Tick(0, HostFlashlightOn(), dt, max, thr, rate, send);
-
-            // Clientes remotos: linterna reportada (desconocida => encendida, no drena).
-            foreach (var cid in net.ConnectedClients)
-            {
-                bool on = !net.TryGetClientFlashlightOn(cid, out var v) || v;
-                Tick(cid, on, dt, max, thr, rate, send);
-            }
+            Tick(0, max, send);
+            foreach (var cid in net.ConnectedClients) Tick(cid, max, send);
         }
 
-        private void Tick(uint clientId, bool flashOn, float dt,
-                          float max, float thr, float rate, bool send)
+        private void Tick(uint clientId, float max, bool send)
         {
-            if (!_sanity.ContainsKey(clientId)) { _sanity[clientId] = max; _offTimer[clientId] = 0f; }
-
-            if (flashOn)
-            {
-                _offTimer[clientId] = 0f;            // apagon interrumpido: reinicia la ventana
-            }
-            else
-            {
-                _offTimer[clientId] += dt;
-                if (_offTimer[clientId] >= thr)      // apagada mas que el umbral => drena
-                    _sanity[clientId] = Mathf.Max(0f, _sanity[clientId] - rate * dt);
-            }
-
+            EnsurePlayer(clientId, max);
             if (!send) return;
-            float s = _sanity[clientId];
-            if (clientId == 0) LocalSanity.Ensure().Set(s, max);        // host: local
-            else               NetworkManager.Instance.ServerSendSanity(clientId, s, max);
+            Publish(clientId, max);
         }
 
         // ── API server para otros sistemas (Arbmos) ───────────────────────────
@@ -120,22 +89,30 @@ namespace Gameplay
         public bool IsAtZero(uint clientId) =>
             _sanity.TryGetValue(clientId, out var s) && s <= 0f;
 
-        // Drena cordura de un jugador (no recuperable). La usa el ArbmosDirector cuando
-        // el jugador se mueve con el Arbmos presente. El valor nuevo se envia al jugador
-        // en el proximo ciclo de envio.
-        public void ServerDrain(uint clientId, float amount)
+        // Aplica un golpe autoritativo y publica el resultado inmediatamente. Devuelve
+        // true unicamente cuando este golpe produjo el cruce de cordura positiva a cero.
+        public bool ServerApplyDamage(uint clientId, float amount)
         {
             var net = NetworkManager.Instance;
-            if (net == null || !net.IsServer) return;
+            if (net == null || !net.IsServer) return false;
             float max = Night != null ? Night.sanityMax : 100f;
-            if (!_sanity.ContainsKey(clientId)) { _sanity[clientId] = max; _offTimer[clientId] = 0f; }
-            _sanity[clientId] = Mathf.Max(0f, _sanity[clientId] - Mathf.Max(0f, amount));
+            EnsurePlayer(clientId, max);
+            float before = _sanity[clientId];
+            _sanity[clientId] = Mathf.Max(0f, before - Mathf.Max(0f, amount));
+            Publish(clientId, max);
+            return before > 0f && _sanity[clientId] <= 0f;
         }
 
-        private bool HostFlashlightOn()
+        private void EnsurePlayer(uint clientId, float max)
         {
-            if (_hostFlashlight == null) _hostFlashlight = FindFirstObjectByType<Flashlight>();
-            return _hostFlashlight != null && _hostFlashlight.isOn;
+            if (!_sanity.ContainsKey(clientId)) _sanity[clientId] = max;
+        }
+
+        private void Publish(uint clientId, float max)
+        {
+            float value = _sanity[clientId];
+            if (clientId == 0) LocalSanity.Ensure().Set(value, max);
+            else NetworkManager.Instance.ServerSendSanity(clientId, value, max);
         }
     }
 }

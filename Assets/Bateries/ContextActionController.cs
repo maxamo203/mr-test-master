@@ -5,9 +5,64 @@ using UnityEngine.InputSystem;
 
 namespace Bateries
 {
+    public enum PrimaryGestureEvent
+    {
+        None,
+        Tap,
+        HoldStarted,
+        HoldReleased,
+    }
+
+    // Traductor puro de un único botón físico/táctil: un toque se confirma al soltar;
+    // mantener supera el umbral una sola vez y nunca produce además un toque.
+    public sealed class PrimaryButtonGesture
+    {
+        public bool IsPressed { get; private set; }
+        public bool IsHolding { get; private set; }
+        public float Elapsed { get; private set; }
+
+        public PrimaryGestureEvent Tick(bool pressed, float deltaTime, float holdSeconds)
+        {
+            if (pressed)
+            {
+                if (!IsPressed)
+                {
+                    IsPressed = true;
+                    IsHolding = false;
+                    Elapsed = 0f;
+                }
+
+                Elapsed += Mathf.Max(0f, deltaTime);
+                if (!IsHolding && Elapsed >= Mathf.Max(0.05f, holdSeconds))
+                {
+                    IsHolding = true;
+                    return PrimaryGestureEvent.HoldStarted;
+                }
+                return PrimaryGestureEvent.None;
+            }
+
+            if (!IsPressed) return PrimaryGestureEvent.None;
+            IsPressed = false;
+            Elapsed = 0f;
+            if (IsHolding)
+            {
+                IsHolding = false;
+                return PrimaryGestureEvent.HoldReleased;
+            }
+            return PrimaryGestureEvent.Tap;
+        }
+
+        public void Reset()
+        {
+            IsPressed = false;
+            IsHolding = false;
+            Elapsed = 0f;
+        }
+    }
+
     // Hub del BOTÓN PRIMARIO (A del joystick / botón en pantalla / tecla E en editor).
-    // Cada frame elige, entre las acciones registradas, la disponible de mayor Priority y
-    // la ejecuta al presionar. Así el mismo botón hace cosas distintas según el contexto:
+    // Cada frame elige, entre las acciones registradas, la disponible de mayor Priority.
+    // Un toque se ejecuta al soltar; mantener activa la luz intensa. Así el mismo botón:
     // si estás apuntando una pila la recoge; si no, prende/apaga la linterna; y se puede
     // extender a puertas, interruptores, etc.
     //
@@ -24,11 +79,15 @@ namespace Bateries
 
         [Header("HUD")]
         [SerializeField] private bool showActionButton = true;
+        [Header("Boton unico")]
+        [SerializeField, Min(0.05f)] private float brightHoldSeconds = 0.5f;
 
         private readonly List<IContextAction> _actions = new();
         private IContextAction _current;
         private string         _currentLabel;
-        private bool           _prevSouth;
+        private readonly PrimaryButtonGesture _primaryGesture = new();
+        private IContextAction _pressedAction;
+        private bool           _screenPrimaryHeld;
         private Flashlight     _flashlight;
 
         private void Awake()
@@ -54,9 +113,15 @@ namespace Bateries
 
         private void OnDestroy()
         {
+            CancelPrimaryGesture();
             if (Instance == this) Instance = null;
             if (NetworkManager.Instance != null)
                 NetworkManager.Instance.OnBatteryCollected -= HandleCollected;
+        }
+
+        private void OnDisable()
+        {
+            CancelPrimaryGesture();
         }
 
         private void EnsureComponent<T>() where T : Component
@@ -74,7 +139,41 @@ namespace Bateries
         private void Update()
         {
             ResolveCurrent();
-            if (PrimaryPressed()) _current?.Execute();
+            UpdatePrimaryGesture();
+        }
+
+        private void UpdatePrimaryGesture()
+        {
+            EnsureFlashlight();
+            bool wasPressed = _primaryGesture.IsPressed;
+            PrimaryGestureEvent gesture = _primaryGesture.Tick(
+                PrimaryHeld(), Time.unscaledDeltaTime, brightHoldSeconds);
+
+            if (!wasPressed && _primaryGesture.IsPressed)
+                _pressedAction = _current;
+
+            switch (gesture)
+            {
+                case PrimaryGestureEvent.Tap:
+                    _pressedAction?.Execute();
+                    _pressedAction = null;
+                    break;
+                case PrimaryGestureEvent.HoldStarted:
+                    _flashlight?.BeginBrightHold();
+                    break;
+                case PrimaryGestureEvent.HoldReleased:
+                    _flashlight?.SetBrightHeld(false);
+                    _pressedAction = null;
+                    break;
+            }
+        }
+
+        private void CancelPrimaryGesture()
+        {
+            _primaryGesture.Reset();
+            _screenPrimaryHeld = false;
+            _pressedAction = null;
+            _flashlight?.SetBrightHeld(false);
         }
 
         // Elige la acción disponible de mayor prioridad.
@@ -96,26 +195,24 @@ namespace Bateries
             }
         }
 
-        // Botón primario: cara del gamepad, left click en modo VR Box Mouse, o E en editor.
-        private bool PrimaryPressed()
+        // El mismo botón se lee como estado continuo para poder distinguir toque de hold.
+        private bool PrimaryHeld()
         {
             var g = GamepadManager.Instance?.Current;
-            bool south = g != null && (g.buttonSouth.isPressed || g.buttonEast.isPressed ||
-                                       g.buttonNorth.isPressed || g.buttonWest.isPressed);
+            bool held = g != null && (g.buttonSouth.isPressed || g.buttonEast.isPressed ||
+                                      g.buttonNorth.isPressed || g.buttonWest.isPressed);
 
             // VR Box Mouse: el botón A/trigger manda left click de mouse.
             if (GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput)
             {
                 var mouse = Mouse.current;
-                if (mouse != null) south |= mouse.leftButton.isPressed;
+                if (mouse != null) held |= mouse.leftButton.isPressed;
             }
 
-            bool pressed = south && !_prevSouth;
-            _prevSouth   = south;
 #if UNITY_EDITOR
-            if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame) pressed = true;
+            if (Keyboard.current != null) held |= Keyboard.current.eKey.isPressed;
 #endif
-            return pressed;
+            return held || _screenPrimaryHeld;
         }
 
         // ── Carga de pila recibida del server (cliente) ───────────────────────
@@ -135,20 +232,28 @@ namespace Bateries
 
         private void OnGUI()
         {
-            if (!showActionButton || _current == null || !_current.ShowActionButton ||
-                string.IsNullOrEmpty(_currentLabel)) return;
-
-            bool pad = GamepadManager.Instance != null && GamepadManager.Instance.IsConnected;
-            string hint = pad ? $"{_currentLabel} (A)" : _currentLabel;
-
             // Estilo Mortuorium (mismo look que el resto de la UII), dentro de la matriz de
             // area segura de UIScale para que quede bien ubicado en todos los dispositivos.
             Scanner.UIScale.Begin();
             float vw = Scanner.UIScale.VirtualWidth, vh = Scanner.UIScale.VirtualHeight;
-            const float w = 320f, h = 68f;
+
+            if (!showActionButton || _current == null || !_current.ShowActionButton ||
+                string.IsNullOrEmpty(_currentLabel))
+            {
+                _screenPrimaryHeld = false;
+                return;
+            }
+
+            bool pad = GamepadManager.Instance != null && GamepadManager.Instance.IsConnected;
+            string holdTime = brightHoldSeconds.ToString("0.#");
+            string hint = pad
+                ? $"{_currentLabel} (A) · mantener {holdTime} s: intensa"
+                : $"{_currentLabel}\nMantener {holdTime} s: luz intensa";
+            const float w = 360f, h = 82f;
             var btn = new Rect(vw * 0.5f - w * 0.5f, vh * 0.62f, w, h);
-            MortuoriumTheme.Boton(null, btn, hint, primario: true,
-                                  onClick: () => _current?.Execute(), fontSize: 24);
+            bool held = GUI.RepeatButton(btn, hint);
+            if (Event.current.type == EventType.Repaint)
+                _screenPrimaryHeld = held;
         }
     }
 }

@@ -34,10 +34,13 @@ namespace Gameplay
         [Tooltip("Escena del lobby/gameplay a cargar al continuar.")]
         [SerializeField] private string _lobbyScene = "SampleScene";
 
-        // Set de noches activo: en development build usa las DEV (si hay); en release,
-        // siempre las de prod. Asi las noches dev nunca llegan a una build de release.
+        // Set de noches activo: el selector Mortuorium > Datos en Play permite probar
+        // DEV o PROD desde el Editor. Fuera del Editor, una development build usa DEV
+        // y una release siempre usa PROD.
         private NightConfig[] Nights =>
-            (Debug.isDebugBuild && _devNights != null && _devNights.Length > 0) ? _devNights : _nights;
+            (PlayDataProfile.UseDevelopment && _devNights != null && _devNights.Length > 0)
+                ? _devNights
+                : _nights;
 
         private enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control }
 

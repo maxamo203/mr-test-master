@@ -26,7 +26,7 @@ namespace Gameplay
         private void OnGUI()
         {
             var ld = LocalDeath.Instance;
-            bool muerto     = ld != null && ld.IsDead;
+            bool muerto     = ld != null && ld.PresentationReady;
             bool sobrevivio = NightResult.Sobrevivio;
             if (!muerto && !sobrevivio) { _selectorAbierto = false; return; }
 

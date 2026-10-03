@@ -5,8 +5,10 @@ using UnityEditor;
 // de esta máquina y no se commitea.
 public static class MortuoriumEditorPlayMenu
 {
-    private const string RutaFondo     = "Mortuorium/Fondo 360 en Play";
-    private const string RutaControles = "Mortuorium/Controles WASD en Play";
+    private const string RutaFondo      = "Mortuorium/Fondo 360 en Play";
+    private const string RutaControles  = "Mortuorium/Controles WASD en Play";
+    private const string RutaPerfilDev  = "Mortuorium/Datos en Play/DEV";
+    private const string RutaPerfilProd = "Mortuorium/Datos en Play/PROD";
 
     // Fondo panorámico como skybox: sin él no hay imagen detrás y los efectos de pantalla
     // completa (VHS / distorsión) no se pueden evaluar. Ver EditorPanorama360.
@@ -39,5 +41,42 @@ public static class MortuoriumEditorPlayMenu
     {
         Menu.SetChecked(RutaControles, EditorPlayerControls.Activo);
         return true;
+    }
+
+    // Selector exclusivo del Editor. Las dos entradas funcionan como opciones de
+    // radio: sólo una queda marcada. Las builds release ignoran esta preferencia.
+    [MenuItem(RutaPerfilDev)]
+    private static void UsarDatosDev()
+    {
+        Gameplay.PlayDataProfile.UseProduction = false;
+        RefrescarPerfilSeleccionado();
+    }
+
+    [MenuItem(RutaPerfilDev, true)]
+    private static bool UsarDatosDevValidate()
+    {
+        RefrescarPerfilSeleccionado();
+        return true;
+    }
+
+    [MenuItem(RutaPerfilProd)]
+    private static void UsarDatosProd()
+    {
+        Gameplay.PlayDataProfile.UseProduction = true;
+        RefrescarPerfilSeleccionado();
+    }
+
+    [MenuItem(RutaPerfilProd, true)]
+    private static bool UsarDatosProdValidate()
+    {
+        RefrescarPerfilSeleccionado();
+        return true;
+    }
+
+    private static void RefrescarPerfilSeleccionado()
+    {
+        bool prod = Gameplay.PlayDataProfile.UseProduction;
+        Menu.SetChecked(RutaPerfilDev, !prod);
+        Menu.SetChecked(RutaPerfilProd, prod);
     }
 }

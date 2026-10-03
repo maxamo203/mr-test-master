@@ -74,8 +74,18 @@ Una acción de prioridad alta bloquea las inferiores hasta terminar, salvo la re
 - Entra cuando: el evento de aparición selecciona una ventana válida.
 - Previo al clip: aparece oscuridad vertical en la abertura y permanece 5 s antes de comenzar la animación.
 - Durante el clip: navegación, giro automático y persecución quedan bloqueados; el movimiento debe seguir la abertura, no subir desde el suelo.
-- Sale cuando: alcanza la pose erguida dentro de la habitación; entonces habilita navegación y pasa a Idle o persecución.
+- Sale cuando: atraviesa la abertura; entonces pasa a `Aterrizaje desde ventana`, todavía sin navegación.
 - Solo puede reproducirse una vez por aparición.
+
+### 7.1. Aterrizaje desde ventana — transición procedural — 1,1 s
+
+- Visual: el cuerpo avanza hacia el interior mientras cae con aceleración; al tocar el piso flexiona la cadera, inclina el torso y recupera la postura.
+- Tipo: acción única de transición.
+- Entra cuando: termina `Emergencia por ventana` y el marcador está por encima del piso.
+- Durante la caída: navegación y persecución permanecen bloqueadas.
+- Contacto con el piso: ocurre al 68% de la transición; el tiempo restante se usa para absorber el impacto y quedar estable.
+- Sale hacia: `Caminata base / persecución`, desde la misma posición, sin teletransporte.
+- En marcadores de ventana ya ubicados a ras del piso se omite para evitar un movimiento artificial.
 
 ### 8. Ataque de agarre — `01a03224...` — 2 s — **por confirmar**
 
@@ -131,6 +141,7 @@ Una acción de prioridad alta bloquea las inferiores hasta terminar, salvo la re
 | Inicio de cubrirse | `01a03212...` | Unica | La linterna lo apunta directamente con linea de vision | Termina el clip; si la luz sigue, pasa a `Caminar cubriendose`; si no, vuelve a locomocion o idle | 2 |
 | Caminar cubriendose | `01a043da...` | Bucle | Termina `Inicio de cubrirse` y la linterna sigue apuntandolo | La luz deja de apuntarlo, se rompe la vision, emerge, ataca o se detiene | 3 |
 | Emerger por ventana | `01a03222...` | Unica | Se elige una ventana valida, aparece oscuridad vertical, esperan 5 s y arranca el clip | Termina erguido dentro de la habitacion | 1 |
+| Aterrizaje desde ventana | Procedural + pose Idle opcional | Unica | Termina `Emerger por ventana` por encima del piso | Completa impacto y recuperacion; comienza persecucion | 1 |
 | Emerger por puerta | `01a043d5...` | Unica | Se elige una puerta valida, aparece oscuridad vertical, esperan 5 s y arranca el clip | Termina erguido dentro de la habitacion | 1 |
 | Ataque de agarre | `01a03224...` | Unica | El jugador entra al rango de agarre con vision directa y angulo valido | Termina el clip o falla el contacto | 0 |
 
@@ -139,5 +150,5 @@ Una acción de prioridad alta bloquea las inferiores hasta terminar, salvo la re
 - `Walking`, `Running` y `Postura cubierta / persecucion cercana` quedan fuera del flujo actual.
 - `Inicio de cubrirse` no debe mover al personaje; solo prepara la transicion visual.
 - `Caminar cubriendose` debe usar una velocidad mas lenta que la caminata base.
-- Las emergencias bloquean navegacion y giro automatico hasta terminar.
+- Las emergencias y el aterrizaje desde ventana bloquean la navegacion hasta terminar.
 - El ataque de agarre bloquea cualquier otro estado mientras se ejecuta.

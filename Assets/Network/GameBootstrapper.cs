@@ -280,8 +280,11 @@ public class GameBootstrapper : MonoBehaviour
     private void StartHost(string mapName)
     {
         var s = Gameplay.GameSession.Ensure();
-        _port = s.HostPort;
-        _net.StartServer(_port);
+        // En un jugador no hay clientes externos ni descubrimiento LAN, por lo que no
+        // corresponde competir por el puerto fijo 7777. El puerto 0 le pide a Windows
+        // uno efimero libre; en multijugador se conserva exactamente el elegido.
+        int requestedPort = s.SoloUnJugador ? 0 : s.HostPort;
+        _port = _net.StartServer(requestedPort);
         // BeginHostFlow carga el mapa, registra su imagen de referencia y se lo pasa
         // al NetworkManager para enviarlo a cada cliente. Debe ir tras StartServer.
         // El host juega como servidor puro: ve las entidades via spawn local (server) y

@@ -24,20 +24,25 @@ public class TcpTransportServer
     private uint _nextClientId = 1;
     private volatile bool _running;
 
-    public void Start(int port)
+    public int Start(int port)
     {
         _listener = new TcpListener(IPAddress.Any, port);
         _listener.Start();
         _running  = true;
         new Thread(AcceptLoop) { IsBackground = true }.Start();
-        Debug.Log($"[Server] Listening on :{port}");
+        int boundPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
+        Debug.Log($"[Server] Listening on :{boundPort}");
+        return boundPort;
     }
 
     public void Stop()
     {
         _running = false;
         _listener?.Stop();
+        _listener = null;
         foreach (var c in _clients.Values) c.Close();
+        _clients.Clear();
+        _streams.Clear();
     }
 
     // Call from main thread

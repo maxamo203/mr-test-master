@@ -174,9 +174,9 @@ public class PlayerInputMsg
 public class PlayerPoseMsg
 {
     public Vector3 RelPos;
-    // Estado de la linterna del jugador (para que el server, autoritativo, drene la
-    // cordura y compute el repel cuando la linterna ilumina un objetivo).
-    public bool FlashlightOn;
+    // Modo de la linterna del jugador. El server decide que amenazas responden a Dim o
+    // exigen Bright; Off se usa para ocultarse del Arbmos.
+    public FlashlightMode FlashlightMode;
     // Direccion de apuntado (forward de la camara) en espacio anchor-relativo, para el
     // test de cono del repel en el server.
     public Vector3 Forward;
@@ -186,7 +186,7 @@ public class PlayerPoseMsg
         using var ms = new MemoryStream(25);
         using var w  = new BinaryWriter(ms);
         MsgHelper.WriteV3(w, RelPos);
-        w.Write(FlashlightOn);
+        w.Write((byte)FlashlightMode);
         MsgHelper.WriteV3(w, Forward);
         return ms.ToArray();
     }
@@ -197,7 +197,7 @@ public class PlayerPoseMsg
         return new()
         {
             RelPos       = MsgHelper.ReadV3(r),
-            FlashlightOn = r.ReadBoolean(),
+            FlashlightMode = (FlashlightMode)r.ReadByte(),
             Forward      = MsgHelper.ReadV3(r),
         };
     }
@@ -404,3 +404,31 @@ public class PlayerRosterMsg
 }
 
 // AnchorResolved, StartGame, ResetNight y NightSurvived no llevan payload — body vacío
+// server → client: muerte local, con el punto de enfoque y el atacante a ocultar.
+public class PlayerDeathMsg
+{
+    public Vector3 KillerFacePosition;
+    public uint KillerNetworkId;
+    public bool AllPlayersDead;
+
+    public byte[] Serialize()
+    {
+        using var ms = new MemoryStream(17);
+        using var w = new BinaryWriter(ms);
+        MsgHelper.WriteV3(w, KillerFacePosition);
+        w.Write(KillerNetworkId);
+        w.Write(AllPlayersDead);
+        return ms.ToArray();
+    }
+
+    public static PlayerDeathMsg Deserialize(byte[] data)
+    {
+        using var r = new BinaryReader(new MemoryStream(data));
+        return new PlayerDeathMsg
+        {
+            KillerFacePosition = MsgHelper.ReadV3(r),
+            KillerNetworkId = r.ReadUInt32(),
+            AllPlayersDead = r.ReadBoolean(),
+        };
+    }
+}

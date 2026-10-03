@@ -19,7 +19,13 @@ public static class SceneFlow
         // Ver Gameplay.NightTransition.TeardownSesion.
         Gameplay.NightTransition.TeardownSesion();
 
-        if (NetworkManager.Instance != null) Object.Destroy(NetworkManager.Instance.gameObject);
+        if (NetworkManager.Instance != null)
+        {
+            // Destroy se difiere hasta el final del frame. Liberar ahora el socket evita
+            // que la escena destino intente bindear el mismo puerto mientras sigue ocupado.
+            NetworkManager.Instance.Shutdown();
+            Object.Destroy(NetworkManager.Instance.gameObject);
+        }
         if (EntityRegistry.Instance != null) Object.Destroy(EntityRegistry.Instance.gameObject);
         if (WorldOrigin.Instance    != null) Object.Destroy(WorldOrigin.Instance.gameObject);
 

@@ -150,7 +150,7 @@ namespace Gameplay
             }
 
             Vector3 waypoint = _pathIndex < _path.Count ? _path[_pathIndex] : _player.position;
-            _veleth.MoveTo(waypoint, _velethSpeed, Time.deltaTime);
+            _veleth.MoveTo(waypoint, _velethSpeed * EntitySpeedSettings.Multiplier, Time.deltaTime);
             if (_pathIndex < _path.Count &&
                 HorizontalDistance(_veleth.Position, _path[_pathIndex]) <= 0.2f)
                 _pathIndex++;

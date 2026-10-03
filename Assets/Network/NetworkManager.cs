@@ -38,9 +38,8 @@ public class NetworkManager : MonoBehaviour
     // Server: ultima pose anchor-relativa reportada por cada cliente (por PlayerPose).
     // El host se conoce por Camera.main aparte. Lo usa el sistema de pilas.
     private readonly Dictionary<uint, Vector3> _clientRelPos   = new();
-    // Server: ultimo estado de linterna (on/off) reportado por cada cliente. Lo usa el
-    // SanitySystem para drenar la cordura del jugador cuando su linterna esta apagada.
-    private readonly Dictionary<uint, bool>    _clientFlashOn  = new();
+    // Server: ultimo modo de linterna reportado por cada cliente.
+    private readonly Dictionary<uint, FlashlightMode> _clientFlashMode = new();
     // Server: ultimo forward (aim) anchor-relativo reportado por cada cliente. Lo usa el
     // GameDirector para el test de cono del repel.
     private readonly Dictionary<uint, Vector3> _clientForward  = new();
@@ -68,7 +67,7 @@ public class NetworkManager : MonoBehaviour
     public event Action<byte, float> OnBatteryCollected; // client: recogió pila (rarityIndex, charge)
     public event Action<int>    OnCollectibleTotal;   // todos: total de reliquias recogidas esta noche
     public event Action<float, float> OnSanityUpdated;    // client: cordura autoritativa (valor, max)
-    public event Action               OnPlayerDied;        // client: fui atrapado (pantalla de muerte)
+    public event Action<PlayerDeathMsg> OnPlayerDied;        // client: fui atrapado (secuencia + pantalla de muerte)
     public event Action<uint, byte[]> OnVoiceData;         // todos: frame de voz de (emisor, adpcm)
     public event Action               OnRosterChanged;     // todos: cambió quién está en la sala
 
@@ -82,8 +81,16 @@ public class NetworkManager : MonoBehaviour
 
     // Server: ultimo estado de linterna reportado por un cliente. false si nunca reportó
     // (el llamador decide el default; el SanitySystem asume "encendida" = no drena).
-    public bool TryGetClientFlashlightOn(uint clientId, out bool on) =>
-        _clientFlashOn.TryGetValue(clientId, out on);
+    public bool TryGetClientFlashlightMode(uint clientId, out FlashlightMode mode) =>
+        _clientFlashMode.TryGetValue(clientId, out mode);
+
+    // Compatibilidad para sistemas que solo necesitan saber apagada/encendida.
+    public bool TryGetClientFlashlightOn(uint clientId, out bool on)
+    {
+        bool found = _clientFlashMode.TryGetValue(clientId, out var mode);
+        on = found && mode != FlashlightMode.Off;
+        return found;
+    }
 
     // Server: forward (aim) world de un cliente (convertido con el WorldOrigin actual).
     public bool TryGetClientForward(uint clientId, out Vector3 worldForward)
@@ -117,10 +124,16 @@ public class NetworkManager : MonoBehaviour
     }
 
     // Server → cliente puntual: fue atrapado (muestra pantalla de muerte).
-    public void ServerSendPlayerDied(uint clientId)
+    public void ServerSendPlayerDied(uint clientId, Vector3 killerFacePosition, uint killerNetworkId, bool allPlayersDead)
     {
         if (_srv == null) return;
-        _srv.Send(clientId, MsgHelper.Frame(MessageType.PlayerDied, Array.Empty<byte>()));
+        var body = new PlayerDeathMsg
+        {
+            KillerFacePosition = killerFacePosition,
+            KillerNetworkId = killerNetworkId,
+            AllPlayersDead = allPlayersDead,
+        }.Serialize();
+        _srv.Send(clientId, MsgHelper.Frame(MessageType.PlayerDied, body));
     }
 
     // Server → cliente puntual: su cordura autoritativa (la calcula el SanitySystem).
@@ -134,19 +147,46 @@ public class NetworkManager : MonoBehaviour
     // Estado de la linterna local de este dispositivo (para reportarla al server).
     public bool LocalFlashlightOn()
     {
+        return LocalFlashlightMode() != FlashlightMode.Off;
+    }
+
+    public FlashlightMode LocalFlashlightMode()
+    {
         if (_localFlashlight == null) _localFlashlight = FindAnyObjectByType<Flashlight>();
-        return _localFlashlight != null && _localFlashlight.isOn;
+        return _localFlashlight != null ? _localFlashlight.Mode : FlashlightMode.Off;
     }
 
     // ── Public API ────────────────────────────────────────────────────────
 
-    public void StartServer(int port)
+    public int StartServer(int port)
     {
+        // Publicar el estado de host recien despues de reservar el puerto. Si el bind
+        // falla, la sesion no debe quedar marcada como iniciada a medias.
+        if (_srv != null) return port;
+
+        var server = new TcpTransportServer();
+        int boundPort = server.Start(port);
+        _srv      = server;
         IsServer  = true;
         InSession = true;
-        _srv      = new TcpTransportServer();
-        _srv.Start(port);
         ServerRebuildRoster();   // la sala arranca con el host solo
+        return boundPort;
+    }
+
+    // Cierra los sockets de forma sincrona antes de cambiar de escena. Destroy se
+    // procesa al final del frame; esperar a OnDestroy dejaba el puerto ocupado cuando
+    // la escena siguiente intentaba crear su host durante ese mismo cambio.
+    public void Shutdown()
+    {
+        _srv?.Stop();
+        _srv = null;
+
+        _cli?.Disconnect();
+        _cli = null;
+
+        IsServer    = false;
+        InSession   = false;
+        GameStarted = false;
     }
 
     public void StartClient(string host, int port)
@@ -566,7 +606,7 @@ public class NetworkManager : MonoBehaviour
         _connectedClients.Remove(clientId);
         _resolvedClients.Remove(clientId);
         _clientRelPos.Remove(clientId);
-        _clientFlashOn.Remove(clientId);
+        _clientFlashMode.Remove(clientId);
         _clientForward.Remove(clientId);
         _clientAnchorStatus.Remove(clientId);
 
@@ -610,7 +650,7 @@ public class NetworkManager : MonoBehaviour
             {
                 var pose = PlayerPoseMsg.Deserialize(incoming.Body);
                 _clientRelPos[incoming.ClientId]  = pose.RelPos;
-                _clientFlashOn[incoming.ClientId] = pose.FlashlightOn;
+                _clientFlashMode[incoming.ClientId] = pose.FlashlightMode;
                 _clientForward[incoming.ClientId] = pose.Forward;
                 break;
             }
@@ -685,7 +725,7 @@ public class NetworkManager : MonoBehaviour
             var relPos  = WorldOrigin.Instance.ToRelative(Camera.main.transform.position);
             var relFwd  = WorldOrigin.Instance.ToRelativeDir(Camera.main.transform.forward);
             _cli.Send(MsgHelper.Frame(MessageType.PlayerPose,
-                new PlayerPoseMsg { RelPos = relPos, FlashlightOn = LocalFlashlightOn(), Forward = relFwd }.Serialize()));
+                new PlayerPoseMsg { RelPos = relPos, FlashlightMode = LocalFlashlightMode(), Forward = relFwd }.Serialize()));
         }
 
         foreach (var entity in EntityRegistry.Instance.All)
@@ -793,7 +833,7 @@ public class NetworkManager : MonoBehaviour
             }
             case MessageType.PlayerDied:
             {
-                OnPlayerDied?.Invoke();
+                OnPlayerDied?.Invoke(PlayerDeathMsg.Deserialize(msg.Body));
                 break;
             }
             case MessageType.VoiceData:
@@ -873,7 +913,7 @@ public class NetworkManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        _srv?.Stop();
-        _cli?.Disconnect();
+        Shutdown();
+        if (Instance == this) Instance = null;
     }
 }
