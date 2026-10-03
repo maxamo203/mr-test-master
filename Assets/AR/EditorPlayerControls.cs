@@ -16,7 +16,7 @@ using Scanner;   // UIBlocker
 // Controles:
 //   WASD            caminar (horizontal, relativo a hacia dónde estás mirando)
 //   Shift           correr
-//   Espacio / E     subir      |   Ctrl / Q   bajar
+//   Espacio         subir      |   Ctrl / Q   bajar   (E es el botón único: linterna)
 //   clic en el mundo  capturar mouse y mirar libremente
 //   Escape             liberar mouse
 //
@@ -52,7 +52,7 @@ public class EditorPlayerControls : MonoBehaviour
         var go = new GameObject("EditorPlayerControls");
         DontDestroyOnLoad(go);
         go.AddComponent<EditorPlayerControls>();
-        Debug.Log("EditorPlayerControls: WASD para caminar, Shift correr, Espacio/E subir, " +
+        Debug.Log("EditorPlayerControls: WASD para caminar, Shift correr, Espacio subir, " +
                   "Ctrl/Q bajar, clic para capturar el mouse y Escape para liberarlo. " +
                   "Se apaga en Mortuorium > Controles WASD en Play.");
     }
