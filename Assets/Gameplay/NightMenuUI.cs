@@ -768,8 +768,8 @@ namespace Gameplay
             // US-11.1: el filtro VHS en la PARTIDA es parte de la atmósfera y no se
             // apaga; sobre los menús es opcional (gusto y legibilidad).
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
-                         "FILTRO VHS EN MENÚS",
-                         "El grano y las líneas de cinta también sobre esta pantalla",
+                         "FILTRO VHS EN PAUSA",
+                         "El grano y las líneas de cinta también sobre el menú de pausa",
                          GameOptions.VhsEnMenus,
                          () => GameOptions.VhsEnMenus = !GameOptions.VhsEnMenus);
             y += 68f;
