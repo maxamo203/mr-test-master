@@ -306,6 +306,49 @@ public static class MortuoriumTheme
         return new Rect(HudMargin, y, HudBarW, HudBarH);
     }
 
+    // En Cardboard la esquina inf-izq de la pantalla cae fuera de las lentes (y debajo
+    // del recorte de la nariz): las barras no se veían. Ahí se dibuja una copia por ojo,
+    // centrada bajo el centro de cada uno — que MRCardboardController ubica en
+    // W*0.25 / W*0.75 — y un poco por debajo de la mitad, dentro del campo cómodo.
+    // Las dos copias quedan en la misma posición relativa a su ojo (disparidad 0), así
+    // que se fusionan en una sola barra.
+    public const float HudBarWCardboard = 170f;
+    // Borde inferior de la fila 0 en Cardboard, como fracción del alto de pantalla.
+    public const float HudCardboardBaseY = 0.70f;
+
+    // Devuelve cuántos rects hay que dibujar para la fila: 1 fuera de Cardboard (abajo-izq,
+    // como siempre) o 2 en Cardboard (uno por ojo). Coords virtuales, tras UIScale.Begin.
+    public static int HudBarRects(float vw, float vh, int fila, out Rect a, out Rect b)
+    {
+        if (!MRCardboardController.Activo)
+        {
+            a = HudBarRect(vw, vh, fila);
+            b = default;
+            return 1;
+        }
+
+        // Pixeles de pantalla → espacio virtual de UIScale (área segura escalada).
+        var   sg = Scanner.UIScale.SafeGui;
+        float s  = Scanner.UIScale.Factor;
+        float w  = HudBarWCardboard;
+        float y  = (Screen.height * HudCardboardBaseY - sg.y) / s
+                 - HudBarH - fila * (HudBarH + HudBarGap);
+        float cxL = (Screen.width * 0.25f - sg.x) / s;
+        float cxR = (Screen.width * 0.75f - sg.x) / s;
+        a = new Rect(cxL - w * 0.5f, y, w, HudBarH);
+        b = new Rect(cxR - w * 0.5f, y, w, HudBarH);
+        return 2;
+    }
+
+    // Atajo: dibuja la barra en su fila, una o dos veces según el modo.
+    public static void HudBarra(float vw, float vh, int fila, float pct01, Color fill,
+                                string etiqueta, string valor)
+    {
+        int n = HudBarRects(vw, vh, fila, out var a, out var b);
+        Barra(a, pct01, fill, etiqueta, valor);
+        if (n > 1) Barra(b, pct01, fill, etiqueta, valor);
+    }
+
     // Barra estilo Mortuorium: fondo + borde + relleno proporcional, con etiqueta a
     // la izquierda y valor a la derecha (mismo lenguaje que los sliders del pausa).
     public static void Barra(Rect r, float pct01, Color fill, string etiqueta, string valor)

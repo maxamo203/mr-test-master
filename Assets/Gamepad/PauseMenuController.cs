@@ -441,6 +441,7 @@ namespace Gamepad
                     AddSlider("fl_outer",     new Rect(x, y, w, 60f), "Ángulo externo", fl.outerAngleDeg, 2f,  89f, "{0:0}°");    y += 68f;
                     AddSlider("fl_inner",     new Rect(x, y, w, 60f), "Ángulo interno", fl.innerAngleDeg, 0f,  89f, "{0:0}°");    y += 68f;
                     AddSlider("fl_intensity", new Rect(x, y, w, 60f), "Intensidad",     fl.intensity,     0f,  10f, "{0:0.0}");   y += 68f;
+                    AddSlider("fl_drenaje",   new Rect(x, y, w, 60f), "Drenaje batería", Flashlight.DevMultiplicadorDrenaje, 0f, 10f, "x{0:0.0}"); y += 68f;
                 }
 
                 y += 6f;
@@ -559,7 +560,7 @@ namespace Gamepad
             switch (_page)
             {
                 case Page.Control:    return 820f;
-                case Page.Flashlight: return 660f;
+                case Page.Flashlight: return 728f;   // +68 por el slider "Drenaje batería"
                 case Page.Cardboard:
                 {
                     // 3 sliders de óptica + el toggle de estéreo; con el estéreo prendido
@@ -639,6 +640,7 @@ namespace Gamepad
             {
                 case "fl_range":     step = 1f;     break;
                 case "fl_intensity": step = 0.5f;   break;
+                case "fl_drenaje":   step = 0.5f;   break;   // multiplicador
                 case "cb_zoom":      step = 0.02f;  break;
                 case "cb_offL":
                 case "cb_offR":      step = 0.005f; break;
@@ -671,6 +673,7 @@ namespace Gamepad
                 case "fl_outer":     { var fl = GetFlashlight(); return fl != null ? fl.outerAngleDeg : 0f; }
                 case "fl_inner":     { var fl = GetFlashlight(); return fl != null ? fl.innerAngleDeg : 0f; }
                 case "fl_intensity": { var fl = GetFlashlight(); return fl != null ? fl.intensity     : 0f; }
+                case "fl_drenaje":   return Flashlight.DevMultiplicadorDrenaje;
                 case "cb_zoom":      { var cb = GetCardboard();  return cb != null ? cb.Scale   : 0f; }
                 case "cb_offL":      { var cb = GetCardboard();  return cb != null ? cb.OffsetL : 0f; }
                 case "cb_offR":      { var cb = GetCardboard();  return cb != null ? cb.OffsetR : 0f; }
@@ -711,6 +714,7 @@ namespace Gamepad
                 case "fl_outer":     { var fl = GetFlashlight(); if (fl != null) fl.outerAngleDeg = Mathf.Clamp(value, 2f,   89f); break; }
                 case "fl_inner":     { var fl = GetFlashlight(); if (fl != null) fl.innerAngleDeg = Mathf.Clamp(value, 0f, fl.outerAngleDeg - 1f); break; }
                 case "fl_intensity": { var fl = GetFlashlight(); if (fl != null) fl.intensity     = Mathf.Clamp(value, 0f,   10f); break; }
+                case "fl_drenaje":   Flashlight.DevMultiplicadorDrenaje = Mathf.Clamp(value, 0f, 10f); break;
                 case "cb_zoom":      { var cb = GetCardboard(); if (cb != null) cb.Scale   = value; break; }
                 case "cb_offL":      { var cb = GetCardboard(); if (cb != null) cb.OffsetL = value; break; }
                 case "cb_offR":      { var cb = GetCardboard(); if (cb != null) cb.OffsetR = value; break; }
