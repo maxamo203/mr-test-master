@@ -59,9 +59,17 @@ namespace Scanner
             return tex;
         }
 
-        public static void Save(string name, ScanData data)
+        // recalcularHash: false sólo cuando el hash viene de otro dispositivo (import):
+        // se conserva tal cual para que ambos lo reconozcan como el mismo mapa.
+        // El PNG tiene que estar escrito ANTES, porque forma parte del hash.
+        public static void Save(string name, ScanData data, bool recalcularHash = true)
         {
             data.name = name;
+            if (recalcularHash || string.IsNullOrEmpty(data.contentHash))
+            {
+                var png = RefImagePathFor(name);
+                data.contentHash = ScanHash.Compute(data, File.Exists(png) ? File.ReadAllBytes(png) : null);
+            }
             var json = JsonUtility.ToJson(data, prettyPrint: true);
             File.WriteAllText(PathFor(name), json);
             Debug.Log($"[ScanSerializer] Guardado '{name}' en {PathFor(name)}");
@@ -79,6 +87,24 @@ namespace Scanner
             var data = JsonUtility.FromJson<ScanData>(json);
             Debug.Log($"[ScanSerializer] Cargado '{name}' ({data?.walls?.Count ?? 0} walls, {data?.cubes?.Count ?? 0} cubes)");
             return data;
+        }
+
+        // Hash del escaneo guardado; si es viejo y no lo tiene, lo calcula y re-guarda.
+        public static string AsegurarHash(string name)
+        {
+            var data = Load(name);
+            if (data == null) return null;
+            if (string.IsNullOrEmpty(data.contentHash)) Save(name, data);
+            return data.contentHash;
+        }
+
+        // Nombre local del escaneo con este hash de contenido, o null si no hay.
+        public static string BuscarPorHash(string hash)
+        {
+            if (string.IsNullOrEmpty(hash)) return null;
+            foreach (var name in ListSaved())
+                if (AsegurarHash(name) == hash) return name;
+            return null;
         }
 
         public static List<string> ListSaved()
