@@ -45,6 +45,19 @@ public class MRCardboardController : MonoBehaviour
 
     public bool CardboardActive { get; private set; }
 
+    // Estado global barato para los HUD IMGUI (FlashlightHUD, SanityHUD), que lo consultan
+    // en cada evento de OnGUI y no pueden andar buscando el componente. Se baja en
+    // ExitCardboard, al que también pasa OnDisable (cambio de escena).
+    public static bool Activo { get; private set; }
+
+    // Sale de Cardboard si está prendido. Para los flujos que necesitan la pantalla mono
+    // (apuntar el centro a la imagen, arrastrar el gizmo del ajuste manual).
+    public static void SalirSiActivo()
+    {
+        var cb = FindAnyObjectByType<MRCardboardController>();
+        if (cb != null && cb.CardboardActive) cb.SetCardboard(false);
+    }
+
     // _rtL siempre existe. _rtR sólo en estéreo (en mono los dos ojos muestran _rtL).
     private RenderTexture      _rtL, _rtR;
     private RenderTexture      _prevTarget;
@@ -116,6 +129,7 @@ public class MRCardboardController : MonoBehaviour
         Camera.onPostRender        += OnCamaraPostRender;
 
         CardboardActive = true;
+        Activo = true;
         Debug.Log($"[MRCardboard] Cardboard ON (estéreo={_stereo}).");
     }
 
@@ -140,6 +154,7 @@ public class MRCardboardController : MonoBehaviour
         RestoreOrientation();
 
         CardboardActive = false;
+        Activo = false;
         Debug.Log("[MRCardboard] Cardboard OFF (AR mono a pantalla).");
     }
 

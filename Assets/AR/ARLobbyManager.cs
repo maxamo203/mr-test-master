@@ -303,6 +303,8 @@ public class ARLobbyManager : MonoBehaviour
         // su anchor manual — puede retocarlo o cerrar con LISTO de una.
         if (ManualCalibration.Calibrado)
         {
+            // El ajuste es un gizmo táctil: con la vista estéreo no se puede arrastrar.
+            MRCardboardController.SalirSiActivo();
             State = LobbyState.CalibrandoManual;
             ManualCalibration.Instance.AbrirAjuste();
             return;
@@ -325,6 +327,9 @@ public class ARLobbyManager : MonoBehaviour
     {
         if (State == LobbyState.GameStarted) return;
 
+        // Buscar la imagen es apuntarle con el centro de la pantalla, que en estéreo no
+        // es lo que ve ninguno de los dos ojos: se vuelve a la vista mono.
+        MRCardboardController.SalirSiActivo();
         State = LobbyState.Scanning;
 
         // keepVisualPosition: false → la escena se mueve con el anchor nuevo, que es

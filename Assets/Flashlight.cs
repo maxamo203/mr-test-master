@@ -31,6 +31,13 @@ public class Flashlight : MonoBehaviour
     [Tooltip("Carga consumida por segundo mientras isOn.")]
     public float drainPerSecond = 2f;
 
+    // Multiplicador de drenaje para PROBAR (slider de Pausa → LINTERNA (DEV)): acelera el
+    // agotamiento para ver rápido cómo se cierra el agujero de la oscuridad. Sólo rige en
+    // development build; en release el drenaje es siempre el de la noche.
+    public static float DevMultiplicadorDrenaje = 1f;
+    private static float MultiplicadorDrenaje =>
+        Debug.isDebugBuild ? Mathf.Max(0f, DevMultiplicadorDrenaje) : 1f;
+
     [Header("Titileo por batería baja")]
     // Puramente visual (afecta solo la intensidad renderizada, nunca isOn): a nadie que
     // compruebe si esta linterna está "alumbrando" algo (PlayerLights,
@@ -207,7 +214,7 @@ public class Flashlight : MonoBehaviour
         if (isOn)
         {
             if (currentCharge > 0f)
-                currentCharge = Mathf.Max(0f, currentCharge - drainPerSecond * Time.deltaTime);
+                currentCharge = Mathf.Max(0f, currentCharge - drainPerSecond * MultiplicadorDrenaje * Time.deltaTime);
 
             // Aviso de batería baja, una sola vez por bajada (se rearma al recargar por
             // encima del umbral alto, para no repetirlo titilando en el borde).
