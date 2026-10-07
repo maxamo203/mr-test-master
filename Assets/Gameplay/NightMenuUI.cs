@@ -89,6 +89,9 @@ namespace Gameplay
 
             _mostrarAvisoIos = Application.platform == RuntimePlatform.Android && !GameOptions.AvisoIosVisto;
             //_mostrarAvisoIos = true;
+
+            // Volvemos de una partida que se cortó sola (el host salió o se cayó la red).
+            if (HayAvisoSalida) AudioManager.Sonar(c => c.uiAlerta);
         }
 
         private void Update()
@@ -110,6 +113,7 @@ namespace Gameplay
             // Bloqueo por versión no compatible: a propósito no tiene botón de
             // volver (no se puede omitir), así que el back tampoco hace nada acá.
             if (_versionIncompatible) return;
+            if (HayAvisoSalida) { CerrarAvisoSalida(); return; }
             if (_mostrarAvisoVersionDesconocida) { CerrarAvisoVersionDesconocida(); return; }
             if (_mostrarAvisoIos) { CerrarAvisoIos(); return; }
             if (_confirmarBorrar != null) { _confirmarBorrar = null; return; }
@@ -190,6 +194,10 @@ namespace Gameplay
             if (_versionIncompatible)
             {
                 DrawBloqueoVersion(vw, vh);
+            }
+            else if (HayAvisoSalida)
+            {
+                DrawAvisoSalida(vw, vh);
             }
             else if (_mostrarAvisoVersionDesconocida)
             {
@@ -714,6 +722,40 @@ namespace Gameplay
             GameOptions.AvisoIosVisto = true;
         }
 
+        // Aviso de que la partida multijugador se cortó sola: el host cerró la sala o se
+        // perdió la conexión (lo deja NetworkManager en GameSession.AvisoSalida antes de
+        // volver al menú). Se muestra una sola vez.
+        private static bool HayAvisoSalida =>
+            GameSession.Instance != null && !string.IsNullOrEmpty(GameSession.Instance.AvisoSalida);
+
+        private void DrawAvisoSalida(float vw, float vh)
+        {
+            T.Fill(new Rect(0, 0, vw, vh), new Color(0f, 0f, 0f, 0.7f));
+
+            float pw = vw - 56f, ph = 270f;
+            var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
+            T.Panel(panel, T.BgPanel, T.Tan);
+
+            const float iconSize = 60f;
+            MortuoriumIcons.Draw(new Rect(panel.center.x - iconSize / 2f, panel.y + 14f, iconSize, iconSize),
+                                  MortuoriumIcons.Icon.Pentagrama);
+
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 82f, pw - 44f, 30f),
+                      GameSession.Instance.AvisoSalida, T.Estilo(T.FBebas, 20, T.Cream));
+            GUI.Label(new Rect(panel.x + 22f, panel.y + 118f, pw - 44f, 80f),
+                      "La partida terminó porque el host salió o se cortó la red. " +
+                      "Podés volver a unirte cuando abra una sala nueva.",
+                      T.Estilo(T.FElite, 13, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
+
+            T.Boton(_nav, new Rect(panel.x + 22f, panel.yMax - 62f, pw - 44f, 46f),
+                    "ENTENDIDO", true, CerrarAvisoSalida, fontSize: 16);
+        }
+
+        private void CerrarAvisoSalida()
+        {
+            if (GameSession.Instance != null) GameSession.Instance.AvisoSalida = null;
+        }
+
         private void DrawOpciones(float vw, float vh)
         {
             T.BotonVolver(_nav, () => _pantalla = Pantalla.Menu);
@@ -768,8 +810,8 @@ namespace Gameplay
             // US-11.1: el filtro VHS en la PARTIDA es parte de la atmósfera y no se
             // apaga; sobre los menús es opcional (gusto y legibilidad).
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
-                         "FILTRO VHS EN MENÚS",
-                         "El grano y las líneas de cinta también sobre esta pantalla",
+                         "FILTRO VHS EN PAUSA",
+                         "El grano y las líneas de cinta también sobre el menú de pausa",
                          GameOptions.VhsEnMenus,
                          () => GameOptions.VhsEnMenus = !GameOptions.VhsEnMenus);
             y += 68f;

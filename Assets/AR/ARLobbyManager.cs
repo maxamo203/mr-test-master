@@ -46,6 +46,7 @@ public class ARLobbyManager : MonoBehaviour
         net.OnClientResolved    += HandleClientResolved;
         net.OnClientAnchorStatus += HandleClientAnchorStatus;
         net.OnMapReceived       += HandleMapReceived;
+        net.OnMapAnnounced      += HandleMapAnnounced;
         net.OnNightReset        += HandleNightReset;
         net.OnNightSurvived     += Gameplay.NightTransition.NocheSuperada;
         net.OnNightClock        += HandleNightClock;
@@ -103,9 +104,12 @@ public class ARLobbyManager : MonoBehaviour
             return;
         }
 
+        // Hash antes de empaquetar: en escaneos viejos AsegurarHash lo escribe en el
+        // json, y así viaja dentro del .mscn y el cliente lo guarda igual.
+        var hash = ScanSerializer.AsegurarHash(mapName);
         ScanLoader.LoadForDisplay(mapName, _imageAnchor);
         _mapaListo = true;
-        NetworkManager.Instance.ServerSetMap(ScanPackage.Pack(mapName));
+        NetworkManager.Instance.ServerSetMap(ScanPackage.Pack(mapName), hash, mapName);
     }
 
     // Cliente: NO arranca el tracking todavía — primero necesita recibir el mapa
@@ -134,9 +138,30 @@ public class ARLobbyManager : MonoBehaviour
             !activada || (mgr != null && mgr.Listo));
     }
 
-    // Cliente: llegó el .mscn del host. Lo importamos, reconstruimos el mapa
-    // display-only y registramos su imagen de referencia para calibrar el anchor
-    // contra la misma imagen física que el host.
+    // Hash del mapa que este cliente ya tiene cargado: un re-anuncio del mismo mapa
+    // no debe recargarlo (eso reiniciaría la búsqueda de la imagen).
+    private string _hashCargado;
+
+    // Cliente: el host anunció qué mapa se juega. Si ya hay un escaneo local con ese
+    // hash se usa ése; si no, se le pide el .mscn (llega por HandleMapReceived).
+    private void HandleMapAnnounced(string hash, string nombre)
+    {
+        var net = NetworkManager.Instance;
+        if (net.IsServer) return;
+        if (_mapaListo && !string.IsNullOrEmpty(hash) && hash == _hashCargado) return;
+
+        var local = ScanSerializer.BuscarPorHash(hash);
+        if (local != null)
+        {
+            Debug.Log($"[ARLobby] Mapa '{nombre}' ya está en el dispositivo como '{local}'; no se descarga.");
+            CargarMapaCliente(local);
+            return;
+        }
+        net.ClientRequestMap();
+    }
+
+    // Cliente: llegó el .mscn del host (porque lo pedimos). Import lo instala, o
+    // devuelve el local si ya había uno con el mismo hash.
     private void HandleMapReceived(byte[] bytes)
     {
         if (NetworkManager.Instance.IsServer) return; // el host ya tiene su mapa cargado
@@ -148,7 +173,15 @@ public class ARLobbyManager : MonoBehaviour
             Debug.LogWarning("[ARLobby] No se pudo importar el mapa recibido.");
             return;
         }
+        CargarMapaCliente(name);
+    }
+
+    // Reconstruye el mapa display-only y registra su imagen de referencia para
+    // calibrar el anchor contra la misma imagen física que el host.
+    private void CargarMapaCliente(string name)
+    {
         ScanLoader.LoadForDisplay(name, _imageAnchor);
+        _hashCargado = ScanSerializer.Load(name)?.contentHash;
         _mapaListo = true;
         State = LobbyState.Scanning;
         Debug.Log($"[ARLobby] Mapa '{name}' cargado; apuntá a la imagen para sincronizar.");
@@ -433,6 +466,7 @@ public class ARLobbyManager : MonoBehaviour
         net.OnClientResolved    -= HandleClientResolved;
         net.OnClientAnchorStatus -= HandleClientAnchorStatus;
         net.OnMapReceived       -= HandleMapReceived;
+        net.OnMapAnnounced      -= HandleMapAnnounced;
         net.OnNightReset        -= HandleNightReset;
         net.OnNightSurvived     -= Gameplay.NightTransition.NocheSuperada;
         net.OnNightClock        -= HandleNightClock;

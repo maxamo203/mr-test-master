@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem.EnhancedTouch;
 using ETouch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 using Scanner;   // UIScale, UIBlocker
@@ -76,16 +77,39 @@ namespace Gamepad
         private static Texture2D _tex;
         private GUIStyle _btn, _icon, _title, _status, _battTxt, _toggleLbl;
 
+        // En el menú principal no hay nada que pausar (y sus OPCIONES ya cubren las del
+        // jugador): ni botón ni menú. Se cachea por escena para no comparar el nombre en
+        // cada evento de OnGUI.
+        private bool _enMenuPrincipal;
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
             if (!EnhancedTouchSupport.enabled) EnhancedTouchSupport.Enable();
+            ResolverEscena(SceneManager.GetActiveScene());
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance != this) return;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            Instance = null;
+        }
+
+        private void OnSceneLoaded(Scene s, LoadSceneMode m) => ResolverEscena(s);
+
+        private void ResolverEscena(Scene s)
+        {
+            _enMenuPrincipal = s.name == SceneFlow.EscenaMenu;
+            if (_enMenuPrincipal) _open = false;
         }
 
         // ----------------------------------------------------------------- OnGUI
         private void OnGUI()
         {
+            if (_enMenuPrincipal) return;
             UIScale.Begin();
             EnsureStyles();
             _items.Clear();
@@ -142,7 +166,7 @@ namespace Gamepad
                 if (hayVoz) { AddButton("voz", new Rect(x, y, w, 64f), "CHAT DE VOZ"); y += 76f; }
                 // US-11.1: el filtro VHS de la partida no se apaga (es atmósfera); lo
                 // que el jugador decide es si además cubre los menús.
-                AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS en menús",
+                AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS en pausa",
                           GameOptions.VhsEnMenus); y += 64f;
                 if (Debug.isDebugBuild)
                 {
@@ -938,6 +962,7 @@ namespace Gamepad
         // -------------------------------------------------------------- Acciones
         private void Toggle()
         {
+            if (_enMenuPrincipal && !_open) return;   // el Start del mando tampoco la abre acá
             CommitEdit();
             _open = !_open;
             if (_open) AudioManager.Sonar(c => c.uiConfirmar);
