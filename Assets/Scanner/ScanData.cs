@@ -106,5 +106,11 @@ namespace Scanner
         // los jugadores, viaja en el .mscn) tienen que usar el mismo valor.
         // Campo aditivo: JsonUtility deja 0 en los escaneos que no lo tienen.
         public int refImageOrientation;
+
+        // SHA-256 del contenido (todos los elementos + el PNG de referencia, sin el
+        // nombre). Identifica el mapa entre dispositivos: el cliente multijugador sólo
+        // lo descarga si no tiene uno con este hash. Ver ScanHash. Vacío en escaneos
+        // viejos hasta que ScanSerializer.AsegurarHash lo calcula.
+        public string contentHash;
     }
 }

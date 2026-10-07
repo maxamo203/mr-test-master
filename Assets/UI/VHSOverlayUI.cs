@@ -69,8 +69,13 @@ public class VHSOverlayUI : MonoBehaviour
         // Sólo pintar: en los eventos de layout/input no hay nada que hacer.
         if (Event.current.type != EventType.Repaint) return;
 
-        // El menú de pausa es un menú aunque esté sobre la partida.
-        bool menu = _enMenu || Gamepad.PauseMenuController.IsOpen;
+        // Menú principal: sin filtro. En Android no se dibujaba en el arranque en frío y
+        // aparecía recién tras visitar otra escena (bug de render nunca resuelto, ver
+        // historial de fix/e2e-test-findings); para que el menú se vea siempre igual, ahí
+        // no se dibuja nunca. Sobre el menú de PAUSA sigue rigiendo VhsEnMenus.
+        if (_enMenu) return;
+
+        bool menu = Gamepad.PauseMenuController.IsOpen;
 
         if (menu)
         {

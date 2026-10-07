@@ -270,6 +270,31 @@ public class MapDataMsg
     }
 }
 
+// Server → client: qué mapa se juega (hash de contenido, ver Scanner.ScanHash). El
+// cliente busca uno local con ese hash y sólo si no lo tiene manda MapRequest.
+public class MapAnnounceMsg
+{
+    public string Hash;
+    public string Name;
+    public int    Size;
+
+    public byte[] Serialize()
+    {
+        using var ms = new MemoryStream();
+        using var w  = new BinaryWriter(ms);
+        w.Write(Hash ?? "");
+        w.Write(Name ?? "");
+        w.Write(Size);
+        return ms.ToArray();
+    }
+
+    public static MapAnnounceMsg Deserialize(byte[] d)
+    {
+        using var r = new BinaryReader(new MemoryStream(d));
+        return new() { Hash = r.ReadString(), Name = r.ReadString(), Size = r.ReadInt32() };
+    }
+}
+
 // Client → server: si este dispositivo usa anchor points extra, cuántos colocó y si
 // ya cerró la colocación. El host no puede arrancar la noche mientras algún jugador
 // tenga la opción activada y no haya terminado. Ver AnchorPointManager.
@@ -403,7 +428,7 @@ public class PlayerRosterMsg
     }
 }
 
-// AnchorResolved, StartGame, ResetNight y NightSurvived no llevan payload — body vacío
+// AnchorResolved, StartGame, ResetNight, NightSurvived y MapRequest no llevan payload — body vacío
 // server → client: muerte local, con el punto de enfoque y el atacante a ocultar.
 public class PlayerDeathMsg
 {

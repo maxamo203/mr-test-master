@@ -29,13 +29,14 @@ public class FlashlightHUD : MonoBehaviour
                    : pct < 0.25f ? T.Tan
                                  : T.Green;
 
-        var r = T.HudBarRect(UIScale.VirtualWidth, UIScale.VirtualHeight, fila: 0);
         string modo = _fl.Mode switch
         {
             FlashlightMode.Bright => "INTENSA",
             FlashlightMode.Dim    => "TENUE",
             _                     => "APAGADA",
         };
-        T.Barra(r, pct, fill, $"LINTERNA · {modo}", $"{Mathf.RoundToInt(pct * 100f)}%");
+        // Abajo-izq; en Cardboard, una copia bajo cada ojo (ver T.HudBarRects).
+        T.HudBarra(UIScale.VirtualWidth, UIScale.VirtualHeight, 0, pct, fill,
+                   $"LINTERNA · {modo}", $"{Mathf.RoundToInt(pct * 100f)}%");
     }
 }

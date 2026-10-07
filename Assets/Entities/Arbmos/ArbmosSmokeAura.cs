@@ -247,5 +247,6 @@ public class ArbmosSmokeAura : MonoBehaviour
     {
         if (_smoke != null) Destroy(_smoke.gameObject);
         if (_floorPlane != null) Destroy(_floorPlane.gameObject);
+        if (_smokeMat != null) Destroy(_smokeMat);   // material runtime por instancia
     }
 }

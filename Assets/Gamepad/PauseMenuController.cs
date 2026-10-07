@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem.EnhancedTouch;
 using ETouch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 using Scanner;   // UIScale, UIBlocker
@@ -76,16 +77,39 @@ namespace Gamepad
         private static Texture2D _tex;
         private GUIStyle _btn, _icon, _title, _status, _battTxt, _toggleLbl;
 
+        // En el menú principal no hay nada que pausar (y sus OPCIONES ya cubren las del
+        // jugador): ni botón ni menú. Se cachea por escena para no comparar el nombre en
+        // cada evento de OnGUI.
+        private bool _enMenuPrincipal;
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
             if (!EnhancedTouchSupport.enabled) EnhancedTouchSupport.Enable();
+            ResolverEscena(SceneManager.GetActiveScene());
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance != this) return;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            Instance = null;
+        }
+
+        private void OnSceneLoaded(Scene s, LoadSceneMode m) => ResolverEscena(s);
+
+        private void ResolverEscena(Scene s)
+        {
+            _enMenuPrincipal = s.name == SceneFlow.EscenaMenu;
+            if (_enMenuPrincipal) _open = false;
         }
 
         // ----------------------------------------------------------------- OnGUI
         private void OnGUI()
         {
+            if (_enMenuPrincipal) return;
             UIScale.Begin();
             EnsureStyles();
             _items.Clear();
@@ -142,7 +166,7 @@ namespace Gamepad
                 if (hayVoz) { AddButton("voz", new Rect(x, y, w, 64f), "CHAT DE VOZ"); y += 76f; }
                 // US-11.1: el filtro VHS de la partida no se apaga (es atmósfera); lo
                 // que el jugador decide es si además cubre los menús.
-                AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS en menús",
+                AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS en pausa",
                           GameOptions.VhsEnMenus); y += 64f;
                 if (Debug.isDebugBuild)
                 {
@@ -450,6 +474,7 @@ namespace Gamepad
                     AddSlider("fl_outer",     new Rect(x, y, w, 60f), "Ángulo externo", fl.outerAngleDeg, 2f,  89f, "{0:0}°");    y += 68f;
                     AddSlider("fl_inner",     new Rect(x, y, w, 60f), "Ángulo interno", fl.innerAngleDeg, 0f,  89f, "{0:0}°");    y += 68f;
                     AddSlider("fl_intensity", new Rect(x, y, w, 60f), "Intensidad",     fl.intensity,     0f,  10f, "{0:0.0}");   y += 68f;
+                    AddSlider("fl_drenaje",   new Rect(x, y, w, 60f), "Drenaje batería", Flashlight.DevMultiplicadorDrenaje, 0f, 10f, "x{0:0.0}"); y += 68f;
                 }
 
                 y += 6f;
@@ -568,7 +593,7 @@ namespace Gamepad
             switch (_page)
             {
                 case Page.Control:    return 820f;
-                case Page.Flashlight: return 660f;
+                case Page.Flashlight: return 728f;   // +68 por el slider "Drenaje batería"
                 case Page.Cardboard:
                 {
                     // 3 sliders de óptica + el toggle de estéreo; con el estéreo prendido
@@ -649,6 +674,7 @@ namespace Gamepad
             {
                 case "fl_range":     step = 1f;     break;
                 case "fl_intensity": step = 0.5f;   break;
+                case "fl_drenaje":   step = 0.5f;   break;   // multiplicador
                 case "cb_zoom":      step = 0.02f;  break;
                 case "cb_offL":
                 case "cb_offR":      step = 0.005f; break;
@@ -682,6 +708,7 @@ namespace Gamepad
                 case "fl_outer":     { var fl = GetFlashlight(); return fl != null ? fl.outerAngleDeg : 0f; }
                 case "fl_inner":     { var fl = GetFlashlight(); return fl != null ? fl.innerAngleDeg : 0f; }
                 case "fl_intensity": { var fl = GetFlashlight(); return fl != null ? fl.intensity     : 0f; }
+                case "fl_drenaje":   return Flashlight.DevMultiplicadorDrenaje;
                 case "cb_zoom":      { var cb = GetCardboard();  return cb != null ? cb.Scale   : 0f; }
                 case "cb_offL":      { var cb = GetCardboard();  return cb != null ? cb.OffsetL : 0f; }
                 case "cb_offR":      { var cb = GetCardboard();  return cb != null ? cb.OffsetR : 0f; }
@@ -723,6 +750,7 @@ namespace Gamepad
                 case "fl_outer":     { var fl = GetFlashlight(); if (fl != null) fl.outerAngleDeg = Mathf.Clamp(value, 2f,   89f); break; }
                 case "fl_inner":     { var fl = GetFlashlight(); if (fl != null) fl.innerAngleDeg = Mathf.Clamp(value, 0f, fl.outerAngleDeg - 1f); break; }
                 case "fl_intensity": { var fl = GetFlashlight(); if (fl != null) fl.intensity     = Mathf.Clamp(value, 0f,   10f); break; }
+                case "fl_drenaje":   Flashlight.DevMultiplicadorDrenaje = Mathf.Clamp(value, 0f, 10f); break;
                 case "cb_zoom":      { var cb = GetCardboard(); if (cb != null) cb.Scale   = value; break; }
                 case "cb_offL":      { var cb = GetCardboard(); if (cb != null) cb.OffsetL = value; break; }
                 case "cb_offR":      { var cb = GetCardboard(); if (cb != null) cb.OffsetR = value; break; }
@@ -947,6 +975,7 @@ namespace Gamepad
         // -------------------------------------------------------------- Acciones
         private void Toggle()
         {
+            if (_enMenuPrincipal && !_open) return;   // el Start del mando tampoco la abre acá
             CommitEdit();
             _open = !_open;
             if (_open) AudioManager.Sonar(c => c.uiConfirmar);

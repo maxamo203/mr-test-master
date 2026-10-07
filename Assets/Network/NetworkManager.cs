@@ -25,7 +25,9 @@ public class NetworkManager : MonoBehaviour
 
     private uint   _nextNetId     = 1;
     private string _cloudAnchorId = null;  // null = anchor no listo todavía
-    private byte[] _mapBytes      = null;  // server: .mscn del mapa elegido, se envía al conectarse cada cliente
+    private byte[] _mapBytes      = null;  // server: .mscn del mapa elegido, sólo a quien lo pida (MapRequest)
+    private string _mapHash       = null;  // server: hash de contenido del mapa, se anuncia al conectarse cada cliente
+    private string _mapName       = null;
 
     // Sin avatares por ahora: el jugador ES su cámara AR, no se instancia prefab de
     // jugador. Solo se spawnean/sincronizan los Sorkens. Dejar en false.
@@ -51,6 +53,14 @@ public class NetworkManager : MonoBehaviour
 
     private float _tickTimer;
 
+    // Server: tiempo acumulado hasta el próximo Heartbeat (ver NetworkConfig).
+    private float _heartbeatTimer;
+
+    // Client: último momento (realtime) en que llegó algo del host, y si ya se dio la
+    // conexión por perdida (para no disparar la salida dos veces).
+    private float _ultimoRecibido;
+    private bool  _conexionPerdida;
+
     // ── Eventos ───────────────────────────────────────────────────────────
 
     public event Action<uint>   OnClientJoined;       // server: nuevo cliente
@@ -64,6 +74,7 @@ public class NetworkManager : MonoBehaviour
     public event Action<int,int> OnNightClock;         // client: (restantes, totales) del amanecer
     public event Action<float>  OnRitualBook;          // client: oscuridad del libro ritual (0..1)
     public event Action<byte[]> OnMapReceived;         // client: recibió el .mscn del mapa
+    public event Action<string, string> OnMapAnnounced; // client: (hash, nombre) del mapa que eligió el host
     public event Action<byte, float> OnBatteryCollected; // client: recogió pila (rarityIndex, charge)
     public event Action<int>    OnCollectibleTotal;   // todos: total de reliquias recogidas esta noche
     public event Action<float, float> OnSanityUpdated;    // client: cordura autoritativa (valor, max)
@@ -178,6 +189,12 @@ public class NetworkManager : MonoBehaviour
     // la escena siguiente intentaba crear su host durante ese mismo cambio.
     public void Shutdown()
     {
+        // Avisar a los clientes ANTES de cerrar los sockets, para que muestren "el host
+        // cerró la sala" y no "se perdió la conexión". Broadcast escribe sincrónico.
+        // Vive acá (y no en OnDestroy) porque SceneFlow.GoTo llama a Shutdown() antes de
+        // destruir el objeto: después _srv ya es null y el aviso no saldría nunca.
+        if (_srv != null)
+            _srv.Broadcast(MsgHelper.Frame(MessageType.SessionEnded, Array.Empty<byte>()));
         _srv?.Stop();
         _srv = null;
 
@@ -195,24 +212,35 @@ public class NetworkManager : MonoBehaviour
         InSession = true;
         _cli = new TcpTransportClient();
         _cli.Connect(host, port);
+        _ultimoRecibido = Time.realtimeSinceStartup;
     }
 
-    // Server: guardar el .mscn del mapa elegido por el host. Se envía a cada cliente
-    // apenas se conecta (ver HandleClientConnected) y a los ya conectados ahora.
-    public void ServerSetMap(byte[] mapBytes)
+    // Server: fijar el mapa elegido por el host. Se ANUNCIA (hash + nombre) a cada
+    // cliente al conectarse y a los ya conectados ahora; el .mscn completo viaja sólo
+    // a quien responda MapRequest porque no tiene un escaneo con ese hash.
+    public void ServerSetMap(byte[] mapBytes, string hash, string name)
     {
         _mapBytes = mapBytes;
+        _mapHash  = hash;
+        _mapName  = name;
         if (mapBytes == null || mapBytes.Length == 0)
         {
             Debug.LogWarning("[Server] ServerSetMap recibió bytes vacíos.");
             return;
         }
-        if (_srv != null)
-        {
-            var msg = MsgHelper.Frame(MessageType.MapData, new MapDataMsg { Bytes = mapBytes }.Serialize());
-            _srv.Broadcast(msg);
-        }
-        Debug.Log($"[Server] Mapa fijado ({mapBytes.Length} bytes).");
+        _srv?.Broadcast(MapAnnounceFrame());
+        Debug.Log($"[Server] Mapa fijado '{name}' ({mapBytes.Length} bytes, hash {hash}).");
+    }
+
+    private byte[] MapAnnounceFrame() =>
+        MsgHelper.Frame(MessageType.MapAnnounce,
+            new MapAnnounceMsg { Hash = _mapHash, Name = _mapName, Size = _mapBytes.Length }.Serialize());
+
+    // Client: no tengo el mapa anunciado, pedirle el .mscn al host.
+    public void ClientRequestMap()
+    {
+        _cli.Send(MsgHelper.Frame(MessageType.MapRequest, Array.Empty<byte>()));
+        Debug.Log("[Client] MapRequest enviado al servidor");
     }
 
     // Server: guardar anchor ID y enviarlo a todos los clientes conectados
@@ -549,6 +577,16 @@ public class NetworkManager : MonoBehaviour
         while (_srv.TryDequeue(out var msg))
             HandleServerMessage(msg);
 
+        // Latido para que los clientes detecten un host caído sin cierre limpio del
+        // socket. Corre también en la sala: ahí no viaja nada periódico.
+        _heartbeatTimer += TickInterval;
+        if (_heartbeatTimer >= NetworkConfig.HeartbeatInterval)
+        {
+            _heartbeatTimer = 0f;
+            if (_connectedClients.Count > 0)
+                _srv.Broadcast(MsgHelper.Frame(MessageType.Heartbeat, Array.Empty<byte>()));
+        }
+
         // Solo broadcastear estado del juego cuando la partida ya arrancó
         if (GameStarted)
             BroadcastWorldState();
@@ -565,12 +603,12 @@ public class NetworkManager : MonoBehaviour
         _srv.Send(clientId, MsgHelper.Frame(MessageType.ClientConnected,
             new ClientConnectedMsg { ClientId = clientId, PlayerNetworkId = 0 }.Serialize()));
 
-        // Enviar el mapa PRIMERO: el cliente necesita el .mscn (mapa + imagen de
+        // Anunciar el mapa PRIMERO: el cliente necesita el .mscn (mapa + imagen de
         // referencia) para reconstruir el entorno y calibrar su anchor contra la misma
-        // imagen física que el host. Sin esto los Sorkens no caen en el mismo lugar.
+        // imagen física que el host. Si ya lo tiene (mismo hash) usa el local; si no,
+        // lo pide con MapRequest.
         if (_mapBytes != null && _mapBytes.Length > 0)
-            _srv.Send(clientId, MsgHelper.Frame(MessageType.MapData,
-                new MapDataMsg { Bytes = _mapBytes }.Serialize()));
+            _srv.Send(clientId, MapAnnounceFrame());
 
         // Enviar catch-up de entidades ya existentes (en espacio anchor-relativo). Se
         // omiten las DIRIGIDAS a otro jugador (alucinaciones de Arbmos ajenas).
@@ -631,6 +669,14 @@ public class NetworkManager : MonoBehaviour
                 if (!EntityRegistry.Instance.TryGet(input.NetworkId, out var entity)) return;
                 if (entity.OwnerClientId == incoming.ClientId)
                     entity.ApplyInputData(input.Tick, incoming.Body);
+                break;
+            }
+            case MessageType.MapRequest:
+            {
+                if (_mapBytes == null || _mapBytes.Length == 0) return;
+                _srv.Send(incoming.ClientId, MsgHelper.Frame(MessageType.MapData,
+                    new MapDataMsg { Bytes = _mapBytes }.Serialize()));
+                Debug.Log($"[Server] Mapa enviado al cliente {incoming.ClientId} ({_mapBytes.Length} bytes)");
                 break;
             }
             case MessageType.AnchorResolved:
@@ -714,7 +760,20 @@ public class NetworkManager : MonoBehaviour
         if (_cli == null) return;
 
         while (_cli.TryDequeue(out var msg))
+        {
+            _ultimoRecibido = Time.realtimeSinceStartup;
             HandleClientMessage(msg);
+            if (_conexionPerdida) return;   // SessionEnded: ya salimos al menú
+        }
+
+        // El host se fue: el socket se cerró (ReadLoop vio EOF) o hace rato que no
+        // llega nada, ni siquiera el Heartbeat (Wi-Fi caída, app del host matada).
+        if (!_cli.IsConnected ||
+            Time.realtimeSinceStartup - _ultimoRecibido > NetworkConfig.HostTimeoutSeconds)
+        {
+            PerderConexionConHost(hostCerro: false);
+            return;
+        }
 
         if (!GameStarted) return;
 
@@ -806,6 +865,13 @@ public class NetworkManager : MonoBehaviour
                 OnRitualBook?.Invoke(m.Oscuridad);
                 break;
             }
+            case MessageType.MapAnnounce:
+            {
+                var m = MapAnnounceMsg.Deserialize(msg.Body);
+                Debug.Log($"[Client] Mapa anunciado '{m.Name}' ({m.Size} bytes, hash {m.Hash})");
+                OnMapAnnounced?.Invoke(m.Hash, m.Name);
+                break;
+            }
             case MessageType.MapData:
             {
                 var m = MapDataMsg.Deserialize(msg.Body);
@@ -842,6 +908,13 @@ public class NetworkManager : MonoBehaviour
                 OnVoiceData?.Invoke(v.SenderId, v.Adpcm);
                 break;
             }
+            case MessageType.SessionEnded:
+                PerderConexionConHost(hostCerro: true);
+                break;
+
+            case MessageType.Heartbeat:
+                break;   // alcanza con haber actualizado _ultimoRecibido
+
             case MessageType.PlayerRoster:
             {
                 var m = PlayerRosterMsg.Deserialize(msg.Body);
@@ -909,6 +982,32 @@ public class NetworkManager : MonoBehaviour
         entity.OnNetworkDespawn();
         EntityRegistry.Instance.Unregister(networkId);
         Destroy(entity.gameObject);
+    }
+
+    // Client: el host cerró la sala o se perdió la conexión. Desconecta y vuelve al menú
+    // por SceneFlow.GoTo (la única salida válida: teardown de directores, reset de la
+    // sesión AR, destrucción de singletons). Es seguro desde el propio Tick porque
+    // Destroy es diferido; el flag evita repetirlo en los ticks que quedan del frame.
+    private void PerderConexionConHost(bool hostCerro)
+    {
+        if (_conexionPerdida) return;
+        _conexionPerdida = true;
+
+        Debug.Log(hostCerro ? "[Client] El host cerró la sala"
+                            : "[Client] Se perdió la conexión con el host");
+        _cli?.Disconnect();
+
+        Gameplay.GameSession.Ensure().AvisoSalida = hostCerro
+            ? "EL HOST CERRÓ LA SALA"
+            : "SE PERDIÓ LA CONEXIÓN CON EL HOST";
+        SceneFlow.GoTo(SceneFlow.EscenaMenu);
+    }
+
+    // Vuelta del background: el tiempo que ESTE dispositivo estuvo suspendido no cuenta
+    // como silencio del host. Si el socket murió mientras tanto, lo detecta IsConnected.
+    private void OnApplicationPause(bool pausado)
+    {
+        if (!pausado) _ultimoRecibido = Time.realtimeSinceStartup;
     }
 
     private void OnDestroy()

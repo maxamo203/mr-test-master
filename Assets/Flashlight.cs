@@ -72,6 +72,13 @@ public class Flashlight : MonoBehaviour
     [Tooltip("Iluminación inicial exterior del haz concentrado.")]
     [Range(0f, 1f)] public float brightFarHaloStrength = 0.05f;
 
+    // Multiplicador de drenaje para PROBAR (slider de Pausa → LINTERNA (DEV)): acelera el
+    // agotamiento para ver rápido cómo se cierra el agujero de la oscuridad. Sólo rige en
+    // development build; en release el drenaje es siempre el de la noche.
+    public static float DevMultiplicadorDrenaje = 1f;
+    private static float MultiplicadorDrenaje =>
+        Debug.isDebugBuild ? Mathf.Max(0f, DevMultiplicadorDrenaje) : 1f;
+
     [Header("Titileo por batería baja")]
     // Puramente visual (afecta solo la intensidad renderizada, nunca isOn): a nadie que
     // compruebe si esta linterna está "alumbrando" algo (PlayerLights,
@@ -334,7 +341,7 @@ static readonly int ID_COS_INNER = Shader.PropertyToID("_FlashlightCosInner");
             if (currentCharge > 0f)
             {
                 currentCharge = Mathf.Max(0f,
-                    currentCharge - CurrentDrainPerSecond * Time.deltaTime);
+                    currentCharge - CurrentDrainPerSecond * MultiplicadorDrenaje * Time.deltaTime);
             }
 
             // Aviso de batería baja, una sola vez por bajada (se rearma al recargar por

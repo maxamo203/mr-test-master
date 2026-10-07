@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using Scanner;   // UIScale, UIBlocker
 using T = MortuoriumTheme;
 
@@ -217,17 +216,11 @@ namespace Gameplay
 
         private void ReturnToMenu()
         {
-            // Frena los directores DontDestroyOnLoad y limpia el estado estático
-            // (muertes, cordura local, NightResult). Sin esto la próxima partida
-            // arrancaba mostrando ya la pantalla de fin de noche, y el libro/Arbmos
-            // seguían corriendo en su sala de sincronización.
-            NightTransition.TeardownSesion();
-
-            // Teardown de la sesión (mismo criterio que SceneFlow): salir de la partida.
-            if (NetworkManager.Instance != null) Destroy(NetworkManager.Instance.gameObject);
-            if (EntityRegistry.Instance != null) Destroy(EntityRegistry.Instance.gameObject);
-            if (WorldOrigin.Instance    != null) Destroy(WorldOrigin.Instance.gameObject);
-            SceneManager.LoadScene(_menuScene);
+            // Mismo teardown que cualquier otra salida de partida: frena los directores
+            // DontDestroyOnLoad, limpia el estado estático (muertes, cordura, NightResult),
+            // resetea la sesión AR y destruye los singletons cross-escena. Antes esto era
+            // una copia a mano de SceneFlow.GoTo y se quedaba atrás cuando GoTo cambiaba.
+            SceneFlow.GoTo(_menuScene);
         }
     }
 }

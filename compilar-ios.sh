@@ -9,7 +9,8 @@
 # Uso:
 #   ./compilar-ios.sh                    # usa ~/Desktop/build9
 #   ./compilar-ios.sh <carpeta-export>   # otra carpeta exportada por Unity
-#   DEVICE=<UDID> ./compilar-ios.sh      # si hay más de un iPhone conectado
+#   DEVICE=<UDID> ./compilar-ios.sh      # elegir el iPhone sin preguntar
+# Con más de un iPhone disponible pregunta en cuál instalar (antes de compilar).
 
 set -euo pipefail
 
@@ -26,19 +27,43 @@ LOG="$EXPORT_DIR/build/xcodebuild.log"
 if [[ -z "${DEVICE:-}" ]]; then
   JSON=$(mktemp)
   DEVELOPER_DIR="$XCODE_DEFAULT" xcrun devicectl list devices --json-output "$JSON" >/dev/null 2>&1 || true
-  DEVICE=$(/usr/bin/python3 - "$JSON" <<'PY'
+  # Una línea por iPhone: "udid<TAB>nombre (cable|wifi)", los de cable primero.
+  CANDIDATOS=("${(@f)$(/usr/bin/python3 - "$JSON" <<'PY'
 import json, sys
 try:
     devs = json.load(open(sys.argv[1]))["result"]["devices"]
 except Exception:
     devs = []
+# Sólo iPhones físicos alcanzables ahora: devicectl también lista los emparejados
+# alguna vez (otro iPhone del equipo queda "unavailable" y falla con error 4016).
+cands = []
 for d in devs:
     hw = d.get("hardwareProperties", {})
-    if hw.get("reality") == "physical" and hw.get("platform") == "iOS" and hw.get("deviceType") == "iPhone":
-        print(hw.get("udid", "")); break
+    cp = d.get("connectionProperties", {})
+    if hw.get("reality") != "physical" or hw.get("platform") != "iOS" or hw.get("deviceType") != "iPhone":
+        continue
+    if cp.get("tunnelState") == "unavailable":
+        continue
+    wired = cp.get("transportType") == "wired"
+    name = d.get("deviceProperties", {}).get("name", "iPhone")
+    cands.append((not wired, f"{hw.get('udid', '')}\t{name} ({'cable' if wired else 'wifi'})"))
+for _, line in sorted(cands):
+    print(line)
 PY
-)
+)}")
   rm -f "$JSON"
+  CANDIDATOS=(${CANDIDATOS:#})   # descarta la línea vacía si no hubo ninguno
+  DEVICE=""
+
+  if (( ${#CANDIDATOS} > 1 )) && [[ -t 0 ]]; then
+    echo "Hay ${#CANDIDATOS} iPhones disponibles. ¿En cuál instalo?"
+    PS3="Número: "
+    select OPCION in "${CANDIDATOS[@]#*$'\t'}"; do
+      [[ -n "$OPCION" ]] && { DEVICE="${CANDIDATOS[$REPLY]%%$'\t'*}"; break; }
+    done
+  elif (( ${#CANDIDATOS} > 0 )); then
+    DEVICE="${CANDIDATOS[1]%%$'\t'*}"
+  fi
 fi
 [[ -n "$DEVICE" ]] || { echo "No hay ningún iPhone conectado. Conectalo por cable, desbloquealo y probá de nuevo."; exit 1; }
 

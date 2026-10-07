@@ -66,6 +66,11 @@ namespace Gameplay
         // lobby/sincronización: la partida sigue siendo la misma que un host multi.
         public bool SoloUnJugador => Mode == SessionMode.SinglePlayer;
 
+        // Aviso a mostrar UNA vez en el menú al volver de una partida que se cortó sola
+        // (el host cerró la sala o se perdió la conexión — ver NetworkManager). Vive acá
+        // porque GameSession sobrevive a SceneFlow.GoTo. NightMenuUI lo limpia al cerrarlo.
+        public string AvisoSalida { get; set; }
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }

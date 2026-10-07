@@ -12,13 +12,46 @@ public class DarknessOverlay : MonoBehaviour
     [Tooltip("Si darkWhenFlashlightOff = true, qué tan oscuro cuando la linterna está apagada")]
     [Range(0f, 1f)] public float darknessWhenOff = 0.95f;
 
+    // El agujero que abre la linterna en la oscuridad tiene borde con puntas (estilo
+    // "spiky vignette") y su tamaño depende de la BATERIA: enorme con la pila llena, se
+    // va cerrando hasta un minimo (nunca negro total) a medida que se agota. Es solo la
+    // vista: el cono de gameplay (PlayerLights, la Light) sigue usando
+    // Flashlight.outerAngleDeg y no se achica.
+    [Header("Agujero de la linterna (según batería)")]
+    // Ojo con la escala: del centro al borde corto de la pantalla entran ~30° (menos por
+    // ojo en Cardboard). Un radio mayor a eso deja toda la pantalla dentro del agujero y
+    // el efecto no se ve en absoluto.
+    [Tooltip("Radio angular del agujero con la batería al 100%, en grados. ~30° ya roza el borde corto de la pantalla.")]
+    [Range(5f, 80f)] public float anguloBateriaLlenaDeg = 17f;
+    [Tooltip("Radio angular del agujero con la batería casi en 0%, en grados. Mínimo: no se cierra del todo.")]
+    [Range(2f, 60f)] public float anguloBateriaVaciaDeg = 9f;
+    [Tooltip("Curva de cierre. 1 = lineal; >1 se mantiene amplio más tiempo y cae al final; <1 se cierra antes.")]
+    [Range(0.25f, 4f)] public float curvaCierre = 1.4f;
+    [Tooltip("Largo de las puntas del borde, como fracción del radio.")]
+    [Range(0f, 0.6f)] public float puntas = 0.22f;
+    [Tooltip("Ancho del degradé del borde, como fracción del radio.")]
+    [Range(0.01f, 0.6f)] public float suavidadBorde = 0.18f;
+    [Tooltip("Cuánto aclaran los rayos finos que se escapan del borde hacia la oscuridad (0 = sin rayos).")]
+    [Range(0f, 1f)] public float rayos = 0.35f;
+    [Tooltip("Segundos que tarda el agujero en acompañar un cambio brusco de carga (al recoger una pila).")]
+    [Range(0f, 3f)] public float suavizadoCarga = 0.6f;
+    [Tooltip("Segundos que tarda el agujero en cerrarse / abrirse al enfocar la linterna (modo Bright).")]
+    [Range(0f, 1f)] public float suavizadoEnfoque = 0.12f;
+
     [Header("Referencias")]
     public Camera arCamera;
     public Flashlight flashlight;
 
     private GameObject _quad;
     private Material _mat;
-    private static readonly int ID_DARK = Shader.PropertyToID("_OverlayDarkness");
+    private float _cargaVisible = 1f;
+    private float _enfoque, _enfoqueVel;   // 0 = haz normal, 1 = enfocado (Bright)
+    private float _cargaVel;
+    private static readonly int ID_DARK      = Shader.PropertyToID("_OverlayDarkness");
+    private static readonly int ID_CONE_TAN  = Shader.PropertyToID("_OverlayConeTan");
+    private static readonly int ID_SOFTNESS  = Shader.PropertyToID("_OverlaySoftness");
+    private static readonly int ID_SPIKES    = Shader.PropertyToID("_OverlaySpikes");
+    private static readonly int ID_RAYS      = Shader.PropertyToID("_OverlayRays");
 
     void Awake()
     {
@@ -83,6 +116,43 @@ public class DarknessOverlay : MonoBehaviour
             effectiveDark = darkness;
 
         Shader.SetGlobalFloat(ID_DARK, effectiveDark);
+        PublicarAgujero();
+    }
+
+    void PublicarAgujero()
+    {
+        float carga = flashlight != null ? flashlight.Charge01 : 1f;
+        // Fuera de partida no hay transición que mostrar: arrancar la noche ya con el
+        // tamaño correcto en vez de verlo abrirse.
+        if (flashlight == null || !flashlight.Operational || suavizadoCarga <= 0f)
+        {
+            _cargaVisible = carga;
+            _cargaVel = 0f;
+        }
+        else
+        {
+            _cargaVisible = Mathf.SmoothDamp(_cargaVisible, carga, ref _cargaVel, suavizadoCarga);
+        }
+
+        float t = Mathf.Pow(Mathf.Clamp01(_cargaVisible), curvaCierre);
+        float minDeg = Mathf.Min(anguloBateriaVaciaDeg, anguloBateriaLlenaDeg);
+        float deg = Mathf.Lerp(minDeg, anguloBateriaLlenaDeg, t);
+
+        // Enfocar (mantener el botón) concentra el haz: la luz sobre el mundo sale más fuerte
+        // y más cerrada (Flashlight.brightConeAngleMultiplier), y la vista tiene que acompañar
+        // cerrando el agujero puntiagudo en la misma proporción. La batería sigue mandando
+        // el tamaño base; el enfoque lo multiplica.
+        float objetivoEnfoque = flashlight != null && flashlight.Mode == FlashlightMode.Bright ? 1f : 0f;
+        _enfoque = suavizadoEnfoque <= 0f
+            ? objetivoEnfoque
+            : Mathf.SmoothDamp(_enfoque, objetivoEnfoque, ref _enfoqueVel, suavizadoEnfoque);
+        if (flashlight != null)
+            deg *= Mathf.Lerp(1f, Mathf.Clamp(flashlight.brightConeAngleMultiplier, 0.1f, 1f), _enfoque);
+
+        Shader.SetGlobalFloat(ID_CONE_TAN, Mathf.Tan(deg * Mathf.Deg2Rad));
+        Shader.SetGlobalFloat(ID_SOFTNESS, suavidadBorde);
+        Shader.SetGlobalFloat(ID_SPIKES, puntas);
+        Shader.SetGlobalFloat(ID_RAYS, rayos);
     }
 
     void OnDisable()

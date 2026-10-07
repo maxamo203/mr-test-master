@@ -356,6 +356,13 @@ MonoBehaviour:
   darkness: 0.92
   darkWhenFlashlightOff: 1
   darknessWhenOff: 0.95
+  anguloBateriaLlenaDeg: 17
+  anguloBateriaVaciaDeg: 9
+  curvaCierre: 1.4
+  puntas: 0.22
+  suavidadBorde: 0.18
+  rayos: 0.35
+  suavizadoCarga: 0.6
   arCamera: {fileID: 0}
   flashlight: {fileID: 0}
 --- !u!1 &8631959139027139366
