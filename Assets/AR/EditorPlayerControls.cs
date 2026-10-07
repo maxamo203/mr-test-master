@@ -61,8 +61,16 @@ public class EditorPlayerControls : MonoBehaviour
         // valor a mano): mover la cámara desde atrás sería un accidente, no una acción.
         if (Gamepad.PauseMenuController.IsOpen) return;
 
-        Mirar();
         Caminar();
+    }
+
+    // La mirada va en LateUpdate a propósito: TransformGizmoController (orden -100) agarra el
+    // handle en SU LateUpdate. Con Mirar() en Update, el frame del clic la cámara ya había
+    // girado cuando el gizmo todavía no sabía que se lo estaba arrastrando.
+    private void LateUpdate()
+    {
+        if (_cam == null || Gamepad.PauseMenuController.IsOpen) return;
+        Mirar();
     }
 
     // La cámara AR se crea con la escena y cambia al cambiar de escena; además hay que
@@ -97,6 +105,17 @@ public class EditorPlayerControls : MonoBehaviour
     {
         var mouse = Mouse.current;
         if (mouse == null) return;
+
+        // Un handle del gizmo agarrado (mover un vértice de pared, etc.) se lleva el
+        // arrastre: el gizmo calcula el movimiento con un rayo desde la cámara, así que si
+        // además la rotamos, el handle se persigue a sí mismo (gira y titila). No es un
+        // panel IMGUI, por eso UIBlocker no lo cubre.
+        var gizmo = TransformGizmoController.Instance;
+        if (gizmo != null && gizmo.ActiveHandle != null)
+        {
+            _arrastrando = false;
+            return;
+        }
 
         // Botón izquierdo o derecho: el derecho es la salida cuando el izquierdo se lo
         // lleva otro sistema (en el escáner un clic coloca/selecciona, ver
