@@ -428,7 +428,21 @@ public class PlayerRosterMsg
     }
 }
 
-// AnchorResolved, StartGame, ResetNight, NightSurvived y MapRequest no llevan payload — body vacío
+// Server → all: contador de la sala de sincronización. Lo calcula el host (es el único
+// que sabe quién está listo) y lo reparte para que lo vean todos, no sólo él. Ambos
+// cuentan al host.
+public class LobbyStatusMsg
+{
+    public byte Jugadores;   // conectados, host incluido
+    public byte Listos;      // ya ubicaron el entorno (y cerraron sus anclas)
+
+    public byte[] Serialize() => new[] { Jugadores, Listos };
+
+    public static LobbyStatusMsg Deserialize(byte[] d) =>
+        new() { Jugadores = d[0], Listos = d[1] };
+}
+
+// AnchorResolved, AnchorUnresolved, StartGame, ResetNight, NightSurvived, MapRequest y Heartbeat no llevan payload — body vacío
 // server → client: muerte local, con el punto de enfoque y el atacante a ocultar.
 public class PlayerDeathMsg
 {

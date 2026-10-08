@@ -26,5 +26,7 @@ public enum MessageType : ushort
     MapAnnounce     = 24,  // server → client: hash + nombre del mapa elegido (el .mscn va sólo si se pide)
     MapRequest      = 25,  // client → server: no tengo ese mapa, mandame el .mscn (MapData)
     SessionEnded    = 26,  // server → all: el host cierra la sala (salió al menú / cerró la app)
-    Heartbeat       = 27,  // server → all: latido (1 Hz, sin cuerpo) para detectar un host caído sin cierre limpio
+    Heartbeat       = 27,  // ambos sentidos: latido (1 Hz, sin cuerpo) para detectar un par caído sin cierre limpio
+    LobbyStatus     = 28,  // server → all: jugadores en la sala y cuántos ya ubicaron el entorno (host incluido)
+    AnchorUnresolved = 29, // client → server: volvió a ubicar el entorno (AJUSTAR / BUSCAR IMAGEN), ya no está listo
 }

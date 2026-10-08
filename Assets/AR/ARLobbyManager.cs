@@ -18,7 +18,28 @@ public class ARLobbyManager : MonoBehaviour
         GameStarted,
     }
 
-    public LobbyState State        { get; private set; } = LobbyState.Idle;
+    // Un cliente que sale de AllReady sin que arranque la noche (AJUSTAR ENTORNO, BUSCAR
+    // IMAGEN) deja de estar listo: se le avisa al host para que no lo siga contando. Al
+    // volver a cerrar el ajuste, AvanzarTrasSincronizar manda AnchorResolved de nuevo.
+    private LobbyState _state = LobbyState.Idle;
+    public LobbyState State
+    {
+        get => _state;
+        private set
+        {
+            if (_state == value) return;
+            var previo = _state;
+            _state = value;
+
+            var net = NetworkManager.Instance;
+            if (previo == LobbyState.AllReady && value != LobbyState.GameStarted &&
+                net != null && !net.IsServer)
+                net.ClientSendAnchorUnresolved();
+        }
+    }
+
+    // Server: clientes remotos conectados y cuántos de ellos ya están listos (el host
+    // NO se cuenta acá; el contador visible para todos sí lo suma — ver PublicarContador).
     public int ConnectedCount      { get; private set; }
     public int ResolvedCount       { get; private set; }
 
@@ -45,6 +66,7 @@ public class ARLobbyManager : MonoBehaviour
         net.OnClientJoined      += HandleClientJoined;
         net.OnClientLeft        += HandleClientLeft;
         net.OnClientResolved    += HandleClientResolved;
+        net.OnClientUnresolved  += HandleClientUnresolved;
         net.OnClientAnchorStatus += HandleClientAnchorStatus;
         net.OnMapReceived       += HandleMapReceived;
         net.OnMapAnnounced      += HandleMapAnnounced;
@@ -394,20 +416,14 @@ public class ARLobbyManager : MonoBehaviour
         _resolvedClients.Clear();
         ResolvedCount = 0;
 
-        // Este jugador venía calibrado a mano: mandarlo a buscar una imagen que no
-        // tiene sería un callejón sin salida. Volvemos al ajuste del 0,0 conservando
-        // su anchor manual — puede retocarlo o cerrar con LISTO de una.
-        if (ManualCalibration.Calibrado)
-        {
-            // El ajuste es un gizmo táctil: con la vista estéreo no se puede arrastrar.
-            MRCardboardController.SalirSiActivo();
-            State = LobbyState.CalibrandoManual;
-            ManualCalibration.Instance.AbrirAjuste();
-            return;
-        }
-
-        // Anclado a la imagen desde la noche anterior: no hay nada que volver a buscar,
-        // se sigue el mismo camino que tras detectarla (anclas primero si están activadas).
+        // Ubicado desde la noche anterior —por la imagen o a mano—: no hay nada que
+        // volver a buscar, se sigue el mismo camino que tras calibrar (anclas primero si
+        // están activadas). El anchor manual sobrevive igual que el de la imagen.
+        //
+        // Antes, quien venía calibrado a mano ("NO TENGO LA IMAGEN") caía en UBICAR EL
+        // ENTORNO en cada reintento y tenía que volver a cerrar el ajuste con LISTO para
+        // poder empezar: si ese jugador era el host, parecía que "al host le exigía
+        // recalibrar". Retocar sigue a un botón (AJUSTAR ENTORNO), como con la imagen.
         if (YaCalibrado)
         {
             ContinuarTrasCalibrar();
@@ -493,8 +509,43 @@ public class ARLobbyManager : MonoBehaviour
 
     private void HandleClientResolved(uint id)
     {
+        // Sólo cuenta quien sigue en la sala: si no, listos podía superar a conectados
+        // y SincronizacionPendiente (conectados − listos) tapaba a un cliente nuevo.
+        if (!_connectedClients.Contains(id)) return;
         _resolvedClients.Add(id);
         ResolvedCount = _resolvedClients.Count;
+    }
+
+    private void HandleClientUnresolved(uint id)
+    {
+        _resolvedClients.Remove(id);
+        ResolvedCount = _resolvedClients.Count;
+    }
+
+    // ── Contador de la sala (host → todos) ────────────────────────────────
+
+    private int _jugadoresPublicados = -1, _listosPublicados = -1;
+
+    // ¿El host mismo está listo? Llegó a WaitingForClients sólo tras ubicar el entorno
+    // y cerrar sus anclas (o en partida, donde el contador ya no se muestra).
+    private bool HostListo =>
+        State == LobbyState.WaitingForClients || State == LobbyState.GameStarted;
+
+    // El host lo recalcula cada frame (son dos enteros) y lo difunde SÓLO si cambió:
+    // el estado del host cambia desde muchos caminos (detección, ajuste manual, anclas,
+    // reinicio) y engancharse a cada uno era la forma de que el contador se trabara.
+    private void Update()
+    {
+        var net = NetworkManager.Instance;
+        if (net == null || !net.IsServer || State == LobbyState.Idle) return;
+
+        int jugadores = 1 + ConnectedCount;
+        int listos    = ResolvedCount + (HostListo ? 1 : 0);
+        if (jugadores == _jugadoresPublicados && listos == _listosPublicados) return;
+
+        _jugadoresPublicados = jugadores;
+        _listosPublicados    = listos;
+        net.ServerSendLobbyStatus(jugadores, listos);
     }
 
     private void HandleClientAnchorStatus(uint id) => RecalcularAnclasPendientes();
@@ -527,6 +578,7 @@ public class ARLobbyManager : MonoBehaviour
         net.OnClientJoined      -= HandleClientJoined;
         net.OnClientLeft        -= HandleClientLeft;
         net.OnClientResolved    -= HandleClientResolved;
+        net.OnClientUnresolved  -= HandleClientUnresolved;
         net.OnClientAnchorStatus -= HandleClientAnchorStatus;
         net.OnMapReceived       -= HandleMapReceived;
         net.OnMapAnnounced      -= HandleMapAnnounced;

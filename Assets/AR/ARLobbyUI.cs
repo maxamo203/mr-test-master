@@ -132,6 +132,7 @@ public class ARLobbyUI : MonoBehaviour
         float y = vh - 290f;
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 36f), "SINCRONIZACIÓN",
                   T.Estilo(T.FBebas, 26, T.Cream));
+        if (!solo) DrawContadorSala(new Rect(Pad, y, vw - Pad * 2f, 36f));
         y += 38f;
 
         string entorno = Gameplay.GameSession.Instance != null &&
@@ -188,11 +189,9 @@ public class ARLobbyUI : MonoBehaviour
 
             case ARLobbyManager.LobbyState.WaitingForClients:
             {
-                // El contador de conectados/listos solo aplica a multijugador.
+                // El contador de conectados/listos va arriba, junto al título (lo ven todos).
                 GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f),
-                          solo
-                              ? "Imagen detectada · listo para empezar"
-                              : $"Imagen detectada · conectados {_lobby.ConnectedCount} · listos {_lobby.ResolvedCount}",
+                          solo ? "Imagen detectada · listo para empezar" : "Imagen detectada",
                           T.Estilo(T.FMono, 12, T.Green));
 
                 bool puede = _lobby.CanStartGame;
@@ -221,6 +220,22 @@ public class ARLobbyUI : MonoBehaviour
         }
 
         _nav.End();
+    }
+
+    // Contador de la sala, alineado a la derecha en la fila del título. Los números los
+    // calcula el host y los reparte (NetworkManager.LobbyJugadores/LobbyListos), así que
+    // host y clientes ven lo mismo; los dos cuentan al host. Verde cuando están todos.
+    private void DrawContadorSala(Rect fila)
+    {
+        int jugadores = _net.LobbyJugadores;
+        if (jugadores <= 0) return;   // cliente: todavía no llegó el primer LobbyStatus
+        int listos = Mathf.Min(_net.LobbyListos, jugadores);
+
+        GUI.Label(new Rect(fila.x, fila.y, fila.width, 20f), $"LISTOS {listos}/{jugadores}",
+                  T.Estilo(T.FBebas, 20, listos >= jugadores ? T.Green : T.Tan, TextAnchor.UpperRight));
+        GUI.Label(new Rect(fila.x, fila.y + 20f, fila.width, 16f),
+                  jugadores == 1 ? "1 jugador conectado" : $"{jugadores} jugadores conectados",
+                  T.Estilo(T.FMono, 10, T.Muted, TextAnchor.UpperRight));
     }
 
     // ── Obteniendo el entorno del host (overlay de carga, sólo cliente) ───
