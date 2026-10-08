@@ -393,6 +393,8 @@ namespace Bateries
         public void ServerHandlePickup(uint clientId, uint batteryNetId)
         {
             if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return;
+            // Un muerto (espectando) no interviene en la partida.
+            if (Gameplay.ServerDeaths.IsDead(clientId)) return;
             if (!_byNetId.TryGetValue(batteryNetId, out var point))
             {
                 Debug.Log($"[Bateries] Pickup ignorado: pila {batteryNetId} no registrada (¿ya recogida?).");

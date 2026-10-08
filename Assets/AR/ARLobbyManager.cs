@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using Scanner;
 using UnityEngine;
@@ -117,6 +118,7 @@ public class ARLobbyManager : MonoBehaviour
     public void BeginClientFlow()
     {
         State = LobbyState.Scanning;
+        FaseMapa(EstadoMapa.EsperandoAnuncio);   // overlay de carga hasta tener el mapa
         // El host tiene que saber de entrada si este cliente va a colocar anclas, para
         // no habilitar INICIAR NOCHE antes de tiempo. TcpTransportClient.Connect es
         // sincrónico, así que acá ya estamos conectados.
@@ -138,6 +140,43 @@ public class ARLobbyManager : MonoBehaviour
             !activada || (mgr != null && mgr.Listo));
     }
 
+    // ── Obtención del mapa (cliente) ──────────────────────────────────────
+    // Desde que el cliente se conecta hasta que el mapa del host está armado en la
+    // escena pasa un rato que antes era invisible (anuncio → pedido → .mscn de cientos
+    // de KB por Wi-Fi → importar y reconstruir). ARLobbyUI lo muestra como overlay de
+    // carga con estos datos. En el host siempre es Listo: carga su mapa sincrónico.
+    public enum EstadoMapa
+    {
+        Listo,              // mapa armado (o host: no aplica)
+        EsperandoAnuncio,   // conectado, el host todavía no dijo qué mapa se juega
+        Descargando,        // MapRequest enviado, llegando el MapData
+        Instalando,         // importando + reconstruyendo (un frame de hitch)
+        Error,              // el .mscn llegó pero no se pudo importar
+    }
+
+    public EstadoMapa MapaCliente     { get; private set; } = EstadoMapa.Listo;
+    public string     MapaNombre      { get; private set; }
+    public float      MapaEsperaDesde { get; private set; }   // realtime del último cambio de fase
+
+    // ¿Tapar la sincronización con el overlay de carga? Sólo cliente y antes de tener mapa.
+    public bool MapaPendiente =>
+        MapaCliente != EstadoMapa.Listo &&
+        NetworkManager.Instance != null && !NetworkManager.Instance.IsServer;
+
+    private void FaseMapa(EstadoMapa e)
+    {
+        MapaCliente     = e;
+        MapaEsperaDesde = Time.realtimeSinceStartup;
+    }
+
+    // Botón REINTENTAR del overlay tras un import fallido: volver a pedir el .mscn.
+    public void ReintentarMapa()
+    {
+        if (MapaCliente != EstadoMapa.Error) return;
+        FaseMapa(EstadoMapa.Descargando);
+        NetworkManager.Instance.ClientRequestMap();
+    }
+
     // Hash del mapa que este cliente ya tiene cargado: un re-anuncio del mismo mapa
     // no debe recargarlo (eso reiniciaría la búsqueda de la imagen).
     private string _hashCargado;
@@ -150,13 +189,15 @@ public class ARLobbyManager : MonoBehaviour
         if (net.IsServer) return;
         if (_mapaListo && !string.IsNullOrEmpty(hash) && hash == _hashCargado) return;
 
+        MapaNombre = nombre;
         var local = ScanSerializer.BuscarPorHash(hash);
         if (local != null)
         {
             Debug.Log($"[ARLobby] Mapa '{nombre}' ya está en el dispositivo como '{local}'; no se descarga.");
-            CargarMapaCliente(local);
+            StartCoroutine(InstalarMapa(null, local));
             return;
         }
+        if (MapaCliente != EstadoMapa.Descargando) FaseMapa(EstadoMapa.Descargando);
         net.ClientRequestMap();
     }
 
@@ -167,13 +208,34 @@ public class ARLobbyManager : MonoBehaviour
         if (NetworkManager.Instance.IsServer) return; // el host ya tiene su mapa cargado
         if (bytes == null || bytes.Length == 0) return;
 
-        var name = ScanPackage.Import(bytes);
+        StartCoroutine(InstalarMapa(bytes, null));
+    }
+
+    // Importar + reconstruir es sincrónico y se lleva un frame entero: se difiere uno
+    // para que el overlay alcance a mostrar "PREPARANDO ENTORNO" en vez de quedarse
+    // congelado en la barra de descarga.
+    private IEnumerator InstalarMapa(byte[] bytes, string local)
+    {
+        FaseMapa(EstadoMapa.Instalando);
+        yield return null;
+
+        string name = local;
+        try
+        {
+            if (name == null) name = ScanPackage.Import(bytes);
+            if (!string.IsNullOrEmpty(name)) CargarMapaCliente(name);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            name = null;
+        }
+
         if (string.IsNullOrEmpty(name))
         {
             Debug.LogWarning("[ARLobby] No se pudo importar el mapa recibido.");
-            return;
+            FaseMapa(EstadoMapa.Error);
         }
-        CargarMapaCliente(name);
     }
 
     // Reconstruye el mapa display-only y registra su imagen de referencia para
@@ -184,6 +246,7 @@ public class ARLobbyManager : MonoBehaviour
         _hashCargado = ScanSerializer.Load(name)?.contentHash;
         _mapaListo = true;
         State = LobbyState.Scanning;
+        FaseMapa(EstadoMapa.Listo);
         Debug.Log($"[ARLobby] Mapa '{name}' cargado; apuntá a la imagen para sincronizar.");
     }
 

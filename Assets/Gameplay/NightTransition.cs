@@ -136,7 +136,12 @@ namespace Gameplay
         {
             DetenerSistemas();
 
-            if (LocalDeath.Instance != null && LocalDeath.Instance.IsDead) return;
+            // Si estaba espectando, la noche ya terminó: vuelve su pantalla de muerte.
+            if (LocalDeath.Instance != null && LocalDeath.Instance.IsDead)
+            {
+                LocalDeath.Instance.TerminarNoche();
+                return;
+            }
 
             NightResult.MarcarSobrevivida();
             NightResult.MarcarObjetosRecolectados(NightLoot.Total);

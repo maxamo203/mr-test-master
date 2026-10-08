@@ -1,6 +1,7 @@
 using Scanner;
 using UnityEngine;
 using T = MortuoriumTheme;
+using Mapa = ARLobbyManager.EstadoMapa;
 
 // UI del lobby AR (SampleScene) con la estética del prototipo: la pantalla de
 // SINCRONIZACIÓN (todos apuntan la cámara a la imagen de referencia del mapa)
@@ -75,6 +76,12 @@ public class ARLobbyUI : MonoBehaviour
         if (_lobby == null || _net == null) return;
         if (_lobby.State == ARLobbyManager.LobbyState.Idle) return;
 
+        // El overlay de carga del mapa oscurece toda la pantalla: se dibuja DETRÁS de la
+        // franja de sala de GameBootstrapper (mayor depth = más al fondo) para que
+        // "UNIDO A LA SALA · conectado a …" siga legible encima.
+        bool cargandoMapa = _lobby.MapaPendiente;
+        GUI.depth = cargandoMapa ? 1 : 0;
+
         UIScale.Begin();
         _nav.Begin();
 
@@ -102,6 +109,16 @@ public class ARLobbyUI : MonoBehaviour
         if (_lobby.State == ARLobbyManager.LobbyState.CalibrandoManual)
         {
             DrawCalibracionManual(vw, vh);
+            _nav.End();
+            return;
+        }
+
+        // ── OBTENIENDO EL ENTORNO DEL HOST (cliente, antes de tener el mapa) ──
+        // Sin esto el cliente veía "Buscando la imagen…" sobre una escena vacía y no
+        // había forma de saber que en realidad el mapa todavía estaba en camino.
+        if (cargandoMapa)
+        {
+            DrawCargaMapa(vw, vh);
             _nav.End();
             return;
         }
@@ -206,6 +223,103 @@ public class ARLobbyUI : MonoBehaviour
         _nav.End();
     }
 
+    // ── Obteniendo el entorno del host (overlay de carga, sólo cliente) ───
+    // Tapa la cámara con un velo (la escena todavía está vacía) y cuenta en qué fase
+    // está: esperar el anuncio → descargar el .mscn (con barra en bytes reales) →
+    // armar el mapa. Si una fase se estira, sugiere la causa probable.
+    private const float EsperaSospechosa = 8f;
+
+    private void DrawCargaMapa(float vw, float vh)
+    {
+        T.Fill(new Rect(0, 0, vw, vh), new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.85f));
+        UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
+
+        var   fase   = _lobby.MapaCliente;
+        float espera = Time.realtimeSinceStartup - _lobby.MapaEsperaDesde;
+        float w      = vw - Pad * 2f;
+        float y      = vh * 0.40f;
+
+        string titulo = fase switch
+        {
+            Mapa.EsperandoAnuncio => "ESPERANDO ENTORNO",
+            Mapa.Descargando      => "DESCARGANDO ENTORNO",
+            Mapa.Instalando       => "PREPARANDO ENTORNO",
+            _                     => "NO SE PUDO CARGAR EL ENTORNO",
+        };
+        GUI.Label(new Rect(Pad, y, w, 36f), titulo,
+                  T.Estilo(T.FBebas, 26, fase == Mapa.Error ? T.Red : T.Cream));
+        y += 38f;
+
+        GUI.Label(new Rect(Pad, y, w, 22f),
+                  string.IsNullOrEmpty(_lobby.MapaNombre)
+                      ? "Entorno compartido por el host"
+                      : $"Entorno: {_lobby.MapaNombre}",
+                  T.Estilo(T.FElite, 13, T.CreamDim));
+        y += 34f;
+
+        var    barra = new Rect(Pad, y, w, 30f);
+        string texto;
+        string aviso = null;
+        switch (fase)
+        {
+            case Mapa.EsperandoAnuncio:
+                T.Barra(barra, 0f, T.Tan, $"esperando al host {Spinner()}", null);
+                texto = "Conectado. Esperando que el host indique qué entorno se juega.";
+                if (espera > EsperaSospechosa)
+                    aviso = "Si no avanza, verificá que el host y vos tengan la misma " +
+                            "versión del juego.";
+                break;
+
+            case Mapa.Descargando:
+            {
+                // Total del frame en curso si ya empezó a llegar; si no, el anunciado.
+                int total  = _net.ClientMapaBytesAnunciados;
+                int leidos = 0;
+                if (_net.ClientProgresoMapa(out int l, out int t)) { leidos = l; total = t; }
+                float pct = total > 0 ? (float)leidos / total : 0f;
+                if (leidos > 0)
+                    T.Barra(barra, pct, T.Tan, $"{Tamano(leidos)} / {Tamano(total)}",
+                            $"{Mathf.FloorToInt(pct * 100f)}%");
+                else
+                    T.Barra(barra, 0f, T.Tan, $"solicitando {Spinner()}",
+                            total > 0 ? Tamano(total) : null);
+                texto = "El host te está enviando el escaneo del cuarto y su imagen de " +
+                        "referencia. Sólo pasa la primera vez: después queda guardado " +
+                        "en este dispositivo.";
+                if (leidos == 0 && espera > EsperaSospechosa)
+                    aviso = "El host todavía no responde. Verificá que sigan en la misma red Wi-Fi.";
+                break;
+            }
+
+            case Mapa.Instalando:
+                T.Barra(barra, 1f, T.Tan, $"armando el mapa {Spinner()}", "100%");
+                texto = "Armando las paredes y registrando la imagen de referencia…";
+                break;
+
+            default:
+                T.Barra(barra, 0f, T.Red, "error", null);
+                texto = "El entorno llegó dañado o incompleto.";
+                break;
+        }
+        y += 42f;
+
+        GUI.Label(new Rect(Pad, y, w, 48f), texto,
+                  T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
+        y += 52f;
+
+        if (aviso != null)
+            GUI.Label(new Rect(Pad, y, w, 40f), aviso,
+                      T.Estilo(T.FMono, 11, T.Tan, TextAnchor.UpperLeft, wrap: true));
+
+        if (fase == Mapa.Error)
+            T.Boton(_nav, new Rect(Pad, vh - 44f - 56f, w, 56f), "REINTENTAR", primario: true,
+                    () => _lobby.ReintentarMapa());
+    }
+
+    private static string Tamano(int bytes) =>
+        bytes >= 1024 * 1024 ? $"{bytes / (1024f * 1024f):0.0} MB"
+                             : $"{Mathf.CeilToInt(bytes / 1024f)} KB";
+
     // Imagen de referencia guardada con el escaneo, semi-transparente y centrada
     // en el área libre encima del panel: guía para reencuadrar la cámara sobre el
     // punto físico exacto mientras ARImageAnchor intenta reengancharla.
@@ -245,19 +359,18 @@ public class ARLobbyUI : MonoBehaviour
         // quedarse sin UI acá dejaría al jugador sin poder arrancar la partida.
         if (mgr == null) { AnchorPointManager.Ensure(); return; }
 
-        // Retícula: cruz fina en el centro, teñida por la calidad del punto.
+        // Retícula: cruz fina teñida por la calidad del punto. En Cardboard va una por
+        // ojo: el centro de la pantalla cae en la costura entre los dos.
         var calidad = AnchorQuality.Instance;
-        const float R = 20f, G = 6f, W = 2f;
-        float cx = vw * 0.5f, cy = vh * 0.5f;
-        var reticColor = mgr.CardboardBloquea ? T.Dim
-                       : calidad != null      ? calidad.Color
-                                              : T.Cream;
-        T.Fill(new Rect(cx - R, cy - W * 0.5f, R - G, W), reticColor);
-        T.Fill(new Rect(cx + G, cy - W * 0.5f, R - G, W), reticColor);
-        T.Fill(new Rect(cx - W * 0.5f, cy - R, W, R - G), reticColor);
-        T.Fill(new Rect(cx - W * 0.5f, cy + G, W, R - G), reticColor);
-
-        if (calidad != null && !mgr.CardboardBloquea) calidad.DibujarBajoLaMira(cx, cy);
+        if (MiraCardboard(mgr, out var ojoL, out var ojoR))
+        {
+            DibujarMira(ojoL, calidad);
+            DibujarMira(ojoR, calidad);
+        }
+        else
+        {
+            DibujarMira(new Vector2(vw * 0.5f, vh * 0.5f), calidad);
+        }
 
         T.Gradiente(new Rect(0, vh - 400f, vw, 400f), 0.9f, haciaAbajo: false);
         UIBlocker.AddVirtualRect(new Rect(0, vh - 400f, vw, 400f));
@@ -280,10 +393,9 @@ public class ARLobbyUI : MonoBehaviour
                   T.Estilo(T.FMono, 13, mgr.PuedeCerrar ? T.Green : T.Tan));
         y += 24f;
 
-        // Motivo del último rechazo (o el hint de Cardboard, que gana).
-        string aviso = mgr.CardboardBloquea ? "Salí de Cardboard para poder apuntar" : _errorAnclas;
-        if (!string.IsNullOrEmpty(aviso))
-            GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), aviso, T.Estilo(T.FMono, 11, T.Red));
+        // Motivo del último rechazo.
+        if (!string.IsNullOrEmpty(_errorAnclas))
+            GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), _errorAnclas, T.Estilo(T.FMono, 11, T.Red));
 
         // Los botones se dibujan SIEMPRE (deshabilitados en vez de ocultos): el foco
         // del mando es una lista global y se resetea si cambia la cantidad de items.
@@ -294,7 +406,7 @@ public class ARLobbyUI : MonoBehaviour
                     _errorAnclas = mgr.TryColocar(out var err) ? null : err;
                     ReportarAnclas();
                 },
-                enabled: mgr.PuedeColocar && !mgr.CardboardBloquea);
+                enabled: mgr.PuedeColocar);
 
         float bw = (vw - Pad * 2f - 10f) * 0.5f;
         by -= 52f;
@@ -311,6 +423,45 @@ public class ARLobbyUI : MonoBehaviour
         T.Boton(_nav, new Rect(Pad, by, vw - Pad * 2f, 34f), "OMITIR ANCLAS", primario: false,
                 () => { mgr.Omitir(); _errorAnclas = null; _lobby.AnchorPlacementDone(); },
                 fontSize: 13, textColor: T.Muted);
+    }
+
+    private static void DibujarMira(Vector2 c, AnchorQuality calidad)
+    {
+        const float R = 20f, G = 6f, W = 2f;
+        var col = calidad != null ? calidad.Color : T.Cream;
+        T.Fill(new Rect(c.x - R, c.y - W * 0.5f, R - G, W), col);
+        T.Fill(new Rect(c.x + G, c.y - W * 0.5f, R - G, W), col);
+        T.Fill(new Rect(c.x - W * 0.5f, c.y - R, W, R - G), col);
+        T.Fill(new Rect(c.x - W * 0.5f, c.y + G, W, R - G), col);
+        if (calidad != null) calidad.DibujarBajoLaMira(c.x, c.y);
+    }
+
+    // Posición de la mira en cada ojo (coords virtuales de UIScale) si Cardboard está
+    // activo. Va en el punto de cada ojo que corresponde al centro de la cámara —por
+    // donde AnchorPointManager tira el raycast—, a la distancia del hit para que en
+    // estéreo la mira se fusione a la profundidad de la superficie apuntada.
+    private MRCardboardController _cardboard;
+
+    private bool MiraCardboard(AnchorPointManager mgr, out Vector2 izq, out Vector2 der)
+    {
+        izq = der = default;
+        if (!MRCardboardController.Activo) return false;
+        if (_cardboard == null) _cardboard = FindFirstObjectByType<MRCardboardController>();
+        if (_cardboard == null) return false;
+
+        float dist = 2f;
+        var cam = Camera.main;
+        if (mgr.UltimoHit.Hit && cam != null)
+            dist = Vector3.Dot(mgr.UltimoHit.Position - cam.transform.position, cam.transform.forward);
+
+        if (!_cardboard.MiraEnOjos(dist, out var pl, out var pr)) return false;
+
+        // Píxeles de pantalla → espacio virtual de UIScale (área segura escalada).
+        var   sg = UIScale.SafeGui;
+        float s  = UIScale.Factor;
+        izq = new Vector2((pl.x - sg.x) / s, (pl.y - sg.y) / s);
+        der = new Vector2((pr.x - sg.x) / s, (pr.y - sg.y) / s);
+        return true;
     }
 
     private string _errorAnclas;

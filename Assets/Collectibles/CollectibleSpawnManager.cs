@@ -366,6 +366,8 @@ namespace Collectibles
         public void ServerHandlePickup(uint clientId, uint netId)
         {
             if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return;
+            // Un muerto (espectando) no interviene en la partida.
+            if (Gameplay.ServerDeaths.IsDead(clientId)) return;
             if (!_hasActive || netId != _activeNetId)
             {
                 Debug.Log($"[Reliquias] Pickup ignorado: {netId} no es la reliquia activa (¿ya recogida?).");

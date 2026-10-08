@@ -14,7 +14,12 @@ using UnityEngine;
 // Nota plataforma:
 //   * Android: el broadcast a 255.255.255.255 funciona sin permisos extra.
 //   * iOS 14+: requiere NSLocalNetworkUsageDescription en Info.plist; sin eso
-//     el sistema bloquea silenciosamente el trafico de LAN.
+//     el sistema bloquea silenciosamente el trafico de LAN. Ademas, ENVIAR un
+//     broadcast exige el entitlement com.apple.developer.networking.multicast
+//     (lo aprueba Apple a mano): sin el, send() falla con "No route to host" y
+//     un host iPhone nunca aparecia en la lista de los demas. Por eso en iOS el
+//     anuncio tambien sale por unicast a cada IP de la subred (ver Barrido), que
+//     solo necesita el permiso de red local.
 public class LanDiscovery : MonoBehaviour
 {
     public const int DiscoveryPort = 47777;
@@ -38,6 +43,21 @@ public class LanDiscovery : MonoBehaviour
     [SerializeField] private float _hostTtl = 5f;
     [Tooltip("Intervalo entre paquetes de anuncio (segundos).")]
     [SerializeField] private float _advertiseInterval = 1f;
+    [Tooltip("Intervalo entre barridos unicast de la subred (solo iOS). Debe quedar " +
+             "por debajo de Host Ttl para que un paquete perdido no haga parpadear la sala.")]
+    [SerializeField] private float _sweepInterval = 2f;
+
+    // Solo iOS: es el unico que no puede ENVIAR broadcast. Recibirlo si puede
+    // (verificado: un iPhone cliente ve las salas de un host Android), asi que
+    // los demas hosts no necesitan barrer.
+#if UNITY_IOS && !UNITY_EDITOR
+    private const bool BarridoUnicast = true;
+#else
+    private const bool BarridoUnicast = false;
+#endif
+    // Tope de destinos por barrido: una subred mas grande que /24 se recorta a la
+    // /24 propia (donde esta casi todo dispositivo de una red domestica).
+    private const int MaxDestinosBarrido = 254;
 
     private readonly Dictionary<string, DiscoveredHost> _hosts   = new();
     private readonly Dictionary<string, DiscoveredHost> _pending = new();
@@ -104,6 +124,13 @@ public class LanDiscovery : MonoBehaviour
             _advertiser = new UdpClient { EnableBroadcast = true };
             var ep      = new IPEndPoint(IPAddress.Broadcast, DiscoveryPort);
             var sleepMs = Mathf.Max(100, Mathf.RoundToInt(_advertiseInterval * 1000f));
+            var sweepMs = Mathf.Max(sleepMs, Mathf.RoundToInt(_sweepInterval * 1000f));
+
+            List<IPEndPoint> destinos = BarridoUnicast ? DestinosBarrido() : null;
+            if (destinos != null)
+                Debug.Log($"[LanDiscovery] Barrido unicast a {destinos.Count} direcciones de la subred");
+            int  proximoBarrido   = Environment.TickCount;
+            bool avisoBroadcast   = false;
 
             while (_running)
             {
@@ -113,7 +140,24 @@ public class LanDiscovery : MonoBehaviour
                 }
                 catch (Exception e)
                 {
-                    if (_running) Debug.LogWarning($"[LanDiscovery] send: {e.Message}");
+                    // En iOS sin entitlement de multicast falla siempre: avisar una
+                    // sola vez, el barrido unicast cubre el anuncio.
+                    if (_running && !(BarridoUnicast && avisoBroadcast))
+                        Debug.LogWarning($"[LanDiscovery] send: {e.Message}");
+                    avisoBroadcast = true;
+                }
+
+                if (destinos != null && Environment.TickCount - proximoBarrido >= 0)
+                {
+                    proximoBarrido = Environment.TickCount + sweepMs;
+                    foreach (var d in destinos)
+                    {
+                        if (!_running) break;
+                        // IPs sin nadie detras fallan (EHOSTDOWN/EHOSTUNREACH tras
+                        // el ARP): es lo esperado en un barrido, se ignora.
+                        try { _advertiser.Send(_advertisePacket, _advertisePacket.Length, d); }
+                        catch { }
+                    }
                 }
                 Thread.Sleep(sleepMs);
             }
@@ -164,6 +208,82 @@ public class LanDiscovery : MonoBehaviour
         {
             Debug.LogError($"[LanDiscovery] listener fatal: {e}");
         }
+    }
+
+    // ── Barrido unicast (iOS) ─────────────────────────────────────────────
+    // Todas las IPs de host de las subredes privadas en las que esta el
+    // dispositivo (Wi-Fi en0, hotspot propio bridge*), sin la propia ni las de
+    // red/broadcast. Se calcula una vez al empezar a anunciar.
+
+    private static readonly string[] InterfacesExcluidas = { "pdp_ip", "utun", "ipsec", "awdl", "llw" };
+
+    private static List<IPEndPoint> DestinosBarrido()
+    {
+        var destinos = new List<IPEndPoint>();
+        var vistos   = new HashSet<uint>();
+        try
+        {
+            foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                if (ni.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback) continue;
+                string nombre = (ni.Name ?? "").ToLowerInvariant();
+                bool excluida = false;
+                foreach (var pre in InterfacesExcluidas)
+                    if (nombre.StartsWith(pre)) { excluida = true; break; }
+                if (excluida) continue;
+
+                foreach (var ua in ni.GetIPProperties().UnicastAddresses)
+                {
+                    if (ua.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+                    var b = ua.Address.GetAddressBytes();
+                    bool privada = b[0] == 10 || (b[0] == 192 && b[1] == 168) ||
+                                   (b[0] == 172 && b[1] >= 16 && b[1] <= 31);
+                    if (!privada) continue;
+
+                    // Mascara real si la plataforma la da; si no, /24. Mas ancha que
+                    // /24 se recorta a la /24 propia (ver MaxDestinosBarrido).
+                    int prefijo = 24;
+                    try
+                    {
+                        var m = ua.IPv4Mask;
+                        if (m != null)
+                        {
+                            uint mascara = ToUInt(m.GetAddressBytes());
+                            if (mascara != 0) prefijo = CountBits(mascara);
+                        }
+                    }
+                    catch { /* IPv4Mask no implementado en la plataforma */ }
+                    if (prefijo < 24) prefijo = 24;
+                    if (prefijo > 30) continue; // /31 y /32: no hay otros hosts
+
+                    uint propia = ToUInt(b);
+                    uint masc   = 0xFFFFFFFFu << (32 - prefijo);
+                    uint red    = propia & masc;
+                    uint bcast  = red | ~masc;
+                    for (uint ip = red + 1; ip < bcast && destinos.Count < MaxDestinosBarrido * 2; ip++)
+                    {
+                        if (ip == propia || !vistos.Add(ip)) continue;
+                        destinos.Add(new IPEndPoint(new IPAddress(new[]
+                        {
+                            (byte)(ip >> 24), (byte)(ip >> 16), (byte)(ip >> 8), (byte)ip,
+                        }), DiscoveryPort));
+                    }
+                }
+            }
+        }
+        catch (Exception e) { Debug.LogWarning($"[LanDiscovery] barrido: {e.Message}"); }
+        return destinos;
+    }
+
+    private static uint ToUInt(byte[] b) =>
+        ((uint)b[0] << 24) | ((uint)b[1] << 16) | ((uint)b[2] << 8) | b[3];
+
+    private static int CountBits(uint v)
+    {
+        int n = 0;
+        while (v != 0) { n += (int)(v & 1); v >>= 1; }
+        return n;
     }
 
     // ── Main-thread bookkeeping ───────────────────────────────────────────

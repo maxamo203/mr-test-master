@@ -60,6 +60,7 @@ public class NetworkManager : MonoBehaviour
     // conexión por perdida (para no disparar la salida dos veces).
     private float _ultimoRecibido;
     private bool  _conexionPerdida;
+    private int   _actividadVista;   // último TcpTransportClient.Actividad visto
 
     // ── Eventos ───────────────────────────────────────────────────────────
 
@@ -241,6 +242,18 @@ public class NetworkManager : MonoBehaviour
     {
         _cli.Send(MsgHelper.Frame(MessageType.MapRequest, Array.Empty<byte>()));
         Debug.Log("[Client] MapRequest enviado al servidor");
+    }
+
+    // Client: tamaño del .mscn según el MapAnnounce: total de la barra de descarga
+    // antes de que llegue el primer byte.
+    public int ClientMapaBytesAnunciados { get; private set; }
+
+    // Client: avance del MapData que se está recibiendo (bytes del cuerpo). false si
+    // no hay ninguno en curso (todavía no empezó a llegar, o ya llegó entero).
+    public bool ClientProgresoMapa(out int leidos, out int total)
+    {
+        leidos = total = 0;
+        return _cli != null && _cli.Recibiendo(MessageType.MapData, out leidos, out total);
     }
 
     // Server: guardar anchor ID y enviarlo a todos los clientes conectados
@@ -766,6 +779,15 @@ public class NetworkManager : MonoBehaviour
             if (_conexionPerdida) return;   // SessionEnded: ya salimos al menú
         }
 
+        // Un frame a medio llegar también es señal de vida: mientras baja un MapData
+        // pesado no se desencola nada (ni los Heartbeat, que van detrás en el stream).
+        int actividad = _cli.Actividad;
+        if (actividad != _actividadVista)
+        {
+            _actividadVista = actividad;
+            _ultimoRecibido = Time.realtimeSinceStartup;
+        }
+
         // El host se fue: el socket se cerró (ReadLoop vio EOF) o hace rato que no
         // llega nada, ni siquiera el Heartbeat (Wi-Fi caída, app del host matada).
         if (!_cli.IsConnected ||
@@ -869,6 +891,7 @@ public class NetworkManager : MonoBehaviour
             {
                 var m = MapAnnounceMsg.Deserialize(msg.Body);
                 Debug.Log($"[Client] Mapa anunciado '{m.Name}' ({m.Size} bytes, hash {m.Hash})");
+                ClientMapaBytesAnunciados = m.Size;
                 OnMapAnnounced?.Invoke(m.Hash, m.Name);
                 break;
             }

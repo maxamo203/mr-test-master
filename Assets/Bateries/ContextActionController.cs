@@ -138,6 +138,17 @@ namespace Bateries
 
         private void Update()
         {
+            // Muerto (con la pantalla de muerte o espectando): el botón primario no hace
+            // nada — ni recoger, ni linterna. El espectador mira, no interviene.
+            var ld = Gameplay.LocalDeath.Instance;
+            if (ld != null && ld.IsDead)
+            {
+                if (_primaryGesture.IsPressed || _current != null) CancelPrimaryGesture();
+                _current = null;
+                _currentLabel = null;
+                return;
+            }
+
             ResolveCurrent();
             UpdatePrimaryGesture();
         }
