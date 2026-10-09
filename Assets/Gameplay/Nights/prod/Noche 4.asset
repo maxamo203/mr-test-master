@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   displayName: Noche 4
   briefing: Solo Arbmos te observa. Apaga la luz para ocultarte; iluminarlo lo provoca.
-  nightDurationSeconds: 330
+  nightDurationSeconds: 300
   sorkenActive: 0
   attemptIntervalMin: 19
   attemptIntervalMax: 30

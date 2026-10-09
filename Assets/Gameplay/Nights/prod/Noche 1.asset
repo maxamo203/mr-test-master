@@ -15,7 +15,7 @@ MonoBehaviour:
   displayName: Noche 1
   briefing: El Sorken tantea los accesos. Tomate el tiempo de ubicar el ruido antes
     de alumbrar.
-  nightDurationSeconds: 240
+  nightDurationSeconds: 300
   sorkenActive: 1
   attemptIntervalMin: 30
   attemptIntervalMax: 46

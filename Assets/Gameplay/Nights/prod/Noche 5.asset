@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   displayName: Noche 5
   briefing: El Arbmos acecha mas seguido. No lo mires con la linterna; ocultate a oscuras.
-  nightDurationSeconds: 360
+  nightDurationSeconds: 300
   sorkenActive: 1
   attemptIntervalMin: 16
   attemptIntervalMax: 26

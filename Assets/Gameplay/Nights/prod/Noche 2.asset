@@ -15,7 +15,7 @@ MonoBehaviour:
   displayName: Noche 2
   briefing: Insiste mas seguido y aguanta mas la luz. La bateria ya no alcanza para
     todo.
-  nightDurationSeconds: 270
+  nightDurationSeconds: 300
   sorkenActive: 1
   attemptIntervalMin: 26
   attemptIntervalMax: 40

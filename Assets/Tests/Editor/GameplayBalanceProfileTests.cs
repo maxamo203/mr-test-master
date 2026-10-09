@@ -16,6 +16,7 @@ public class GameplayBalanceProfileTests
             var night = AssetDatabase.LoadAssetAtPath<NightConfig>(
                 $"Assets/Gameplay/Nights/prod/Noche {i + 1}.asset");
             Assert.That(night, Is.Not.Null);
+            Assert.That(night.nightDurationSeconds, Is.EqualTo(300f));
             Assert.That(night.bookConsumeSeconds, Is.EqualTo(book[i]));
             Assert.That(night.velethChaseSpeed, Is.EqualTo(veleth[i]));
             Assert.That(night.sorkenRetreatSpeed, Is.EqualTo(retreat[i]));
@@ -31,6 +32,7 @@ public class GameplayBalanceProfileTests
             var night = AssetDatabase.LoadAssetAtPath<NightConfig>(
                 $"Assets/Gameplay/Nights/dev/Noche {i + 1}.asset");
             Assert.That(night, Is.Not.Null);
+            Assert.That(night.nightDurationSeconds, Is.EqualTo(300f));
             Assert.That(night.bookConsumeSeconds, Is.GreaterThanOrEqualTo(6f));
             Assert.That(night.velethChaseSpeed, Is.GreaterThanOrEqualTo(previousVeleth));
             previousVeleth = night.velethChaseSpeed;
