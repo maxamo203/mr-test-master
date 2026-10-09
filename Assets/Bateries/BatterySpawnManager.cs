@@ -31,7 +31,7 @@ namespace Bateries
 
         [Header("Reaparicion")]
         [Tooltip("Segundos que tarda en reaparecer una pila en un punto tras recogerla.")]
-        [SerializeField] private float respawnSeconds = 60f;
+        [SerializeField] private float respawnSeconds = 30f;
         [Tooltip("Si algun jugador esta a esta distancia (m) del punto, el timer de " +
                  "reaparicion se congela (la pila no reaparece mientras se queden cerca).")]
         [SerializeField] private float playerBlockRadius = 1.5f;
