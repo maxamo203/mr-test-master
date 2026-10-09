@@ -140,7 +140,7 @@ public class SorkenWindowEntryTests
     }
 
     [Test]
-    public void AterrizajeCorrigeAlturaSinRetenerElMovimientoHorizontalDelHips()
+    public void AterrizajeConservaProfundidadDelRigSinRetenerLosOtrosEjes()
     {
         Vector3 reference = new(0f, 7.3f, 100f);
         Vector3 animatedBelowFloor = new(2f, -54.4f, 114f);
@@ -152,6 +152,17 @@ public class SorkenWindowEntryTests
         Assert.That(corrected.x, Is.EqualTo(animatedBelowFloor.x));
         Assert.That(corrected.y, Is.EqualTo(reference.y));
         Assert.That(corrected.z, Is.EqualTo(animatedBelowFloor.z));
+    }
+
+    [Test]
+    public void PersecucionUsaUnaCadenciaMasLentaQueElClipOriginal()
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/Entities/Prefabs/SorkenGameplay.prefab");
+        var serialized = new SerializedObject(prefab.GetComponent<SorkenAnimator>());
+        float speed = serialized.FindProperty("_chasePlaybackSpeed").floatValue;
+
+        Assert.That(speed, Is.EqualTo(0.75f).Within(0.001f));
     }
 
     [Test]

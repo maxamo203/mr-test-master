@@ -32,6 +32,9 @@ public class SorkenAnimator : MonoBehaviour
     [SerializeField] private float _blendSpeed = 6f;
     [Tooltip("Duracion del fundido entre la entrada y la primera zancada.")]
     [Min(0.1f)] [SerializeField] private float _entryToChaseBlendSeconds = 0.75f;
+    [Tooltip("Velocidad de reproduccion de la marcha de persecucion. La traslacion " +
+             "sigue determinada por NightConfig.")]
+    [Range(0.1f, 1f)] [SerializeField] private float _chasePlaybackSpeed = 0.75f;
 
     [Header("Desplazamiento sincronizado")]
     [Tooltip("Apoyos contenidos en el loop de marcha herida.")]
@@ -67,6 +70,7 @@ public class SorkenAnimator : MonoBehaviour
     private float _activeWindowLandingDuration;
     private bool _entryToChaseBlendActive;
     private bool _landingHipsReferenceCaptured;
+    private Vector3 _neutralHipsLocalPosition;
     private Vector3 _landingHipsReferencePosition;
 
     public float WindowEntryDuration => emergeWindowClip != null && emergeWindowClip.length > 0.01f
@@ -171,10 +175,15 @@ public class SorkenAnimator : MonoBehaviour
         if (state == SorkenState.WindowLanding)
         {
             _windowLandingElapsed = 0f;
-            _landingHipsReferenceCaptured = false;
+            _landingHipsReferencePosition = _neutralHipsLocalPosition;
+            _landingHipsReferenceCaptured = _hips != null;
             AnimationClip clip = windowLandingClip != null ? windowLandingClip : idleClip;
             if (clip != null && clip.length > 0.001f)
                 _clipPlayables[target].SetSpeed(clip.length / WindowLandingDuration);
+        }
+        else if (state == SorkenState.Chasing)
+        {
+            _clipPlayables[target].SetSpeed(Mathf.Clamp(_chasePlaybackSpeed, 0.1f, 1f));
         }
         else
         {
@@ -188,6 +197,7 @@ public class SorkenAnimator : MonoBehaviour
         var animator = GetComponent<Animator>();
         _hips = animator.isHuman ? animator.GetBoneTransform(HumanBodyBones.Hips) : null;
         _hips ??= FindDescendant(transform, "Hips");
+        if (_hips != null) _neutralHipsLocalPosition = _hips.localPosition;
         _activeWindowLandingDuration = Mathf.Max(0.2f, _windowLandingDuration);
         animator.applyRootMotion = false; // el codigo controla pos/rot, no la animacion
 
@@ -276,11 +286,10 @@ public class SorkenAnimator : MonoBehaviour
             _windowLandingElapsed += Time.deltaTime;
     }
 
-    // La traslacion completa desde la ventana la controla GameDirector. El FBX de
-    // aterrizaje tambien contiene traslacion en Hips (incluida una bajada de ~0.62 m):
-    // si se deja pasar, se suma a la bajada del root y hunde el cuerpo bajo el piso.
-    // Corregimos solamente la altura: fijar tambien X/Z retiene al hips en la pose
-    // inicial y, al liberar el peso durante el fundido, produce un salto horizontal.
+    // La traslacion completa desde la ventana la controla GameDirector. El rig importado
+    // esta rotado: su Y local es profundidad mundial, no altura. El clip de aterrizaje
+    // desplaza ese eje unos 0.61 m hacia atras. Lo anclamos a la pose neutra del rig y
+    // dejamos X/Z animados; asi el fundido a persecucion no produce el retroceso visible.
     private void LateUpdate()
     {
         if (_hips == null || _sorken == null || _weights == null)
@@ -294,12 +303,6 @@ public class SorkenAnimator : MonoBehaviour
         float landingWeight = totalWeight > 1e-4f
             ? Mathf.Clamp01(_weights[landingIndex] / totalWeight)
             : 0f;
-
-        if (_sorken.State == SorkenState.WindowLanding && !_landingHipsReferenceCaptured)
-        {
-            _landingHipsReferencePosition = _hips.localPosition;
-            _landingHipsReferenceCaptured = true;
-        }
 
         // Durante el fundido a persecucion el input de aterrizaje sigue teniendo peso.
         // Mantener la correccion hasta que llegue a cero evita que reaparezca desde abajo.
