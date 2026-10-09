@@ -23,6 +23,7 @@ public class VelethDirector : MonoBehaviour
     private float _grabTimer;
     private readonly List<Vector3> _path = new();
     private int _pathIndex;
+    private int _traceId;
 
     public static VelethDirector Ensure()
     {
@@ -79,6 +80,9 @@ public class VelethDirector : MonoBehaviour
         }
 
         _veleth.SetState(VelethState.Hunting);
+        _traceId = GameplayTelemetry.BeginThreat(
+            "veleth", 0, _veleth.Position,
+            $"speed={_night.velethChaseSpeed:F2}");
         _path.Clear();
         _pathIndex = 0;
         _repathTimer = 0f;
@@ -99,6 +103,12 @@ public class VelethDirector : MonoBehaviour
 
     public void StopRun()
     {
+        if (_traceId != 0)
+        {
+            GameplayTelemetry.End(_traceId, "veleth", "stopped", 0,
+                                  _veleth != null ? _veleth.Position : Vector3.zero);
+            _traceId = 0;
+        }
         StopAllCoroutines();
         _running = false;
         CurrentTarget = 0;
@@ -139,7 +149,7 @@ public class VelethDirector : MonoBehaviour
 
         if (!NearestAlivePlayer(_veleth.Position, out uint targetId, out Vector3 targetPos))
         {
-            EndNightByVeleth();
+            if (!AnyAlivePlayer()) EndNightByVeleth();
             return;
         }
 
@@ -190,6 +200,8 @@ public class VelethDirector : MonoBehaviour
 
     private void Catch(uint clientId)
     {
+        GameplayTelemetry.Phase(_traceId, "veleth", "capture", clientId,
+                                _veleth.Position);
         _veleth.SetState(VelethState.Grabbing);
         _grabTimer = Mathf.Max(0f, _night.velethGrabHoldSeconds);
         if (ServerDeaths.Kill(clientId, _veleth.transform))
@@ -218,7 +230,8 @@ public class VelethDirector : MonoBehaviour
         bool found = false;
         var net = NetworkManager.Instance;
 
-        if (Camera.main != null && ServerDeaths.IsAlive(0))
+        if (Camera.main != null && ServerDeaths.IsAlive(0) &&
+            TrackingReliability.LocalIsReliable())
         {
             best = (Camera.main.transform.position - from).sqrMagnitude;
             position = Camera.main.transform.position;
@@ -229,6 +242,7 @@ public class VelethDirector : MonoBehaviour
         {
             if (ServerDeaths.IsDead(id) || !net.TryGetClientWorldPosition(id, out var candidate))
                 continue;
+            if (!TrackingReliability.PlayerIsReliable(id)) continue;
             float distance = (candidate - from).sqrMagnitude;
             if (distance >= best) continue;
             best = distance;

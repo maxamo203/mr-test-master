@@ -27,6 +27,8 @@ public class ArbmosDirector : MonoBehaviour
     {
         public uint owner;
         public bool normalReserved;
+        public bool lethalReserved;
+        public int traceId;
         public Phase phase = Phase.Dormant;
         public float cooldown;
         public uint netId;
@@ -186,12 +188,13 @@ private readonly List<uint> _scratchRemove = new();
                      Random.value <= Mathf.Clamp01(_night.arbmosSpawnChancePerAttempt);
         if (!spawn)
         {
-            haunt.cooldown = 3f;
+            haunt.cooldown = RandomCooldown();
             return;
         }
 
         if (!ThreatCoordinator.TryBeginNormalArbmos(clientId))
         {
+            GameplayTelemetry.Postponed("arbmos", "team_capacity", clientId);
             haunt.cooldown = 2f;
             return;
         }
@@ -209,6 +212,9 @@ private readonly List<uint> _scratchRemove = new();
         }
 
         haunt.stationaryPosition = haunt.ent.Position;
+        haunt.traceId = GameplayTelemetry.BeginThreat(
+            "arbmos", clientId, haunt.stationaryPosition,
+            $"grace={_night.arbmosExposureGraceSeconds:F2};exposure={_night.arbmosExposureSeconds:F2}");
         haunt.hideTimer = 0f;
         haunt.exposureTimer = 0f;
         haunt.exposureGraceTimer = Mathf.Max(0f, _night.arbmosExposureGraceSeconds);
@@ -248,6 +254,8 @@ private readonly List<uint> _scratchRemove = new();
 
     private void BeginNormalChase(Haunt haunt)
     {
+        GameplayTelemetry.Phase(haunt.traceId, "arbmos", "normal_chase",
+                                haunt.owner, haunt.ent.Position);
         haunt.ent.SetState(ArbmosState.Attacking);
         haunt.path.Clear();
         haunt.pathIndex = 0;
@@ -335,7 +343,12 @@ private readonly List<uint> _scratchRemove = new();
     private void BeginLethal(uint clientId, Haunt haunt, Vector3 playerPosition)
     {
         if (haunt.lethalTriggered) return;
+        GameplayTelemetry.End(haunt.traceId, "arbmos", "lethal_escalation",
+                              clientId, haunt.ent != null ? haunt.ent.Position : playerPosition);
+        haunt.traceId = 0;
         ReleaseNormalReservation(haunt);
+        ThreatCoordinator.BeginLethalArbmos(clientId);
+        haunt.lethalReserved = true;
         haunt.lethalTriggered = true;
 
         if (haunt.ent == null &&
@@ -344,12 +357,16 @@ private readonly List<uint> _scratchRemove = new();
         {
             // Reintenta en el tick siguiente sin abrir otra ventana ni consumir cooldown.
             haunt.lethalTriggered = false;
+            ReleaseLethalReservation(haunt);
             haunt.cooldown = 0f;
             haunt.phase = Phase.Dormant;
             return;
         }
 
         haunt.stationaryPosition = haunt.ent.Position;
+        haunt.traceId = GameplayTelemetry.BeginThreat(
+            "arbmos_lethal", clientId, haunt.stationaryPosition,
+            $"speed={_night.arbmosLethalChaseSpeed:F2}");
         haunt.ent.SetPositionDirectly(haunt.stationaryPosition);
         FacePlayer(haunt, playerPosition);
         haunt.ent.SetState(ArbmosState.Idle);
@@ -447,6 +464,9 @@ private readonly List<uint> _scratchRemove = new();
 
     private void CompleteLethal(uint clientId, Haunt haunt)
     {
+        GameplayTelemetry.End(haunt.traceId, "arbmos_lethal", "capture",
+                              clientId, haunt.ent != null ? haunt.ent.Position : Vector3.zero);
+        haunt.traceId = 0;
         ServerDeaths.Kill(clientId, haunt.ent != null ? haunt.ent.transform : null);
         StartCoroutine(DespawnAfterDeathReveal(haunt));
         haunt.phase = Phase.Done;
@@ -521,15 +541,24 @@ private bool SpawnArbmosFor(uint clientId, Haunt haunt, Vector3 playerPosition,
 
     private void RetryLethal(Haunt haunt)
     {
-        DespawnHaunt(haunt);
+        DespawnHaunt(haunt, releaseLethal: false);
         haunt.lethalTriggered = false;
         haunt.cooldown = 0f;
         haunt.phase = Phase.Dormant;
     }
 
-    private void DespawnHaunt(Haunt haunt)
+    private void DespawnHaunt(Haunt haunt, bool releaseLethal = true)
     {
+        if (haunt.traceId != 0)
+        {
+            GameplayTelemetry.End(haunt.traceId,
+                haunt.lethalTriggered ? "arbmos_lethal" : "arbmos",
+                "despawn", haunt.owner,
+                haunt.ent != null ? haunt.ent.Position : Vector3.zero);
+            haunt.traceId = 0;
+        }
         ReleaseNormalReservation(haunt);
+        if (releaseLethal) ReleaseLethalReservation(haunt);
         if (haunt.netId != 0 && NetworkManager.Instance != null)
             NetworkManager.Instance.ServerDespawn(haunt.netId);
         haunt.netId = 0;
@@ -542,6 +571,13 @@ private bool SpawnArbmosFor(uint clientId, Haunt haunt, Vector3 playerPosition,
         if (haunt == null || !haunt.normalReserved) return;
         ThreatCoordinator.EndNormalArbmos(haunt.owner);
         haunt.normalReserved = false;
+    }
+
+    private static void ReleaseLethalReservation(Haunt haunt)
+    {
+        if (haunt == null || !haunt.lethalReserved) return;
+        ThreatCoordinator.EndLethalArbmos(haunt.owner);
+        haunt.lethalReserved = false;
     }
 
     private IEnumerator DespawnAfterDeathReveal(Haunt haunt)
@@ -684,9 +720,11 @@ private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
     private IEnumerable<uint> AlivePlayersWithPose()
     {
         var net = NetworkManager.Instance;
-        if (Camera.main != null && ServerDeaths.IsAlive(0)) yield return 0;
+        if (Camera.main != null && ServerDeaths.IsAlive(0) &&
+            TrackingReliability.LocalIsReliable()) yield return 0;
         foreach (uint clientId in net.ConnectedClients)
             if (ServerDeaths.IsAlive(clientId) &&
+                TrackingReliability.PlayerIsReliable(clientId) &&
                 net.TryGetClientWorldPosition(clientId, out _))
                 yield return clientId;
     }

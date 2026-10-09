@@ -10,6 +10,7 @@ namespace Gameplay
         public const int MaxConcurrentThreats = 3;
 
         private static readonly HashSet<uint> NormalArbmosOwners = new();
+        private static readonly HashSet<uint> LethalArbmosOwners = new();
         private static bool _sorken;
         private static bool _book;
         private static int _generation;
@@ -18,17 +19,21 @@ namespace Gameplay
         public static bool BookActive => _book;
         public static int ActiveNormalArbmos => NormalArbmosOwners.Count;
         public static int Generation => _generation;
+        public static bool HasAnyCapablePlayer => CurrentCapablePlayers() > 0;
+        public static bool LethalConsequenceActive => LethalArbmosOwners.Count > 0;
 
         public static void ResetAll()
         {
             _sorken = false;
             _book = false;
             NormalArbmosOwners.Clear();
+            LethalArbmosOwners.Clear();
             _generation++;
         }
 
         public static bool TryBeginSorken()
         {
+            if (LethalConsequenceActive) return false;
             if (_sorken) return true;
             if (!CanFit(CurrentCapablePlayers(), GenericTasks() + 1,
                         NormalArbmosOwners.Count)) return false;
@@ -36,11 +41,23 @@ namespace Gameplay
             return true;
         }
 
+        public static bool TryBeginSorkenAt(Vector3 target, float range,
+                                            float targetRadius)
+        {
+            return CanAnyCapableReach(target, range, targetRadius) &&
+                   TryBeginSorken();
+        }
+
         public static void EndSorken() => _sorken = false;
 
         public static bool CanBeginBook() => _book ||
-            CanFit(CurrentCapablePlayers(), GenericTasks() + 1,
-                   NormalArbmosOwners.Count);
+            (!LethalConsequenceActive &&
+             CanFit(CurrentCapablePlayers(), GenericTasks() + 1,
+                    NormalArbmosOwners.Count));
+
+        public static bool CanBeginBookAt(Vector3 target, float range,
+                                          float targetRadius) =>
+            CanBeginBook() && CanAnyCapableReach(target, range, targetRadius);
 
         public static bool TryBeginBook()
         {
@@ -55,10 +72,12 @@ namespace Gameplay
         // Sorken tiene prioridad sobre libro, y libro sobre Arbmos normal. Al perder
         // capacidad, el libro solo se pausa si ya no alcanza ni ignorando los Arbmos.
         public static bool CanKeepBook() => !_book ||
-            CanFit(CurrentCapablePlayers(), GenericTasks(), 0);
+            (!LethalConsequenceActive &&
+             CanFit(CurrentCapablePlayers(), GenericTasks(), 0));
 
         public static bool TryBeginNormalArbmos(uint owner)
         {
+            if (LethalConsequenceActive) return false;
             if (NormalArbmosOwners.Contains(owner)) return true;
             int capable = CurrentCapablePlayers();
             if (!IsCapable(owner) ||
@@ -72,16 +91,48 @@ namespace Gameplay
 
         public static bool CanKeepNormalArbmos(uint owner)
         {
+            if (LethalConsequenceActive) return false;
             if (!NormalArbmosOwners.Contains(owner)) return false;
             return IsCapable(owner) &&
                    CanFit(CurrentCapablePlayers(), GenericTasks(),
                           NormalArbmosOwners.Count);
         }
 
+        public static void BeginLethalArbmos(uint owner)
+        {
+            NormalArbmosOwners.Remove(owner);
+            LethalArbmosOwners.Add(owner);
+        }
+
+        public static void EndLethalArbmos(uint owner) =>
+            LethalArbmosOwners.Remove(owner);
+
         public static bool CanFit(int capablePlayers, int genericTasks, int ownedTasks)
         {
             int total = Mathf.Max(0, genericTasks) + Mathf.Max(0, ownedTasks);
             return total <= Mathf.Min(MaxConcurrentThreats, Mathf.Max(0, capablePlayers));
+        }
+
+        public static bool CanAnyCapableReach(Vector3 target, float range,
+                                              float targetRadius)
+        {
+            var net = NetworkManager.Instance;
+            if (net == null) return false;
+            float maxDistance = Mathf.Max(0f, range) + Mathf.Max(0f, targetRadius);
+
+            if (IsCapable(0) && Camera.main != null &&
+                Vector3.Distance(Camera.main.transform.position, target) <= maxDistance &&
+                PlayerLights.HasLineOfSight(Camera.main.transform.position,
+                                             target, targetRadius)) return true;
+
+            foreach (uint clientId in net.ConnectedClients)
+            {
+                if (!IsCapable(clientId) ||
+                    !net.TryGetClientWorldPosition(clientId, out Vector3 position)) continue;
+                if (Vector3.Distance(position, target) <= maxDistance &&
+                    PlayerLights.HasLineOfSight(position, target, targetRadius)) return true;
+            }
+            return false;
         }
 
         private static int GenericTasks() => (_sorken ? 1 : 0) + (_book ? 1 : 0);
@@ -100,10 +151,15 @@ namespace Gameplay
         private static bool IsCapable(uint clientId)
         {
             if (ServerDeaths.IsDead(clientId)) return false;
-            if (clientId == 0) return Camera.main != null;
+            if (!TrackingReliability.PlayerIsReliable(clientId)) return false;
             var net = NetworkManager.Instance;
+            if (clientId == 0)
+                return Camera.main != null && net != null &&
+                       net.LocalFlashlightCharge01() > 0.001f;
             return net != null && net.TryGetClientWorldPosition(clientId, out _) &&
-                   net.TryGetClientForward(clientId, out _);
+                   net.TryGetClientForward(clientId, out _) &&
+                   net.TryGetClientFlashlightCharge01(clientId, out float charge) &&
+                   charge > 0.001f;
         }
     }
 }

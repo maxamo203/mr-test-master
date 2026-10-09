@@ -30,6 +30,7 @@ namespace Gameplay
         private float _oscuridadRemota;
         private NetworkManager _suscritoA;
         private bool _bookReserved;
+        private int _bookTraceId;
 
         public static RitualBookDirector Ensure()
         {
@@ -66,6 +67,7 @@ namespace Gameplay
             TodosAlumbrando = false;
             _oscuridadRemota = 0f;
             _bookReserved = false;
+            _bookTraceId = 0;
 
             if (_night != null && _night.bookActive)
             {
@@ -91,6 +93,7 @@ namespace Gameplay
         // StartRun siempre construye uno nuevo, asi que no hay nada que conservar.
         public void StopRun()
         {
+            EndTelemetry("stopped");
             ReleaseReservation();
             _running = false;
             _flow = null;
@@ -101,6 +104,7 @@ namespace Gameplay
 
         public void Reiniciar()
         {
+            EndTelemetry("reset");
             ReleaseReservation();
             Alumbrando = 0;
             TodosAlumbrando = false;
@@ -129,16 +133,12 @@ namespace Gameplay
             // defender el libro y no debe perder por una recalibracion.
             var view = RitualBookView.Active;
             if (view == null) return;
+            if (!ThreatCoordinator.HasAnyCapablePlayer) return;
 
             if (_flow.Phase == RitualBookPhase.Consuming)
             {
                 if (_bookReserved && !ThreatCoordinator.CanKeepBook())
                     ReleaseReservation();
-                if (!_bookReserved)
-                {
-                    if (!ThreatCoordinator.TryBeginBook()) return;
-                    _bookReserved = true;
-                }
             }
 
             // Se mide tambien durante Waiting. El flow no acumula defensa antes del
@@ -151,19 +151,32 @@ namespace Gameplay
                 ang = angReal;
                 range = rangeReal;
             }
+            if (_flow.Phase == RitualBookPhase.Consuming && !_bookReserved)
+            {
+                if (!ThreatCoordinator.CanBeginBookAt(
+                        view.PuntoDeLuz, range, view.RadioAproximado) ||
+                    !ThreatCoordinator.TryBeginBook()) return;
+                _bookReserved = true;
+            }
             Alumbrando = PlayerLights.CountIlluminating(
                 view.PuntoDeLuz, ang, range, view.RadioAproximado,
                 FlashlightMode.Bright, requireLineOfSight: true);
             int jugadoresVivos = ContarJugadoresVivos(net);
             TodosAlumbrando = Alumbrando > 0;
 
-            bool allowStart = _bookReserved || ThreatCoordinator.CanBeginBook();
+            bool allowStart = _bookReserved || ThreatCoordinator.CanBeginBookAt(
+                view.PuntoDeLuz, range, view.RadioAproximado);
 
             var result = _flow.Tick(Time.deltaTime, Alumbrando, jugadoresVivos,
                                     _night.bookConsumeSeconds, _night.bookDefenseSeconds,
                                     allowStart);
             if ((result & RitualBookTickResult.ConsumptionStarted) != 0)
+            {
                 _bookReserved = ThreatCoordinator.TryBeginBook();
+                _bookTraceId = GameplayTelemetry.BeginThreat(
+                    "book", 0, view.PuntoDeLuz,
+                    $"consume={_night.bookConsumeSeconds:F2};defense={_night.bookDefenseSeconds:F2}");
+            }
             AplicarVista(_flow.Darkness01);
 
             if ((result & RitualBookTickResult.ConsumptionStarted) != 0)
@@ -171,6 +184,9 @@ namespace Gameplay
 
             if ((result & RitualBookTickResult.Saved) != 0)
             {
+                GameplayTelemetry.End(_bookTraceId, "book", "saved", 0,
+                                      view.PuntoDeLuz);
+                _bookTraceId = 0;
                 ReleaseReservation();
                 Debug.Log("[LibroRitual] El libro fue salvado con la linterna.");
             }
@@ -183,7 +199,12 @@ namespace Gameplay
             }
 
             if ((result & RitualBookTickResult.Consumed) != 0)
+            {
+                GameplayTelemetry.End(_bookTraceId, "book", "consumed", 0,
+                                      view.PuntoDeLuz);
+                _bookTraceId = 0;
                 InvocarVeleth();
+            }
         }
 
         private void InvocarVeleth()
@@ -212,6 +233,15 @@ namespace Gameplay
             if (!_bookReserved) return;
             ThreatCoordinator.EndBook();
             _bookReserved = false;
+        }
+
+        private void EndTelemetry(string result)
+        {
+            if (_bookTraceId == 0) return;
+            GameplayTelemetry.End(_bookTraceId, "book", result, 0,
+                RitualBookView.Active != null
+                    ? RitualBookView.Active.PuntoDeLuz : Vector3.zero);
+            _bookTraceId = 0;
         }
 
         private void SetOscuridadRemota(float oscuridad01)

@@ -65,6 +65,7 @@ namespace Gameplay
         private bool  _running;
         private Phase _phase = Phase.Idle;
         private bool  _sorkenReserved;
+        private int   _sorkenTraceId;
 
         // Reloj de la noche (condicion de victoria). 0 = noche sin limite de tiempo.
         private float _nightDuration;
@@ -133,6 +134,7 @@ namespace Gameplay
 
             ServerDeaths.Reset();
             ThreatCoordinator.ResetAll();
+            GameplayTelemetry.BeginSession(_night, CountAlivePlayers());
             _sorkenReserved = false;
             _coverStartPlayedThisAttempt = false;
             _phase = Phase.Idle;
@@ -164,6 +166,12 @@ namespace Gameplay
         // soltamos las referencias y frenamos. El próximo OnGameStarted re-inicializa.
         public void StopRun()
         {
+            if (_sorkenTraceId != 0)
+            {
+                GameplayTelemetry.End(_sorkenTraceId, "sorken", "stopped", 0,
+                    _sorken != null ? _sorken.Position : Vector3.zero);
+                _sorkenTraceId = 0;
+            }
             ReleaseSorkenReservation();
             _running      = false;
             _phase        = Phase.Idle;
@@ -208,6 +216,16 @@ namespace Gameplay
                 }
             }
 
+            // El reloj de la noche continúa, pero ninguna amenaza avanza ni daña si
+            // todos los jugadores perdieron tracking fiable. Al relocalizar hay 2 s
+            // de recuperación antes de retomar.
+            if (_phase != Phase.Idle && !AnyReliableAlivePlayer()) return;
+            if (_phase != Phase.Idle && ThreatCoordinator.LethalConsequenceActive)
+            {
+                EndAttempt();
+                return;
+            }
+
             switch (_phase)
             {
                 case Phase.Idle:       TickIdle(dt);       break;
@@ -249,8 +267,14 @@ namespace Gameplay
             _marker = markers[UnityEngine.Random.Range(0, markers.Count)];
             if (_marker == null) { _attemptTimer = 1f; return; }
 
-            if (!ThreatCoordinator.TryBeginSorken())
+            Vector3 defenseTarget = EmergePosition() + Vector3.up;
+            float defenseRange = _night.flashlightRange;
+            if (PlayerLights.TryConoReal(out _, out float realRange))
+                defenseRange = realRange;
+            if (!ThreatCoordinator.TryBeginSorkenAt(
+                    defenseTarget, defenseRange, 0.4f))
             {
+                GameplayTelemetry.Postponed("sorken", "no_viable_defender");
                 _marker = null;
                 _attemptTimer = 2f;
                 return;
@@ -268,6 +292,9 @@ namespace Gameplay
                 _attemptTimer = 2f;
                 return;
             }
+            _sorkenTraceId = GameplayTelemetry.BeginThreat(
+                "sorken", 0, _sorken.Position,
+                $"marker={_marker.KindId};entry={_night.entryGraceSeconds:F2}");
 
             // US-4.1: que tipo de punto es (puerta/ventana/...), para que suene distinto.
             // Se resuelve contra el AudioCatalog y viaja como un byte junto al estado, asi
@@ -540,6 +567,8 @@ namespace Gameplay
         private void TickChasing(float dt)
         {
             if (_sorken == null) { EndAttempt(); return; }
+            if (_hasTarget && ServerDeaths.IsAlive(_targetClientId) &&
+                !TrackingReliability.PlayerIsReliable(_targetClientId)) return;
             if (!TryGetLockedTarget(out var tpos)) { Retreat(); return; }
 
             bool iluminado = IsSorkenDirectlyLit();
@@ -621,6 +650,8 @@ private void BeginCoverStart()
         private void TickCoverStarting(float dt)
         {
             if (_sorken == null) { EndAttempt(); return; }
+            if (_hasTarget && ServerDeaths.IsAlive(_targetClientId) &&
+                !TrackingReliability.PlayerIsReliable(_targetClientId)) return;
             if (!TryGetLockedTarget(out _)) { Retreat(); return; }
 
             bool illuminated = IsSorkenDirectlyLit();
@@ -749,6 +780,11 @@ private void BeginCoverStart()
         // Cierra el intento: despawnea el Sorken y agenda el proximo.
         private void EndAttempt()
         {
+            string result = _phase == Phase.Retreating ? "repelled" :
+                            _phase == Phase.Grabbed ? "capture" : "ended";
+            GameplayTelemetry.End(_sorkenTraceId, "sorken", result, 0,
+                                  _sorken != null ? _sorken.Position : Vector3.zero);
+            _sorkenTraceId = 0;
             DespawnSorken();
             ReleaseSorkenReservation();
             _attemptTimer = UnityEngine.Random.Range(_night.attemptIntervalMin, _night.attemptIntervalMax);
@@ -788,6 +824,19 @@ private void BeginCoverStart()
             return false;
         }
 
+        private bool AnyReliableAlivePlayer()
+        {
+            var net = NetworkManager.Instance;
+            if (Camera.main != null && ServerDeaths.IsAlive(0) &&
+                TrackingReliability.LocalIsReliable()) return true;
+            if (net == null) return false;
+            foreach (var cid in net.ConnectedClients)
+                if (ServerDeaths.IsAlive(cid) &&
+                    net.IsClientPoseReliable(
+                        cid, TrackingReliability.RemotePoseMaxAgeSeconds)) return true;
+            return false;
+        }
+
         private bool AnyAlivePlayerWithin(Vector3 world, float dist)
         {
             // Horizontal: proximidad al punto sin contar la altura de la camara AR.
@@ -802,7 +851,8 @@ private void BeginCoverStart()
             float best = float.MaxValue; bool found = false;
             var net = NetworkManager.Instance;
 
-            if (Camera.main != null && ServerDeaths.IsAlive(0))
+            if (Camera.main != null && ServerDeaths.IsAlive(0) &&
+                TrackingReliability.LocalIsReliable())
             {
                 best  = (Camera.main.transform.position - from).sqrMagnitude;
                 pos   = Camera.main.transform.position;
@@ -811,6 +861,7 @@ private void BeginCoverStart()
             foreach (var cid in net.ConnectedClients)
             {
                 if (ServerDeaths.IsDead(cid)) continue;
+                if (!TrackingReliability.PlayerIsReliable(cid)) continue;
                 if (!net.TryGetClientWorldPosition(cid, out var p)) continue;
                 float d = (p - from).sqrMagnitude;
                 if (d < best) { best = d; pos = p; clientId = cid; found = true; }
@@ -837,6 +888,7 @@ private void BeginCoverStart()
         {
             pos = Vector3.zero;
             if (ServerDeaths.IsDead(clientId)) return false;
+            if (!TrackingReliability.PlayerIsReliable(clientId)) return false;
             if (clientId == 0)
             {
                 if (Camera.main == null) return false;
@@ -850,9 +902,12 @@ private void BeginCoverStart()
         private IEnumerable<Vector3> AlivePlayerPositions()
         {
             var net = NetworkManager.Instance;
-            if (Camera.main != null && ServerDeaths.IsAlive(0)) yield return Camera.main.transform.position;
+            if (Camera.main != null && ServerDeaths.IsAlive(0) &&
+                TrackingReliability.LocalIsReliable())
+                yield return Camera.main.transform.position;
             foreach (var cid in net.ConnectedClients)
-                if (ServerDeaths.IsAlive(cid) && net.TryGetClientWorldPosition(cid, out var p)) yield return p;
+                if (ServerDeaths.IsAlive(cid) && TrackingReliability.PlayerIsReliable(cid) &&
+                    net.TryGetClientWorldPosition(cid, out var p)) yield return p;
         }
 
         // --- Repel: hay algun jugador iluminando el objetivo con su linterna? ---

@@ -180,14 +180,18 @@ public class PlayerPoseMsg
     // Direccion de apuntado (forward de la camara) en espacio anchor-relativo, para el
     // test de cono del repel en el server.
     public Vector3 Forward;
+    public bool TrackingValid = true;
+    public float FlashlightCharge01 = 1f;
 
     public byte[] Serialize()
     {
-        using var ms = new MemoryStream(25);
+        using var ms = new MemoryStream(30);
         using var w  = new BinaryWriter(ms);
         MsgHelper.WriteV3(w, RelPos);
         w.Write((byte)FlashlightMode);
         MsgHelper.WriteV3(w, Forward);
+        w.Write(TrackingValid);
+        w.Write(Mathf.Clamp01(FlashlightCharge01));
         return ms.ToArray();
     }
 
@@ -199,6 +203,8 @@ public class PlayerPoseMsg
             RelPos       = MsgHelper.ReadV3(r),
             FlashlightMode = (FlashlightMode)r.ReadByte(),
             Forward      = MsgHelper.ReadV3(r),
+            TrackingValid = r.ReadBoolean(),
+            FlashlightCharge01 = r.ReadSingle(),
         };
     }
 }

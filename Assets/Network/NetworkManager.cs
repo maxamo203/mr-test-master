@@ -43,6 +43,9 @@ public class NetworkManager : MonoBehaviour
     // Server: ultimo forward (aim) anchor-relativo reportado por cada cliente. Lo usa el
     // GameDirector para el test de cono del repel.
     private readonly Dictionary<uint, Vector3> _clientForward  = new();
+    private readonly Dictionary<uint, bool> _clientTrackingValid = new();
+    private readonly Dictionary<uint, float> _clientFlashCharge01 = new();
+    private readonly Dictionary<uint, float> _clientPoseReceivedAt = new();
     // Server: estado de los anchor points extra de cada cliente. Gatea el arranque de
     // la noche (ver ARLobbyManager.CanStartGame).
     private readonly Dictionary<uint, AnchorPointsStatusMsg> _clientAnchorStatus = new();
@@ -83,6 +86,17 @@ public class NetworkManager : MonoBehaviour
     // (el llamador decide el default; el SanitySystem asume "encendida" = no drena).
     public bool TryGetClientFlashlightMode(uint clientId, out FlashlightMode mode) =>
         _clientFlashMode.TryGetValue(clientId, out mode);
+
+    public bool TryGetClientFlashlightCharge01(uint clientId, out float charge01) =>
+        _clientFlashCharge01.TryGetValue(clientId, out charge01);
+
+    public bool IsClientPoseReliable(uint clientId, float maxAgeSeconds)
+    {
+        return _clientTrackingValid.TryGetValue(clientId, out bool valid) && valid &&
+               _clientPoseReceivedAt.TryGetValue(clientId, out float receivedAt) &&
+               Gameplay.TrackingReliability.PoseIsFresh(
+                   Time.unscaledTime, receivedAt, maxAgeSeconds);
+    }
 
     // Compatibilidad para sistemas que solo necesitan saber apagada/encendida.
     public bool TryGetClientFlashlightOn(uint clientId, out bool on)
@@ -154,6 +168,12 @@ public class NetworkManager : MonoBehaviour
     {
         if (_localFlashlight == null) _localFlashlight = FindAnyObjectByType<Flashlight>();
         return _localFlashlight != null ? _localFlashlight.Mode : FlashlightMode.Off;
+    }
+
+    public float LocalFlashlightCharge01()
+    {
+        if (_localFlashlight == null) _localFlashlight = FindAnyObjectByType<Flashlight>();
+        return _localFlashlight != null ? _localFlashlight.Charge01 : 0f;
     }
 
     // ── Public API ────────────────────────────────────────────────────────
@@ -464,12 +484,14 @@ public class NetworkManager : MonoBehaviour
         _playerPosScratch.Clear();
         if (!IsServer) return _playerPosScratch;
 
-        if (Camera.main != null)
+        if (Camera.main != null && Gameplay.TrackingReliability.LocalIsReliable())
             _playerPosScratch.Add(Camera.main.transform.position);
 
         if (WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady)
-            foreach (var rel in _clientRelPos.Values)
-                _playerPosScratch.Add(WorldOrigin.Instance.ToWorld(rel));
+            foreach (var pair in _clientRelPos)
+                if (IsClientPoseReliable(
+                        pair.Key, Gameplay.TrackingReliability.RemotePoseMaxAgeSeconds))
+                    _playerPosScratch.Add(WorldOrigin.Instance.ToWorld(pair.Value));
 
         return _playerPosScratch;
     }
@@ -479,6 +501,9 @@ public class NetworkManager : MonoBehaviour
     public bool TryGetClientWorldPosition(uint clientId, out Vector3 world)
     {
         world = Vector3.zero;
+        if (GameStarted && !IsClientPoseReliable(
+                clientId, Gameplay.TrackingReliability.RemotePoseMaxAgeSeconds))
+            return false;
         if (_clientRelPos.TryGetValue(clientId, out var rel) &&
             WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady)
         {
@@ -608,6 +633,9 @@ public class NetworkManager : MonoBehaviour
         _clientRelPos.Remove(clientId);
         _clientFlashMode.Remove(clientId);
         _clientForward.Remove(clientId);
+        _clientTrackingValid.Remove(clientId);
+        _clientFlashCharge01.Remove(clientId);
+        _clientPoseReceivedAt.Remove(clientId);
         _clientAnchorStatus.Remove(clientId);
 
         if (_clientToPlayer.TryGetValue(clientId, out var playerId))
@@ -652,6 +680,10 @@ public class NetworkManager : MonoBehaviour
                 _clientRelPos[incoming.ClientId]  = pose.RelPos;
                 _clientFlashMode[incoming.ClientId] = pose.FlashlightMode;
                 _clientForward[incoming.ClientId] = pose.Forward;
+                _clientTrackingValid[incoming.ClientId] = pose.TrackingValid;
+                _clientFlashCharge01[incoming.ClientId] =
+                    Mathf.Clamp01(pose.FlashlightCharge01);
+                _clientPoseReceivedAt[incoming.ClientId] = Time.unscaledTime;
                 break;
             }
             case MessageType.BatteryPickup:
@@ -725,7 +757,14 @@ public class NetworkManager : MonoBehaviour
             var relPos  = WorldOrigin.Instance.ToRelative(Camera.main.transform.position);
             var relFwd  = WorldOrigin.Instance.ToRelativeDir(Camera.main.transform.forward);
             _cli.Send(MsgHelper.Frame(MessageType.PlayerPose,
-                new PlayerPoseMsg { RelPos = relPos, FlashlightMode = LocalFlashlightMode(), Forward = relFwd }.Serialize()));
+                new PlayerPoseMsg
+                {
+                    RelPos = relPos,
+                    FlashlightMode = LocalFlashlightMode(),
+                    Forward = relFwd,
+                    TrackingValid = Gameplay.TrackingReliability.LocalIsReliable(),
+                    FlashlightCharge01 = LocalFlashlightCharge01(),
+                }.Serialize()));
         }
 
         foreach (var entity in EntityRegistry.Instance.All)

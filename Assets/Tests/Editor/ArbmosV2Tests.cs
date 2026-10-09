@@ -83,6 +83,8 @@ public class ArbmosV2Tests
             RelPos = new Vector3(1f, 2f, 3f),
             Forward = new Vector3(0f, 0f, 1f),
             FlashlightMode = FlashlightMode.Bright,
+            TrackingValid = false,
+            FlashlightCharge01 = 0.42f,
         };
 
         PlayerPoseMsg copy = PlayerPoseMsg.Deserialize(original.Serialize());
@@ -90,6 +92,8 @@ public class ArbmosV2Tests
         Assert.That(copy.RelPos, Is.EqualTo(original.RelPos));
         Assert.That(copy.Forward, Is.EqualTo(original.Forward));
         Assert.That(copy.FlashlightMode, Is.EqualTo(FlashlightMode.Bright));
+        Assert.That(copy.TrackingValid, Is.False);
+        Assert.That(copy.FlashlightCharge01, Is.EqualTo(0.42f).Within(0.001f));
     }
 
     [Test]

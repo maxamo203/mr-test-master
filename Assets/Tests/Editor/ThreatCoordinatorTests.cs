@@ -22,4 +22,17 @@ public class ThreatCoordinatorTests
         Assert.That(ThreatCoordinator.CanFit(8, 1, 2), Is.True);
         Assert.That(ThreatCoordinator.CanFit(8, 1, 3), Is.False);
     }
+
+    [Test]
+    public void ConsecuenciaLetalBloqueaNuevasAmenazasNormales()
+    {
+        ThreatCoordinator.ResetAll();
+        ThreatCoordinator.BeginLethalArbmos(7);
+
+        Assert.That(ThreatCoordinator.LethalConsequenceActive, Is.True);
+        Assert.That(ThreatCoordinator.TryBeginSorken(), Is.False);
+
+        ThreatCoordinator.EndLethalArbmos(7);
+        Assert.That(ThreatCoordinator.LethalConsequenceActive, Is.False);
+    }
 }
