@@ -34,6 +34,7 @@ public class ArbmosDirector : MonoBehaviour
         public Vector3 stationaryPosition;
         public float hideTimer;
         public float exposureTimer;
+        public float exposureGraceTimer;
         public float attackTimer;
         public float stalkTimer;
         public float stalkTotal;
@@ -210,6 +211,7 @@ private readonly List<uint> _scratchRemove = new();
         haunt.stationaryPosition = haunt.ent.Position;
         haunt.hideTimer = 0f;
         haunt.exposureTimer = 0f;
+        haunt.exposureGraceTimer = Mathf.Max(0f, _night.arbmosExposureGraceSeconds);
         haunt.attackTimer = 0f;
         haunt.phase = Phase.PresentStill;
     }
@@ -229,6 +231,12 @@ private readonly List<uint> _scratchRemove = new();
         }
 
         haunt.hideTimer = 0f;
+        if (haunt.exposureGraceTimer > 0f)
+        {
+            haunt.exposureGraceTimer = Mathf.Max(0f, haunt.exposureGraceTimer - dt);
+            haunt.exposureTimer = 0f;
+            return;
+        }
         if (OwnerIsLightingHead(clientId, haunt))
             haunt.exposureTimer += dt;
         else
@@ -384,10 +392,18 @@ private readonly List<uint> _scratchRemove = new();
         if (haunt.ent == null) { RetryLethal(haunt); return; }
 
         haunt.chaseTimer += dt;
-        if (HorizontalDistance(haunt.ent.Position, playerPosition) <= _night.arbmosGrabRange ||
-            haunt.chaseTimer >= Mathf.Max(0.1f, _night.arbmosLethalMaxSeconds))
+        bool inGrabRange = HorizontalDistance(haunt.ent.Position, playerPosition) <=
+                           _night.arbmosGrabRange;
+        if (inGrabRange && HasCaptureLine(haunt.ent.Position, playerPosition))
         {
             CompleteLethal(clientId, haunt);
+            return;
+        }
+        if (haunt.chaseTimer >= Mathf.Max(0.1f, _night.arbmosLethalMaxSeconds))
+        {
+            // El timeout no mata a distancia ni detrás de una pared: reprograma la
+            // consecuencia desde una nueva posición válida.
+            RetryLethal(haunt);
             return;
         }
 
@@ -545,39 +561,112 @@ private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
                                       out Vector3 spawn)
     {
         Vector3 forward = PlayerForward(clientId);
-        forward.y = 0f;
-        if (forward.sqrMagnitude < 1e-4f) forward = Vector3.forward;
-        forward.Normalize();
+        Vector3 horizontalForward = forward;
+        horizontalForward.y = 0f;
+        if (horizontalForward.sqrMagnitude < 1e-4f) horizontalForward = Vector3.forward;
+        horizontalForward.Normalize();
 
-        float desiredDistance = Mathf.Max(0.75f, _night.arbmosSpawnDistance);
-        const float minimumDistance = 0.75f;
-        const float searchStep = 0.25f;
+        float desiredDistance = Mathf.Max(ArbmosSpawnGeometry.MinimumDistance,
+                                          _night.arbmosSpawnDistance);
         float floorY = FloorWorldY(playerPosition.y);
         var nav = SorkerNav.Ensure();
 
-        // El candidato siempre queda sobre el eje de visión del jugador. Se prueba desde
-        // la distancia ideal hacia adentro y sólo se acepta con una línea visual libre:
-        // si hay una pared de por medio, ese punto nunca se utiliza.
-        for (float distance = desiredDistance; distance >= minimumDistance; distance -= searchStep)
+        float verticalFov = Camera.main != null ? Camera.main.fieldOfView : 60f;
+        float aspect = Camera.main != null ? Camera.main.aspect : 16f / 9f;
+        float horizontalHalfFov = Mathf.Atan(Mathf.Tan(verticalFov * 0.5f * Mathf.Deg2Rad) *
+                                             aspect) * Mathf.Rad2Deg;
+        float beamAngle = _night.flashlightConeAngleDeg;
+        float beamRange = _night.flashlightRange;
+        if (PlayerLights.TryConoReal(out float realAngle, out float realRange))
         {
-            Vector3 candidate = playerPosition + forward * distance;
-            candidate.y = floorY;
-            if (nav.IsWalkable(candidate) && nav.HasClearLine(playerPosition, candidate))
-            {
-                spawn = candidate;
-                return true;
-            }
+            beamAngle = realAngle;
+            beamRange = realRange;
+        }
 
-            // Sin paredes escaneadas, la dirección frontal sigue siendo válida.
-            if (!nav.HasObstacleGrid)
+        // Busca primero a la distancia configurada y, si el cuerpo no entra completo,
+        // prueba un poco más lejos. Nunca lo acerca dentro de los 2 m para forzar spawn.
+        int firstSide = Random.value < 0.5f ? -1 : 1;
+        for (float distance = desiredDistance; distance <= desiredDistance + 0.75f;
+             distance += 0.25f)
+        {
+            if (!ArbmosSpawnGeometry.TryLateralAngleBand(
+                    horizontalHalfFov, beamAngle, distance,
+                    out float minimumAngle, out float maximumAngle))
+                continue;
+
+            for (int sidePass = 0; sidePass < 2; sidePass++)
             {
-                spawn = candidate;
-                return true;
+                int side = sidePass == 0 ? firstSide : -firstSide;
+                for (int sample = 0; sample < 4; sample++)
+                {
+                    float t = sample / 3f;
+                    float angle = Mathf.Lerp(maximumAngle, minimumAngle, t) * side;
+                    Vector3 candidate = playerPosition +
+                        ArbmosSpawnGeometry.LateralDirection(horizontalForward, angle) * distance;
+                    candidate.y = floorY;
+                    if (IsValidSpawnCandidate(clientId, playerPosition, forward, candidate,
+                                              verticalFov * 0.5f, horizontalHalfFov,
+                                              beamAngle, beamRange, nav))
+                    {
+                        spawn = candidate;
+                        return true;
+                    }
+                }
             }
         }
 
         spawn = default;
         return false;
+    }
+
+    private bool IsValidSpawnCandidate(uint clientId, Vector3 playerPosition,
+                                       Vector3 playerForward, Vector3 candidate,
+                                       float verticalHalfFov, float horizontalHalfFov,
+                                       float beamAngle, float beamRange, SorkerNav nav)
+    {
+        Vector3 feet = candidate + Vector3.up * 0.2f;
+        Vector3 torso = candidate + Vector3.up * 1.05f;
+        Vector3 head = candidate + Vector3.up * ArbmosSpawnGeometry.BodyHeight;
+
+        if (!ArbmosSpawnGeometry.PointInsideView(playerPosition, playerForward, feet,
+                                                  horizontalHalfFov, verticalHalfFov) ||
+            !ArbmosSpawnGeometry.PointInsideView(playerPosition, playerForward, head,
+                                                  horizontalHalfFov, verticalHalfFov))
+            return false;
+
+        // Si la linterna está encendida, ni torso ni cabeza pueden tocar el haz.
+        if (PlayerLights.ModeFor(clientId) != FlashlightMode.Off &&
+            (PlayerLights.Alcanza(playerPosition, playerForward, torso, beamAngle,
+                                  beamRange, ArbmosSpawnGeometry.BodyRadius) ||
+             PlayerLights.Alcanza(playerPosition, playerForward, head, beamAngle,
+                                  beamRange, ArbmosSpawnGeometry.BodyRadius)))
+            return false;
+
+        if (!HasBodyClearance(candidate, nav)) return false;
+        if (!nav.HasClearLine(playerPosition, torso) ||
+            !nav.HasClearLine(playerPosition, head)) return false;
+        if (!PlayerLights.HasLineOfSight(playerPosition, torso,
+                                         ArbmosSpawnGeometry.BodyRadius) ||
+            !PlayerLights.HasLineOfSight(playerPosition, head,
+                                         ArbmosSpawnGeometry.BodyRadius)) return false;
+
+        Vector3 capsuleBottom = candidate + Vector3.up * ArbmosSpawnGeometry.BodyRadius;
+        Vector3 capsuleTop = candidate + Vector3.up *
+            (ArbmosSpawnGeometry.BodyHeight - ArbmosSpawnGeometry.BodyRadius);
+        return !Physics.CheckCapsule(capsuleBottom, capsuleTop,
+                                     ArbmosSpawnGeometry.BodyRadius,
+                                     Physics.DefaultRaycastLayers,
+                                     QueryTriggerInteraction.Ignore);
+    }
+
+    private static bool HasBodyClearance(Vector3 candidate, SorkerNav nav)
+    {
+        if (!nav.IsWalkable(candidate)) return false;
+        float r = ArbmosSpawnGeometry.BodyRadius;
+        return nav.IsWalkable(candidate + Vector3.right * r) &&
+               nav.IsWalkable(candidate - Vector3.right * r) &&
+               nav.IsWalkable(candidate + Vector3.forward * r) &&
+               nav.IsWalkable(candidate - Vector3.forward * r);
     }
 
     private static void FacePlayer(Haunt haunt, Vector3 playerPosition)
@@ -647,6 +736,15 @@ private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
         a.y = 0f;
         b.y = 0f;
         return Vector3.Distance(a, b);
+    }
+
+    private static bool HasCaptureLine(Vector3 entity, Vector3 player)
+    {
+        Vector3 from = entity + Vector3.up;
+        Vector3 to = player;
+        var nav = SorkerNav.Instance;
+        return (nav == null || nav.HasClearLine(entity, player)) &&
+               PlayerLights.HasLineOfSight(from, to, 0.2f);
     }
 
     public string DebugSnapshot()

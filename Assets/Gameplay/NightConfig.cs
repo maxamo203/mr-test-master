@@ -85,18 +85,20 @@ namespace Gameplay
         [Tooltip("Espera (s) entre alucinaciones del MISMO jugador (rango, al azar).")]
         public float arbmosCooldownMin = 20f;
         public float arbmosCooldownMax = 40f;
-        [Tooltip("A que distancia (m) del jugador, hacia donde mira, aparece el Arbmos.")]
+        [Tooltip("Distancia deseada (m) para buscar una aparicion lateral visible y fuera del haz.")]
         public float arbmosSpawnDistance = 2.5f;
         [Tooltip("Probabilidad base [0..1] de aparicion al terminar el cooldown.")]
         public float arbmosSpawnChancePerAttempt = 0.6f;
         [Tooltip("Segundos continuos con la linterna apagada para ocultar una aparicion normal.")]
         [Min(0.1f)] public float arbmosHideSeconds = 3f;
         [Tooltip("Segundos de luz directa sobre la cabeza necesarios para comprometer el ataque.")]
-        [Min(0.05f)] public float arbmosExposureSeconds = 0.8f;
+        [Min(0.05f)] public float arbmosExposureSeconds = 1.2f;
+        [Tooltip("Gracia al aparecer durante la que la luz no acumula exposición.")]
+        [Min(0f)] public float arbmosExposureGraceSeconds = 1f;
         [Tooltip("Demora breve entre comprometer el ataque normal y aplicar el daño.")]
-        [Min(0f)] public float arbmosAttackCommitSeconds = 0.35f;
+        [Min(0f)] public float arbmosAttackCommitSeconds = 0.5f;
         [Tooltip("Techo de velocidad (m/s). La velocidad real también respeta la distancia por paso del clip.")]
-        [Min(0.1f)] public float arbmosAttackChaseSpeed = 2.5f;
+        [Min(0.1f)] public float arbmosAttackChaseSpeed = 2f;
         [Tooltip("Limite de seguridad (s) del ataque normal si no consigue alcanzar al jugador.")]
         [Min(0.1f)] public float arbmosAttackMaxSeconds = 14f;
         [Tooltip("Distancia horizontal a la que ejecuta el susto y aplica el golpe de cordura.")]
@@ -113,8 +115,8 @@ namespace Gameplay
         public float arbmosLethalStalkSeconds = 3f;
         [Tooltip("Velocidad (m/s) de la embestida letal.")]
         public float arbmosLethalChaseSpeed = 3.5f;
-        [Tooltip("Limite de seguridad de la persecucion final. Al vencer, completa la muerte " +
-                 "aunque la navegacion no encuentre una ruta, para que la secuencia no quede trabada.")]
+        [Tooltip("Limite de seguridad de la persecucion final. Al vencer sin captura valida, " +
+                 "reprograma la aparicion; nunca mata a distancia ni a traves de obstaculos.")]
         [Min(0.1f)] public float arbmosLethalMaxSeconds = 8f;
         [Tooltip("Frecuencia con la que recalcula la ruta durante la persecucion final.")]
         [Min(0.05f)] public float arbmosLethalRepathSeconds = 0.3f;

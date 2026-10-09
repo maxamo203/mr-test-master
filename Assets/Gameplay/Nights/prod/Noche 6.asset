@@ -44,16 +44,17 @@ MonoBehaviour:
   arbmosSpawnDistance: 2
   arbmosSpawnChancePerAttempt: 0.75
   arbmosHideSeconds: 3
-  arbmosExposureSeconds: 0.8
-  arbmosAttackCommitSeconds: 0.35
-  arbmosAttackChaseSpeed: 2.5
+  arbmosExposureSeconds: 1.2
+  arbmosExposureGraceSeconds: 1
+  arbmosAttackCommitSeconds: 0.5
+  arbmosAttackChaseSpeed: 2
   arbmosAttackMaxSeconds: 14
   arbmosAttackGrabRange: 1
   arbmosSanityDamage: 30
   arbmosLookTargetHeight: 1.65
   arbmosLookTargetRadius: 0.25
   arbmosLethalStalkSeconds: 2.5
-  arbmosLethalChaseSpeed: 4.2
+  arbmosLethalChaseSpeed: 3.4
   arbmosLethalMaxSeconds: 8
   arbmosLethalRepathSeconds: 0.3
   arbmosGrabRange: 1.3
