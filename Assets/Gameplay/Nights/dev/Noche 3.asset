@@ -22,10 +22,15 @@ MonoBehaviour:
   entryGraceSeconds: 4
   entryAnimationSeconds: 3
   entryTriggerDistance: 3
-  chaseRepelSeconds: 3
-  sorkenChaseSpeed: 2.5
+  chaseRepelSeconds: 3.5
+  sorkenPostEntryPauseSeconds: 2.5
+  sorkenChaseSpeed: 0.5
+  sorkenIlluminatedSpeed: 0.1
+  sorkenAimToleranceSeconds: 2
+  sorkenRepelDecayPerSecond: 0.5
+  sorkenBlockedRepathSeconds: 0.4
   sorkenCoverStartSeconds: 3
-  sorkenCoverWalkSpeedMultiplier: 0.7
+  sorkenCoverWalkSpeedMultiplier: 1
   sorkenRetreatSpeed: 3.5
   grabRange: 1.2
   flashlightMaxCharge: 200

@@ -146,7 +146,7 @@ namespace Gameplay
         private static bool ModeAtLeast(FlashlightMode actual, FlashlightMode minimum) =>
             actual != FlashlightMode.Off && actual >= minimum;
 
-        private static bool HasLineOfSight(Vector3 origin, Vector3 target, float targetRadius)
+        public static bool HasLineOfSight(Vector3 origin, Vector3 target, float targetRadius)
         {
             Vector3 delta = target - origin;
             float distance = delta.magnitude;

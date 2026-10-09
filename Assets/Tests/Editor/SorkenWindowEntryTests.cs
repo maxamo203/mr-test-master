@@ -7,6 +7,65 @@ using UnityEngine;
 public class SorkenWindowEntryTests
 {
     [Test]
+    public void DefensaConservaProgresoYPosicionHastaDosSegundos()
+    {
+        var atHalfSecond = GameDirector.StepDefense(
+            1.4f, 0f, false, 0.5f, 2f, 0.5f);
+        var atExactBoundary = GameDirector.StepDefense(
+            atHalfSecond.Progress, 1.9f, false, 0.1f, 2f, 0.5f);
+
+        Assert.That(atHalfSecond.Progress, Is.EqualTo(1.4f).Within(0.0001f));
+        Assert.That(atHalfSecond.HoldPosition, Is.True);
+        Assert.That(atExactBoundary.Progress, Is.EqualTo(1.4f).Within(0.0001f));
+        Assert.That(atExactBoundary.HoldPosition, Is.True);
+    }
+
+    [Test]
+    public void DefensaDegradaGradualmenteDespuesDeLaTolerancia()
+    {
+        var afterBoundary = GameDirector.StepDefense(
+            1.4f, 2f, false, 0.1f, 2f, 0.5f);
+        var recovered = GameDirector.StepDefense(
+            afterBoundary.Progress, afterBoundary.LightLostSeconds,
+            true, 0.2f, 2f, 0.5f);
+
+        Assert.That(afterBoundary.HoldPosition, Is.False);
+        Assert.That(afterBoundary.Progress, Is.EqualTo(1.35f).Within(0.0001f));
+        Assert.That(recovered.Progress, Is.EqualTo(1.55f).Within(0.0001f));
+        Assert.That(recovered.LightLostSeconds, Is.Zero);
+    }
+
+    [Test]
+    public void CapturaYFallbackRespetanObstaculos()
+    {
+        Assert.That(GameDirector.CanCaptureAtDistance(0.8f, 1.1f, true), Is.True);
+        Assert.That(GameDirector.CanCaptureAtDistance(0.8f, 1.1f, false), Is.False);
+        Assert.That(GameDirector.CanAdvanceWithoutPath(false), Is.True,
+            "Sin geometria escaneada se admite linea recta.");
+        Assert.That(GameDirector.CanAdvanceWithoutPath(true), Is.False,
+            "Con obstaculos y sin ruta debe esperar/recalcular.");
+    }
+
+    [Test]
+    public void PerfilesSorkenUsanDefensaParaEspaciosPequenos()
+    {
+        string[] guids = AssetDatabase.FindAssets("t:NightConfig",
+            new[] { "Assets/Gameplay/Nights" });
+        Assert.That(guids.Length, Is.GreaterThanOrEqualTo(12));
+
+        foreach (string guid in guids)
+        {
+            NightConfig night = AssetDatabase.LoadAssetAtPath<NightConfig>(
+                AssetDatabase.GUIDToAssetPath(guid));
+            Assert.That(night.sorkenPostEntryPauseSeconds, Is.GreaterThanOrEqualTo(2.5f), night.name);
+            Assert.That(night.sorkenChaseSpeed, Is.InRange(0.4f, 0.6f), night.name);
+            Assert.That(night.sorkenIlluminatedSpeed, Is.LessThanOrEqualTo(0.1f), night.name);
+            Assert.That(night.sorkenAimToleranceSeconds, Is.EqualTo(2f).Within(0.001f), night.name);
+            Assert.That(night.sorkenRepelDecayPerSecond, Is.EqualTo(0.5f).Within(0.001f), night.name);
+        }
+    }
+
+    [Test]
     public void PrefabUsaLaCaminataCubiertaConAlasReplegadas()
     {
         GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(

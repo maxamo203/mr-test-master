@@ -41,13 +41,27 @@ namespace Gameplay
         public float entryTriggerDistance = 3f;
 
         [Header("Persecucion")]
-        [Tooltip("Segundos que hay que iluminar al Sorken para ahuyentarlo en el chase.")]
-        public float chaseRepelSeconds = 5f;
-        public float sorkenChaseSpeed = 2.5f;
+        [Tooltip("Tiempo TOTAL de luz intensa valida para ahuyentar al Sorken. El gesto " +
+                 "inicial de cubrirse ya cuenta dentro de este tiempo.")]
+        [Min(0.1f)] public float chaseRepelSeconds = 3.5f;
+        [Tooltip("Pausa inmovil al terminar de entrar. Durante ella puede comenzar la defensa, " +
+                 "pero nunca puede capturar al jugador.")]
+        [Min(0f)] public float sorkenPostEntryPauseSeconds = 2.5f;
+        [Tooltip("Velocidad normal dentro del ambiente, pensada para espacios pequenos.")]
+        [Min(0f)] public float sorkenChaseSpeed = 0.5f;
+        [Tooltip("Velocidad muy lenta mientras recibe luz intensa valida.")]
+        [Min(0f)] public float sorkenIlluminatedSpeed = 0.1f;
+        [Tooltip("Al perder el haz, conserva progreso y posicion durante esta ventana.")]
+        [Min(0f)] public float sorkenAimToleranceSeconds = 2f;
+        [Tooltip("Segundos de progreso que pierde por cada segundo sin luz, una vez agotada la tolerancia.")]
+        [Min(0f)] public float sorkenRepelDecayPerSecond = 0.5f;
+        [Tooltip("Intervalo entre reintentos de ruta cuando existe geometria pero no hay camino valido.")]
+        [Min(0.05f)] public float sorkenBlockedRepathSeconds = 0.4f;
         [Tooltip("Duracion de la animacion inicial al cubrirse el rostro con la linterna.")]
         [Min(0f)] public float sorkenCoverStartSeconds = 3f;
-        [Tooltip("Multiplicador de velocidad mientras avanza cubriendose de la linterna.")]
-        [Range(0.1f, 1f)] public float sorkenCoverWalkSpeedMultiplier = 0.7f;
+        [Tooltip("Multiplicador adicional de la animacion cubierta. La velocidad iluminada " +
+                 "sigue teniendo como techo sorkenIlluminatedSpeed.")]
+        [Range(0.1f, 1f)] public float sorkenCoverWalkSpeedMultiplier = 1f;
         [Tooltip("Velocidad al retirarse tras ser repelido (sale corriendo).")]
         public float sorkenRetreatSpeed = 3.5f;
         [Tooltip("Distancia (m) a la que el Sorken atrapa al jugador (grab).")]
