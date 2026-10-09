@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Gameplay.Spawning;
 using Scanner;
 using UnityEngine;
 
@@ -59,11 +60,14 @@ namespace Bateries
         [SerializeField] private float floorRadius = 3f;
         [Tooltip("Tope de puntos de spawn.")]
         [SerializeField] private int   maxSpawnPoints = 12;
+        [Tooltip("Radio de la huella reservada por una pila, incluyendo su volumen.")]
+        [SerializeField] private float objectFootprintRadius = 0.10f;
 
         [Header("Debug")]
         [Tooltip("Muestra un panel en pantalla con el estado del sistema de pilas. " +
                  "Dejalo apagado en device: el OnGUI tiene costo. Solo para diagnosticar.")]
         [SerializeField] private bool _showDebugHud = false;
+        [SerializeField] private bool _drawSpawnGizmos = false;
 
         // Ultimo estado legible para el HUD de diagnostico.
         private string _status = "esperando arranque de partida…";
@@ -77,11 +81,17 @@ namespace Bateries
             public bool    blockUntilClear; // si respeta la regla de proximidad (post-pickup)
             public uint    netId;
             public byte    rarityIndex;
+            public SpawnSurfaceKind surface;
+            public CubeObject support;
         }
 
         private readonly List<SpawnPoint>          _points  = new();
         private readonly Dictionary<uint, SpawnPoint> _byNetId = new();
+        private readonly List<Vector3> _rejectedPoints = new();
         private bool _started;
+        private int _geometryVersion = int.MinValue;
+        private int _rejectedCount;
+        private string _lastRejection;
 
         private void Awake()
         {
@@ -129,8 +139,7 @@ namespace Bateries
             BuildSpawnPoints();
             _started = true;
 
-            _status  = $"{_points.Count} puntos derivados del escaneo.";
-            Debug.Log($"[Bateries] {_points.Count} puntos de spawn derivados del escaneo.");
+            Debug.Log($"[Bateries] {_status}");
         }
 
         // Dificultad de la noche en curso. Puede ser null si se entra a la escena sin
@@ -154,6 +163,8 @@ namespace Bateries
         {
             _started = false;
             _points.Clear();
+            _byNetId.Clear();
+            SpawnReservationRegistry.ClearOwner("battery");
             _status = "detenido entre noches.";
         }
 
@@ -206,8 +217,24 @@ namespace Bateries
 
         private void BuildSpawnPoints()
         {
+            DespawnTrackedObjects();
             _points.Clear();
             _byNetId.Clear();
+            _rejectedPoints.Clear();
+            _rejectedCount = 0;
+            _lastRejection = null;
+
+            if (!InteriorSpawnValidator.TryEnsureReady(out var topologyReason))
+            {
+                _geometryVersion = InteriorSpawnValidator.GeometryVersion;
+                _status = $"esperando contorno interior cerrado: {topologyReason}.";
+                Debug.LogWarning($"[Bateries] {_status} No se usa fallback exterior.");
+                return;
+            }
+
+            _geometryVersion = InteriorSpawnValidator.GeometryVersion;
+            SpawnReservationRegistry.BeginGeometry(_geometryVersion);
+            SpawnReservationRegistry.ClearOwner("battery");
 
             if (useFurnitureTops && SceneRegistry.Instance != null)
             {
@@ -220,26 +247,13 @@ namespace Bateries
 
                     // Centro de la cara superior en world, con un pequeño offset arriba.
                     Vector3 topWorld = t.position + t.up * (scale.y * 0.5f + surfaceOffset);
-                    AddPoint(topWorld);
+                    AddPoint(topWorld, SpawnSurfaceKind.FurnitureTop, cube);
                     if (_points.Count >= maxSpawnPoints) break;
                 }
             }
 
             if (scatterOnFloor && _points.Count < maxSpawnPoints && FloorPoint.Instance != null)
                 ScatterFloorGrid();
-
-            // Fallback: sin muebles ni piso util, unos puntos en anillo alrededor del anchor.
-            if (_points.Count == 0)
-            {
-                float y = FloorPoint.Instance != null ? FloorPoint.Instance.LocalY : 0f;
-                int n = Mathf.Min(6, maxSpawnPoints);
-                for (int i = 0; i < n; i++)
-                {
-                    float a = i * Mathf.PI * 2f / n;
-                    var rel = new Vector3(Mathf.Cos(a) * 1.2f, y + surfaceOffset, Mathf.Sin(a) * 1.2f);
-                    AddPointRel(rel);
-                }
-            }
 
             // Arrancar todos vacios: se llenan tras initialSpawnDelay, sin exigir que el
             // jugador se aleje (la regla de proximidad solo aplica a la reaparicion).
@@ -249,6 +263,10 @@ namespace Bateries
                 p.timer           = initialSpawnDelay;
                 p.blockUntilClear = false;
             }
+
+            _status = _points.Count > 0
+                ? $"{_points.Count} puntos interiores; {_rejectedCount} rechazados."
+                : $"sin puntos interiores validos ({_lastRejection ?? "sin superficies candidatas"}); esperando.";
         }
 
         private void ScatterFloorGrid()
@@ -269,7 +287,7 @@ namespace Bateries
                     HasFurnitureAbove(WorldOrigin.Instance.ToWorld(rel)))
                     continue;
 
-                AddPointRel(rel);
+                AddPointRel(rel, SpawnSurfaceKind.Floor, null);
             }
         }
 
@@ -291,15 +309,25 @@ namespace Bateries
             return false;
         }
 
-        private void AddPoint(Vector3 worldPos)
+        private void AddPoint(Vector3 worldPos, SpawnSurfaceKind surface, CubeObject support)
         {
             if (WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady) return;
-            AddPointRel(WorldOrigin.Instance.ToRelative(worldPos));
+            AddPointRel(WorldOrigin.Instance.ToRelative(worldPos), surface, support);
         }
 
-        private void AddPointRel(Vector3 relPos)
+        private void AddPointRel(Vector3 relPos, SpawnSurfaceKind surface, CubeObject support)
         {
-            _points.Add(new SpawnPoint { relPos = relPos });
+            if (!InteriorSpawnValidator.TryValidate(relPos, surface, support,
+                    objectFootprintRadius, pickupMaxDistance, out var reason) ||
+                !SpawnReservationRegistry.TryReserve("battery", _points.Count.ToString(), relPos,
+                    objectFootprintRadius, 0.05f, out reason))
+            {
+                _rejectedCount++;
+                _lastRejection = reason;
+                _rejectedPoints.Add(relPos);
+                return;
+            }
+            _points.Add(new SpawnPoint { relPos = relPos, surface = surface, support = support });
         }
 
         // ¿Hay un punto de spawn de PILA a menos de minDist de relPos (anchor-relative)?
@@ -320,6 +348,13 @@ namespace Bateries
             if (!_started) return;
             if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return;
             if (WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady) return;
+
+            int currentGeometry = InteriorSpawnValidator.GeometryVersion;
+            if (currentGeometry != _geometryVersion)
+            {
+                BuildSpawnPoints();
+                return;
+            }
 
             var players = NetworkManager.Instance.ServerPlayerWorldPositions();
             float dt = Time.deltaTime;
@@ -347,6 +382,14 @@ namespace Bateries
 
         private void Spawn(SpawnPoint p)
         {
+            if (!InteriorSpawnValidator.TryValidate(p.relPos, p.surface, p.support,
+                    objectFootprintRadius, pickupMaxDistance, out var invalidReason))
+            {
+                p.timer = 5f;
+                _status = $"spawn pospuesto: {invalidReason}.";
+                return;
+            }
+
             // La noche puede sesgar la mezcla de rarezas (NightConfig.batteryChanceMods):
             // las ultimas noches reparten mas pilas pero peores, asi el jugador corre mas
             // por menos carga. Sin NightConfig, la probabilidad base del set.
@@ -404,19 +447,12 @@ namespace Bateries
                 return;
             }
 
-            // Validar cercania SOLO para clientes (anti-cheat). El host ya validó con su
-            // propio apuntado; NO re-chequeamos para no rechazar por diferencias de cámara.
-            // Para clientes usamos su pose reportada con un margen sobre el apuntado; si aún
-            // no reportó pose, confiamos en el apuntado del cliente.
-            if (clientId != 0 &&
-                NetworkManager.Instance.TryGetClientWorldPosition(clientId, out var playerWorld))
+            float maxDist = pickupMaxDistance + 0.75f;
+            if (!InteriorSpawnValidator.CanPickupNow(clientId, entity.transform.position,
+                    maxDist, objectFootprintRadius, out var pickupReason))
             {
-                float maxDist = pickupMaxDistance + 0.75f; // margen sobre el apuntado
-                if ((playerWorld - entity.transform.position).sqrMagnitude > maxDist * maxDist)
-                {
-                    Debug.Log($"[Bateries] Pickup rechazado: cliente {clientId} demasiado lejos de la pila {batteryNetId}.");
-                    return;
-                }
+                Debug.Log($"[Bateries] Pickup rechazado para cliente {clientId}: {pickupReason}.");
+                return;
             }
 
             byte rarityIndex = point.rarityIndex;
@@ -456,7 +492,38 @@ namespace Bateries
                 $"NetworkManager: {(net != null ? "OK" : "NULL")}   Server: {isServer}   GameStarted: {started}\n" +
                 $"WorldOrigin ready: {woReady}   Camera.main: {(Camera.main != null)}\n" +
                 $"RaritySet: {(rarities != null ? "OK" : "FALTA")}   Puntos: {_points.Count}   Activas: {_byNetId.Count}\n" +
+                $"Geometría: {_geometryVersion}   Rechazados: {_rejectedCount}   Último: {_lastRejection ?? "-"}\n" +
                 $"Estado: {_status}";
+        }
+
+        private void DespawnTrackedObjects()
+        {
+            if (_byNetId.Count == 0 || NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return;
+            var ids = new List<uint>(_byNetId.Keys);
+            for (int i = 0; i < ids.Count; i++)
+                NetworkManager.Instance.ServerDespawn(ids[i]);
+        }
+
+        private void OnDrawGizmosSelected()
+        {
+            if (!_drawSpawnGizmos || WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady) return;
+            if (InteriorSpawnValidator.TryEnsureReady(out _) && InteriorSpawnValidator.Topology != null)
+            {
+                float y = FloorPoint.Instance != null ? FloorPoint.Instance.LocalY + 0.02f : 0.02f;
+                Gizmos.color = Color.yellow;
+                foreach (var edge in InteriorSpawnValidator.Topology.Boundaries)
+                {
+                    Vector3 a = WorldOrigin.Instance.ToWorld(new Vector3(edge.A.x, y, edge.A.y));
+                    Vector3 b = WorldOrigin.Instance.ToWorld(new Vector3(edge.B.x, y, edge.B.y));
+                    Gizmos.DrawLine(a, b);
+                }
+            }
+            Gizmos.color = Color.green;
+            foreach (var point in _points)
+                Gizmos.DrawWireSphere(WorldOrigin.Instance.ToWorld(point.relPos), objectFootprintRadius);
+            Gizmos.color = Color.red;
+            foreach (var point in _rejectedPoints)
+                Gizmos.DrawWireSphere(WorldOrigin.Instance.ToWorld(point), objectFootprintRadius);
         }
     }
 }
