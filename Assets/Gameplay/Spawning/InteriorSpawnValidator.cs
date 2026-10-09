@@ -145,6 +145,28 @@ namespace Gameplay.Spawning
             return true;
         }
 
+        public static float EstimatePrefabFootprintRadius(GameObject prefab, float fallback)
+        {
+            float radius = Mathf.Max(0.02f, fallback);
+            if (prefab == null) return radius;
+
+            Transform root = prefab.transform;
+            // Conserva rotacion y escala del root; solo elimina su traslacion de asset.
+            Matrix4x4 toSpawnOrigin = Matrix4x4.Translate(-root.position);
+            foreach (var filter in prefab.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (filter.sharedMesh == null) continue;
+                radius = Mathf.Max(radius, BoundsRadiusXZ(
+                    filter.sharedMesh.bounds, toSpawnOrigin * filter.transform.localToWorldMatrix));
+            }
+            foreach (var renderer in prefab.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                radius = Mathf.Max(radius, BoundsRadiusXZ(
+                    renderer.localBounds, toSpawnOrigin * renderer.transform.localToWorldMatrix));
+            }
+            return radius;
+        }
+
         private static bool FurnitureSupports(CubeObject cube, Vector3 relativePosition,
                                               float radius, out string reason)
         {
@@ -262,6 +284,25 @@ namespace Gameplay.Spawning
                 int z = Mathf.RoundToInt(value.z * 1000f);
                 return ((x * 397) ^ y) * 397 ^ z;
             }
+        }
+
+        private static float BoundsRadiusXZ(Bounds bounds, Matrix4x4 matrix)
+        {
+            Vector3 min = bounds.min;
+            Vector3 max = bounds.max;
+            float radius = 0f;
+            for (int ix = 0; ix < 2; ix++)
+            for (int iy = 0; iy < 2; iy++)
+            for (int iz = 0; iz < 2; iz++)
+            {
+                Vector3 corner = new(
+                    ix == 0 ? min.x : max.x,
+                    iy == 0 ? min.y : max.y,
+                    iz == 0 ? min.z : max.z);
+                Vector3 local = matrix.MultiplyPoint3x4(corner);
+                radius = Mathf.Max(radius, new Vector2(local.x, local.z).magnitude);
+            }
+            return radius;
         }
 
         private static Vector2 Xz(Vector3 value) => new(value.x, value.z);

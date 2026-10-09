@@ -92,6 +92,7 @@ namespace Bateries
         private int _geometryVersion = int.MinValue;
         private int _rejectedCount;
         private string _lastRejection;
+        private float _effectiveFootprintRadius;
 
         private void Awake()
         {
@@ -173,6 +174,7 @@ namespace Bateries
         // BatteryEntity/NetworkEntity. Devuelve false y loguea el problema exacto si no.
         private bool ValidateSetup()
         {
+            _effectiveFootprintRadius = objectFootprintRadius;
             if (rarities == null || rarities.Rarities == null || rarities.Rarities.Length == 0)
             {
                 _status = "falta el BatteryRaritySet (o no tiene rarezas).";
@@ -209,6 +211,8 @@ namespace Bateries
                                    $"componente BatteryEntity. Agregáselo al prefab.");
                     return false;
                 }
+                _effectiveFootprintRadius = Mathf.Max(_effectiveFootprintRadius,
+                    InteriorSpawnValidator.EstimatePrefabFootprintRadius(prefab, objectFootprintRadius));
             }
             return true;
         }
@@ -318,9 +322,9 @@ namespace Bateries
         private void AddPointRel(Vector3 relPos, SpawnSurfaceKind surface, CubeObject support)
         {
             if (!InteriorSpawnValidator.TryValidate(relPos, surface, support,
-                    objectFootprintRadius, pickupMaxDistance, out var reason) ||
+                    _effectiveFootprintRadius, pickupMaxDistance, out var reason) ||
                 !SpawnReservationRegistry.TryReserve("battery", _points.Count.ToString(), relPos,
-                    objectFootprintRadius, 0.05f, out reason))
+                    _effectiveFootprintRadius, 0.05f, out reason))
             {
                 _rejectedCount++;
                 _lastRejection = reason;
@@ -383,7 +387,7 @@ namespace Bateries
         private void Spawn(SpawnPoint p)
         {
             if (!InteriorSpawnValidator.TryValidate(p.relPos, p.surface, p.support,
-                    objectFootprintRadius, pickupMaxDistance, out var invalidReason))
+                    _effectiveFootprintRadius, pickupMaxDistance, out var invalidReason))
             {
                 p.timer = 5f;
                 _status = $"spawn pospuesto: {invalidReason}.";
@@ -449,7 +453,7 @@ namespace Bateries
 
             float maxDist = pickupMaxDistance + 0.75f;
             if (!InteriorSpawnValidator.CanPickupNow(clientId, entity.transform.position,
-                    maxDist, objectFootprintRadius, out var pickupReason))
+                    maxDist, EffectiveFootprintRadius, out var pickupReason))
             {
                 Debug.Log($"[Bateries] Pickup rechazado para cliente {clientId}: {pickupReason}.");
                 return;
@@ -520,10 +524,13 @@ namespace Bateries
             }
             Gizmos.color = Color.green;
             foreach (var point in _points)
-                Gizmos.DrawWireSphere(WorldOrigin.Instance.ToWorld(point.relPos), objectFootprintRadius);
+                Gizmos.DrawWireSphere(WorldOrigin.Instance.ToWorld(point.relPos), EffectiveFootprintRadius);
             Gizmos.color = Color.red;
             foreach (var point in _rejectedPoints)
-                Gizmos.DrawWireSphere(WorldOrigin.Instance.ToWorld(point), objectFootprintRadius);
+                Gizmos.DrawWireSphere(WorldOrigin.Instance.ToWorld(point), EffectiveFootprintRadius);
         }
+
+        private float EffectiveFootprintRadius =>
+            _effectiveFootprintRadius > 0f ? _effectiveFootprintRadius : objectFootprintRadius;
     }
 }

@@ -94,6 +94,7 @@ namespace Collectibles
         private int _geometryVersion = int.MinValue;
         private int _rejectedCount;
         private string _lastRejection;
+        private float _effectiveFootprintRadius;
 
         private void Awake()
         {
@@ -180,6 +181,7 @@ namespace Collectibles
         private bool ValidateSetup()
         {
             _variantTypeIds.Clear();
+            _effectiveFootprintRadius = objectFootprintRadius;
 
             var reg = NetworkManager.Instance.PrefabRegistry;
             if (reg == null)
@@ -196,7 +198,11 @@ namespace Collectibles
                 try { prefab = reg.Get(typeId); } catch { /* no registrado en este indice */ }
 
                 if (prefab != null && prefab.GetComponent<CollectibleEntity>() != null)
+                {
                     _variantTypeIds.Add(typeId);
+                    _effectiveFootprintRadius = Mathf.Max(_effectiveFootprintRadius,
+                        InteriorSpawnValidator.EstimatePrefabFootprintRadius(prefab, objectFootprintRadius));
+                }
             }
 
             if (_variantTypeIds.Count == 0)
@@ -264,9 +270,9 @@ namespace Collectibles
         private void AddCandidateRel(Vector3 relPos, SpawnSurfaceKind surface, CubeObject support)
         {
             if (!InteriorSpawnValidator.TryValidate(relPos, surface, support,
-                    objectFootprintRadius, pickupMaxDistance, out var reason) ||
+                    _effectiveFootprintRadius, pickupMaxDistance, out var reason) ||
                 !SpawnReservationRegistry.TryReserve("collectible", _candidates.Count.ToString(), relPos,
-                    objectFootprintRadius, minDistanceFromBatteries, out reason))
+                    _effectiveFootprintRadius, minDistanceFromBatteries, out reason))
             {
                 _rejectedCount++;
                 _lastRejection = reason;
@@ -353,7 +359,7 @@ namespace Collectibles
             int idx = PickPointIndex();
             Candidate candidate = _candidates[idx];
             if (!InteriorSpawnValidator.TryValidate(candidate.relPos, candidate.surface,
-                    candidate.support, objectFootprintRadius, pickupMaxDistance, out var invalidReason))
+                    candidate.support, EffectiveFootprintRadius, pickupMaxDistance, out var invalidReason))
             {
                 _timer = 5f;
                 _status = $"spawn pospuesto: {invalidReason}.";
@@ -409,7 +415,7 @@ namespace Collectibles
 
             float maxDist = pickupMaxDistance + 0.75f;
             if (!InteriorSpawnValidator.CanPickupNow(clientId, entity.transform.position,
-                    maxDist, objectFootprintRadius, out var pickupReason))
+                    maxDist, EffectiveFootprintRadius, out var pickupReason))
             {
                 Debug.Log($"[Reliquias] Pickup rechazado para cliente {clientId}: {pickupReason}.");
                 return;
@@ -452,10 +458,13 @@ namespace Collectibles
             if (!_drawSpawnGizmos || WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady) return;
             Gizmos.color = Color.cyan;
             foreach (var candidate in _candidates)
-                Gizmos.DrawWireSphere(WorldOrigin.Instance.ToWorld(candidate.relPos), objectFootprintRadius);
+                Gizmos.DrawWireSphere(WorldOrigin.Instance.ToWorld(candidate.relPos), EffectiveFootprintRadius);
             Gizmos.color = Color.red;
             foreach (var point in _rejectedPoints)
-                Gizmos.DrawWireSphere(WorldOrigin.Instance.ToWorld(point), objectFootprintRadius);
+                Gizmos.DrawWireSphere(WorldOrigin.Instance.ToWorld(point), EffectiveFootprintRadius);
         }
+
+        private float EffectiveFootprintRadius =>
+            _effectiveFootprintRadius > 0f ? _effectiveFootprintRadius : objectFootprintRadius;
     }
 }

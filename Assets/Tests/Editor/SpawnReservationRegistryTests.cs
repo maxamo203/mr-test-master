@@ -27,4 +27,20 @@ public class SpawnReservationRegistryTests
         SpawnReservationRegistry.BeginGeometry(11);
         Assert.That(SpawnReservationRegistry.Count, Is.Zero);
     }
+
+    [Test]
+    public void PrefabFootprintIncludesRealMeshScale()
+    {
+        var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        try
+        {
+            cube.transform.localScale = new Vector3(2f, 1f, 4f);
+            float radius = InteriorSpawnValidator.EstimatePrefabFootprintRadius(cube, 0.1f);
+            Assert.That(radius, Is.EqualTo(Mathf.Sqrt(5f)).Within(0.001f));
+        }
+        finally
+        {
+            Object.DestroyImmediate(cube);
+        }
+    }
 }
