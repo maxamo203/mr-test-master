@@ -140,7 +140,7 @@ public class SorkenWindowEntryTests
     }
 
     [Test]
-    public void AterrizajeNoDuplicaLaTraslacionDelHipsDelFbx()
+    public void AterrizajeCorrigeAlturaSinRetenerElMovimientoHorizontalDelHips()
     {
         Vector3 reference = new(0f, 7.3f, 100f);
         Vector3 animatedBelowFloor = new(2f, -54.4f, 114f);
@@ -149,7 +149,9 @@ public class SorkenWindowEntryTests
             animatedBelowFloor, reference, localCompression: 14f,
             impact: 0f, landingWeight: 1f);
 
-        Assert.That(corrected, Is.EqualTo(reference));
+        Assert.That(corrected.x, Is.EqualTo(animatedBelowFloor.x));
+        Assert.That(corrected.y, Is.EqualTo(reference.y));
+        Assert.That(corrected.z, Is.EqualTo(animatedBelowFloor.z));
     }
 
     [Test]

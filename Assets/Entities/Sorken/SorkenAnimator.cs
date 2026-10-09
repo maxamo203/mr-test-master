@@ -279,8 +279,8 @@ public class SorkenAnimator : MonoBehaviour
     // La traslacion completa desde la ventana la controla GameDirector. El FBX de
     // aterrizaje tambien contiene traslacion en Hips (incluida una bajada de ~0.62 m):
     // si se deja pasar, se suma a la bajada del root y hunde el cuerpo bajo el piso.
-    // Bloqueamos esa traslacion con el peso real del clip, conservando todas sus
-    // rotaciones, y agregamos solamente la compresion corporal deseada.
+    // Corregimos solamente la altura: fijar tambien X/Z retiene al hips en la pose
+    // inicial y, al liberar el peso durante el fundido, produce un salto horizontal.
     private void LateUpdate()
     {
         if (_hips == null || _sorken == null || _weights == null)
@@ -327,9 +327,11 @@ public class SorkenAnimator : MonoBehaviour
         Vector3 animatedPosition, Vector3 referencePosition,
         float localCompression, float impact, float landingWeight)
     {
-        Vector3 target = referencePosition +
-                         Vector3.down * (Mathf.Max(0f, localCompression) * Mathf.Clamp01(impact));
-        return Vector3.Lerp(animatedPosition, target, Mathf.Clamp01(landingWeight));
+        float targetY = referencePosition.y -
+                        (Mathf.Max(0f, localCompression) * Mathf.Clamp01(impact));
+        Vector3 corrected = animatedPosition;
+        corrected.y = Mathf.Lerp(animatedPosition.y, targetY, Mathf.Clamp01(landingWeight));
+        return corrected;
     }
 
     private static Transform FindDescendant(Transform root, string wantedName)
