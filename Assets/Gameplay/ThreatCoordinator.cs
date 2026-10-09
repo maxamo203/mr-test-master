@@ -79,11 +79,11 @@ namespace Gameplay
 
         public static void EndBook() => _book = false;
 
-        // Sorken tiene prioridad sobre libro, y libro sobre Arbmos normal. Al perder
-        // capacidad, el libro solo se pausa si ya no alcanza ni ignorando los Arbmos.
+        // El presupuesto se consulta al COMENZAR una amenaza. Una amenaza ya iniciada
+        // conserva su lugar aunque Sorken entre despues; de otro modo su llegada
+        // despawneaba Arbmos y congelaba un libro que ya se estaba consumiendo.
         public static bool CanKeepBook() => !_book ||
-            (!LethalConsequenceActive &&
-             CanFit(CurrentCapablePlayers(), GenericTasks(), 0));
+            CanKeepExistingThreat(CurrentCapablePlayers() > 0);
 
         public static bool TryBeginNormalArbmos(uint owner)
         {
@@ -101,12 +101,14 @@ namespace Gameplay
 
         public static bool CanKeepNormalArbmos(uint owner)
         {
-            if (LethalConsequenceActive) return false;
             if (!NormalArbmosOwners.Contains(owner)) return false;
-            return IsCapable(owner) &&
-                   CanFit(CurrentCapablePlayers(), GenericTasks(),
-                          NormalArbmosOwners.Count);
+            return CanKeepExistingThreat(IsCapable(owner));
         }
+
+        // Politica comun para eventos ya activos. Sorken, el libro u otros Arbmos no
+        // aparecen aca a proposito: solamente condicionan intentos posteriores.
+        public static bool CanKeepExistingThreat(bool participantCapable) =>
+            participantCapable && !LethalConsequenceActive;
 
         public static void BeginLethalArbmos(uint owner)
         {

@@ -48,4 +48,28 @@ public class ThreatCoordinatorTests
         ThreatCoordinator.EndSorken();
         Assert.That(ThreatCoordinator.SorkenActive, Is.False);
     }
+
+    [Test]
+    public void SorkenNoExpulsaUnaAmenazaQueYaHabiaComenzado()
+    {
+        ThreatCoordinator.ResetAll();
+        ThreatCoordinator.BeginSorkenInside();
+
+        Assert.That(ThreatCoordinator.CanKeepExistingThreat(participantCapable: true),
+                    Is.True);
+        Assert.That(ThreatCoordinator.CanFit(1, genericTasks: 1, ownedTasks: 1),
+                    Is.False, "Sorken debe seguir bloqueando eventos nuevos para un jugador");
+    }
+
+    [Test]
+    public void ConsecuenciaLetalSiInterrumpeUnaAmenazaExistente()
+    {
+        ThreatCoordinator.ResetAll();
+        ThreatCoordinator.BeginLethalArbmos(7);
+
+        Assert.That(ThreatCoordinator.CanKeepExistingThreat(participantCapable: true),
+                    Is.False);
+
+        ThreatCoordinator.EndLethalArbmos(7);
+    }
 }
