@@ -271,7 +271,7 @@ namespace Gameplay
             float defenseRange = _night.flashlightRange;
             if (PlayerLights.TryConoReal(out _, out float realRange))
                 defenseRange = realRange;
-            if (!ThreatCoordinator.TryBeginSorkenAt(
+            if (!ThreatCoordinator.CanBeginSorkenEntryAt(
                     defenseTarget, defenseRange, 0.4f))
             {
                 GameplayTelemetry.Postponed("sorken", "no_viable_defender");
@@ -279,7 +279,6 @@ namespace Gameplay
                 _attemptTimer = 2f;
                 return;
             }
-            _sorkenReserved = true;
 
             // Spawn ya a la altura del piso (EmergePosition con _sorken null usa depth 0);
             // luego lo reposicionamos aplicando el EmergeDepth del modelo.
@@ -399,6 +398,11 @@ namespace Gameplay
 
         private void EnterChase()
         {
+            // Hasta este punto el Sorken seguía fuera/cruzando y no participaba del
+            // presupuesto de amenazas. Al terminar el cruce ya está dentro, incluso si
+            // todavía debe bajar desde una ventana hasta el piso.
+            ThreatCoordinator.BeginSorkenInside();
+            _sorkenReserved = true;
             Vector3 floorEntry = ChaseEntryPosition();
             if (IsWindowMarker() && _sorken.Position.y > floorEntry.y + 0.05f)
             {

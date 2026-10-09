@@ -35,4 +35,17 @@ public class ThreatCoordinatorTests
         ThreatCoordinator.EndLethalArbmos(7);
         Assert.That(ThreatCoordinator.LethalConsequenceActive, Is.False);
     }
+
+    [Test]
+    public void SorkenSoloCuentaCuandoYaIngresoAlAmbiente()
+    {
+        ThreatCoordinator.ResetAll();
+
+        Assert.That(ThreatCoordinator.SorkenActive, Is.False);
+        ThreatCoordinator.BeginSorkenInside();
+        Assert.That(ThreatCoordinator.SorkenActive, Is.True);
+
+        ThreatCoordinator.EndSorken();
+        Assert.That(ThreatCoordinator.SorkenActive, Is.False);
+    }
 }

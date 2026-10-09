@@ -48,6 +48,16 @@ namespace Gameplay
                    TryBeginSorken();
         }
 
+        // La entrada desde el exterior es un aviso y no consume un defensor. Esto permite
+        // que el libro o un Arbmos comiencen mientras el Sorken todavía cruza la abertura.
+        // Recién se registra como amenaza normal cuando ya alcanzó el interior.
+        public static bool CanBeginSorkenEntryAt(Vector3 target, float range,
+                                                  float targetRadius) =>
+            !LethalConsequenceActive &&
+            CanAnyCapableReach(target, range, targetRadius);
+
+        public static void BeginSorkenInside() => _sorken = true;
+
         public static void EndSorken() => _sorken = false;
 
         public static bool CanBeginBook() => _book ||
