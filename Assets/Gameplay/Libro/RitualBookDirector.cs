@@ -196,6 +196,11 @@ namespace Gameplay
             if (view != null) view.SetDisponible(false);
 
             bool invocada = VelethDirector.Ensure().StartHunt(origen);
+            if (invocada)
+            {
+                GameDirector.Instance?.SuspendForVeleth();
+                ArbmosDirector.Instance?.StopRun();
+            }
             OnVelethInvoked?.Invoke();
             Debug.Log(invocada
                 ? "[LibroRitual] El libro fue consumido: Veleth fue invocada."

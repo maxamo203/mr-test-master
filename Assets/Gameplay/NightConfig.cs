@@ -63,7 +63,7 @@ namespace Gameplay
                  "sigue teniendo como techo sorkenIlluminatedSpeed.")]
         [Range(0.1f, 1f)] public float sorkenCoverWalkSpeedMultiplier = 1f;
         [Tooltip("Velocidad al retirarse tras ser repelido (sale corriendo).")]
-        public float sorkenRetreatSpeed = 3.5f;
+        public float sorkenRetreatSpeed = 2.8f;
         [Tooltip("Distancia (m) a la que el Sorken atrapa al jugador (grab).")]
         public float grabRange = 1.2f;
 
@@ -132,7 +132,7 @@ namespace Gameplay
         [Tooltip("Espera aleatoria maxima (s) antes de que la oscuridad ataque el libro.")]
         [Min(0f)] public float bookEventDelayMax = 50f;
         [Tooltip("Ventana completa (s) desde que empieza la oscuridad hasta que consume el libro.")]
-        [Min(0.1f)] public float bookConsumeSeconds = 6f;
+        [Min(0.1f)] public float bookConsumeSeconds = 16f;
         [Tooltip("Segundos CONTINUOS de linterna sobre el libro necesarios para salvarlo.")]
         [Min(0.1f)] public float bookDefenseSeconds = 4f;
 
@@ -142,7 +142,7 @@ namespace Gameplay
 
         [Header("Veleth (invocada al perder el libro)")]
         [Tooltip("Velocidad de persecucion. Veleth no puede ser repelida con la linterna.")]
-        [Min(0.1f)] public float velethChaseSpeed = 3.2f;
+        [Min(0.1f)] public float velethChaseSpeed = 2.2f;
         [Tooltip("Distancia horizontal a la que Veleth atrapa al jugador.")]
         [Min(0.05f)] public float velethGrabRange = 1.1f;
         [Tooltip("Frecuencia con la que recalcula su ruta hacia el jugador que se mueve.")]

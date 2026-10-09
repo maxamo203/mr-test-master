@@ -32,7 +32,7 @@ MonoBehaviour:
   sorkenBlockedRepathSeconds: 0.4
   sorkenCoverStartSeconds: 3
   sorkenCoverWalkSpeedMultiplier: 1
-  sorkenRetreatSpeed: 3.5
+  sorkenRetreatSpeed: 2.8
   grabRange: 1.1
   flashlightMaxCharge: 130
   flashlightDrainPerSecond: 1.5
@@ -62,9 +62,9 @@ MonoBehaviour:
   bookActive: 1
   bookEventDelayMin: 50
   bookEventDelayMax: 75
-  bookConsumeSeconds: 9
+  bookConsumeSeconds: 16
   bookDefenseSeconds: 3.5
-  velethChaseSpeed: 2.8
+  velethChaseSpeed: 2.2
   velethGrabRange: 1.1
   velethRepathSeconds: 0.3
   velethGrabHoldSeconds: 0.8

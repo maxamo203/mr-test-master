@@ -144,7 +144,9 @@ public class VelethDirector : MonoBehaviour
         }
 
         CurrentTarget = targetId;
-        if (HorizontalDistance(_veleth.Position, targetPos) <= _night.velethGrabRange)
+        float targetDistance = HorizontalDistance(_veleth.Position, targetPos);
+        bool clearCapture = HasCaptureLine(_veleth.Position, targetPos);
+        if (CanCaptureAtDistance(targetDistance, _night.velethGrabRange, clearCapture))
         {
             Catch(targetId);
             return;
@@ -161,13 +163,29 @@ public class VelethDirector : MonoBehaviour
                 _path.Clear();
         }
 
-        Vector3 waypoint = _pathIndex < _path.Count ? _path[_pathIndex] : targetPos;
+        bool hasPath = _pathIndex < _path.Count;
+        bool directIsSafe = SorkerNav.Instance == null || !SorkerNav.Instance.HasObstacleGrid;
+        if (!hasPath && !directIsSafe)
+        {
+            FaceTarget(targetPos);
+            return;
+        }
+
+        Vector3 waypoint = hasPath ? _path[_pathIndex] : targetPos;
         _veleth.MoveTo(waypoint,
             _night.velethChaseSpeed * EntitySpeedSettings.Multiplier *
             _veleth.MovementMultiplier, dt);
         if (_pathIndex < _path.Count &&
             HorizontalDistance(_veleth.Position, _path[_pathIndex]) <= 0.2f)
             _pathIndex++;
+    }
+
+    private void FaceTarget(Vector3 target)
+    {
+        Vector3 direction = target - _veleth.Position;
+        direction.y = 0f;
+        if (direction.sqrMagnitude > 1e-5f)
+            _veleth.SetRotationDirectly(Quaternion.LookRotation(direction, Vector3.up));
     }
 
     private void Catch(uint clientId)
@@ -242,6 +260,18 @@ public class VelethDirector : MonoBehaviour
         a.y = 0f;
         b.y = 0f;
         return Vector3.Distance(a, b);
+    }
+
+    public static bool CanCaptureAtDistance(float distance, float range,
+                                            bool hasClearLine) =>
+        distance <= range && hasClearLine;
+
+    private static bool HasCaptureLine(Vector3 entity, Vector3 player)
+    {
+        var nav = SorkerNav.Instance;
+        return (nav == null || nav.HasClearLine(entity, player)) &&
+               PlayerLights.HasLineOfSight(entity + Vector3.up * 0.6f,
+                                            player, 0.2f);
     }
 
     private static float FloorWorldY(float fallback)

@@ -176,6 +176,14 @@ namespace Gameplay
             _hasTarget = false;
         }
 
+        // Veleth es una consecuencia global y tiene prioridad sobre las amenazas
+        // normales. A diferencia del reset de noche, acá sí despawneamos el Sorken.
+        public void SuspendForVeleth()
+        {
+            if (_sorken != null || _sorkenNetId != 0) DespawnSorken();
+            StopRun();
+        }
+
         private void Update()
         {
             if (!_running) return;
