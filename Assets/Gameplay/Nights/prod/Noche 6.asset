@@ -38,11 +38,11 @@ MonoBehaviour:
   flashlightBrightDrainPerSecond: 6
   sanityMax: 100
   arbmosActive: 1
-  arbmosForceSpawnAfterCooldown: 0
-  arbmosCooldownMin: 18
-  arbmosCooldownMax: 32
+  arbmosForceSpawnAfterCooldown: 1
+  arbmosCooldownMin: 9
+  arbmosCooldownMax: 16
   arbmosSpawnDistance: 2
-  arbmosSpawnChancePerAttempt: 0.75
+  arbmosSpawnChancePerAttempt: 1
   arbmosHideSeconds: 3
   arbmosExposureSeconds: 1.2
   arbmosExposureGraceSeconds: 1
