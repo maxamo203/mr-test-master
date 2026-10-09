@@ -15,9 +15,9 @@ public class SorkenAnimator : MonoBehaviour
 {
     [Header("Clips por estado (arrastrar). Si falta uno, cae a Idle.")]
     public AnimationClip idleClip;
-    [Tooltip("Emergencia por puerta.")]
+    [Tooltip("Entrada por puerta. Debe apuntar al asset semantico DoorEntry.")]
     public AnimationClip emergeClip;
-    [Tooltip("Emergencia por ventana.")]
+    [Tooltip("Entrada por ventana. Debe apuntar al asset semantico WindowEntry.")]
     public AnimationClip emergeWindowClip;
     [Tooltip("Pose base del aterrizaje. Si falta, usa Idle y agrega la compresion procedural.")]
     public AnimationClip windowLandingClip;
@@ -66,6 +66,8 @@ public class SorkenAnimator : MonoBehaviour
     private float _windowLandingElapsed;
     private float _activeWindowLandingDuration;
     private bool _entryToChaseBlendActive;
+    private bool _landingHipsReferenceCaptured;
+    private Vector3 _landingHipsReferencePosition;
 
     public float WindowEntryDuration => emergeWindowClip != null && emergeWindowClip.length > 0.01f
         ? emergeWindowClip.length
@@ -169,6 +171,7 @@ public class SorkenAnimator : MonoBehaviour
         if (state == SorkenState.WindowLanding)
         {
             _windowLandingElapsed = 0f;
+            _landingHipsReferenceCaptured = false;
             AnimationClip clip = windowLandingClip != null ? windowLandingClip : idleClip;
             if (clip != null && clip.length > 0.001f)
                 _clipPlayables[target].SetSpeed(clip.length / WindowLandingDuration);
@@ -273,19 +276,60 @@ public class SorkenAnimator : MonoBehaviour
             _windowLandingElapsed += Time.deltaTime;
     }
 
-    // La traslacion completa desde la ventana la controla GameDirector. Esta capa agrega
-    // la reaccion corporal que hace legible el aterrizaje: impacto, flexion y recuperacion.
-    // Se aplica despues del Animator, por lo que funciona tanto con un clip dedicado como
-    // con el fallback a Idle y no modifica el root que replica la red.
+    // La traslacion completa desde la ventana la controla GameDirector. El FBX de
+    // aterrizaje tambien contiene traslacion en Hips (incluida una bajada de ~0.62 m):
+    // si se deja pasar, se suma a la bajada del root y hunde el cuerpo bajo el piso.
+    // Bloqueamos esa traslacion con el peso real del clip, conservando todas sus
+    // rotaciones, y agregamos solamente la compresion corporal deseada.
     private void LateUpdate()
     {
-        if (_hips == null || _sorken == null || _sorken.State != SorkenState.WindowLanding)
+        if (_hips == null || _sorken == null || _weights == null)
             return;
+
+        int landingIndex = (int)SorkenState.WindowLanding;
+        if (landingIndex >= _weights.Length) return;
+
+        float totalWeight = 0f;
+        for (int i = 0; i < _weights.Length; i++) totalWeight += _weights[i];
+        float landingWeight = totalWeight > 1e-4f
+            ? Mathf.Clamp01(_weights[landingIndex] / totalWeight)
+            : 0f;
+
+        if (_sorken.State == SorkenState.WindowLanding && !_landingHipsReferenceCaptured)
+        {
+            _landingHipsReferencePosition = _hips.localPosition;
+            _landingHipsReferenceCaptured = true;
+        }
+
+        // Durante el fundido a persecucion el input de aterrizaje sigue teniendo peso.
+        // Mantener la correccion hasta que llegue a cero evita que reaparezca desde abajo.
+        if (!_landingHipsReferenceCaptured || landingWeight <= 0.0001f)
+        {
+            if (_sorken.State != SorkenState.WindowLanding)
+                _landingHipsReferenceCaptured = false;
+            return;
+        }
 
         float t = Mathf.Clamp01(_windowLandingElapsed / WindowLandingDuration);
         float impact = Mathf.Sin(Mathf.Clamp01(Mathf.InverseLerp(0.56f, 0.86f, t)) * Mathf.PI);
-        _hips.localPosition += Vector3.down * (_landingCompression * impact);
-        _hips.localRotation *= Quaternion.Euler(_landingPitch * impact, 0f, -2.5f * impact);
+        float parentScaleY = _hips.parent != null ? Mathf.Abs(_hips.parent.lossyScale.y) : 1f;
+        float localCompression = _landingCompression / Mathf.Max(0.0001f, parentScaleY);
+        _hips.localPosition = CorrectLandingHipsPosition(
+            _hips.localPosition, _landingHipsReferencePosition,
+            localCompression, impact, landingWeight);
+        _hips.localRotation *= Quaternion.Slerp(
+            Quaternion.identity,
+            Quaternion.Euler(_landingPitch * impact, 0f, -2.5f * impact),
+            landingWeight);
+    }
+
+    public static Vector3 CorrectLandingHipsPosition(
+        Vector3 animatedPosition, Vector3 referencePosition,
+        float localCompression, float impact, float landingWeight)
+    {
+        Vector3 target = referencePosition +
+                         Vector3.down * (Mathf.Max(0f, localCompression) * Mathf.Clamp01(impact));
+        return Vector3.Lerp(animatedPosition, target, Mathf.Clamp01(landingWeight));
     }
 
     private static Transform FindDescendant(Transform root, string wantedName)

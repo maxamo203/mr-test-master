@@ -140,10 +140,8 @@ namespace Gamepad
                 AddButton("cardboard", new Rect(x, y, w, 64f), "CARDBOARD");       y += 76f;
                 AddButton("arcalidad", new Rect(x, y, w, 64f), "CALIDAD AR");      y += 76f;
                 if (hayVoz) { AddButton("voz", new Rect(x, y, w, 64f), "CHAT DE VOZ"); y += 76f; }
-                // US-11.1: el filtro VHS de la partida no se apaga (es atmósfera); lo
-                // que el jugador decide es si además cubre los menús.
-                AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS en menús",
-                          GameOptions.VhsEnMenus); y += 64f;
+                AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS",
+                          GameOptions.VhsActivo); y += 64f;
                 if (Debug.isDebugBuild)
                 {
                     AddButton("vhs",      new Rect(x, y, w, 64f), "VHS (DEV)");      y += 76f;
@@ -576,7 +574,7 @@ namespace Gamepad
                     var cbAlto = GetCardboard();
                     return 524f + (cbAlto != null && cbAlto.Estereo3D ? 136f : 0f);
                 }
-                // +64 por el toggle "Filtro VHS en menús" (prod), +76 por "VHS (DEV)" y
+                // +64 por el toggle "Filtro VHS" (prod), +76 por "VHS (DEV)" y
                 // +76 por "ARBMOS (DEV)". El volumen dejó de ser un slider acá: ahora es el
                 // botón AUDIO (mismo alto que el slider que reemplazó, +4).
                 case Page.Options:    return (Debug.isDebugBuild ? 1068f : 624f) + (hayVoz ? 76f : 0f);
@@ -1038,7 +1036,7 @@ namespace Gamepad
                 case "meshlight": FlashlightMeshLighting.Enabled       = !FlashlightMeshLighting.Enabled;       break;
 
                 // ── US-11.1 (VHS) ────────────────────────────────────────────
-                case "vhsmenus":  GameOptions.VhsEnMenus = !GameOptions.VhsEnMenus; break;
+                case "vhsmenus":  GameOptions.VhsActivo = !GameOptions.VhsActivo; break;
                 case "vhs":
                     if (Debug.isDebugBuild) { _page = Page.VHS; _focus = 0; _focusLast = true; }
                     break;

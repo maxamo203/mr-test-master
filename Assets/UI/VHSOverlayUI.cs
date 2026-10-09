@@ -14,9 +14,9 @@ using T = MortuoriumTheme;
 //              (scanlines, grano, banda de tracking, viñeta, tinte y REC). Lo único que
 //              no se puede replicar sin shader es el warp de píxeles (jitter de línea).
 //
-// Es una opción de PRODUCCIÓN (GameOptions.VhsEnMenus): el jugador puede apagar el filtro
-// sobre los menús sin tocar el de la partida. Los ingredientes se prenden/apagan por
-// separado sólo en development build (ver VHSSettings).
+// Es una opción de PRODUCCIÓN (GameOptions.VhsActivo): el jugador puede apagar el filtro
+// completo sin alterar la oscuridad. Los ingredientes se prenden/apagan por separado
+// sólo en development build (ver VHSSettings).
 //
 // Se auto-crea al arrancar la app y sobrevive a los cambios de escena. El
 // DefaultExecutionOrder alto hace que su OnGUI corra ÚLTIMO, así el filtro queda por
@@ -74,9 +74,9 @@ public class VHSOverlayUI : MonoBehaviour
 
         if (menu)
         {
-            if (GameOptions.VhsEnMenus) DibujarCompuesto();
+            if (GameOptions.VhsActivo) DibujarCompuesto();
         }
-        else if (CameraFXOverlay.EnPartida)
+        else if (CameraFXOverlay.EnPartida && GameOptions.VhsActivo)
         {
             // El resto del filtro ya lo aplicó el shader sobre la imagen de la cámara.
             DibujarRec();

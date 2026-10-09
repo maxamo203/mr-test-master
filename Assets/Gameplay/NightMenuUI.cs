@@ -768,13 +768,13 @@ namespace Gameplay
                 y += 68f;
             }
 
-            // US-11.1: el filtro VHS en la PARTIDA es parte de la atmósfera y no se
-            // apaga; sobre los menús es opcional (gusto y legibilidad).
+            // El filtro de cinta es opcional. La oscuridad usa una capa independiente y
+            // permanece activa aunque el jugador lo apague.
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
-                         "FILTRO VHS EN MENÚS",
-                         "El grano y las líneas de cinta también sobre esta pantalla",
-                         GameOptions.VhsEnMenus,
-                         () => GameOptions.VhsEnMenus = !GameOptions.VhsEnMenus);
+                         "FILTRO VHS",
+                         "Grano, líneas y distorsión de cámara (no afecta la oscuridad)",
+                         GameOptions.VhsActivo,
+                         () => GameOptions.VhsActivo = !GameOptions.VhsActivo);
             y += 68f;
 
             // Estado del mando + botón para ir al visualizador.

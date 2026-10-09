@@ -1,3 +1,4 @@
+using System.Linq;
 using Gameplay;
 using NUnit.Framework;
 using UnityEditor;
@@ -6,14 +7,21 @@ using UnityEngine;
 public class SorkenWindowEntryTests
 {
     [Test]
-    public void PrimerIntentoDeLaPrimeraNocheFuerzaPuerta()
+    public void PrefabUsaLaCaminataCubiertaConAlasReplegadas()
     {
-        Assert.That(GameDirector.ShouldForceDoorOnFirstAttempt(0, true), Is.True);
-        Assert.That(GameDirector.ShouldForceDoorOnFirstAttempt(0, false), Is.False);
-        Assert.That(GameDirector.ShouldForceDoorOnFirstAttempt(1, true), Is.False);
-        Assert.That(GameDirector.IsDoorKind("door"), Is.True);
-        Assert.That(GameDirector.IsDoorKind("Puerta_Principal"), Is.True);
-        Assert.That(GameDirector.IsDoorKind("window"), Is.False);
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/Entities/Prefabs/SorkenGameplay.prefab");
+        SorkenAnimator animator = prefab.GetComponent<SorkenAnimator>();
+        AnimationClip clip = animator.coverWalkClip;
+
+        Assert.That(clip, Is.Not.Null);
+        Assert.That(clip.name, Is.EqualTo("Sorken_CoverWalk_WingsRested_Gameplay"));
+        Assert.That(clip.length, Is.EqualTo(3.97f).Within(0.02f));
+
+        EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings(clip);
+        Assert.That(bindings.Any(binding => binding.path.StartsWith("Armature/Hips")), Is.True);
+        Assert.That(bindings.Any(binding => string.IsNullOrEmpty(binding.path) ||
+                                            binding.path == "Armature"), Is.False);
     }
 
     [Test]
@@ -51,6 +59,60 @@ public class SorkenWindowEntryTests
         Assert.That(GameDirector.WindowLandingPosition(start, end, 0.82f), Is.EqualTo(end));
         Assert.That(GameDirector.WindowLandingPosition(start, end, 0.9f), Is.EqualTo(end));
         Assert.That(GameDirector.WindowLandingPosition(start, end, 1f), Is.EqualTo(end));
+    }
+
+    [Test]
+    public void AterrizajeNoDuplicaLaTraslacionDelHipsDelFbx()
+    {
+        Vector3 reference = new(0f, 7.3f, 100f);
+        Vector3 animatedBelowFloor = new(2f, -54.4f, 114f);
+
+        Vector3 corrected = SorkenAnimator.CorrectLandingHipsPosition(
+            animatedBelowFloor, reference, localCompression: 14f,
+            impact: 0f, landingWeight: 1f);
+
+        Assert.That(corrected, Is.EqualTo(reference));
+    }
+
+    [Test]
+    public void CorreccionDelHipsSeLiberaDuranteElFundidoAPersecucion()
+    {
+        Vector3 reference = new(0f, 7.3f, 100f);
+        Vector3 chasePose = new(0f, 8f, 101f);
+
+        Assert.That(SorkenAnimator.CorrectLandingHipsPosition(
+            chasePose, reference, 14f, 0f, 0f), Is.EqualTo(chasePose));
+    }
+
+    [Test]
+    public void EntidadRestauraLaEscalaQueElClipDeVentanaIntentaSobrescribir()
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/Entities/Prefabs/SorkenGameplay.prefab");
+        GameObject instance = Object.Instantiate(prefab);
+
+        try
+        {
+            SorkenEntity entity = instance.GetComponent<SorkenEntity>();
+            Vector3 gameplayScale = instance.transform.localScale;
+            typeof(SorkenEntity).GetMethod("Awake",
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic)
+                ?.Invoke(entity, null);
+            entity.SetPositionDirectly(instance.transform.position);
+
+            instance.transform.localScale = Vector3.one * 0.01f;
+            typeof(SorkenEntity).GetMethod("LateUpdate",
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic)
+                ?.Invoke(entity, null);
+
+            Assert.That(instance.transform.localScale, Is.EqualTo(gameplayScale));
+        }
+        finally
+        {
+            Object.DestroyImmediate(instance);
+        }
     }
 
     [Test]
@@ -143,6 +205,42 @@ public class SorkenWindowEntryTests
     }
 
     [Test]
+    public void NocheCortaReservaUnaSenalAntesDeAnimarLaVentana()
+    {
+        float start = GameDirector.EntryAnimationStart(
+            true, graceSeconds: 4f, animationDuration: 5.93f,
+            minimumWindowCueSeconds: 1.25f);
+        float end = GameDirector.EntryEnd(
+            true, graceSeconds: 4f, animationStart: start, animationDuration: 5.93f);
+
+        Assert.That(start, Is.EqualTo(1.25f).Within(0.001f));
+        Assert.That(end, Is.EqualTo(7.18f).Within(0.001f));
+    }
+
+    [Test]
+    public void NocheLargaConservaLaVentanaDeReaccionConfigurada()
+    {
+        float start = GameDirector.EntryAnimationStart(
+            true, graceSeconds: 11f, animationDuration: 5.93f,
+            minimumWindowCueSeconds: 1.25f);
+
+        Assert.That(start, Is.EqualTo(5.07f).Within(0.001f));
+    }
+
+    [Test]
+    public void HumoOcultaElCruceSinDesaparecerAntesDelAterrizaje()
+    {
+        Assert.That(SorkenDarknessCue.TargetAmount(SorkenState.Idle), Is.EqualTo(1f));
+        Assert.That(SorkenDarknessCue.TargetAmount(SorkenState.EmergingDoor),
+            Is.GreaterThanOrEqualTo(0.9f));
+        Assert.That(SorkenDarknessCue.TargetAmount(SorkenState.EmergingWindow),
+            Is.GreaterThanOrEqualTo(0.9f));
+        Assert.That(SorkenDarknessCue.TargetAmount(SorkenState.WindowLanding),
+            Is.GreaterThanOrEqualTo(0.7f));
+        Assert.That(SorkenDarknessCue.TargetAmount(SorkenState.Chasing), Is.EqualTo(0f));
+    }
+
+    [Test]
     public void VentanaAltaDaMasTiempoParaDescender()
     {
         float low = SorkenAnimator.EvaluateWindowLandingDuration(2.4f, 0.75f, 0.4f);
@@ -163,9 +261,31 @@ public class SorkenWindowEntryTests
 
         Assert.That(animator.emergeWindowClip, Is.Not.Null);
         Assert.That(animator.windowLandingClip, Is.Not.Null);
-        Assert.That(animator.emergeWindowClip.name, Is.EqualTo("Sorken_WindowEntry_v02"));
-        Assert.That(animator.windowLandingClip.name, Is.EqualTo("Sorken_WindowLanding_v02"));
-        Assert.That(animator.emergeWindowClip.length, Is.EqualTo(5.93f).Within(0.05f));
+        Assert.That(animator.emergeClip.name, Is.EqualTo("Sorken_DoorEntry_Gameplay"));
+        Assert.That(animator.emergeWindowClip.name, Is.EqualTo("Sorken_WindowEntry_Gameplay"));
+        Assert.That(animator.windowLandingClip.name, Is.EqualTo("Sorken_WindowLanding_Gameplay"));
+        Assert.That(animator.emergeClip.length, Is.EqualTo(5.93f).Within(0.05f));
+        Assert.That(animator.emergeWindowClip.length, Is.EqualTo(2.97f).Within(0.05f));
         Assert.That(animator.windowLandingClip.length, Is.EqualTo(1.1f).Within(0.05f));
+
+        AssertClipApuntaAlRigDelPrefab(animator.emergeClip);
+        AssertClipApuntaAlRigDelPrefab(animator.emergeWindowClip);
+        AssertClipApuntaAlRigDelPrefab(animator.windowLandingClip);
+    }
+
+    private static void AssertClipApuntaAlRigDelPrefab(AnimationClip clip)
+    {
+        EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings(clip);
+        bool animaHipsReal = false;
+
+        foreach (EditorCurveBinding binding in bindings)
+        {
+            Assert.That(binding.path, Is.Not.Empty,
+                $"{clip.name} no debe animar el Transform raiz del prefab.");
+            if (binding.path == "Armature/Hips") animaHipsReal = true;
+        }
+
+        Assert.That(animaHipsReal, Is.True,
+            $"{clip.name} debe apuntar a Armature/Hips, no a un Hips inexistente.");
     }
 }

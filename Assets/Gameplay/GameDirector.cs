@@ -29,6 +29,11 @@ namespace Gameplay
                  "El apoyo de los pies agrega despues su pequena compensacion.")]
         [Min(0f)] [SerializeField] private float _windowPerchClearance = 0.25f;
 
+        [Tooltip("Tiempo minimo durante el que solo se anuncia la entrada por ventana " +
+                 "antes de iniciar el clip. Evita que una noche de prueba corta reproduzca " +
+                 "toda la animacion detras del humo inicial.")]
+        [Min(0f)] [SerializeField] private float _windowCueLeadSeconds = 1.25f;
+
         [Tooltip("Separacion final respecto del plano interior de la puerta. Solo unos " +
                  "centimetros: la persecucion agrega el resto del desplazamiento.")]
         [Min(0f)] [SerializeField] private float _doorInsideClearance = 0.08f;
@@ -61,7 +66,6 @@ namespace Gameplay
         private float _grace;          // Entering: cuenta a la entrada
         private float _phaseTimer;     // Grabbed / Retreating
         private bool  _coverStartPlayedThisAttempt;
-        private bool  _firstAttemptPending;
 
         // Sorken actual (null entre intentos).
         private SorkenEntity _sorken;
@@ -115,7 +119,6 @@ namespace Gameplay
 
             ServerDeaths.Reset();
             _coverStartPlayedThisAttempt = false;
-            _firstAttemptPending = true;
             _phase = Phase.Idle;
             _attemptTimer = _night.initialAttemptDelay;
 
@@ -216,16 +219,7 @@ namespace Gameplay
                 return;
             }
 
-            int nightIndex = GameSession.Instance != null ? GameSession.Instance.NightIndex : -1;
-            bool forceFirstDoor = ShouldForceDoorOnFirstAttempt(nightIndex, _firstAttemptPending);
-            _marker = forceFirstDoor ? RandomDoorMarker(markers) : null;
-            if (_marker == null)
-            {
-                if (forceFirstDoor)
-                    Debug.LogWarning("[GameDirector] Noche 1: no hay marcador de puerta; " +
-                                     "el primer intento usara cualquier entrada disponible.");
-                _marker = markers[UnityEngine.Random.Range(0, markers.Count)];
-            }
+            _marker = markers[UnityEngine.Random.Range(0, markers.Count)];
             if (_marker == null) { _attemptTimer = 1f; return; }
 
             // Spawn ya a la altura del piso (EmergePosition con _sorken null usa depth 0);
@@ -249,37 +243,10 @@ namespace Gameplay
             // solo arranca en el tramo final configurado de la ventana.
             _sorken.SetState(SorkenState.Idle);
             _coverStartPlayedThisAttempt = false;
-            _firstAttemptPending = false;
 
             _repel = 0f; _grace = 0f; _windowLandingDuration = 0f;
             _phase = Phase.Entering;
             Debug.Log($"[GameDirector] Emerge netId={_sorkenNetId} en marcador {_marker.name}.");
-        }
-
-        public static bool ShouldForceDoorOnFirstAttempt(int nightIndex, bool firstAttemptPending) =>
-            nightIndex == 0 && firstAttemptPending;
-
-        public static bool IsDoorKind(string kindId)
-        {
-            string kind = kindId != null ? kindId.ToLowerInvariant() : string.Empty;
-            return kind.Contains("door") || kind.Contains("puerta");
-        }
-
-        private static MarkerObject RandomDoorMarker(IReadOnlyList<MarkerObject> markers)
-        {
-            int doorCount = 0;
-            for (int i = 0; i < markers.Count; i++)
-                if (markers[i] != null && IsDoorKind(markers[i].KindId)) doorCount++;
-
-            if (doorCount == 0) return null;
-            int selected = UnityEngine.Random.Range(0, doorCount);
-            for (int i = 0; i < markers.Count; i++)
-            {
-                MarkerObject marker = markers[i];
-                if (marker == null || !IsDoorKind(marker.KindId)) continue;
-                if (selected-- == 0) return marker;
-            }
-            return null;
         }
 
         // --- Entering ---
@@ -299,7 +266,8 @@ namespace Gameplay
             float animationDuration = window
                 ? Mathf.Max(0.2f, _sorken.WindowEntryDuration)
                 : Mathf.Max(0.2f, _night.entryAnimationSeconds);
-            float animationStart = Mathf.Max(0f, _night.entryGraceSeconds - animationDuration);
+            float animationStart = EntryAnimationStart(
+                window, _night.entryGraceSeconds, animationDuration, _windowCueLeadSeconds);
             if (_grace >= animationStart &&
                 _sorken.State != SorkenState.EmergingDoor &&
                 _sorken.State != SorkenState.EmergingWindow)
@@ -336,10 +304,27 @@ namespace Gameplay
             // Una ventana puede necesitar un clip mas largo que la gracia configurada.
             // No iniciamos la caida hasta que termino el traspaso y el segundo pie esta
             // apoyado; asi el cambio de clip no lo despega del marco a mitad de gesto.
-            float entryEnd = window
-                ? Mathf.Max(_night.entryGraceSeconds, animationStart + animationDuration)
-                : _night.entryGraceSeconds;
+            float entryEnd = EntryEnd(
+                window, _night.entryGraceSeconds, animationStart, animationDuration);
             if (_grace >= entryEnd) EnterChase();
+        }
+
+        public static float EntryAnimationStart(
+            bool window, float graceSeconds, float animationDuration,
+            float minimumWindowCueSeconds)
+        {
+            float fittedStart = Mathf.Max(0f, graceSeconds - animationDuration);
+            return window
+                ? Mathf.Max(fittedStart, Mathf.Max(0f, minimumWindowCueSeconds))
+                : fittedStart;
+        }
+
+        public static float EntryEnd(
+            bool window, float graceSeconds, float animationStart, float animationDuration)
+        {
+            return window
+                ? Mathf.Max(graceSeconds, animationStart + animationDuration)
+                : graceSeconds;
         }
 
         private void EnterChase()

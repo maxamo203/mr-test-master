@@ -10,8 +10,7 @@ namespace Gameplay
     // development build (pausa -> Opciones -> VHS (DEV)), para poder calibrar en el
     // celular cual mezcla queda mejor; en release las propiedades nunca se escriben, asi
     // que Publicar() corre una unica vez al arrancar y despues no hay costo por frame. Lo
-    // unico que el jugador toca en release es GameOptions.VhsEnMenus (el filtro sobre los
-    // menus, on/off).
+    // unico que el jugador toca en release es GameOptions.VhsActivo (on/off global).
     public static class VHSSettings
     {
         private static readonly int ID_AMOUNT = Shader.PropertyToID("_VhsAmount");
@@ -101,17 +100,19 @@ namespace Gameplay
         // ¿Hay algo que dibujar? Si no, CameraFXOverlay puede apagar el quad y ahorrarse
         // el GrabPass entero cuando ademas no hay tension.
         public static bool Activo =>
-            _intensidad > 0.001f &&
+            GameOptions.VhsActivo && _intensidad > 0.001f &&
             (_scanlines + _grano + _bandas + _jitter + _vineta + _tinte) > 0.001f;
+
+        private static float IntensidadEfectiva => GameOptions.VhsActivo ? _intensidad : 0f;
 
         // Intensidad efectiva de cada ingrediente (0 = apagado), para el overlay IMGUI
         // de los menus, que no pasa por el shader.
-        public static float AmtScanlines => _scanlines * _intensidad;
-        public static float AmtGrano     => _grano     * _intensidad;
-        public static float AmtBandas    => _bandas    * _intensidad;
-        public static float AmtJitter    => _jitter    * _intensidad;
-        public static float AmtVineta    => _vineta    * _intensidad;
-        public static float AmtTinte     => _tinte     * _intensidad;
+        public static float AmtScanlines => _scanlines * IntensidadEfectiva;
+        public static float AmtGrano     => _grano     * IntensidadEfectiva;
+        public static float AmtBandas    => _bandas    * IntensidadEfectiva;
+        public static float AmtJitter    => _jitter    * IntensidadEfectiva;
+        public static float AmtVineta    => _vineta    * IntensidadEfectiva;
+        public static float AmtTinte     => _tinte     * IntensidadEfectiva;
         public static Color ColorTinte   => ColorCinta;
 
         // Empuja el estado a los uniforms globales del shader. Se llama SOLO cuando algo

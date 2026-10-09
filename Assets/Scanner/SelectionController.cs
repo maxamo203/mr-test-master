@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.EnhancedTouch;
+using UnityEngine.SceneManagement;
 using ETouch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 
 namespace Scanner
@@ -70,11 +71,25 @@ namespace Scanner
             {
                 _diagState = "Mouse.Released";
                 _lastTapPos = ms.position.ReadValue();
+#if UNITY_EDITOR
+                // Con el cursor bloqueado, Mouse.position puede quedar oculto en una
+                // coordenada vieja. Para el testing en PC el clic selecciona exactamente
+                // lo que el jugador está mirando en el centro de la cámara.
+                if (ShouldUseEditorCenterClick(SceneManager.GetActiveScene().name,
+                                               Cursor.lockState == CursorLockMode.Locked))
+                    _lastTapPos = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+#endif
                 _lastTapFrame = Time.frameCount;
                 _lastPickFrame = Time.frameCount;
                 TryPick(_lastTapPos);
+                return;
             }
         }
+
+#if UNITY_EDITOR
+        public static bool ShouldUseEditorCenterClick(string sceneName, bool cursorLocked) =>
+            sceneName == "ScannerScene" && cursorLocked;
+#endif
 
         private void OnGUI()
         {
@@ -86,6 +101,11 @@ namespace Scanner
                 {
                     _diagState = "IMGUI.MouseUp";
                     _lastTapPos = new Vector2(e.mousePosition.x, Screen.height - e.mousePosition.y);
+#if UNITY_EDITOR
+                    if (ShouldUseEditorCenterClick(SceneManager.GetActiveScene().name,
+                                                   Cursor.lockState == CursorLockMode.Locked))
+                        _lastTapPos = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+#endif
                     _lastTapFrame = Time.frameCount;
                     _lastPickFrame = Time.frameCount;
                     TryPick(_lastTapPos);

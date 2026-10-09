@@ -96,6 +96,24 @@ public class EditorPlayerControls : MonoBehaviour
 
     public static bool IsScannerScene(string sceneName) => sceneName == "ScannerScene";
 
+    public static bool ShouldRecaptureAfterDeselect(
+        string sceneName, bool selectionWasCleared, bool pauseMenuOpen) =>
+        IsScannerScene(sceneName) && selectionWasCleared && !pauseMenuOpen;
+
+    // Lo llama ScanStateMachine al cerrar una selección desde la UI del escáner.
+    // Devuelve inmediatamente el control de cámara sin exigir un clic extra en el mundo.
+    public static void RecaptureAfterScannerDeselect()
+    {
+        if (!ShouldRecaptureAfterDeselect(SceneManager.GetActiveScene().name, true,
+                                          Gamepad.PauseMenuController.IsOpen))
+            return;
+
+        var controls = FindFirstObjectByType<EditorPlayerControls>();
+        if (controls == null || !controls.ResolverCamara()) return;
+        controls.SincronizarAngulosConCamara();
+        controls.CapturarCursor();
+    }
+
     // La cámara AR se crea con la escena y cambia al cambiar de escena; además hay que
     // callar al TrackedPoseDriver, que si el editor llegara a entregarle una pose (XR
     // Simulation, un device conectado) pisaría el transform en el mismo frame.

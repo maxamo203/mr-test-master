@@ -20,9 +20,10 @@ public enum SorkenState : byte
 // el clip del estado en todos los peers.
 //
 // IMPORTANTE: el Animator (Playables) con clips Generic pisa el transform del root cada
-// frame. Por eso guardamos la pose deseada (pos/rot) que fija el codigo y la RE-APLICAMOS
-// en LateUpdate (despues de que corre el Animator), asi el control de pos/rotacion es del
-// codigo, no de la animacion.
+// frame. Por eso guardamos la pose deseada (pos/rot/escala) que fija el codigo y la
+// RE-APLICAMOS en LateUpdate (despues de que corre el Animator), asi el control del
+// transform raiz es del codigo, no de la animacion. Los clips nuevos de ventana contienen
+// por error una curva de escala 0.01 en el root; sin restaurarla el modelo se achica 100x.
 public class SorkenEntity : MonoBehaviour
 {
     public Vector3     Position => transform.position;
@@ -56,6 +57,7 @@ public class SorkenEntity : MonoBehaviour
     // Pose deseada (la que fija el codigo). Se re-aplica en LateUpdate.
     private Vector3    _desiredPos;
     private Quaternion _desiredRot;
+    private Vector3    _desiredScale;
     private bool       _hasDesired;
     private SorkenAnimator _sorkenAnimator;
 
@@ -81,6 +83,7 @@ public class SorkenEntity : MonoBehaviour
         _sorkenAnimator = GetComponent<SorkenAnimator>();
         _desiredPos = transform.position;
         _desiredRot = transform.rotation;
+        _desiredScale = transform.localScale;
     }
 
     public void SetState(SorkenState s)
@@ -132,5 +135,6 @@ public class SorkenEntity : MonoBehaviour
         if (!_hasDesired) return;
         transform.position = _desiredPos;
         transform.rotation = _desiredRot;
+        transform.localScale = _desiredScale;
     }
 }
