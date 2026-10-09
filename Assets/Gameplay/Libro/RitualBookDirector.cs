@@ -29,6 +29,7 @@ namespace Gameplay
         private float _sendTimer;
         private float _oscuridadRemota;
         private NetworkManager _suscritoA;
+        private bool _bookReserved;
 
         public static RitualBookDirector Ensure()
         {
@@ -64,6 +65,7 @@ namespace Gameplay
             Alumbrando = 0;
             TodosAlumbrando = false;
             _oscuridadRemota = 0f;
+            _bookReserved = false;
 
             if (_night != null && _night.bookActive)
             {
@@ -89,6 +91,7 @@ namespace Gameplay
         // StartRun siempre construye uno nuevo, asi que no hay nada que conservar.
         public void StopRun()
         {
+            ReleaseReservation();
             _running = false;
             _flow = null;
             _oscuridadRemota = 0f;
@@ -98,6 +101,7 @@ namespace Gameplay
 
         public void Reiniciar()
         {
+            ReleaseReservation();
             Alumbrando = 0;
             TodosAlumbrando = false;
             _oscuridadRemota = 0f;
@@ -126,6 +130,17 @@ namespace Gameplay
             var view = RitualBookView.Active;
             if (view == null) return;
 
+            if (_flow.Phase == RitualBookPhase.Consuming)
+            {
+                if (_bookReserved && !ThreatCoordinator.CanKeepBook())
+                    ReleaseReservation();
+                if (!_bookReserved)
+                {
+                    if (!ThreatCoordinator.TryBeginBook()) return;
+                    _bookReserved = true;
+                }
+            }
+
             // Se mide tambien durante Waiting. El flow no acumula defensa antes del
             // ataque, pero asi el primer fragmento de frame del evento cuenta si el
             // jugador ya estaba apuntando al libro.
@@ -138,19 +153,27 @@ namespace Gameplay
             }
             Alumbrando = PlayerLights.CountIlluminating(
                 view.PuntoDeLuz, ang, range, view.RadioAproximado,
-                FlashlightMode.Bright);
+                FlashlightMode.Bright, requireLineOfSight: true);
             int jugadoresVivos = ContarJugadoresVivos(net);
-            TodosAlumbrando = jugadoresVivos > 0 && Alumbrando >= jugadoresVivos;
+            TodosAlumbrando = Alumbrando > 0;
+
+            bool allowStart = _bookReserved || ThreatCoordinator.CanBeginBook();
 
             var result = _flow.Tick(Time.deltaTime, Alumbrando, jugadoresVivos,
-                                    _night.bookConsumeSeconds, _night.bookDefenseSeconds);
+                                    _night.bookConsumeSeconds, _night.bookDefenseSeconds,
+                                    allowStart);
+            if ((result & RitualBookTickResult.ConsumptionStarted) != 0)
+                _bookReserved = ThreatCoordinator.TryBeginBook();
             AplicarVista(_flow.Darkness01);
 
             if ((result & RitualBookTickResult.ConsumptionStarted) != 0)
                 Debug.Log("[LibroRitual] La oscuridad empezo a consumir el libro.");
 
             if ((result & RitualBookTickResult.Saved) != 0)
+            {
+                ReleaseReservation();
                 Debug.Log("[LibroRitual] El libro fue salvado con la linterna.");
+            }
 
             _sendTimer -= Time.deltaTime;
             if (_sendTimer <= 0f || result != RitualBookTickResult.None)
@@ -165,6 +188,7 @@ namespace Gameplay
 
         private void InvocarVeleth()
         {
+            ReleaseReservation();
             _running = false;
             NetworkManager.Instance?.ServerSendRitualBook(1f);
             var view = RitualBookView.Active;
@@ -176,6 +200,13 @@ namespace Gameplay
             Debug.Log(invocada
                 ? "[LibroRitual] El libro fue consumido: Veleth fue invocada."
                 : "[LibroRitual] El libro fue consumido, pero no se pudo crear a Veleth.");
+        }
+
+        private void ReleaseReservation()
+        {
+            if (!_bookReserved) return;
+            ThreatCoordinator.EndBook();
+            _bookReserved = false;
         }
 
         private void SetOscuridadRemota(float oscuridad01)
@@ -206,9 +237,7 @@ namespace Gameplay
             int jugadoresVivos = NetworkManager.Instance != null
                 ? ContarJugadoresVivos(NetworkManager.Instance)
                 : 1;
-            float velocidadAtaque = TodosAlumbrando ? 0f
-                : Alumbrando == 0 ? 1f
-                : 1f - Alumbrando / (float)Mathf.Max(1, jugadoresVivos);
+            float velocidadAtaque = TodosAlumbrando ? 0f : 1f;
             return $"libro={_flow.Phase} oscuridad={_flow.Darkness01:P0} " +
                    $"defensa={_flow.Defense01:P0} alumbrando={Alumbrando} " +
                    $"todos={TodosAlumbrando} velocidadAtaque=" +

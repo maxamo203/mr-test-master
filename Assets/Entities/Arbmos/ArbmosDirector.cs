@@ -25,6 +25,8 @@ public class ArbmosDirector : MonoBehaviour
 
     private sealed class Haunt
     {
+        public uint owner;
+        public bool normalReserved;
         public Phase phase = Phase.Dormant;
         public float cooldown;
         public uint netId;
@@ -112,7 +114,7 @@ private readonly List<uint> _scratchRemove = new();
         {
             if (!_haunts.TryGetValue(clientId, out var haunt))
             {
-                haunt = new Haunt { cooldown = RandomCooldown() };
+                haunt = new Haunt { owner = clientId, cooldown = RandomCooldown() };
                 _haunts.Add(clientId, haunt);
             }
             TickPlayer(clientId, haunt, dt);
@@ -141,6 +143,13 @@ private readonly List<uint> _scratchRemove = new();
             SanitySystem.Instance.IsAtZero(clientId))
         {
             BeginLethal(clientId, haunt, playerPosition);
+        }
+
+        if (haunt.normalReserved &&
+            !ThreatCoordinator.CanKeepNormalArbmos(clientId))
+        {
+            EndNormalHaunt(haunt);
+            return;
         }
 
         switch (haunt.phase)
@@ -174,15 +183,29 @@ private readonly List<uint> _scratchRemove = new();
 
         bool spawn = _night.arbmosForceSpawnAfterCooldown ||
                      Random.value <= Mathf.Clamp01(_night.arbmosSpawnChancePerAttempt);
-        if (spawn) InvokePresent(clientId, haunt, playerPosition);
-        else haunt.cooldown = 3f;
+        if (!spawn)
+        {
+            haunt.cooldown = 3f;
+            return;
+        }
+
+        if (!ThreatCoordinator.TryBeginNormalArbmos(clientId))
+        {
+            haunt.cooldown = 2f;
+            return;
+        }
+        haunt.normalReserved = true;
+        InvokePresent(clientId, haunt, playerPosition);
     }
 
     private void InvokePresent(uint clientId, Haunt haunt, Vector3 playerPosition)
     {
         if (!SpawnArbmosFor(clientId, haunt, playerPosition, aura: true,
                             lethal: false, distort: 0.3f))
+        {
+            ReleaseNormalReservation(haunt);
             return;
+        }
 
         haunt.stationaryPosition = haunt.ent.Position;
         haunt.hideTimer = 0f;
@@ -304,6 +327,7 @@ private readonly List<uint> _scratchRemove = new();
     private void BeginLethal(uint clientId, Haunt haunt, Vector3 playerPosition)
     {
         if (haunt.lethalTriggered) return;
+        ReleaseNormalReservation(haunt);
         haunt.lethalTriggered = true;
 
         if (haunt.ent == null &&
@@ -489,11 +513,19 @@ private bool SpawnArbmosFor(uint clientId, Haunt haunt, Vector3 playerPosition,
 
     private void DespawnHaunt(Haunt haunt)
     {
+        ReleaseNormalReservation(haunt);
         if (haunt.netId != 0 && NetworkManager.Instance != null)
             NetworkManager.Instance.ServerDespawn(haunt.netId);
         haunt.netId = 0;
         haunt.ent = null;
         haunt.path.Clear();
+    }
+
+    private static void ReleaseNormalReservation(Haunt haunt)
+    {
+        if (haunt == null || !haunt.normalReserved) return;
+        ThreatCoordinator.EndNormalArbmos(haunt.owner);
+        haunt.normalReserved = false;
     }
 
     private IEnumerator DespawnAfterDeathReveal(Haunt haunt)

@@ -64,6 +64,7 @@ namespace Gameplay
 
         private bool  _running;
         private Phase _phase = Phase.Idle;
+        private bool  _sorkenReserved;
 
         // Reloj de la noche (condicion de victoria). 0 = noche sin limite de tiempo.
         private float _nightDuration;
@@ -131,6 +132,8 @@ namespace Gameplay
             }
 
             ServerDeaths.Reset();
+            ThreatCoordinator.ResetAll();
+            _sorkenReserved = false;
             _coverStartPlayedThisAttempt = false;
             _phase = Phase.Idle;
             _attemptTimer = _night.initialAttemptDelay;
@@ -161,6 +164,7 @@ namespace Gameplay
         // soltamos las referencias y frenamos. El próximo OnGameStarted re-inicializa.
         public void StopRun()
         {
+            ReleaseSorkenReservation();
             _running      = false;
             _phase        = Phase.Idle;
             _sorken       = null;
@@ -237,11 +241,25 @@ namespace Gameplay
             _marker = markers[UnityEngine.Random.Range(0, markers.Count)];
             if (_marker == null) { _attemptTimer = 1f; return; }
 
+            if (!ThreatCoordinator.TryBeginSorken())
+            {
+                _marker = null;
+                _attemptTimer = 2f;
+                return;
+            }
+            _sorkenReserved = true;
+
             // Spawn ya a la altura del piso (EmergePosition con _sorken null usa depth 0);
             // luego lo reposicionamos aplicando el EmergeDepth del modelo.
             _sorkenNetId = NetworkManager.Instance.ServerSpawn(EntityTypeIds.Sorken, EmergePosition(), 0);
             _sorken = GetSorken(_sorkenNetId);
-            if (_sorken == null) { _attemptTimer = 2f; return; }
+            if (_sorken == null)
+            {
+                ReleaseSorkenReservation();
+                _marker = null;
+                _attemptTimer = 2f;
+                return;
+            }
 
             // US-4.1: que tipo de punto es (puerta/ventana/...), para que suene distinto.
             // Se resuelve contra el AudioCatalog y viaja como un byte junto al estado, asi
@@ -724,6 +742,7 @@ private void BeginCoverStart()
         private void EndAttempt()
         {
             DespawnSorken();
+            ReleaseSorkenReservation();
             _attemptTimer = UnityEngine.Random.Range(_night.attemptIntervalMin, _night.attemptIntervalMax);
             _phase = Phase.Idle;
             Debug.Log($"[GameDirector] Fin del intento. Proximo en {_attemptTimer:F1}s.");
@@ -735,6 +754,13 @@ private void BeginCoverStart()
                 NetworkManager.Instance.ServerDespawn(_sorkenNetId);
             _sorken = null; _sorkenNetId = 0; _marker = null;
             _hasTarget = false;
+        }
+
+        private void ReleaseSorkenReservation()
+        {
+            if (!_sorkenReserved) return;
+            ThreatCoordinator.EndSorken();
+            _sorkenReserved = false;
         }
 
         // --- Muerte ---

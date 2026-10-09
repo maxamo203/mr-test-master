@@ -61,12 +61,11 @@ namespace Gameplay
                                          float consumeSeconds, float defenseSeconds) =>
             Tick(deltaTime, illuminated ? 1 : 0, 1, consumeSeconds, defenseSeconds);
 
-        // Con varios jugadores, cada jugador que apunta reduce una fracción del ataque.
-        // Mientras no sean todos: velocidad = 1 - (apuntando / jugadores vivos).
-        // La oscuridad recién retrocede cuando apuntan TODOS.
+        // Un solo defensor valido basta para salvar el libro. Esto permite que, en una
+        // sesion cooperativa, los demas jugadores atiendan amenazas independientes.
         public RitualBookTickResult Tick(float deltaTime, int illuminatingPlayers,
                                          int alivePlayers, float consumeSeconds,
-                                         float defenseSeconds)
+                                         float defenseSeconds, bool allowStart = true)
         {
             if (Phase == RitualBookPhase.Consumed || deltaTime <= 0f)
                 return RitualBookTickResult.None;
@@ -83,6 +82,8 @@ namespace Gameplay
                 }
 
                 remaining -= _waitRemaining;
+                _waitRemaining = 0f;
+                if (!allowStart) return result;
                 BeginConsumption();
                 result |= RitualBookTickResult.ConsumptionStarted;
             }
@@ -92,7 +93,7 @@ namespace Gameplay
 
             int alive = Mathf.Max(1, alivePlayers);
             int illuminating = Mathf.Clamp(illuminatingPlayers, 0, alive);
-            bool fullyProtected = illuminating >= alive;
+            bool fullyProtected = illuminating > 0;
 
             if (fullyProtected)
             {
@@ -127,11 +128,7 @@ namespace Gameplay
                 _wasIlluminated = false;
             }
 
-            // Nadie apuntando: 100%. Cada jugador reduce 1 / total de la sesión:
-            // con cuatro, 1 apunta=75%, 2=50%, 3=25%. Defensa continúa en cero.
-            float attackSpeed = 1f - illuminating / (float)alive;
-            float scaledRemaining = remaining * attackSpeed;
-            float consumeAdvanced = Mathf.Min(scaledRemaining, consumeSeconds - _consumeElapsed);
+            float consumeAdvanced = Mathf.Min(remaining, consumeSeconds - _consumeElapsed);
             _consumeElapsed += consumeAdvanced;
             Darkness01 = Mathf.Lerp(_consumeStartDarkness, 1f,
                 Mathf.Clamp01(_consumeElapsed / consumeSeconds));
