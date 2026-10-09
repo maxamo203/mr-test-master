@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using Gameplay;
+using Gameplay.Spawning;
 using Scanner;
 using UnityEngine;
 
@@ -52,6 +53,8 @@ public class ArbmosDirector : MonoBehaviour
 private readonly List<uint> _scratchRemove = new();
     private NightConfig _night;
     private bool _running;
+    private string _lastSpawnRejection = "-";
+    private int _rejectedSpawnAttempts;
 
     public static ArbmosDirector Ensure()
     {
@@ -90,6 +93,8 @@ private readonly List<uint> _scratchRemove = new();
         net.OnClientLeft -= HandleClientLeft;
         net.OnClientLeft += HandleClientLeft;
         _running = true;
+        _lastSpawnRejection = "-";
+        _rejectedSpawnAttempts = 0;
     }
 
     public void StopRun()
@@ -496,7 +501,7 @@ private readonly List<uint> _scratchRemove = new();
             FlashlightMode.Dim, requireLineOfSight: true);
     }
 
-private bool SpawnArbmosFor(uint clientId, Haunt haunt, Vector3 playerPosition,
+    private bool SpawnArbmosFor(uint clientId, Haunt haunt, Vector3 playerPosition,
                                 bool aura, bool lethal, float distort)
     {
         var net = NetworkManager.Instance;
@@ -505,7 +510,7 @@ private bool SpawnArbmosFor(uint clientId, Haunt haunt, Vector3 playerPosition,
         if (!TrySpawnPositionNear(clientId, playerPosition, out Vector3 spawn))
         {
             // Con geometría escaneada nunca aparece al otro lado de una pared. Si no hay
-            // suficiente espacio interior delante del jugador, reintenta más adelante.
+            // suficiente espacio en el mismo ambiente que el jugador, reintenta más adelante.
             haunt.cooldown = 2f;
             return false;
         }
@@ -593,7 +598,7 @@ private bool SpawnArbmosFor(uint clientId, Haunt haunt, Vector3 playerPosition,
         return Random.Range(Mathf.Min(a, b), Mathf.Max(a, b));
     }
 
-private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
+    private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
                                       out Vector3 spawn)
     {
         Vector3 forward = PlayerForward(clientId);
@@ -607,10 +612,6 @@ private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
         float floorY = FloorWorldY(playerPosition.y);
         var nav = SorkerNav.Ensure();
 
-        float verticalFov = Camera.main != null ? Camera.main.fieldOfView : 60f;
-        float aspect = Camera.main != null ? Camera.main.aspect : 16f / 9f;
-        float horizontalHalfFov = Mathf.Atan(Mathf.Tan(verticalFov * 0.5f * Mathf.Deg2Rad) *
-                                             aspect) * Mathf.Rad2Deg;
         float beamAngle = _night.flashlightConeAngleDeg;
         float beamRange = _night.flashlightRange;
         if (PlayerLights.TryConoReal(out float realAngle, out float realRange))
@@ -619,80 +620,119 @@ private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
             beamRange = realRange;
         }
 
-        // Busca primero a la distancia configurada y, si el cuerpo no entra completo,
-        // prueba un poco más lejos. Nunca lo acerca dentro de los 2 m para forzar spawn.
-        int firstSide = Random.value < 0.5f ? -1 : 1;
-        for (float distance = desiredDistance; distance <= desiredDistance + 0.75f;
-             distance += 0.25f)
+        if (!InteriorSpawnValidator.TryEnsureReady(out var topologyReason) ||
+            WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady)
         {
-            if (!ArbmosSpawnGeometry.TryLateralAngleBand(
-                    horizontalHalfFov, beamAngle, distance,
-                    out float minimumAngle, out float maximumAngle))
-                continue;
+            _lastSpawnRejection = topologyReason ?? "WorldOrigin no esta listo";
+            _rejectedSpawnAttempts++;
+            spawn = default;
+            return false;
+        }
 
-            for (int sidePass = 0; sidePass < 2; sidePass++)
+        // Recorre 360 grados: el Arbmos ya no esta obligado a aparecer dentro de la
+        // camara. Se prioriza la distancia de diseño, se prueba hasta 2 m cuando el
+        // cuarto es angosto y luego puntos más lejanos del mismo ambiente.
+        float randomStart = Random.Range(0f, 360f);
+        const int angularSamples = 24;
+        const float distanceStep = 0.25f;
+        var distances = new List<float> { desiredDistance };
+        for (float distance = desiredDistance - distanceStep;
+             distance >= ArbmosSpawnGeometry.MinimumDistance - 0.001f;
+             distance -= distanceStep)
+            distances.Add(distance);
+        for (float distance = desiredDistance + distanceStep;
+             distance <= desiredDistance + 1.5f;
+             distance += distanceStep)
+            distances.Add(distance);
+
+        string lastReason = "no se encontro una posicion interior valida";
+        for (int distanceSample = 0; distanceSample < distances.Count; distanceSample++)
+        {
+            float distance = distances[distanceSample];
+
+            for (int sample = 0; sample < angularSamples; sample++)
             {
-                int side = sidePass == 0 ? firstSide : -firstSide;
-                for (int sample = 0; sample < 4; sample++)
-                {
-                    float t = sample / 3f;
-                    float angle = Mathf.Lerp(maximumAngle, minimumAngle, t) * side;
-                    Vector3 candidate = playerPosition +
-                        ArbmosSpawnGeometry.LateralDirection(horizontalForward, angle) * distance;
-                    candidate.y = floorY;
-                    if (IsValidSpawnCandidate(clientId, playerPosition, forward, candidate,
-                                              verticalFov * 0.5f, horizontalHalfFov,
-                                              beamAngle, beamRange, nav))
-                    {
-                        spawn = candidate;
-                        return true;
-                    }
-                }
+                float angle = randomStart + sample * (360f / angularSamples);
+                Vector3 candidate = playerPosition +
+                    ArbmosSpawnGeometry.LateralDirection(horizontalForward, angle) * distance;
+                candidate.y = floorY;
+                if (!IsValidSpawnCandidate(clientId, playerPosition, forward, candidate,
+                                           beamAngle, beamRange, nav, out lastReason)) continue;
+
+                _lastSpawnRejection = "-";
+                spawn = candidate;
+                return true;
             }
         }
 
+        _lastSpawnRejection = lastReason;
+        _rejectedSpawnAttempts++;
+        GameplayTelemetry.Postponed("arbmos", "invalid_interior_spawn", clientId);
         spawn = default;
         return false;
     }
 
     private bool IsValidSpawnCandidate(uint clientId, Vector3 playerPosition,
                                        Vector3 playerForward, Vector3 candidate,
-                                       float verticalHalfFov, float horizontalHalfFov,
-                                       float beamAngle, float beamRange, SorkerNav nav)
+                                       float beamAngle, float beamRange, SorkerNav nav,
+                                       out string reason)
     {
         Vector3 feet = candidate + Vector3.up * 0.2f;
         Vector3 torso = candidate + Vector3.up * 1.05f;
         Vector3 head = candidate + Vector3.up * ArbmosSpawnGeometry.BodyHeight;
 
-        if (!ArbmosSpawnGeometry.PointInsideView(playerPosition, playerForward, feet,
-                                                  horizontalHalfFov, verticalHalfFov) ||
-            !ArbmosSpawnGeometry.PointInsideView(playerPosition, playerForward, head,
-                                                  horizontalHalfFov, verticalHalfFov))
+        if (!InteriorSpawnValidator.TryValidateActorInPlayerRoom(
+                playerPosition, candidate, ArbmosSpawnGeometry.BodyRadius,
+                out _, out reason))
             return false;
 
-        // Si la linterna está encendida, ni torso ni cabeza pueden tocar el haz.
+        // Si la linterna está encendida, ninguna franja del cuerpo puede tocar el haz.
         if (PlayerLights.ModeFor(clientId) != FlashlightMode.Off &&
-            (PlayerLights.Alcanza(playerPosition, playerForward, torso, beamAngle,
+            (PlayerLights.Alcanza(playerPosition, playerForward, feet, beamAngle,
+                                  beamRange, ArbmosSpawnGeometry.BodyRadius) ||
+             PlayerLights.Alcanza(playerPosition, playerForward, torso, beamAngle,
                                   beamRange, ArbmosSpawnGeometry.BodyRadius) ||
              PlayerLights.Alcanza(playerPosition, playerForward, head, beamAngle,
                                   beamRange, ArbmosSpawnGeometry.BodyRadius)))
+        {
+            reason = "el candidato esta dentro del haz de luz";
             return false;
+        }
 
-        if (!HasBodyClearance(candidate, nav)) return false;
+        if (!HasBodyClearance(candidate, nav))
+        {
+            reason = "el cuerpo no tiene volumen libre";
+            return false;
+        }
         if (!nav.HasClearLine(playerPosition, torso) ||
-            !nav.HasClearLine(playerPosition, head)) return false;
+            !nav.HasClearLine(playerPosition, head))
+        {
+            reason = "la navegacion detecta una pared de por medio";
+            return false;
+        }
         if (!PlayerLights.HasLineOfSight(playerPosition, torso,
                                          ArbmosSpawnGeometry.BodyRadius) ||
             !PlayerLights.HasLineOfSight(playerPosition, head,
-                                         ArbmosSpawnGeometry.BodyRadius)) return false;
+                                         ArbmosSpawnGeometry.BodyRadius))
+        {
+            reason = "la vision al Arbmos esta ocluida";
+            return false;
+        }
 
         Vector3 capsuleBottom = candidate + Vector3.up * ArbmosSpawnGeometry.BodyRadius;
         Vector3 capsuleTop = candidate + Vector3.up *
             (ArbmosSpawnGeometry.BodyHeight - ArbmosSpawnGeometry.BodyRadius);
-        return !Physics.CheckCapsule(capsuleBottom, capsuleTop,
-                                     ArbmosSpawnGeometry.BodyRadius,
-                                     Physics.DefaultRaycastLayers,
-                                     QueryTriggerInteraction.Ignore);
+        if (Physics.CheckCapsule(capsuleBottom, capsuleTop,
+                                 ArbmosSpawnGeometry.BodyRadius,
+                                 Physics.DefaultRaycastLayers,
+                                 QueryTriggerInteraction.Ignore))
+        {
+            reason = "el volumen del Arbmos intersecta geometria";
+            return false;
+        }
+
+        reason = null;
+        return true;
     }
 
     private static bool HasBodyClearance(Vector3 candidate, SorkerNav nav)
@@ -794,7 +834,8 @@ private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
         if (!_night.arbmosActive) return $"[Arbmos] desactivado en '{_night.displayName}'\n";
 
         var text = new System.Text.StringBuilder();
-        text.Append($"[Arbmos V2] noche='{_night.displayName}' jugadores={_haunts.Count}\n");
+        text.Append($"[Arbmos V2] noche='{_night.displayName}' jugadores={_haunts.Count} " +
+                    $"spawnRechazados={_rejectedSpawnAttempts} ultimo='{_lastSpawnRejection}'\n");
         foreach (var pair in _haunts)
         {
             Haunt haunt = pair.Value;

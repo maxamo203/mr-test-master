@@ -145,6 +145,46 @@ namespace Gameplay.Spawning
             return true;
         }
 
+        public static bool TryValidateActorInPlayerRoom(Vector3 playerWorld,
+                                                        Vector3 candidateWorld,
+                                                        float actorRadius,
+                                                        out int roomIndex,
+                                                        out string reason)
+        {
+            roomIndex = -1;
+            if (!TryEnsureReady(out reason)) return false;
+            if (WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady)
+            {
+                reason = "WorldOrigin no esta listo";
+                return false;
+            }
+
+            Vector3 playerRelative = WorldOrigin.Instance.ToRelative(playerWorld);
+            Vector3 candidateRelative = WorldOrigin.Instance.ToRelative(candidateWorld);
+            Vector2 player = Xz(playerRelative);
+            Vector2 candidate = Xz(candidateRelative);
+
+            if (!_topology.TryGetRoomIndex(player, out roomIndex))
+            {
+                reason = "el jugador no esta dentro de un ambiente cerrado";
+                return false;
+            }
+            if (!_topology.ContainsDiscInRoom(roomIndex, candidate,
+                    Mathf.Max(0.02f, actorRadius) + DefaultWallMargin))
+            {
+                reason = "el cuerpo no entra en el mismo ambiente que el jugador";
+                return false;
+            }
+            if (!_topology.HasClearSegment(player, candidate))
+            {
+                reason = "una pared separa al jugador del punto de aparicion";
+                return false;
+            }
+
+            reason = null;
+            return true;
+        }
+
         public static float EstimatePrefabFootprintRadius(GameObject prefab, float fallback)
         {
             float radius = Mathf.Max(0.02f, fallback);

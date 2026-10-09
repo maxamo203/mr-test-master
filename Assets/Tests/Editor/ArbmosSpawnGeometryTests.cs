@@ -31,4 +31,11 @@ public class ArbmosSpawnGeometryTests
         Assert.That(ArbmosSpawnGeometry.PointInsideView(
             camera, Vector3.forward, new Vector3(3f, 1.6f, 2f), 45f, 30f), Is.False);
     }
+
+    [Test]
+    public void MuestreoCircularTambienPuedeProponerUnPuntoDetrasDelJugador()
+    {
+        Vector3 direction = ArbmosSpawnGeometry.LateralDirection(Vector3.forward, 180f);
+        Assert.That(Vector3.Dot(direction, Vector3.back), Is.GreaterThan(0.999f));
+    }
 }

@@ -37,6 +37,25 @@ public class InteriorTopologyTests
         Assert.That(topology.ContainsDisc(new Vector2(1, 1), 0.1f), Is.True);
         Assert.That(topology.ContainsDisc(new Vector2(5, 1), 0.1f), Is.True);
         Assert.That(topology.ContainsDisc(new Vector2(3, 1), 0.1f), Is.False);
+        Assert.That(topology.TryGetRoomIndex(new Vector2(1, 1), out int firstRoom), Is.True);
+        Assert.That(topology.TryGetRoomIndex(new Vector2(5, 1), out int secondRoom), Is.True);
+        Assert.That(secondRoom, Is.Not.EqualTo(firstRoom));
+        Assert.That(topology.ContainsDiscInRoom(firstRoom, new Vector2(5, 1), 0.1f), Is.False);
+    }
+
+    [Test]
+    public void SameConcaveRoomStillRequiresDirectLineWithoutWalls()
+    {
+        var points = new[]
+        {
+            new Vector2(0, 0), new Vector2(4, 0), new Vector2(4, 1),
+            new Vector2(1, 1), new Vector2(1, 4), new Vector2(0, 4)
+        };
+        Assert.That(InteriorTopology.TryBuild(Loop(points), 0.05f, out var topology, out var reason),
+                    Is.True, reason);
+        Assert.That(topology.TryGetRoomIndex(new Vector2(0.5f, 3f), out int room), Is.True);
+        Assert.That(topology.ContainsDiscInRoom(room, new Vector2(3f, 0.5f), 0.1f), Is.True);
+        Assert.That(topology.HasClearSegment(new Vector2(0.5f, 3f), new Vector2(3f, 0.5f)), Is.False);
     }
 
     [Test]

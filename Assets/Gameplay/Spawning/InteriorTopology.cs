@@ -180,10 +180,26 @@ namespace Gameplay.Spawning
 
         public bool ContainsDisc(Vector2 center, float clearance)
         {
-            bool inside = false;
-            for (int i = 0; i < _rooms.Count && !inside; i++)
-                inside = PointInPolygon(center, _rooms[i]);
-            if (!inside) return false;
+            if (!TryGetRoomIndex(center, out int roomIndex)) return false;
+            return ContainsDiscInRoom(roomIndex, center, clearance);
+        }
+
+        public bool TryGetRoomIndex(Vector2 point, out int roomIndex)
+        {
+            for (int i = 0; i < _rooms.Count; i++)
+            {
+                if (!PointInPolygon(point, _rooms[i])) continue;
+                roomIndex = i;
+                return true;
+            }
+            roomIndex = -1;
+            return false;
+        }
+
+        public bool ContainsDiscInRoom(int roomIndex, Vector2 center, float clearance)
+        {
+            if (roomIndex < 0 || roomIndex >= _rooms.Count ||
+                !PointInPolygon(center, _rooms[roomIndex])) return false;
 
             float required = Mathf.Max(0f, clearance);
             float required2 = required * required;
