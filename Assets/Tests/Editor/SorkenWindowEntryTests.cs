@@ -109,6 +109,25 @@ public class SorkenWindowEntryTests
     }
 
     [Test]
+    public void PrimeraRutaNoHaceVolverAlSorkenHaciaLaVentana()
+    {
+        Vector3 origin = Vector3.zero;
+        var path = new[]
+        {
+            new Vector3(0f, 0f, -0.8f),
+            new Vector3(0.02f, 0f, 0.01f),
+            new Vector3(0.3f, 0f, 0.7f),
+            new Vector3(1f, 0f, 2f)
+        };
+
+        int first = GameDirector.FirstForwardEntryWaypoint(
+            path, 0, origin, Vector3.forward);
+
+        Assert.That(first, Is.EqualTo(2));
+        Assert.That(Vector3.Dot(path[first] - origin, Vector3.forward), Is.Positive);
+    }
+
+    [Test]
     public void UltimoTramoPermaneceEnElPisoParaRecuperarLaPostura()
     {
         Vector3 start = new(0f, 2f, 0f);

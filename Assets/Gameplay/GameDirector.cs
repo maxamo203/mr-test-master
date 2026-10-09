@@ -91,6 +91,8 @@ namespace Gameplay
         private float _lightLostSeconds;
         private uint  _targetClientId;
         private bool  _hasTarget;
+        private Vector3 _entryForward;
+        private bool _entryPathPending;
 
         // Trayectoria de la ventana al piso. Se guarda al terminar el emerge para que el
         // movimiento sea continuo aunque el marcador o el origen AR se actualicen.
@@ -182,6 +184,7 @@ namespace Gameplay
             _pathIndex    = 0;
             _repel = _grace = _phaseTimer = _lightLostSeconds = 0f;
             _hasTarget = false;
+            _entryPathPending = false;
         }
 
         // Veleth es una consecuencia global y tiene prioridad sobre las amenazas
@@ -403,6 +406,10 @@ namespace Gameplay
             // todavía debe bajar desde una ventana hasta el piso.
             ThreatCoordinator.BeginSorkenInside();
             _sorkenReserved = true;
+            _entryForward = _marker.transform.forward;
+            _entryForward.y = 0f;
+            if (_entryForward.sqrMagnitude > 1e-6f) _entryForward.Normalize();
+            _entryPathPending = true;
             Vector3 floorEntry = ChaseEntryPosition();
             if (IsWindowMarker() && _sorken.Position.y > floorEntry.y + 0.05f)
             {
@@ -442,7 +449,11 @@ namespace Gameplay
 
         private void BeginChaseAt(Vector3 position)
         {
-            _sorken.SetPositionDirectly(position);
+            // Al terminar el aterrizaje ya estamos exactamente en la posicion final.
+            // No volver a resolverla contra el marcador: conserva el ultimo fotograma
+            // como origen de la persecucion y evita un salto junto a la pared.
+            if (_phase != Phase.WindowLanding)
+                _sorken.SetPositionDirectly(position);
             _sorken.SetState(SorkenState.Chasing);
             _repel = 0f;
             _lightLostSeconds = 0f;
@@ -623,7 +634,13 @@ namespace Gameplay
             {
                 _repathTimer = Mathf.Max(0.05f, _night.sorkenBlockedRepathSeconds);
                 if (SorkerNav.Instance != null && SorkerNav.Instance.TryGetPath(_sorken.Position, tpos, _path))
+                {
                     _pathIndex = 0;
+                    if (_entryPathPending)
+                        _pathIndex = FirstForwardEntryWaypoint(
+                            _path, _pathIndex, _sorken.Position, _entryForward);
+                    _entryPathPending = false;
+                }
                 else
                     _path.Clear();
             }
@@ -750,6 +767,32 @@ private void BeginCoverStart()
 
         public static bool CanAdvanceWithoutPath(bool hasObstacleGrid) => !hasObstacleGrid;
 
+        // El A* incluye el centro de la celda inicial. Cerca de una abertura esa celda
+        // puede quedar del lado exterior de la pared y hacer que, tras aterrizar, el
+        // Sorken retroceda antes de perseguir. Sólo en la primera ruta de la entrada
+        // saltamos centros redundantes o ubicados detrás del plano de ingreso.
+        public static int FirstForwardEntryWaypoint(
+            IReadOnlyList<Vector3> path, int startIndex,
+            Vector3 origin, Vector3 inwardForward)
+        {
+            if (path == null || path.Count == 0) return 0;
+            int index = Mathf.Clamp(startIndex, 0, path.Count - 1);
+            inwardForward.y = 0f;
+            if (inwardForward.sqrMagnitude <= 1e-6f) return index;
+            inwardForward.Normalize();
+
+            while (index < path.Count - 1)
+            {
+                Vector3 delta = path[index] - origin;
+                delta.y = 0f;
+                bool redundantCellCenter = delta.sqrMagnitude <= 0.04f;
+                bool returnsOutside = Vector3.Dot(delta, inwardForward) < 0f;
+                if (!redundantCellCenter && !returnsOutside) break;
+                index++;
+            }
+            return index;
+        }
+
         private void TickGrabbed(float dt)
         {
             _phaseTimer += dt;
@@ -802,6 +845,7 @@ private void BeginCoverStart()
                 NetworkManager.Instance.ServerDespawn(_sorkenNetId);
             _sorken = null; _sorkenNetId = 0; _marker = null;
             _hasTarget = false;
+            _entryPathPending = false;
         }
 
         private void ReleaseSorkenReservation()
