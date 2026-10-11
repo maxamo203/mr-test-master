@@ -162,7 +162,9 @@ public class VelethDirector : MonoBehaviour
         }
 
         Vector3 waypoint = _pathIndex < _path.Count ? _path[_pathIndex] : targetPos;
-        _veleth.MoveTo(waypoint, _night.velethChaseSpeed, dt);
+        _veleth.MoveTo(waypoint,
+            _night.velethChaseSpeed * EntitySpeedSettings.Multiplier *
+            _veleth.MovementMultiplier, dt);
         if (_pathIndex < _path.Count &&
             HorizontalDistance(_veleth.Position, _path[_pathIndex]) <= 0.2f)
             _pathIndex++;
@@ -172,7 +174,7 @@ public class VelethDirector : MonoBehaviour
     {
         _veleth.SetState(VelethState.Grabbing);
         _grabTimer = Mathf.Max(0f, _night.velethGrabHoldSeconds);
-        if (ServerDeaths.Kill(clientId))
+        if (ServerDeaths.Kill(clientId, _veleth.transform))
         {
             OnPlayerCaught?.Invoke(clientId);
             Debug.Log($"[Veleth] Jugador {clientId} atrapado.");

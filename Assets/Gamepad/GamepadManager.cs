@@ -40,8 +40,17 @@ namespace Gamepad
         public bool IsConnected => Current != null && Current.added;
         // True cuando el control conectado reporta "Mouse" en el nombre (ej: VR BOX Mouse).
         // En ese modo el stick manda delta de mouse en vez de eje analógico.
-        public bool UsesMouseInput => IsConnected &&
-            DisplayName.IndexOf("Mouse", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        public bool UsesMouseInput => IsConnected && EsVRBoxMouse(Current);
+        // Veces que cambió el gamepad activo desde que arrancó la app (diagnóstico: si sube
+        // solo, el mando activo está saltando entre dispositivos).
+        public int CambiosDeMando { get; private set; }
+
+        private static bool EsVRBoxMouse(UnityEngine.InputSystem.Gamepad g)
+        {
+            if (g == null) return false;
+            string n = string.IsNullOrEmpty(g.displayName) ? g.name : g.displayName;
+            return n.IndexOf("Mouse", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
         public GamepadBrand Brand { get; private set; } = GamepadBrand.None;
         public string DisplayName { get; private set; } = "";
 
@@ -105,11 +114,96 @@ namespace Gamepad
 
             // Lectura del pendorcho: siempre, Tick se auto-limpia si no aplica.
             VRBoxInput.Tick();
+            // Diagnóstico del modal de Control: no hace nada si el modal no está abierto.
+            ControllerDiagnostics.Tick();
+
+            ActualizarCapturaPuntero();
 
             // Navegación con gamepad de los menús IMGUI (foco global compartido). Ver
             // ImguiGamepadMenu: GamepadManager es el driver (BeginPass en OnGUI + Tick acá).
             ImguiGamepadMenu.Tick();
         }
+
+        // ── Captura de puntero (VR BOX en modo mouse) ─────────────────────────────
+        // El VR BOX mueve un cursor escondido del SO. Al llegar al borde de la pantalla el
+        // cursor se frena y Mouse.delta pasa a 0: con la palanca mantenida (luz intensa) la
+        // luz se "soltaba" sola al rato. Con Cursor.lockState = Locked el player de Unity pide
+        // requestPointerCapture: Android deja de dibujar/mover el cursor y le entrega a la app
+        // el movimiento RELATIVO (AXIS_RELATIVE_X/Y), sin bordes, y los botones dejan de
+        // pasar por el sistema. Los toques con el dedo no se capturan, siguen andando.
+        // Sólo en partida: en menús/lobby el cursor no molesta y no hace falta cambiar nada.
+        // Android suelta la captura cuando la ventana pierde el foco (cortina de
+        // notificaciones, otra app), así que al recuperarlo se vuelve a pedir.
+        // Además de Cursor.lockState se pide la captura directo a la vista enfocada de la
+        // Activity: con GameActivity el lockState solo no llegó a Android (dumpsys input:
+        // "Pointer Capture Requested: false, seq=0" con el VR BOX detectado). La vista de
+        // superficie de UnityPlayerGameActivity ya reenvía los eventos capturados a
+        // onTouchEvent, así que Unity los sigue recibiendo como mouse.
+        public bool QuiereCaptura => _quiereCaptura;
+        // Estado REAL en Android (View.hasPointerCapture). Se consulta sólo desde el
+        // diagnóstico (ConsultarCapturaAndroid), no cada frame.
+        public bool PunteroCapturado { get; private set; }
+        private bool _quiereCaptura;
+
+        private void ActualizarCapturaPuntero()
+        {
+            // Con el cursor bloqueado Unity no le manda eventos de mouse/toque al IMGUI, así
+            // que GUI.Button deja de responder: la pantalla de muerte / noche superada
+            // (DeathScreenUI) quedaba con los botones muertos. Ahí se suelta la captura.
+            var muerte = Gameplay.LocalDeath.Instance;
+            bool pantallaFinal = (muerte != null && muerte.PresentationReady) || Gameplay.NightResult.Sobrevivio;
+            bool quiere = UsesMouseInput && !pantallaFinal &&
+                          NetworkManager.Instance != null && NetworkManager.Instance.GameStarted;
+            if (quiere == _quiereCaptura) return;
+            _quiereCaptura = quiere;
+            PedirCaptura(quiere);
+        }
+
+        private void OnApplicationFocus(bool foco)
+        {
+            if (foco && _quiereCaptura) PedirCaptura(true);
+        }
+
+        private static void PedirCaptura(bool capturar)
+        {
+            Cursor.lockState = capturar ? CursorLockMode.Locked : CursorLockMode.None;
+#if UNITY_ANDROID && !UNITY_EDITOR
+            ConVistaEnfocada(v => v.Call(capturar ? "requestPointerCapture" : "releasePointerCapture"));
+#endif
+        }
+
+        public void ConsultarCapturaAndroid()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            ConVistaEnfocada(v => PunteroCapturado = v.Call<bool>("hasPointerCapture"));
+#else
+            PunteroCapturado = Cursor.lockState == CursorLockMode.Locked;
+#endif
+        }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        // Corre en el hilo de UI de Android (las vistas sólo se tocan desde ahí). La captura
+        // la tiene que pedir la vista con foco; si no hay, la decorView.
+        private static void ConVistaEnfocada(System.Action<AndroidJavaObject> accion)
+        {
+            try
+            {
+                using var up = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+                var act = up.GetStatic<AndroidJavaObject>("currentActivity");
+                act.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+                {
+                    try
+                    {
+                        var v = act.Call<AndroidJavaObject>("getCurrentFocus")
+                             ?? act.Call<AndroidJavaObject>("getWindow").Call<AndroidJavaObject>("getDecorView");
+                        accion(v);
+                    }
+                    catch (System.Exception e) { Debug.LogWarning($"[GamepadManager] Captura de puntero: {e.Message}"); }
+                }));
+            }
+            catch (System.Exception e) { Debug.LogWarning($"[GamepadManager] Captura de puntero: {e.Message}"); }
+        }
+#endif
 
         // Corre ANTES que los OnGUI de los menús (execution order -60) en cada pass: resetea el
         // índice de dibujo del navegador de menús. Ver ImguiGamepadMenu.
@@ -135,7 +229,14 @@ namespace Gamepad
         // Recalcula el gamepad activo a partir de los conectados.
         private void Refresh()
         {
-            UnityEngine.InputSystem.Gamepad pick = UnityEngine.InputSystem.Gamepad.current;
+            // El VR BOX en modo mouse manda siempre: Gamepad.current salta al último gamepad
+            // que mandó input, y si el SO registra otro gamepad además del "… Mouse", seguirlo
+            // apagaba UsesMouseInput a ratos y con eso la B de la linterna.
+            UnityEngine.InputSystem.Gamepad pick = null;
+            foreach (var g in UnityEngine.InputSystem.Gamepad.all)
+                if (g.added && EsVRBoxMouse(g)) { pick = g; break; }
+
+            if (pick == null) pick = UnityEngine.InputSystem.Gamepad.current;
             if (pick == null || !pick.added)
             {
                 pick = null;
@@ -156,6 +257,7 @@ namespace Gamepad
         {
             bool wasConnected = IsConnected;
             Current = g;
+            CambiosDeMando++;
             Brand = ClassifyBrand(g);
             DisplayName = string.IsNullOrEmpty(g.displayName) ? g.name : g.displayName;
             if (!wasConnected)
@@ -248,9 +350,7 @@ namespace Gamepad
             if (UsesMouseInput)
             {
                 s.leftStick = VRBoxInput.SmoothedStick;
-                var m  = Mouse.current;
-                var kb = Keyboard.current;
-                if (m != null) s.east = m.backButton.isPressed;  // botón B
+                s.east = VRBoxInput.BVisible;  // botón B (ver VRBoxInput: todos los mouse + escape)
                 // A = back de Android, C = vol+, D = vol- → interceptados por el SO, siempre false
                 return s;
             }

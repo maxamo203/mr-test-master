@@ -24,14 +24,20 @@ public sealed class SorkenDarknessCue : MonoBehaviour
         _sorken = GetComponent<SorkenEntity>();
         _createdAt = Time.time;
         CreateMist();
+
+        // La señal debe existir desde el mismo fotograma del spawn. Se crea ya con su
+        // intensidad máxima y se pre-simula para que no empiece como un emisor vacío.
+        _amount = 1f;
+        ApplyMist();
+        _mist.Simulate(0.5f, true, true, true);
+        _mist.Play(true);
     }
 
     private void Update()
     {
-        bool entering = _sorken != null &&
-            (_sorken.State == SorkenState.Idle ||
-             _sorken.State == SorkenState.EmergingDoor ||
-             _sorken.State == SorkenState.EmergingWindow);
+        // La niebla delata el punto de entrada durante toda la secuencia. Solo se
+        // desvanece cuando el Sorken ya termino de entrar y comienza la persecucion.
+        bool entering = _sorken != null && KeepsMistBuilt(_sorken.State);
 
         float speed = entering ? 1f / Mathf.Max(0.1f, _buildSeconds)
                                : 1f / Mathf.Max(0.1f, _fadeSeconds);
@@ -41,6 +47,12 @@ public sealed class SorkenDarknessCue : MonoBehaviour
         if (!entering && _amount <= 0.001f && Time.time > _createdAt + 0.2f)
             Destroy(this);
     }
+
+    public static bool KeepsMistBuilt(SorkenState state) =>
+        state == SorkenState.Idle ||
+        state == SorkenState.EmergingDoor ||
+        state == SorkenState.EmergingWindow ||
+        state == SorkenState.WindowLanding;
 
     private void CreateMist()
     {

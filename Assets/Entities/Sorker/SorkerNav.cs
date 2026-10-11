@@ -32,6 +32,9 @@ public class SorkerNav : MonoBehaviour
 
     // ── Grid ────────────────────────────────────────────────────────────────
     private bool[,] _blocked;
+    // Si no hay grid de obstaculos, los directores pueden avanzar en linea recta. Si hay
+    // grid y TryGetPath falla, no deben usar ese fallback porque atravesarian paredes.
+    public bool HasObstacleGrid => _blocked != null;
     private int     _cols, _rows;
     private float   _minX, _minZ;     // origen del grid en anchor-XZ
     private float   _cell;            // tamano efectivo de celda
@@ -159,6 +162,35 @@ public class SorkerNav : MonoBehaviour
         _built = true;
         _lastSig = SceneSignature();
     }
+
+public bool IsWalkable(Vector3 worldPosition)
+    {
+        if (WorldOrigin.Instance == null) return false;
+        if (!_built || SceneSignature() != _lastSig) Rebuild();
+        if (_blocked == null) return true;
+
+        Vector3 local = WorldOrigin.Instance.ToRelative(worldPosition);
+        return CellOf(local.x, local.z, out int col, out int row) && !_blocked[col, row];
+    }
+
+public bool HasClearLine(Vector3 startWorld, Vector3 endWorld)
+    {
+        if (WorldOrigin.Instance == null) return true;
+        if (!_built || SceneSignature() != _lastSig) Rebuild();
+        if (_blocked == null) return true;
+
+        Vector3 start = WorldOrigin.Instance.ToRelative(startWorld);
+        Vector3 end = WorldOrigin.Instance.ToRelative(endWorld);
+        if (!CellOf(start.x, start.z, out int startCol, out int startRow)) return false;
+        if (!CellOf(end.x, end.z, out int endCol, out int endRow)) return false;
+        if (_blocked[startCol, startRow] &&
+            !NearestFree(startCol, startRow, out startCol, out startRow)) return false;
+        if (_blocked[endCol, endRow]) return false;
+        return LineOfSight(new Vector2Int(startCol, startRow),
+                           new Vector2Int(endCol, endRow));
+    }
+
+
 
     // ── Test de solidez en (x,z) anchor-local ─────────────────────────────
     private bool IsSolid(SceneRegistry reg, float x, float z)

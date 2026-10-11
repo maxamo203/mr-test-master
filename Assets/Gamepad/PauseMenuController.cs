@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem.EnhancedTouch;
 using ETouch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 using Scanner;   // UIScale, UIBlocker
@@ -27,7 +28,7 @@ namespace Gamepad
         // subcategorías: Control (mando), Cardboard (calibración estéreo), Voz (chat de
         // voz, sólo en sesiones multijugador) y — SOLO en development build — Linterna
         // (tuning) y el toggle del Debug HUD.
-        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, VHS, Arbmos, Audio }
+        private enum Page { Main, Options, Control, ControlDiag, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, VHS, Arbmos, Entities, Audio }
 
         public static PauseMenuController Instance { get; private set; }
 
@@ -76,16 +77,39 @@ namespace Gamepad
         private static Texture2D _tex;
         private GUIStyle _btn, _icon, _title, _status, _battTxt, _toggleLbl;
 
+        // En el menú principal no hay nada que pausar (y sus OPCIONES ya cubren las del
+        // jugador): ni botón ni menú. Se cachea por escena para no comparar el nombre en
+        // cada evento de OnGUI.
+        private bool _enMenuPrincipal;
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
             if (!EnhancedTouchSupport.enabled) EnhancedTouchSupport.Enable();
+            ResolverEscena(SceneManager.GetActiveScene());
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance != this) return;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            Instance = null;
+        }
+
+        private void OnSceneLoaded(Scene s, LoadSceneMode m) => ResolverEscena(s);
+
+        private void ResolverEscena(Scene s)
+        {
+            _enMenuPrincipal = s.name == SceneFlow.EscenaMenu;
+            if (_enMenuPrincipal) _open = false;
         }
 
         // ----------------------------------------------------------------- OnGUI
         private void OnGUI()
         {
+            if (_enMenuPrincipal) return;
             UIScale.Begin();
             EnsureStyles();
             _items.Clear();
@@ -142,13 +166,14 @@ namespace Gamepad
                 if (hayVoz) { AddButton("voz", new Rect(x, y, w, 64f), "CHAT DE VOZ"); y += 76f; }
                 // US-11.1: el filtro VHS de la partida no se apaga (es atmósfera); lo
                 // que el jugador decide es si además cubre los menús.
-                AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS en menús",
+                AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS en pausa",
                           GameOptions.VhsEnMenus); y += 64f;
                 if (Debug.isDebugBuild)
                 {
                     AddButton("vhs",      new Rect(x, y, w, 64f), "VHS (DEV)");      y += 76f;
                     AddButton("linterna", new Rect(x, y, w, 64f), "LINTERNA (DEV)"); y += 76f;
                     AddButton("arbmos",   new Rect(x, y, w, 64f), "ARBMOS (DEV)");   y += 76f;
+                    AddButton("entidades", new Rect(x, y, w, 64f), "VELOCIDAD ENTIDADES (DEV)"); y += 76f;
                     AddToggle("debughud", new Rect(x, y, w, 52f), "Debug HUD (dev)",
                               DebugHud.Visible); y += 64f;
                     AddButton("dbgpaneles", new Rect(x, y, w, 64f), "PANELES DEBUG (DEV)"); y += 76f;
@@ -202,6 +227,15 @@ namespace Gamepad
                 GamepadVisualizer.Draw(gpArea, gm != null ? gm.Brand : GamepadBrand.None, st);
                 y += gh + 16f;
 
+                AddButton("controldiag", new Rect(x, y, w, 60f), "DIAGNÓSTICO"); y += 72f;
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+            }
+            else if (_page == Page.ControlDiag)
+            {
+                // Por qué un botón del mando a veces no llega (ver ControllerDiagnostics).
+                GUI.Label(new Rect(x, y, w, 50f), "Control", _title); y += 60f;
+                ControllerDiagnostics.Draw(new Rect(x, y, w, ControllerDiagnostics.Alto));
+                y += ControllerDiagnostics.Alto + 12f;
                 AddButton("volver", new Rect(x, y, w, 60f), "Volver");
             }
             else if (_page == Page.Cardboard)
@@ -359,32 +393,40 @@ namespace Gamepad
             }
             else if (_page == Page.Arbmos)
             {
-                // Gatillo de quietud del Arbmos: cada X segundos se genera una esfera de
-                // radio R sobre el jugador y, si no se sale de ella, se lo considera quieto
-                // (ver ArbmosDirector.UpdateQuietud). El radio es un número fijo de diseño,
-                // pero solo se puede calibrar probándolo en el celular — de ahí esta página
-                // y el wireframe. SOLO development build: en release manda la NightConfig.
+                // Umbrales del encuentro de luz de Arbmos V2. SOLO development build:
+                // en release siempre manda la NightConfig.
                 if (!Debug.isDebugBuild) { _page = Page.Options; return; }
 
                 GUI.Label(new Rect(x, y, w, 50f), "ARBMOS (DEV)", _title); y += 58f;
                 GUI.Label(new Rect(x + 14f, y, w - 28f, 56f),
-                          "Con los valores de la noche apagado, manda la NightConfig. " +
-                          "El wireframe solo se ve en el host.", _status);
+                          "Con el override apagado manda la NightConfig.", _status);
                 y += 62f;
 
-                AddToggle("arbwire", new Rect(x, y, w, 52f), "Wireframe de la esfera",
-                          Gameplay.ArbmosDebug.Wireframe); y += 62f;
                 AddToggle("arbover", new Rect(x, y, w, 52f), "Pisar los valores de la noche",
                           Gameplay.ArbmosDebug.Activo); y += 66f;
 
-                AddSlider("arb_radio",   new Rect(x, y, w, 60f), "Radio de la esfera",
-                          Gameplay.ArbmosDebug.RadioDev,   0.05f, 3f,  "{0:0.00} m"); y += 68f;
-                AddSlider("arb_ventana", new Rect(x, y, w, 60f), "Ventana (cada cuánto)",
-                          Gameplay.ArbmosDebug.VentanaDev, 0.5f, 30f,  "{0:0.0} s");  y += 68f;
-                AddSlider("arb_gracia",  new Rect(x, y, w, 60f), "Gracia fuera de la esfera",
-                          Gameplay.ArbmosDebug.GraciaDev,  0f,    3f,  "{0:0.00} s"); y += 68f;
+                AddSlider("arb_hide", new Rect(x, y, w, 60f), "Ocultacion con luz apagada",
+                          Gameplay.ArbmosDebug.HideDev, 0.1f, 10f, "{0:0.0} s"); y += 68f;
+                AddSlider("arb_exposure", new Rect(x, y, w, 60f), "Exposicion para provocar",
+                          Gameplay.ArbmosDebug.ExposureDev, 0.05f, 5f, "{0:0.00} s"); y += 68f;
+                AddSlider("arb_commit", new Rect(x, y, w, 60f), "Demora del golpe",
+                          Gameplay.ArbmosDebug.AttackCommitDev, 0f, 3f, "{0:0.00} s"); y += 68f;
 
                 y += 6f;
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+            }
+            else if (_page == Page.Entities)
+            {
+                if (!Debug.isDebugBuild) { _page = Page.Options; return; }
+
+                GUI.Label(new Rect(x, y, w, 50f), "VELOCIDAD ENTIDADES (DEV)", _title); y += 58f;
+                GUI.Label(new Rect(x + 14f, y, w - 28f, 56f),
+                          "Multiplica en vivo el desplazamiento de Sorken, Arbmos y Veleth. " +
+                          "En multijugador el host conserva la autoridad.", _status);
+                y += 66f;
+                AddSlider("ent_velocidad", new Rect(x, y, w, 60f), "Multiplicador",
+                          EntitySpeedSettings.Multiplier, EntitySpeedSettings.MinMultiplier,
+                          EntitySpeedSettings.MaxMultiplier, "{0:0.00}x"); y += 70f;
                 AddButton("volver", new Rect(x, y, w, 60f), "Volver");
             }
             else if (_page == Page.DebugPanels)
@@ -559,7 +601,8 @@ namespace Gamepad
         {
             switch (_page)
             {
-                case Page.Control:    return 820f;
+                case Page.Control:    return 892f;
+                case Page.ControlDiag: return 168f + ControllerDiagnostics.Alto;
                 case Page.Flashlight: return 728f;   // +68 por el slider "Drenaje batería"
                 case Page.Cardboard:
                 {
@@ -571,7 +614,7 @@ namespace Gamepad
                 // +64 por el toggle "Filtro VHS en menús" (prod), +76 por "VHS (DEV)" y
                 // +76 por "ARBMOS (DEV)". El volumen dejó de ser un slider acá: ahora es el
                 // botón AUDIO (mismo alto que el slider que reemplazó, +4).
-                case Page.Options:    return (Debug.isDebugBuild ? 992f : 624f) + (hayVoz ? 76f : 0f);
+                case Page.Options:    return (Debug.isDebugBuild ? 1068f : 624f) + (hayVoz ? 76f : 0f);
                 // 3 sliders + la nota sobre el chat de voz.
                 case Page.Audio:      return 420f;
                 case Page.ARCalidad:  return 490f;
@@ -579,6 +622,7 @@ namespace Gamepad
                 case Page.VHS:        return 760f;
                 // 2 toggles + 3 sliders + la ayuda de arriba.
                 case Page.Arbmos:     return 620f;
+                case Page.Entities:   return 320f;
                 case Page.Voice:
                 {
                     var vc = Voice.VoiceChatManager.Instance;
@@ -619,7 +663,7 @@ namespace Gamepad
         private static bool IsSlider(string id) =>
             id != null && (id.StartsWith("fl_") || id.StartsWith("cb_") ||
                            id.StartsWith("opt_") || id.StartsWith("voz_") ||
-                           id.StartsWith("vhs_") || id.StartsWith("arb_"));
+                           id.StartsWith("vhs_") || id.StartsWith("arb_") || id.StartsWith("ent_"));
 
         // "voz_p3" → el slider de volumen del cliente 3. Los ids se arman en la página
         // de voz a partir del roster, así que son dinámicos.
@@ -646,9 +690,10 @@ namespace Gamepad
                 case "cb_offR":      step = 0.005f; break;
                 case "cb_ipd":       step = 1f;     break;   // milímetros
                 case "cb_conv":      step = 0.25f;  break;   // metros
-                case "arb_radio":    step = 0.05f;  break;   // metros
-                case "arb_ventana":  step = 0.5f;   break;   // segundos
-                case "arb_gracia":   step = 0.05f;  break;   // segundos
+                case "arb_hide":     step = 0.1f;   break;
+                case "arb_exposure": step = 0.05f;  break;
+                case "arb_commit":   step = 0.05f;  break;
+                case "ent_velocidad": step = 0.05f; break;
                 case "opt_vol":
                 case "opt_musica":
                 case "opt_sfx":      step = 5f;     break;   // porcentaje
@@ -689,9 +734,10 @@ namespace Gamepad
                 case "vhs_jit":      return Gameplay.VHSSettings.Jitter     * 100f;
                 case "vhs_vin":      return Gameplay.VHSSettings.Vineta     * 100f;
                 case "vhs_tinte":    return Gameplay.VHSSettings.Tinte      * 100f;
-                case "arb_radio":    return Gameplay.ArbmosDebug.RadioDev;
-                case "arb_ventana":  return Gameplay.ArbmosDebug.VentanaDev;
-                case "arb_gracia":   return Gameplay.ArbmosDebug.GraciaDev;
+                case "arb_hide":     return Gameplay.ArbmosDebug.HideDev;
+                case "arb_exposure": return Gameplay.ArbmosDebug.ExposureDev;
+                case "arb_commit":   return Gameplay.ArbmosDebug.AttackCommitDev;
+                case "ent_velocidad": return EntitySpeedSettings.Multiplier;
             }
             return 0f;
         }
@@ -731,9 +777,10 @@ namespace Gamepad
                 case "vhs_vin":      Gameplay.VHSSettings.Vineta     = Mathf.Clamp(value, 0f, 100f) / 100f; break;
                 case "vhs_tinte":    Gameplay.VHSSettings.Tinte      = Mathf.Clamp(value, 0f, 100f) / 100f; break;
                 // Los arb_ clampean adentro de ArbmosDebug (setters).
-                case "arb_radio":    Gameplay.ArbmosDebug.RadioDev   = value; break;
-                case "arb_ventana":  Gameplay.ArbmosDebug.VentanaDev = value; break;
-                case "arb_gracia":   Gameplay.ArbmosDebug.GraciaDev  = value; break;
+                case "arb_hide":     Gameplay.ArbmosDebug.HideDev         = value; break;
+                case "arb_exposure": Gameplay.ArbmosDebug.ExposureDev     = value; break;
+                case "arb_commit":   Gameplay.ArbmosDebug.AttackCommitDev = value; break;
+                case "ent_velocidad": EntitySpeedSettings.Multiplier = value; break;
             }
         }
 
@@ -794,11 +841,12 @@ namespace Gamepad
             if (gp != null && gp.startButton.wasPressedThisFrame)
                 Toggle();
 
-            // VR Box Mouse: right button abre el menú (solo si está cerrado; si está abierto
-            // lo maneja el bloque de navegación más abajo para no hacer toggle+back en el mismo frame).
-            if (GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput &&
-                !_open && VRBoxInput.CancelDown)
-                Toggle();
+            // VR Box Mouse: la B ya NO abre el menú — en partida es el botón de la linterna
+            // (ContextActionController). Lo abre la A: en Android su clic llega como un TOQUE
+            // de un dedo donde está el cursor escondido, así que con el menú cerrado cualquier
+            // toque lo abre (ver el bloque de tap). Con el menú abierto la B sigue siendo
+            // "volver" (bloque de navegación más abajo).
+            bool vrBoxMouse = GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput;
 
             // Tap (dedos/mouse): botón de pausa siempre; ítems si está abierto.
             if (TryGetTapRelease(out var tapPx))
@@ -813,7 +861,14 @@ namespace Gamepad
                 var pv = new Vector2((tapPx.x - sg.x) / f,
                                      (Screen.height - tapPx.y - sg.y) / f); // a virtual
 
-                if (_pauseBtnRect.Contains(pv))
+                // La A del VR BOX llega como un toque donde está el cursor escondido: con el
+                // menú cerrado, un toque "suelto" lo abre. Sólo en plena partida y fuera de
+                // cualquier UI — si no, también lo abría cada toque con el dedo en los menús y
+                // pantallas de la app (al pasar de una a otra salía la pausa).
+                bool aDelVRBox = !_open && vrBoxMouse &&
+                                 NetworkManager.Instance != null && NetworkManager.Instance.GameStarted &&
+                                 !UIBlocker.IsPointerOver(tapPx);
+                if (_pauseBtnRect.Contains(pv) || aDelVRBox)
                 {
                     Toggle();
                 }
@@ -855,15 +910,19 @@ namespace Gamepad
 
             if (!_open) return;
 
+            // En el diagnóstico la B es justo lo que se está probando: no puede sacarte de la
+            // página. Se sale con "Volver".
+            bool probandoB = _page == Page.ControlDiag;
+
             // Volver/cerrar con East (B/○).
-            if (gp != null && gp.buttonEast.wasPressedThisFrame) { Back(); return; }
+            if (!probandoB && gp != null && gp.buttonEast.wasPressedThisFrame) { Back(); return; }
 
             // VR Box Mouse: navegación con VRBoxInput (ya procesado por GamepadManager.Update).
             if (GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput)
             {
                 if (_items.Count > 0)
                 {
-                    if (VRBoxInput.CancelDown)  { Back(); return; }
+                    if (!probandoB && VRBoxInput.CancelDown) { Back(); return; }
                     if (VRBoxInput.ConfirmDown) Activate(_items[_focus].id);
 
                     var delta = VRBoxInput.Delta;
@@ -938,6 +997,7 @@ namespace Gamepad
         // -------------------------------------------------------------- Acciones
         private void Toggle()
         {
+            if (_enMenuPrincipal && !_open) return;   // el Start del mando tampoco la abre acá
             CommitEdit();
             _open = !_open;
             if (_open) AudioManager.Sonar(c => c.uiConfirmar);
@@ -958,6 +1018,8 @@ namespace Gamepad
             {
                 case Page.Options:
                     _page = Page.Main; _focus = 0; _focusLast = true; break;
+                case Page.ControlDiag:
+                    _page = Page.Control; _focus = 0; _focusLast = true; break;
                 case Page.Cardboard:
                     SaveCardboard();
                     _page = Page.Options; _focus = 0; _focusLast = true; break;
@@ -969,6 +1031,7 @@ namespace Gamepad
                 case Page.ARCalidad:
                 case Page.VHS:
                 case Page.Arbmos:
+                case Page.Entities:
                     _page = Page.Options; _focus = 0; _focusLast = true; break;
                 default: // Main
                     _open = false; break;
@@ -1000,6 +1063,7 @@ namespace Gamepad
                 case "opciones":  _page = Page.Options;    _focus = 0; _focusLast = true; break;
                 case "audio":     _page = Page.Audio;      _focus = 0; _focusLast = true; break;
                 case "control":   _page = Page.Control;    _focus = 0; _focusLast = true; break;
+                case "controldiag": _page = Page.ControlDiag; _focus = 0; _focusLast = true; break;
                 case "cardboard": _page = Page.Cardboard;  _focus = 0; _focusLast = true; break;
                 case "arcalidad": _page = Page.ARCalidad;  _focus = 0; _focusLast = true; break;
                 case "arq_0":     ARQuality.Actual = ARQuality.Nivel.Rendimiento; break;
@@ -1034,11 +1098,13 @@ namespace Gamepad
                     break;
                 case "vhsrec":    Gameplay.VHSSettings.Rec = !Gameplay.VHSSettings.Rec; break;
 
-                // ── Arbmos (DEV) — gatillo de quietud ────────────────────────
+                // ── Arbmos V2 (DEV) — umbrales de luz ───────────────────────
                 case "arbmos":
                     if (Debug.isDebugBuild) { _page = Page.Arbmos; _focus = 0; _focusLast = true; }
                     break;
-                case "arbwire":   Gameplay.ArbmosDebug.Wireframe = !Gameplay.ArbmosDebug.Wireframe; break;
+                case "entidades":
+                    if (Debug.isDebugBuild) { _page = Page.Entities; _focus = 0; _focusLast = true; }
+                    break;
                 case "arbover":   Gameplay.ArbmosDebug.Activo    = !Gameplay.ArbmosDebug.Activo;    break;
             }
         }

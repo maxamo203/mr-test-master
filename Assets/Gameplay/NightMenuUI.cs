@@ -34,10 +34,13 @@ namespace Gameplay
         [Tooltip("Escena del lobby/gameplay a cargar al continuar.")]
         [SerializeField] private string _lobbyScene = "SampleScene";
 
-        // Set de noches activo: en development build usa las DEV (si hay); en release,
-        // siempre las de prod. Asi las noches dev nunca llegan a una build de release.
+        // Set de noches activo: el selector Mortuorium > Datos en Play permite probar
+        // DEV o PROD desde el Editor. Fuera del Editor, una development build usa DEV
+        // y una release siempre usa PROD.
         private NightConfig[] Nights =>
-            (Debug.isDebugBuild && _devNights != null && _devNights.Length > 0) ? _devNights : _nights;
+            (PlayDataProfile.UseDevelopment && _devNights != null && _devNights.Length > 0)
+                ? _devNights
+                : _nights;
 
         private enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control }
 
@@ -105,6 +108,11 @@ namespace Gameplay
         {
             var kb = Keyboard.current;
             if (kb == null || !kb.escapeKey.wasPressedThisFrame) return;
+
+            // A veces la B del VR BOX llega como "atrás" (escape). En CONTROL eso te sacaba
+            // del diagnóstico justo mientras probabas la B; ahí se sale con el botón volver.
+            if (_pantalla == Pantalla.Control && Gamepad.GamepadManager.Instance != null &&
+                Gamepad.GamepadManager.Instance.UsesMouseInput) return;
 
             // Mismo orden de precedencia que OnGUI (qué overlay tapa a qué otro).
             // Bloqueo por versión no compatible: a propósito no tiene botón de
@@ -768,8 +776,8 @@ namespace Gameplay
             // US-11.1: el filtro VHS en la PARTIDA es parte de la atmósfera y no se
             // apaga; sobre los menús es opcional (gusto y legibilidad).
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
-                         "FILTRO VHS EN MENÚS",
-                         "El grano y las líneas de cinta también sobre esta pantalla",
+                         "FILTRO VHS EN PAUSA",
+                         "El grano y las líneas de cinta también sobre el menú de pausa",
                          GameOptions.VhsEnMenus,
                          () => GameOptions.VhsEnMenus = !GameOptions.VhsEnMenus);
             y += 68f;
@@ -851,11 +859,23 @@ namespace Gameplay
                 y += 30f;
             }
 
-            float gpH = (vw - Pad * 2f) * 0.62f;
-            var gpArea = new Rect(Pad, y, vw - Pad * 2f, gpH);
+            // Mando a la izquierda y diagnóstico a la derecha si entra (landscape); si no, uno
+            // debajo del otro achicando el mando para dejarle lugar al diagnóstico.
+            float ancho = vw - Pad * 2f;
+            bool lado = ancho >= 900f;
+            float gpW = lado ? Mathf.Min(ancho * 0.5f - 12f, (vh - y - 20f) / 0.62f)
+                             : Mathf.Min(ancho, Mathf.Max(200f, (vh - y - ControllerDiagAlto - 40f) / 0.62f));
+            float gpH = gpW * 0.62f;
+            var gpArea = new Rect(Pad, y, gpW, gpH);
             T.Fill(gpArea, new Color(0.06f, 0.06f, 0.07f, 1f));
             var st = gm != null ? gm.ReadState() : default;
             Gamepad.GamepadVisualizer.Draw(gpArea, gm != null ? gm.Brand : Gamepad.GamepadBrand.None, st);
+
+            var diag = lado ? new Rect(Pad + gpW + 24f, y, ancho - gpW - 24f, ControllerDiagAlto)
+                            : new Rect(Pad, y + gpH + 16f, ancho, ControllerDiagAlto);
+            Gamepad.ControllerDiagnostics.Draw(diag);
         }
+
+        private static float ControllerDiagAlto => Gamepad.ControllerDiagnostics.Alto;
     }
 }

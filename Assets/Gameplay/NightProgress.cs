@@ -8,13 +8,15 @@ namespace Gameplay
     // lo está; cada noche superada desbloquea la siguiente. No se guarda un set porque
     // el desbloqueo es estrictamente secuencial.
     //
-    // La clave se parte entre dev y prod a propósito: el menú usa `_devNights` en
-    // development build y `_nights` en release (ver NightMenuUI.Nights), así que son
-    // dos catálogos distintos y compartir el contador daría índices desbloqueados que
-    // no corresponden. Las PlayerPrefs son de la app, no del build.
+    // La clave se parte entre dev y prod a propósito: el menú puede usar cualquiera
+    // de los dos catálogos (ver NightMenuUI.Nights y PlayDataProfile), así que compartir
+    // el contador daría índices desbloqueados que no corresponden. Las PlayerPrefs son
+    // de la app, no del build.
     public static class NightProgress
     {
-        private static string Key => Debug.isDebugBuild ? "prog_noches_dev" : "prog_noches";
+        private static string Key => PlayDataProfile.UseDevelopment
+            ? "prog_noches_dev"
+            : "prog_noches";
 
         // Cantidad de noches desbloqueadas (siempre >= 1: la primera es de arranque).
         public static int Desbloqueadas => Mathf.Max(1, PlayerPrefs.GetInt(Key, 1));

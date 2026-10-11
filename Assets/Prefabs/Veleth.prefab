@@ -49,6 +49,8 @@ MonoBehaviour:
   _turnSpeed: 260
   _animator: {fileID: 4636031793686999324}
   _emergenceDuration: 8.3
+  _crawlImpulsesPerLoop: 4
+  _plantedSpeedRatio: 0.2
 --- !u!114 &7389289368033313842
 MonoBehaviour:
   m_ObjectHideFlags: 0

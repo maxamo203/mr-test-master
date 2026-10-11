@@ -12,6 +12,7 @@ public enum SorkenState : byte
     CoverStarting = 5,
     CoverWalking  = 6,
     EmergingWindow = 7,
+    WindowLanding = 8,
 }
 
 // Logica pura del Sorken (sin red). El GameDirector (server) le fija el estado y lo
@@ -56,14 +57,38 @@ public class SorkenEntity : MonoBehaviour
     private Vector3    _desiredPos;
     private Quaternion _desiredRot;
     private bool       _hasDesired;
+    private SorkenAnimator _sorkenAnimator;
+
+    public float MovementMultiplier =>
+        _sorkenAnimator != null ? _sorkenAnimator.MovementMultiplier : 1f;
+
+    public float WindowLandingDuration =>
+        _sorkenAnimator != null ? _sorkenAnimator.WindowLandingDuration : 1.1f;
+
+    public float WindowEntryDuration =>
+        _sorkenAnimator != null ? _sorkenAnimator.WindowEntryDuration : 5.93f;
+
+    public float WindowEntryRootOffset(float normalizedTime) =>
+        _sorkenAnimator != null
+            ? _sorkenAnimator.WindowEntryRootOffset(normalizedTime)
+            : SorkenAnimator.EvaluateWindowEntryRootOffset(normalizedTime);
+
+    public void ConfigureWindowLanding(float dropHeight) =>
+        _sorkenAnimator?.ConfigureWindowLanding(dropHeight);
 
     private void Awake()
     {
+        _sorkenAnimator = GetComponent<SorkenAnimator>();
         _desiredPos = transform.position;
         _desiredRot = transform.rotation;
     }
 
-    public void SetState(SorkenState s) => State = s;
+    public void SetState(SorkenState s)
+    {
+        if (State == s) return;
+        State = s;
+        _sorkenAnimator?.SynchronizeState(s);
+    }
 
     // Avanza hacia target (horizontal) girando suave. La velocidad la decide el
     // llamador (GameDirector, desde NightConfig.sorkenChaseSpeed).

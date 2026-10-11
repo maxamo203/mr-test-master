@@ -2,48 +2,39 @@ using UnityEngine;
 
 namespace Gameplay
 {
-    // Perillas de DESARROLLO del gatillo de quietud del Arbmos (ver ArbmosDirector.UpdateQuietud).
-    //
-    // El radio de la esfera de quietud es un numero FIJO de diseño (vive en la NightConfig),
-    // pero es imposible de calibrar sin probarlo en el celular: depende del jitter del
-    // tracking, del drift y de como cada persona sostiene el telefono. Asi que en
-    // development build (pausa -> Opciones -> ARBMOS (DEV)) se puede pisar en vivo y ver el
-    // wireframe de las esferas segun se van generando.
+    // Perillas de DESARROLLO del encuentro de luz de Arbmos V2. Permiten calibrar en el
+    // dispositivo los tres umbrales principales sin modificar los assets de las noches.
     //
     // Tiers (ver CLAUDE.md): en RELEASE nada de esto existe — los getters devuelven
-    // directamente el valor de la noche (una comparacion contra una constante que el
-    // compilador/JIT resuelve) y el wireframe es constante false, asi que no se dibuja ni
-    // se crean las mallas. La persistencia en PlayerPrefs tambien es solo dev.
+    // directamente el valor de la noche. La persistencia en PlayerPrefs tambien es solo dev.
     public static class ArbmosDebug
     {
         private const string KeyPrefijo = "arbmos_dev_";
 
         // Si esta apagado, se usan los valores de la NightConfig (comportamiento de release).
         private static bool  _override;
-        private static float _radio   = 0.5f;
-        private static float _ventana = 5f;
-        private static float _gracia  = 0.4f;
-        private static bool  _wireframe;
+        private static float _hide = 3f;
+        private static float _exposure = 0.8f;
+        private static float _attackCommit = 0.35f;
 
         static ArbmosDebug()
         {
             if (!Debug.isDebugBuild) return;
             _override  = PlayerPrefs.GetInt(KeyPrefijo + "override", 0) == 1;
-            _radio     = PlayerPrefs.GetFloat(KeyPrefijo + "radio",   _radio);
-            _ventana   = PlayerPrefs.GetFloat(KeyPrefijo + "ventana", _ventana);
-            _gracia    = PlayerPrefs.GetFloat(KeyPrefijo + "gracia",  _gracia);
-            _wireframe = PlayerPrefs.GetInt(KeyPrefijo + "wire", 0) == 1;
+            _hide         = PlayerPrefs.GetFloat(KeyPrefijo + "hide", _hide);
+            _exposure     = PlayerPrefs.GetFloat(KeyPrefijo + "exposure", _exposure);
+            _attackCommit = PlayerPrefs.GetFloat(KeyPrefijo + "attack_commit", _attackCommit);
         }
 
         // ── Valores efectivos que consume el director ─────────────────────────
-        public static float Radio(NightConfig n) =>
-            Activo ? _radio   : (n != null ? n.arbmosStillRadius         : 0.5f);
+        public static float HideSeconds(NightConfig n) => Mathf.Max(0.1f,
+            Activo ? _hide : (n != null ? n.arbmosHideSeconds : 3f));
 
-        public static float Ventana(NightConfig n) =>
-            Activo ? _ventana : (n != null ? n.arbmosStillInvokeSeconds  : 5f);
+        public static float ExposureSeconds(NightConfig n) => Mathf.Max(0.05f,
+            Activo ? _exposure : (n != null ? n.arbmosExposureSeconds : 0.8f));
 
-        public static float Gracia(NightConfig n) =>
-            Activo ? _gracia  : (n != null ? n.arbmosStillOutsideGrace   : 0.4f);
+        public static float AttackCommitSeconds(NightConfig n) => Mathf.Max(0f,
+            Activo ? _attackCommit : (n != null ? n.arbmosAttackCommitSeconds : 0.35f));
 
         // ── Perillas (solo se tocan desde el menu de pausa en development build) ──
         public static bool Activo
@@ -52,17 +43,9 @@ namespace Gameplay
             set { _override = value; GuardarInt("override", value); }
         }
 
-        public static float RadioDev   { get => _radio;   set { _radio   = Mathf.Clamp(value, 0.05f, 3f);  Guardar("radio",   _radio);   } }
-        public static float VentanaDev { get => _ventana; set { _ventana = Mathf.Clamp(value, 0.5f, 30f);  Guardar("ventana", _ventana); } }
-        public static float GraciaDev  { get => _gracia;  set { _gracia  = Mathf.Clamp(value, 0f,    3f);  Guardar("gracia",  _gracia);  } }
-
-        // Wireframe de la esfera de quietud del jugador local (solo host: el director es
-        // server-authoritative y solo el server sabe donde esta la esfera de cada uno).
-        public static bool Wireframe
-        {
-            get => Debug.isDebugBuild && _wireframe;
-            set { _wireframe = value; GuardarInt("wire", value); }
-        }
+        public static float HideDev { get => _hide; set { _hide = Mathf.Clamp(value, 0.1f, 10f); Guardar("hide", _hide); } }
+        public static float ExposureDev { get => _exposure; set { _exposure = Mathf.Clamp(value, 0.05f, 5f); Guardar("exposure", _exposure); } }
+        public static float AttackCommitDev { get => _attackCommit; set { _attackCommit = Mathf.Clamp(value, 0f, 3f); Guardar("attack_commit", _attackCommit); } }
 
         private static void Guardar(string k, float v)
         {

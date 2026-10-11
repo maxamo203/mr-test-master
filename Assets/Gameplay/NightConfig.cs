@@ -55,51 +55,55 @@ namespace Gameplay
 
         [Header("Linterna")]
         public float flashlightMaxCharge = 100f;
+        [Tooltip("Consumo por segundo en el modo tenue.")]
         public float flashlightDrainPerSecond = 2f;
+        [Tooltip("Consumo por segundo mientras se mantiene el modo intenso.")]
+        public float flashlightBrightDrainPerSecond = 6f;
 
         [Header("Cordura")]
         public float sanityMax = 100f;
-        [Tooltip("Segundos con la linterna apagada antes de que empiece a drenar cordura.")]
-        public float flashlightOffThreshold = 5f;
-        public float sanityDrainPerSecond = 4f;
 
-        [Header("Arbmos (alucinacion de cordura — individual por jugador)")]
+        [Header("Arbmos V2 (alucinacion individual por jugador)")]
         [Tooltip("Master switch: activar SOLO en las noches donde aparece el Arbmos (doc: noche 4+).")]
         public bool arbmosActive = false;
-        [Tooltip("Duracion (s) de la VENTANA de quietud. Cada X segundos se abre una esfera nueva " +
-                 "centrada en el jugador; al cerrarse, si no se salio de ella se lo considera quieto " +
-                 "y se intenta invocar al Arbmos. Ver ArbmosDirector.UpdateQuietud.")]
-        public float arbmosStillInvokeSeconds = 5f;
-        [Tooltip("Radio (m) de esa esfera: cuanto se puede desplazar el jugador dentro de la ventana " +
-                 "sin dejar de estar 'quieto'. Se mide sobre el eje del CUERPO, no sobre la camara, asi " +
-                 "girar en el lugar para mirar alrededor no cuenta como caminar; ademas se tolera mas " +
-                 "cuanto mas gire. En dev se puede pisar desde pausa -> ARBMOS (DEV).")]
-        public float arbmosStillRadius = 0.5f;
-        [Tooltip("Segundos que el jugador puede estar FUERA de la esfera sin invalidar la ventana. " +
-                 "Absorbe los saltos de una correccion de tracking (un frame malo no tiene por que " +
-                 "costar la ventana entera); salir de verdad supera esta gracia enseguida.")]
-        public float arbmosStillOutsideGrace = 0.4f;
-        [Tooltip("Cuanto permanece la alucinacion no letal (s).")]
-        public float arbmosPresentSeconds = 6f;
-        [Tooltip("Velocidad (m/s) con la que el Arbmos deriva hacia el jugador mientras drena (anim running).")]
-        public float arbmosPresentFollowSpeed = 1.2f;
+        [Tooltip("Solo DEV: invoca al terminar el cooldown sin tirar probabilidad.")]
+        public bool arbmosForceSpawnAfterCooldown = false;
         [Tooltip("Espera (s) entre alucinaciones del MISMO jugador (rango, al azar).")]
         public float arbmosCooldownMin = 20f;
         public float arbmosCooldownMax = 40f;
         [Tooltip("A que distancia (m) del jugador, hacia donde mira, aparece el Arbmos.")]
         public float arbmosSpawnDistance = 2.5f;
-        [Tooltip("Cordura por segundo que drena si el jugador se MUEVE mientras el Arbmos esta presente.")]
-        public float arbmosSanityDrainPerSecond = 6f;
-        [Tooltip("Probabilidad base [0..1] de que aparezca al cumplirse el gatillo de quietud.")]
+        [Tooltip("Probabilidad base [0..1] de aparicion al terminar el cooldown.")]
         public float arbmosSpawnChancePerAttempt = 0.6f;
-        [Tooltip("Multiplicador de esa probabilidad cuando la linterna esta apagada.")]
-        public float arbmosFlashlightOffChanceMul = 2f;
+        [Tooltip("Segundos continuos con la linterna apagada para ocultar una aparicion normal.")]
+        [Min(0.1f)] public float arbmosHideSeconds = 3f;
+        [Tooltip("Segundos de luz directa sobre la cabeza necesarios para comprometer el ataque.")]
+        [Min(0.05f)] public float arbmosExposureSeconds = 0.8f;
+        [Tooltip("Demora breve entre comprometer el ataque normal y aplicar el daño.")]
+        [Min(0f)] public float arbmosAttackCommitSeconds = 0.35f;
+        [Tooltip("Techo de velocidad (m/s). La velocidad real también respeta la distancia por paso del clip.")]
+        [Min(0.1f)] public float arbmosAttackChaseSpeed = 2.5f;
+        [Tooltip("Limite de seguridad (s) del ataque normal si no consigue alcanzar al jugador.")]
+        [Min(0.1f)] public float arbmosAttackMaxSeconds = 14f;
+        [Tooltip("Distancia horizontal a la que ejecuta el susto y aplica el golpe de cordura.")]
+        [Min(0.05f)] public float arbmosAttackGrabRange = 1f;
+        [Tooltip("Cordura que quita un ataque normal. Nunca mata directamente.")]
+        [Min(0f)] public float arbmosSanityDamage = 30f;
+        [Tooltip("Altura de respaldo del punto de mirada si el prefab no tiene lookTarget.")]
+        [Min(0f)] public float arbmosLookTargetHeight = 1.65f;
+        [Tooltip("Radio tolerado alrededor de la cabeza para detectar el haz.")]
+        [Min(0f)] public float arbmosLookTargetRadius = 0.25f;
 
         [Header("Arbmos letal (cordura en cero)")]
         [Tooltip("Segundos inmovil (sin aura, distorsion en escalada) antes de embestir.")]
         public float arbmosLethalStalkSeconds = 3f;
         [Tooltip("Velocidad (m/s) de la embestida letal.")]
         public float arbmosLethalChaseSpeed = 3.5f;
+        [Tooltip("Limite de seguridad de la persecucion final. Al vencer, completa la muerte " +
+                 "aunque la navegacion no encuentre una ruta, para que la secuencia no quede trabada.")]
+        [Min(0.1f)] public float arbmosLethalMaxSeconds = 8f;
+        [Tooltip("Frecuencia con la que recalcula la ruta durante la persecucion final.")]
+        [Min(0.05f)] public float arbmosLethalRepathSeconds = 0.3f;
         [Tooltip("Distancia (m) a la que el Arbmos letal atrapa al jugador.")]
         public float arbmosGrabRange = 1.2f;
 

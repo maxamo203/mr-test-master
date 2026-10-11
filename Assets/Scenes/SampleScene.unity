@@ -1084,6 +1084,8 @@ MonoBehaviour:
   _debugHud: 1
   _practiceMode: 0
   _enterClearance: 0.5
+  _doorInsideClearance: 0.08
+  _doorOutsideDepth: 1
 --- !u!4 &862056582
 Transform:
   m_ObjectHideFlags: 0
@@ -1131,6 +1133,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Bateries.BatteryPickupController
   showActionButton: 1
+  brightHoldSeconds: 0.5
 --- !u!4 &1202678327
 Transform:
   m_ObjectHideFlags: 0

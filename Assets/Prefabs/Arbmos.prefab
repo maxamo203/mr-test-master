@@ -1283,7 +1283,11 @@ MonoBehaviour:
   - {fileID: 1748937508322799092, guid: 653b8c045f6c8124391e4497c57fbbcb, type: 3}
   - {fileID: 1709243389360883414, guid: 653b8c045f6c8124391e4497c57fbbcb, type: 3}
   - {fileID: 5423690845542998801, guid: 653b8c045f6c8124391e4497c57fbbcb, type: 3}
-  chaseClip: {fileID: -2087316994779407254, guid: 428e5c1467e4e2345a724a1aaef480c8, type: 3}
+  chaseClip: {fileID: 7400000, guid: 70aa4c3997f78584487a006a3bb5acdd, type: 2}
+  _stepsPerLoop: 6
+  _metersPerStep: 1.5
+  _chasePlaybackSpeed: 1
+  _plantedSpeedRatio: 0.15
   _blendSpeed: 6
 --- !u!114 &7605124617447009998
 MonoBehaviour:
@@ -1299,6 +1303,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ArbmosEntity
   TurnSpeed: 180
   ModelRotationOffset: {x: 0, y: 0, z: 0}
+  lookTarget: {fileID: 0}
   distortion:
     enabled: 1
     baseIntensity: 0

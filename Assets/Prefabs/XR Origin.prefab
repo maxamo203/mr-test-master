@@ -47,7 +47,7 @@ MonoBehaviour:
   color: {r: 0.9622642, g: 0.26779994, b: 0.26779994, a: 1}
   range: 4.2
   outerAngleDeg: 7.2
-  innerAngleDeg: 8.4
+  innerAngleDeg: 3.2
   intensity: 6.75
   darknessAmount: 0.957
   createRealLight: 1
@@ -55,6 +55,22 @@ MonoBehaviour:
   maxCharge: 100
   currentCharge: 100
   drainPerSecond: 2
+  brightDrainPerSecond: 6
+  brightIntensityMultiplier: 1.6
+  brightConeAngleMultiplier: 0.75
+  brightEdgeFadeDeg: 1
+  edgeHaloAngleDeg: 5
+  edgeHaloStrength: 0.75
+  midHaloAngleDeg: 8
+  midHaloStrength: 0.5
+  brightEdgeHaloAngleDeg: 1.25
+  brightEdgeHaloStrength: 0.18
+  brightMidHaloAngleDeg: 1.25
+  brightMidHaloStrength: 0.1
+  farHaloAngleDeg: 15
+  farHaloStrength: 0.2
+  brightFarHaloAngleDeg: 1.5
+  brightFarHaloStrength: 0.05
   flickerChargeThreshold: 0.4
   flickerMaxChancePerSecond: 1.2
   flickerDurationMin: 0.05
@@ -62,7 +78,6 @@ MonoBehaviour:
   flickerDipMin: 0.05
   flickerDipMax: 0.6
   isOn: 1
-  toggleWithTwoFingers: 1
   requireMatchToOperate: 1
 --- !u!1 &6704683610357316520
 GameObject:
