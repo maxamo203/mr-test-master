@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem.EnhancedTouch;
 using ETouch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 using Scanner;   // UIScale, UIBlocker
@@ -27,7 +28,7 @@ namespace Gamepad
         // subcategorías: Control (mando), Cardboard (calibración estéreo), Voz (chat de
         // voz, sólo en sesiones multijugador) y — SOLO en development build — Linterna
         // (tuning) y el toggle del Debug HUD.
-        private enum Page { Main, Options, Control, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, VHS, Arbmos, Entities, Audio }
+        private enum Page { Main, Options, Control, ControlDiag, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, VHS, Arbmos, Entities, Audio }
 
         public static PauseMenuController Instance { get; private set; }
 
@@ -76,16 +77,39 @@ namespace Gamepad
         private static Texture2D _tex;
         private GUIStyle _btn, _icon, _title, _status, _battTxt, _toggleLbl;
 
+        // En el menú principal no hay nada que pausar (y sus OPCIONES ya cubren las del
+        // jugador): ni botón ni menú. Se cachea por escena para no comparar el nombre en
+        // cada evento de OnGUI.
+        private bool _enMenuPrincipal;
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
             if (!EnhancedTouchSupport.enabled) EnhancedTouchSupport.Enable();
+            ResolverEscena(SceneManager.GetActiveScene());
+            SceneManager.sceneLoaded += OnSceneLoaded;
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance != this) return;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            Instance = null;
+        }
+
+        private void OnSceneLoaded(Scene s, LoadSceneMode m) => ResolverEscena(s);
+
+        private void ResolverEscena(Scene s)
+        {
+            _enMenuPrincipal = s.name == SceneFlow.EscenaMenu;
+            if (_enMenuPrincipal) _open = false;
         }
 
         // ----------------------------------------------------------------- OnGUI
         private void OnGUI()
         {
+            if (_enMenuPrincipal) return;
             UIScale.Begin();
             EnsureStyles();
             _items.Clear();
@@ -142,7 +166,7 @@ namespace Gamepad
                 if (hayVoz) { AddButton("voz", new Rect(x, y, w, 64f), "CHAT DE VOZ"); y += 76f; }
                 // US-11.1: el filtro VHS de la partida no se apaga (es atmósfera); lo
                 // que el jugador decide es si además cubre los menús.
-                AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS en menús",
+                AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS en pausa",
                           GameOptions.VhsEnMenus); y += 64f;
                 if (Debug.isDebugBuild)
                 {
@@ -203,6 +227,15 @@ namespace Gamepad
                 GamepadVisualizer.Draw(gpArea, gm != null ? gm.Brand : GamepadBrand.None, st);
                 y += gh + 16f;
 
+                AddButton("controldiag", new Rect(x, y, w, 60f), "DIAGNÓSTICO"); y += 72f;
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+            }
+            else if (_page == Page.ControlDiag)
+            {
+                // Por qué un botón del mando a veces no llega (ver ControllerDiagnostics).
+                GUI.Label(new Rect(x, y, w, 50f), "Control", _title); y += 60f;
+                ControllerDiagnostics.Draw(new Rect(x, y, w, ControllerDiagnostics.Alto));
+                y += ControllerDiagnostics.Alto + 12f;
                 AddButton("volver", new Rect(x, y, w, 60f), "Volver");
             }
             else if (_page == Page.Cardboard)
@@ -567,7 +600,8 @@ namespace Gamepad
         {
             switch (_page)
             {
-                case Page.Control:    return 820f;
+                case Page.Control:    return 892f;
+                case Page.ControlDiag: return 168f + ControllerDiagnostics.Alto;
                 case Page.Flashlight: return 660f;
                 case Page.Cardboard:
                 {
@@ -803,11 +837,12 @@ namespace Gamepad
             if (gp != null && gp.startButton.wasPressedThisFrame)
                 Toggle();
 
-            // VR Box Mouse: right button abre el menú (solo si está cerrado; si está abierto
-            // lo maneja el bloque de navegación más abajo para no hacer toggle+back en el mismo frame).
-            if (GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput &&
-                !_open && VRBoxInput.CancelDown)
-                Toggle();
+            // VR Box Mouse: la B ya NO abre el menú — en partida es el botón de la linterna
+            // (ContextActionController). Lo abre la A: en Android su clic llega como un TOQUE
+            // de un dedo donde está el cursor escondido, así que con el menú cerrado cualquier
+            // toque lo abre (ver el bloque de tap). Con el menú abierto la B sigue siendo
+            // "volver" (bloque de navegación más abajo).
+            bool vrBoxMouse = GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput;
 
             // Tap (dedos/mouse): botón de pausa siempre; ítems si está abierto.
             if (TryGetTapRelease(out var tapPx))
@@ -822,7 +857,14 @@ namespace Gamepad
                 var pv = new Vector2((tapPx.x - sg.x) / f,
                                      (Screen.height - tapPx.y - sg.y) / f); // a virtual
 
-                if (_pauseBtnRect.Contains(pv))
+                // La A del VR BOX llega como un toque donde está el cursor escondido: con el
+                // menú cerrado, un toque "suelto" lo abre. Sólo en plena partida y fuera de
+                // cualquier UI — si no, también lo abría cada toque con el dedo en los menús y
+                // pantallas de la app (al pasar de una a otra salía la pausa).
+                bool aDelVRBox = !_open && vrBoxMouse &&
+                                 NetworkManager.Instance != null && NetworkManager.Instance.GameStarted &&
+                                 !UIBlocker.IsPointerOver(tapPx);
+                if (_pauseBtnRect.Contains(pv) || aDelVRBox)
                 {
                     Toggle();
                 }
@@ -864,15 +906,19 @@ namespace Gamepad
 
             if (!_open) return;
 
+            // En el diagnóstico la B es justo lo que se está probando: no puede sacarte de la
+            // página. Se sale con "Volver".
+            bool probandoB = _page == Page.ControlDiag;
+
             // Volver/cerrar con East (B/○).
-            if (gp != null && gp.buttonEast.wasPressedThisFrame) { Back(); return; }
+            if (!probandoB && gp != null && gp.buttonEast.wasPressedThisFrame) { Back(); return; }
 
             // VR Box Mouse: navegación con VRBoxInput (ya procesado por GamepadManager.Update).
             if (GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput)
             {
                 if (_items.Count > 0)
                 {
-                    if (VRBoxInput.CancelDown)  { Back(); return; }
+                    if (!probandoB && VRBoxInput.CancelDown) { Back(); return; }
                     if (VRBoxInput.ConfirmDown) Activate(_items[_focus].id);
 
                     var delta = VRBoxInput.Delta;
@@ -947,6 +993,7 @@ namespace Gamepad
         // -------------------------------------------------------------- Acciones
         private void Toggle()
         {
+            if (_enMenuPrincipal && !_open) return;   // el Start del mando tampoco la abre acá
             CommitEdit();
             _open = !_open;
             if (_open) AudioManager.Sonar(c => c.uiConfirmar);
@@ -967,6 +1014,8 @@ namespace Gamepad
             {
                 case Page.Options:
                     _page = Page.Main; _focus = 0; _focusLast = true; break;
+                case Page.ControlDiag:
+                    _page = Page.Control; _focus = 0; _focusLast = true; break;
                 case Page.Cardboard:
                     SaveCardboard();
                     _page = Page.Options; _focus = 0; _focusLast = true; break;
@@ -1010,6 +1059,7 @@ namespace Gamepad
                 case "opciones":  _page = Page.Options;    _focus = 0; _focusLast = true; break;
                 case "audio":     _page = Page.Audio;      _focus = 0; _focusLast = true; break;
                 case "control":   _page = Page.Control;    _focus = 0; _focusLast = true; break;
+                case "controldiag": _page = Page.ControlDiag; _focus = 0; _focusLast = true; break;
                 case "cardboard": _page = Page.Cardboard;  _focus = 0; _focusLast = true; break;
                 case "arcalidad": _page = Page.ARCalidad;  _focus = 0; _focusLast = true; break;
                 case "arq_0":     ARQuality.Actual = ARQuality.Nivel.Rendimiento; break;
