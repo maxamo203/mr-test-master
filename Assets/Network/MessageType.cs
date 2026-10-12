@@ -23,4 +23,11 @@ public enum MessageType : ushort
     PlayerRoster    = 21,  // server → all: quiénes están en la sala (para el chat de voz)
     CollectibleTotal  = 22, // server → all: total de reliquias recogidas esta noche
     CollectiblePickup = 23, // client → server: pedido de recoger la reliquia apuntada
+    MapAnnounce     = 24,  // server → client: hash + nombre del mapa elegido (el .mscn va sólo si se pide)
+    MapRequest      = 25,  // client → server: no tengo ese mapa, mandame el .mscn (MapData)
+    SessionEnded    = 26,  // server → all: el host cierra la sala (salió al menú / cerró la app)
+    Heartbeat       = 27,  // ambos sentidos: latido (1 Hz, sin cuerpo) para detectar un par caído sin cierre limpio
+    LobbyStatus     = 28,  // server → all: jugadores en la sala y cuántos ya ubicaron el entorno (host incluido)
+    AnchorUnresolved = 29, // client → server: volvió a ubicar el entorno (AJUSTAR / BUSCAR IMAGEN), ya no está listo
+    AmbientAudio    = 30,  // server → all: falsa alarma ambiental compartida
 }

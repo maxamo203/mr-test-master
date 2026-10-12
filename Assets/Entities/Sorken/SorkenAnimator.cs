@@ -15,9 +15,9 @@ public class SorkenAnimator : MonoBehaviour
 {
     [Header("Clips por estado (arrastrar). Si falta uno, cae a Idle.")]
     public AnimationClip idleClip;
-    [Tooltip("Emergencia por puerta.")]
+    [Tooltip("Entrada por puerta. Debe apuntar al asset semantico DoorEntry.")]
     public AnimationClip emergeClip;
-    [Tooltip("Emergencia por ventana.")]
+    [Tooltip("Entrada por ventana. Debe apuntar al asset semantico WindowEntry.")]
     public AnimationClip emergeWindowClip;
     [Tooltip("Pose base del aterrizaje. Si falta, usa Idle y agrega la compresion procedural.")]
     public AnimationClip windowLandingClip;
@@ -32,6 +32,9 @@ public class SorkenAnimator : MonoBehaviour
     [SerializeField] private float _blendSpeed = 6f;
     [Tooltip("Duracion del fundido entre la entrada y la primera zancada.")]
     [Min(0.1f)] [SerializeField] private float _entryToChaseBlendSeconds = 0.75f;
+    [Tooltip("Velocidad de reproduccion de la marcha de persecucion. La traslacion " +
+             "sigue determinada por NightConfig.")]
+    [Range(0.1f, 1f)] [SerializeField] private float _chasePlaybackSpeed = 0.75f;
 
     [Header("Desplazamiento sincronizado")]
     [Tooltip("Apoyos contenidos en el loop de marcha herida.")]
@@ -40,6 +43,26 @@ public class SorkenAnimator : MonoBehaviour
     [Min(1)] [SerializeField] private int _coverStepsPerLoop = 5;
     [Tooltip("Velocidad relativa conservada justo al plantar un pie.")]
     [Range(0f, 1f)] [SerializeField] private float _plantedSpeedRatio = 0.2f;
+
+    [Header("Contactos de pisada (fase normalizada)")]
+    [Tooltip("Apoyos visibles del loop de persecucion, calibrados sobre el clip actual.")]
+    [SerializeField] private float[] _chaseFootContacts =
+    {
+        0.035f, 0.116f, 0.201f, 0.286f, 0.369f, 0.451f,
+        0.535f, 0.619f, 0.704f, 0.789f, 0.873f, 0.956f
+    };
+    [Tooltip("Apoyos visibles del loop lento bajo cobertura.")]
+    [SerializeField] private float[] _coverFootContacts =
+    {
+        0.08f, 0.27f, 0.48f, 0.69f, 0.91f
+    };
+    [Tooltip("Apoyos visibles mientras termina de atravesar una puerta.")]
+    [SerializeField] private float[] _doorEntryFootContacts =
+    {
+        0.59f, 0.73f, 0.86f, 0.97f
+    };
+    [Tooltip("Apoyos visibles durante la retirada.")]
+    [SerializeField] private float[] _retreatFootContacts = { 0.24f, 0.61f };
 
     [Header("Transicion ventana -> persecucion")]
     [Tooltip("Duracion usada si el clip nuevo de entrada todavia no esta asignado.")]
@@ -66,6 +89,15 @@ public class SorkenAnimator : MonoBehaviour
     private float _windowLandingElapsed;
     private float _activeWindowLandingDuration;
     private bool _entryToChaseBlendActive;
+    private bool _landingHipsReferenceCaptured;
+    private Vector3 _neutralHipsLocalPosition;
+    private Vector3 _landingHipsReferencePosition;
+    private readonly SorkenFootstepClock _footstepClock = new();
+    private Transform _leftFoot;
+    private Transform _rightFoot;
+    private bool _pendingFootstep;
+    private Vector3 _pendingFootstepPosition;
+    private float _pendingFootstepIntensity;
 
     public float WindowEntryDuration => emergeWindowClip != null && emergeWindowClip.length > 0.01f
         ? emergeWindowClip.length
@@ -150,6 +182,17 @@ public class SorkenAnimator : MonoBehaviour
         }
     }
 
+    // El watcher consume el contacto una sola vez. Si hubo un salto grande de fase, el
+    // reloj conserva solo el apoyo mas reciente para evitar rafagas atrasadas.
+    public bool TryConsumeFootstep(out Vector3 position, out float intensity)
+    {
+        position = _pendingFootstepPosition;
+        intensity = _pendingFootstepIntensity;
+        bool pending = _pendingFootstep;
+        _pendingFootstep = false;
+        return pending;
+    }
+
     public void SynchronizeState(SorkenState state)
     {
         int target = (int)state;
@@ -158,6 +201,8 @@ public class SorkenAnimator : MonoBehaviour
             (_lastState == (int)SorkenState.WindowLanding ||
              _lastState == (int)SorkenState.EmergingDoor);
         _lastState = target;
+        _footstepClock.Reset(target, 0f);
+        _pendingFootstep = false;
 
         if (_clipPlayables == null || target >= _clipPlayables.Length ||
             !_clipPlayables[target].IsValid())
@@ -169,9 +214,15 @@ public class SorkenAnimator : MonoBehaviour
         if (state == SorkenState.WindowLanding)
         {
             _windowLandingElapsed = 0f;
+            _landingHipsReferencePosition = _neutralHipsLocalPosition;
+            _landingHipsReferenceCaptured = _hips != null;
             AnimationClip clip = windowLandingClip != null ? windowLandingClip : idleClip;
             if (clip != null && clip.length > 0.001f)
                 _clipPlayables[target].SetSpeed(clip.length / WindowLandingDuration);
+        }
+        else if (state == SorkenState.Chasing)
+        {
+            _clipPlayables[target].SetSpeed(Mathf.Clamp(_chasePlaybackSpeed, 0.1f, 1f));
         }
         else
         {
@@ -184,7 +235,12 @@ public class SorkenAnimator : MonoBehaviour
         _sorken = GetComponent<SorkenEntity>();
         var animator = GetComponent<Animator>();
         _hips = animator.isHuman ? animator.GetBoneTransform(HumanBodyBones.Hips) : null;
+        _leftFoot = animator.isHuman ? animator.GetBoneTransform(HumanBodyBones.LeftFoot) : null;
+        _rightFoot = animator.isHuman ? animator.GetBoneTransform(HumanBodyBones.RightFoot) : null;
         _hips ??= FindDescendant(transform, "Hips");
+        _leftFoot ??= FindDescendant(transform, "LeftFoot");
+        _rightFoot ??= FindDescendant(transform, "RightFoot");
+        if (_hips != null) _neutralHipsLocalPosition = _hips.localPosition;
         _activeWindowLandingDuration = Mathf.Max(0.2f, _windowLandingDuration);
         animator.applyRootMotion = false; // el codigo controla pos/rot, no la animacion
 
@@ -269,23 +325,112 @@ public class SorkenAnimator : MonoBehaviour
         if (_entryToChaseBlendActive && _weights[target] >= 0.999f)
             _entryToChaseBlendActive = false;
 
+        ActualizarContactos(target, locomotionClip);
+
         if (_sorken.State == SorkenState.WindowLanding)
             _windowLandingElapsed += Time.deltaTime;
     }
 
-    // La traslacion completa desde la ventana la controla GameDirector. Esta capa agrega
-    // la reaccion corporal que hace legible el aterrizaje: impacto, flexion y recuperacion.
-    // Se aplica despues del Animator, por lo que funciona tanto con un clip dedicado como
-    // con el fallback a Idle y no modifica el root que replica la red.
+    private void ActualizarContactos(int state, AnimationClip locomotionClip)
+    {
+        if (_clipPlayables == null || state < 0 || state >= _clipPlayables.Length ||
+            !_clipPlayables[state].IsValid())
+        {
+            _footstepClock.Clear();
+            return;
+        }
+
+        float[] contacts = null;
+        AnimationClip clip = locomotionClip;
+        bool loops = false;
+        float intensity = 1f;
+
+        switch ((SorkenState)state)
+        {
+            case SorkenState.Chasing:
+                contacts = _chaseFootContacts;
+                loops = true;
+                break;
+            case SorkenState.CoverWalking:
+                contacts = _coverFootContacts;
+                loops = true;
+                intensity = 0.72f;
+                break;
+            case SorkenState.EmergingDoor:
+                contacts = _doorEntryFootContacts;
+                clip = emergeClip;
+                intensity = 0.9f;
+                break;
+            case SorkenState.Retreating:
+                contacts = _retreatFootContacts;
+                clip = retreatClip != null ? retreatClip : chaseClip;
+                intensity = 0.68f;
+                break;
+            default:
+                _footstepClock.Clear();
+                return;
+        }
+
+        if (clip == null || clip.length <= 0.001f) return;
+        float phase = (float)(_clipPlayables[state].GetTime() / clip.length);
+        if (!_footstepClock.Advance(state, phase, loops, contacts, out int index)) return;
+
+        bool left = (index & 1) == 0;
+        Transform foot = left ? _leftFoot : _rightFoot;
+        _pendingFootstepPosition = foot != null ? foot.position : transform.position;
+        _pendingFootstepIntensity = intensity;
+        _pendingFootstep = true;
+    }
+
+    // La traslacion completa desde la ventana la controla GameDirector. El rig importado
+    // esta rotado: su Y local es profundidad mundial, no altura. El clip de aterrizaje
+    // desplaza ese eje unos 0.61 m hacia atras. Lo anclamos a la pose neutra del rig y
+    // dejamos X/Z animados; asi el fundido a persecucion no produce el retroceso visible.
     private void LateUpdate()
     {
-        if (_hips == null || _sorken == null || _sorken.State != SorkenState.WindowLanding)
+        if (_hips == null || _sorken == null || _weights == null)
             return;
+
+        int landingIndex = (int)SorkenState.WindowLanding;
+        if (landingIndex >= _weights.Length) return;
+
+        float totalWeight = 0f;
+        for (int i = 0; i < _weights.Length; i++) totalWeight += _weights[i];
+        float landingWeight = totalWeight > 1e-4f
+            ? Mathf.Clamp01(_weights[landingIndex] / totalWeight)
+            : 0f;
+
+        // Durante el fundido a persecucion el input de aterrizaje sigue teniendo peso.
+        // Mantener la correccion hasta que llegue a cero evita que reaparezca desde abajo.
+        if (!_landingHipsReferenceCaptured || landingWeight <= 0.0001f)
+        {
+            if (_sorken.State != SorkenState.WindowLanding)
+                _landingHipsReferenceCaptured = false;
+            return;
+        }
 
         float t = Mathf.Clamp01(_windowLandingElapsed / WindowLandingDuration);
         float impact = Mathf.Sin(Mathf.Clamp01(Mathf.InverseLerp(0.56f, 0.86f, t)) * Mathf.PI);
-        _hips.localPosition += Vector3.down * (_landingCompression * impact);
-        _hips.localRotation *= Quaternion.Euler(_landingPitch * impact, 0f, -2.5f * impact);
+        float parentScaleY = _hips.parent != null ? Mathf.Abs(_hips.parent.lossyScale.y) : 1f;
+        float localCompression = _landingCompression / Mathf.Max(0.0001f, parentScaleY);
+        _hips.localPosition = CorrectLandingHipsPosition(
+            _hips.localPosition, _landingHipsReferencePosition,
+            localCompression, impact, landingWeight);
+        _hips.localRotation *= Quaternion.Slerp(
+            Quaternion.identity,
+            Quaternion.Euler(_landingPitch * impact, 0f, -2.5f * impact),
+            landingWeight);
+    }
+
+    public static Vector3 CorrectLandingHipsPosition(
+        Vector3 animatedPosition, Vector3 referencePosition,
+        float localCompression, float impact, float landingWeight)
+    {
+        float targetY = referencePosition.y -
+                        (Mathf.Max(0f, localCompression) * Mathf.Clamp01(impact));
+        Vector3 corrected = animatedPosition;
+        corrected.y = Mathf.Lerp(animatedPosition.y, targetY, Mathf.Clamp01(landingWeight));
+        return corrected;
     }
 
     private static Transform FindDescendant(Transform root, string wantedName)

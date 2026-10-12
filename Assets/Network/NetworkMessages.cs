@@ -180,14 +180,18 @@ public class PlayerPoseMsg
     // Direccion de apuntado (forward de la camara) en espacio anchor-relativo, para el
     // test de cono del repel en el server.
     public Vector3 Forward;
+    public bool TrackingValid = true;
+    public float FlashlightCharge01 = 1f;
 
     public byte[] Serialize()
     {
-        using var ms = new MemoryStream(25);
+        using var ms = new MemoryStream(30);
         using var w  = new BinaryWriter(ms);
         MsgHelper.WriteV3(w, RelPos);
         w.Write((byte)FlashlightMode);
         MsgHelper.WriteV3(w, Forward);
+        w.Write(TrackingValid);
+        w.Write(Mathf.Clamp01(FlashlightCharge01));
         return ms.ToArray();
     }
 
@@ -199,6 +203,8 @@ public class PlayerPoseMsg
             RelPos       = MsgHelper.ReadV3(r),
             FlashlightMode = (FlashlightMode)r.ReadByte(),
             Forward      = MsgHelper.ReadV3(r),
+            TrackingValid = r.ReadBoolean(),
+            FlashlightCharge01 = r.ReadSingle(),
         };
     }
 }
@@ -267,6 +273,31 @@ public class MapDataMsg
         using var r   = new BinaryReader(new MemoryStream(d));
         int       len = r.ReadInt32();
         return new() { Bytes = len > 0 ? r.ReadBytes(len) : System.Array.Empty<byte>() };
+    }
+}
+
+// Server → client: qué mapa se juega (hash de contenido, ver Scanner.ScanHash). El
+// cliente busca uno local con ese hash y sólo si no lo tiene manda MapRequest.
+public class MapAnnounceMsg
+{
+    public string Hash;
+    public string Name;
+    public int    Size;
+
+    public byte[] Serialize()
+    {
+        using var ms = new MemoryStream();
+        using var w  = new BinaryWriter(ms);
+        w.Write(Hash ?? "");
+        w.Write(Name ?? "");
+        w.Write(Size);
+        return ms.ToArray();
+    }
+
+    public static MapAnnounceMsg Deserialize(byte[] d)
+    {
+        using var r = new BinaryReader(new MemoryStream(d));
+        return new() { Hash = r.ReadString(), Name = r.ReadString(), Size = r.ReadInt32() };
     }
 }
 
@@ -345,6 +376,39 @@ public class RitualBookMsg
     }
 }
 
+// Server → all: un evento ambiental elegido una sola vez por el host. La posicion es
+// anchor-relativa para que la misma puerta suene en el lugar correcto de cada dispositivo.
+public class AmbientAudioMsg
+{
+    public uint Sequence;
+    public byte Kind;
+    public byte Variant;
+    public Vector3 RelativePosition;
+
+    public byte[] Serialize()
+    {
+        using var ms = new MemoryStream(18);
+        using var w = new BinaryWriter(ms);
+        w.Write(Sequence);
+        w.Write(Kind);
+        w.Write(Variant);
+        MsgHelper.WriteV3(w, RelativePosition);
+        return ms.ToArray();
+    }
+
+    public static AmbientAudioMsg Deserialize(byte[] data)
+    {
+        using var r = new BinaryReader(new MemoryStream(data));
+        return new AmbientAudioMsg
+        {
+            Sequence = r.ReadUInt32(),
+            Kind = r.ReadByte(),
+            Variant = r.ReadByte(),
+            RelativePosition = MsgHelper.ReadV3(r),
+        };
+    }
+}
+
 // Un frame de voz (~30 ms) codificado en IMA ADPCM. Viaja cliente → server y el server
 // lo reenvía al resto poniendo el SenderId real (ver NetworkManager.ServerSendVoice).
 //
@@ -403,7 +467,21 @@ public class PlayerRosterMsg
     }
 }
 
-// AnchorResolved, StartGame, ResetNight y NightSurvived no llevan payload — body vacío
+// Server → all: contador de la sala de sincronización. Lo calcula el host (es el único
+// que sabe quién está listo) y lo reparte para que lo vean todos, no sólo él. Ambos
+// cuentan al host.
+public class LobbyStatusMsg
+{
+    public byte Jugadores;   // conectados, host incluido
+    public byte Listos;      // ya ubicaron el entorno (y cerraron sus anclas)
+
+    public byte[] Serialize() => new[] { Jugadores, Listos };
+
+    public static LobbyStatusMsg Deserialize(byte[] d) =>
+        new() { Jugadores = d[0], Listos = d[1] };
+}
+
+// AnchorResolved, AnchorUnresolved, StartGame, ResetNight, NightSurvived, MapRequest y Heartbeat no llevan payload — body vacío
 // server → client: muerte local, con el punto de enfoque y el atacante a ocultar.
 public class PlayerDeathMsg
 {

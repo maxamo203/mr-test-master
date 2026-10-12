@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using Gameplay;
+using Gameplay.Spawning;
 using Scanner;
 using UnityEngine;
 
@@ -25,6 +26,10 @@ public class ArbmosDirector : MonoBehaviour
 
     private sealed class Haunt
     {
+        public uint owner;
+        public bool normalReserved;
+        public bool lethalReserved;
+        public int traceId;
         public Phase phase = Phase.Dormant;
         public float cooldown;
         public uint netId;
@@ -32,6 +37,7 @@ public class ArbmosDirector : MonoBehaviour
         public Vector3 stationaryPosition;
         public float hideTimer;
         public float exposureTimer;
+        public float exposureGraceTimer;
         public float attackTimer;
         public float stalkTimer;
         public float stalkTotal;
@@ -47,6 +53,8 @@ public class ArbmosDirector : MonoBehaviour
 private readonly List<uint> _scratchRemove = new();
     private NightConfig _night;
     private bool _running;
+    private string _lastSpawnRejection = "-";
+    private int _rejectedSpawnAttempts;
 
     public static ArbmosDirector Ensure()
     {
@@ -85,6 +93,8 @@ private readonly List<uint> _scratchRemove = new();
         net.OnClientLeft -= HandleClientLeft;
         net.OnClientLeft += HandleClientLeft;
         _running = true;
+        _lastSpawnRejection = "-";
+        _rejectedSpawnAttempts = 0;
     }
 
     public void StopRun()
@@ -112,7 +122,7 @@ private readonly List<uint> _scratchRemove = new();
         {
             if (!_haunts.TryGetValue(clientId, out var haunt))
             {
-                haunt = new Haunt { cooldown = RandomCooldown() };
+                haunt = new Haunt { owner = clientId, cooldown = RandomCooldown() };
                 _haunts.Add(clientId, haunt);
             }
             TickPlayer(clientId, haunt, dt);
@@ -141,6 +151,13 @@ private readonly List<uint> _scratchRemove = new();
             SanitySystem.Instance.IsAtZero(clientId))
         {
             BeginLethal(clientId, haunt, playerPosition);
+        }
+
+        if (haunt.normalReserved &&
+            !ThreatCoordinator.CanKeepNormalArbmos(clientId))
+        {
+            EndNormalHaunt(haunt);
+            return;
         }
 
         switch (haunt.phase)
@@ -174,19 +191,38 @@ private readonly List<uint> _scratchRemove = new();
 
         bool spawn = _night.arbmosForceSpawnAfterCooldown ||
                      Random.value <= Mathf.Clamp01(_night.arbmosSpawnChancePerAttempt);
-        if (spawn) InvokePresent(clientId, haunt, playerPosition);
-        else haunt.cooldown = 3f;
+        if (!spawn)
+        {
+            haunt.cooldown = RandomCooldown();
+            return;
+        }
+
+        if (!ThreatCoordinator.TryBeginNormalArbmos(clientId))
+        {
+            GameplayTelemetry.Postponed("arbmos", "team_capacity", clientId);
+            haunt.cooldown = 2f;
+            return;
+        }
+        haunt.normalReserved = true;
+        InvokePresent(clientId, haunt, playerPosition);
     }
 
     private void InvokePresent(uint clientId, Haunt haunt, Vector3 playerPosition)
     {
         if (!SpawnArbmosFor(clientId, haunt, playerPosition, aura: true,
                             lethal: false, distort: 0.3f))
+        {
+            ReleaseNormalReservation(haunt);
             return;
+        }
 
         haunt.stationaryPosition = haunt.ent.Position;
+        haunt.traceId = GameplayTelemetry.BeginThreat(
+            "arbmos", clientId, haunt.stationaryPosition,
+            $"grace={_night.arbmosExposureGraceSeconds:F2};exposure={_night.arbmosExposureSeconds:F2}");
         haunt.hideTimer = 0f;
         haunt.exposureTimer = 0f;
+        haunt.exposureGraceTimer = Mathf.Max(0f, _night.arbmosExposureGraceSeconds);
         haunt.attackTimer = 0f;
         haunt.phase = Phase.PresentStill;
     }
@@ -206,6 +242,12 @@ private readonly List<uint> _scratchRemove = new();
         }
 
         haunt.hideTimer = 0f;
+        if (haunt.exposureGraceTimer > 0f)
+        {
+            haunt.exposureGraceTimer = Mathf.Max(0f, haunt.exposureGraceTimer - dt);
+            haunt.exposureTimer = 0f;
+            return;
+        }
         if (OwnerIsLightingHead(clientId, haunt))
             haunt.exposureTimer += dt;
         else
@@ -217,6 +259,8 @@ private readonly List<uint> _scratchRemove = new();
 
     private void BeginNormalChase(Haunt haunt)
     {
+        GameplayTelemetry.Phase(haunt.traceId, "arbmos", "normal_chase",
+                                haunt.owner, haunt.ent.Position);
         haunt.ent.SetState(ArbmosState.Attacking);
         haunt.path.Clear();
         haunt.pathIndex = 0;
@@ -304,6 +348,12 @@ private readonly List<uint> _scratchRemove = new();
     private void BeginLethal(uint clientId, Haunt haunt, Vector3 playerPosition)
     {
         if (haunt.lethalTriggered) return;
+        GameplayTelemetry.End(haunt.traceId, "arbmos", "lethal_escalation",
+                              clientId, haunt.ent != null ? haunt.ent.Position : playerPosition);
+        haunt.traceId = 0;
+        ReleaseNormalReservation(haunt);
+        ThreatCoordinator.BeginLethalArbmos(clientId);
+        haunt.lethalReserved = true;
         haunt.lethalTriggered = true;
 
         if (haunt.ent == null &&
@@ -312,12 +362,16 @@ private readonly List<uint> _scratchRemove = new();
         {
             // Reintenta en el tick siguiente sin abrir otra ventana ni consumir cooldown.
             haunt.lethalTriggered = false;
+            ReleaseLethalReservation(haunt);
             haunt.cooldown = 0f;
             haunt.phase = Phase.Dormant;
             return;
         }
 
         haunt.stationaryPosition = haunt.ent.Position;
+        haunt.traceId = GameplayTelemetry.BeginThreat(
+            "arbmos_lethal", clientId, haunt.stationaryPosition,
+            $"speed={_night.arbmosLethalChaseSpeed:F2}");
         haunt.ent.SetPositionDirectly(haunt.stationaryPosition);
         FacePlayer(haunt, playerPosition);
         haunt.ent.SetState(ArbmosState.Idle);
@@ -360,10 +414,18 @@ private readonly List<uint> _scratchRemove = new();
         if (haunt.ent == null) { RetryLethal(haunt); return; }
 
         haunt.chaseTimer += dt;
-        if (HorizontalDistance(haunt.ent.Position, playerPosition) <= _night.arbmosGrabRange ||
-            haunt.chaseTimer >= Mathf.Max(0.1f, _night.arbmosLethalMaxSeconds))
+        bool inGrabRange = HorizontalDistance(haunt.ent.Position, playerPosition) <=
+                           _night.arbmosGrabRange;
+        if (inGrabRange && HasCaptureLine(haunt.ent.Position, playerPosition))
         {
             CompleteLethal(clientId, haunt);
+            return;
+        }
+        if (haunt.chaseTimer >= Mathf.Max(0.1f, _night.arbmosLethalMaxSeconds))
+        {
+            // El timeout no mata a distancia ni detrás de una pared: reprograma la
+            // consecuencia desde una nueva posición válida.
+            RetryLethal(haunt);
             return;
         }
 
@@ -407,6 +469,9 @@ private readonly List<uint> _scratchRemove = new();
 
     private void CompleteLethal(uint clientId, Haunt haunt)
     {
+        GameplayTelemetry.End(haunt.traceId, "arbmos_lethal", "capture",
+                              clientId, haunt.ent != null ? haunt.ent.Position : Vector3.zero);
+        haunt.traceId = 0;
         ServerDeaths.Kill(clientId, haunt.ent != null ? haunt.ent.transform : null);
         StartCoroutine(DespawnAfterDeathReveal(haunt));
         haunt.phase = Phase.Done;
@@ -436,7 +501,7 @@ private readonly List<uint> _scratchRemove = new();
             FlashlightMode.Dim, requireLineOfSight: true);
     }
 
-private bool SpawnArbmosFor(uint clientId, Haunt haunt, Vector3 playerPosition,
+    private bool SpawnArbmosFor(uint clientId, Haunt haunt, Vector3 playerPosition,
                                 bool aura, bool lethal, float distort)
     {
         var net = NetworkManager.Instance;
@@ -445,7 +510,7 @@ private bool SpawnArbmosFor(uint clientId, Haunt haunt, Vector3 playerPosition,
         if (!TrySpawnPositionNear(clientId, playerPosition, out Vector3 spawn))
         {
             // Con geometría escaneada nunca aparece al otro lado de una pared. Si no hay
-            // suficiente espacio interior delante del jugador, reintenta más adelante.
+            // suficiente espacio en el mismo ambiente que el jugador, reintenta más adelante.
             haunt.cooldown = 2f;
             return false;
         }
@@ -481,19 +546,43 @@ private bool SpawnArbmosFor(uint clientId, Haunt haunt, Vector3 playerPosition,
 
     private void RetryLethal(Haunt haunt)
     {
-        DespawnHaunt(haunt);
+        DespawnHaunt(haunt, releaseLethal: false);
         haunt.lethalTriggered = false;
         haunt.cooldown = 0f;
         haunt.phase = Phase.Dormant;
     }
 
-    private void DespawnHaunt(Haunt haunt)
+    private void DespawnHaunt(Haunt haunt, bool releaseLethal = true)
     {
+        if (haunt.traceId != 0)
+        {
+            GameplayTelemetry.End(haunt.traceId,
+                haunt.lethalTriggered ? "arbmos_lethal" : "arbmos",
+                "despawn", haunt.owner,
+                haunt.ent != null ? haunt.ent.Position : Vector3.zero);
+            haunt.traceId = 0;
+        }
+        ReleaseNormalReservation(haunt);
+        if (releaseLethal) ReleaseLethalReservation(haunt);
         if (haunt.netId != 0 && NetworkManager.Instance != null)
             NetworkManager.Instance.ServerDespawn(haunt.netId);
         haunt.netId = 0;
         haunt.ent = null;
         haunt.path.Clear();
+    }
+
+    private static void ReleaseNormalReservation(Haunt haunt)
+    {
+        if (haunt == null || !haunt.normalReserved) return;
+        ThreatCoordinator.EndNormalArbmos(haunt.owner);
+        haunt.normalReserved = false;
+    }
+
+    private static void ReleaseLethalReservation(Haunt haunt)
+    {
+        if (haunt == null || !haunt.lethalReserved) return;
+        ThreatCoordinator.EndLethalArbmos(haunt.owner);
+        haunt.lethalReserved = false;
     }
 
     private IEnumerator DespawnAfterDeathReveal(Haunt haunt)
@@ -509,43 +598,151 @@ private bool SpawnArbmosFor(uint clientId, Haunt haunt, Vector3 playerPosition,
         return Random.Range(Mathf.Min(a, b), Mathf.Max(a, b));
     }
 
-private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
+    private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
                                       out Vector3 spawn)
     {
         Vector3 forward = PlayerForward(clientId);
-        forward.y = 0f;
-        if (forward.sqrMagnitude < 1e-4f) forward = Vector3.forward;
-        forward.Normalize();
+        Vector3 horizontalForward = forward;
+        horizontalForward.y = 0f;
+        if (horizontalForward.sqrMagnitude < 1e-4f) horizontalForward = Vector3.forward;
+        horizontalForward.Normalize();
 
-        float desiredDistance = Mathf.Max(0.75f, _night.arbmosSpawnDistance);
-        const float minimumDistance = 0.75f;
-        const float searchStep = 0.25f;
+        float desiredDistance = Mathf.Max(ArbmosSpawnGeometry.MinimumDistance,
+                                          _night.arbmosSpawnDistance);
         float floorY = FloorWorldY(playerPosition.y);
         var nav = SorkerNav.Ensure();
 
-        // El candidato siempre queda sobre el eje de visión del jugador. Se prueba desde
-        // la distancia ideal hacia adentro y sólo se acepta con una línea visual libre:
-        // si hay una pared de por medio, ese punto nunca se utiliza.
-        for (float distance = desiredDistance; distance >= minimumDistance; distance -= searchStep)
+        float beamAngle = _night.flashlightConeAngleDeg;
+        float beamRange = _night.flashlightRange;
+        if (PlayerLights.TryConoReal(out float realAngle, out float realRange))
         {
-            Vector3 candidate = playerPosition + forward * distance;
-            candidate.y = floorY;
-            if (nav.IsWalkable(candidate) && nav.HasClearLine(playerPosition, candidate))
-            {
-                spawn = candidate;
-                return true;
-            }
+            beamAngle = realAngle;
+            beamRange = realRange;
+        }
 
-            // Sin paredes escaneadas, la dirección frontal sigue siendo válida.
-            if (!nav.HasObstacleGrid)
+        if (!InteriorSpawnValidator.TryEnsureReady(out var topologyReason) ||
+            WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady)
+        {
+            _lastSpawnRejection = topologyReason ?? "WorldOrigin no esta listo";
+            _rejectedSpawnAttempts++;
+            spawn = default;
+            return false;
+        }
+
+        // Recorre 360 grados: el Arbmos ya no esta obligado a aparecer dentro de la
+        // camara. Se prioriza la distancia de diseño, se prueba hasta 2 m cuando el
+        // cuarto es angosto y luego puntos más lejanos del mismo ambiente.
+        float randomStart = Random.Range(0f, 360f);
+        const int angularSamples = 24;
+        const float distanceStep = 0.25f;
+        var distances = new List<float> { desiredDistance };
+        for (float distance = desiredDistance - distanceStep;
+             distance >= ArbmosSpawnGeometry.MinimumDistance - 0.001f;
+             distance -= distanceStep)
+            distances.Add(distance);
+        for (float distance = desiredDistance + distanceStep;
+             distance <= desiredDistance + 1.5f;
+             distance += distanceStep)
+            distances.Add(distance);
+
+        string lastReason = "no se encontro una posicion interior valida";
+        for (int distanceSample = 0; distanceSample < distances.Count; distanceSample++)
+        {
+            float distance = distances[distanceSample];
+
+            for (int sample = 0; sample < angularSamples; sample++)
             {
+                float angle = randomStart + sample * (360f / angularSamples);
+                Vector3 candidate = playerPosition +
+                    ArbmosSpawnGeometry.LateralDirection(horizontalForward, angle) * distance;
+                candidate.y = floorY;
+                if (!IsValidSpawnCandidate(clientId, playerPosition, forward, candidate,
+                                           beamAngle, beamRange, nav, out lastReason)) continue;
+
+                _lastSpawnRejection = "-";
                 spawn = candidate;
                 return true;
             }
         }
 
+        _lastSpawnRejection = lastReason;
+        _rejectedSpawnAttempts++;
+        GameplayTelemetry.Postponed("arbmos", "invalid_interior_spawn", clientId);
         spawn = default;
         return false;
+    }
+
+    private bool IsValidSpawnCandidate(uint clientId, Vector3 playerPosition,
+                                       Vector3 playerForward, Vector3 candidate,
+                                       float beamAngle, float beamRange, SorkerNav nav,
+                                       out string reason)
+    {
+        Vector3 feet = candidate + Vector3.up * 0.2f;
+        Vector3 torso = candidate + Vector3.up * 1.05f;
+        Vector3 head = candidate + Vector3.up * ArbmosSpawnGeometry.BodyHeight;
+
+        if (!InteriorSpawnValidator.TryValidateActorInPlayerRoom(
+                playerPosition, candidate, ArbmosSpawnGeometry.BodyRadius,
+                out _, out reason))
+            return false;
+
+        // Si la linterna está encendida, ninguna franja del cuerpo puede tocar el haz.
+        if (PlayerLights.ModeFor(clientId) != FlashlightMode.Off &&
+            (PlayerLights.Alcanza(playerPosition, playerForward, feet, beamAngle,
+                                  beamRange, ArbmosSpawnGeometry.BodyRadius) ||
+             PlayerLights.Alcanza(playerPosition, playerForward, torso, beamAngle,
+                                  beamRange, ArbmosSpawnGeometry.BodyRadius) ||
+             PlayerLights.Alcanza(playerPosition, playerForward, head, beamAngle,
+                                  beamRange, ArbmosSpawnGeometry.BodyRadius)))
+        {
+            reason = "el candidato esta dentro del haz de luz";
+            return false;
+        }
+
+        if (!HasBodyClearance(candidate, nav))
+        {
+            reason = "el cuerpo no tiene volumen libre";
+            return false;
+        }
+        if (!nav.HasClearLine(playerPosition, torso) ||
+            !nav.HasClearLine(playerPosition, head))
+        {
+            reason = "la navegacion detecta una pared de por medio";
+            return false;
+        }
+        if (!PlayerLights.HasLineOfSight(playerPosition, torso,
+                                         ArbmosSpawnGeometry.BodyRadius) ||
+            !PlayerLights.HasLineOfSight(playerPosition, head,
+                                         ArbmosSpawnGeometry.BodyRadius))
+        {
+            reason = "la vision al Arbmos esta ocluida";
+            return false;
+        }
+
+        Vector3 capsuleBottom = candidate + Vector3.up * ArbmosSpawnGeometry.BodyRadius;
+        Vector3 capsuleTop = candidate + Vector3.up *
+            (ArbmosSpawnGeometry.BodyHeight - ArbmosSpawnGeometry.BodyRadius);
+        if (Physics.CheckCapsule(capsuleBottom, capsuleTop,
+                                 ArbmosSpawnGeometry.BodyRadius,
+                                 Physics.DefaultRaycastLayers,
+                                 QueryTriggerInteraction.Ignore))
+        {
+            reason = "el volumen del Arbmos intersecta geometria";
+            return false;
+        }
+
+        reason = null;
+        return true;
+    }
+
+    private static bool HasBodyClearance(Vector3 candidate, SorkerNav nav)
+    {
+        if (!nav.IsWalkable(candidate)) return false;
+        float r = ArbmosSpawnGeometry.BodyRadius;
+        return nav.IsWalkable(candidate + Vector3.right * r) &&
+               nav.IsWalkable(candidate - Vector3.right * r) &&
+               nav.IsWalkable(candidate + Vector3.forward * r) &&
+               nav.IsWalkable(candidate - Vector3.forward * r);
     }
 
     private static void FacePlayer(Haunt haunt, Vector3 playerPosition)
@@ -563,9 +760,11 @@ private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
     private IEnumerable<uint> AlivePlayersWithPose()
     {
         var net = NetworkManager.Instance;
-        if (Camera.main != null && ServerDeaths.IsAlive(0)) yield return 0;
+        if (Camera.main != null && ServerDeaths.IsAlive(0) &&
+            TrackingReliability.LocalIsReliable()) yield return 0;
         foreach (uint clientId in net.ConnectedClients)
             if (ServerDeaths.IsAlive(clientId) &&
+                TrackingReliability.PlayerIsReliable(clientId) &&
                 net.TryGetClientWorldPosition(clientId, out _))
                 yield return clientId;
     }
@@ -617,6 +816,15 @@ private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
         return Vector3.Distance(a, b);
     }
 
+    private static bool HasCaptureLine(Vector3 entity, Vector3 player)
+    {
+        Vector3 from = entity + Vector3.up;
+        Vector3 to = player;
+        var nav = SorkerNav.Instance;
+        return (nav == null || nav.HasClearLine(entity, player)) &&
+               PlayerLights.HasLineOfSight(from, to, 0.2f);
+    }
+
     public string DebugSnapshot()
     {
         if (NetworkManager.Instance == null || !NetworkManager.Instance.IsServer)
@@ -626,7 +834,8 @@ private bool TrySpawnPositionNear(uint clientId, Vector3 playerPosition,
         if (!_night.arbmosActive) return $"[Arbmos] desactivado en '{_night.displayName}'\n";
 
         var text = new System.Text.StringBuilder();
-        text.Append($"[Arbmos V2] noche='{_night.displayName}' jugadores={_haunts.Count}\n");
+        text.Append($"[Arbmos V2] noche='{_night.displayName}' jugadores={_haunts.Count} " +
+                    $"spawnRechazados={_rejectedSpawnAttempts} ultimo='{_lastSpawnRejection}'\n");
         foreach (var pair in _haunts)
         {
             Haunt haunt = pair.Value;

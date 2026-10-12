@@ -15,7 +15,7 @@ MonoBehaviour:
   displayName: Noche 1
   briefing: El Sorken tantea los accesos. Tomate el tiempo de ubicar el ruido antes
     de alumbrar.
-  nightDurationSeconds: 240
+  nightDurationSeconds: 300
   sorkenActive: 1
   attemptIntervalMin: 30
   attemptIntervalMax: 46
@@ -23,11 +23,16 @@ MonoBehaviour:
   entryGraceSeconds: 11
   entryAnimationSeconds: 3
   entryTriggerDistance: 3.5
-  chaseRepelSeconds: 4
-  sorkenChaseSpeed: 2
+  chaseRepelSeconds: 3.5
+  sorkenPostEntryPauseSeconds: 2.5
+  sorkenChaseSpeed: 0.5
+  sorkenIlluminatedSpeed: 0.1
+  sorkenAimToleranceSeconds: 2
+  sorkenRepelDecayPerSecond: 0.5
+  sorkenBlockedRepathSeconds: 0.4
   sorkenCoverStartSeconds: 3
-  sorkenCoverWalkSpeedMultiplier: 0.7
-  sorkenRetreatSpeed: 3.5
+  sorkenCoverWalkSpeedMultiplier: 1
+  sorkenRetreatSpeed: 2.8
   grabRange: 1.1
   flashlightMaxCharge: 130
   flashlightDrainPerSecond: 1.5
@@ -40,9 +45,10 @@ MonoBehaviour:
   arbmosSpawnDistance: 2.5
   arbmosSpawnChancePerAttempt: 0.5
   arbmosHideSeconds: 3
-  arbmosExposureSeconds: 0.8
-  arbmosAttackCommitSeconds: 0.35
-  arbmosAttackChaseSpeed: 2.5
+  arbmosExposureSeconds: 1.2
+  arbmosExposureGraceSeconds: 1
+  arbmosAttackCommitSeconds: 0.5
+  arbmosAttackChaseSpeed: 2
   arbmosAttackMaxSeconds: 14
   arbmosAttackGrabRange: 1
   arbmosSanityDamage: 30
@@ -56,9 +62,9 @@ MonoBehaviour:
   bookActive: 1
   bookEventDelayMin: 50
   bookEventDelayMax: 75
-  bookConsumeSeconds: 9
+  bookConsumeSeconds: 16
   bookDefenseSeconds: 3.5
-  velethChaseSpeed: 2.8
+  velethChaseSpeed: 2.2
   velethGrabRange: 1.1
   velethRepathSeconds: 0.3
   velethGrabHoldSeconds: 0.8

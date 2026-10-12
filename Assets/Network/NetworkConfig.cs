@@ -7,4 +7,19 @@ public static class NetworkConfig
     // el puerto en "Avanzado", deja de anunciarse: hay que unirse escribiendo la IP
     // con el puerto (ip:puerto) a mano.
     public const int DefaultPort = 7777;
+
+    // El host manda un Heartbeat cada HeartbeatInterval segundos (también en la sala,
+    // antes de GameStarted). Si el cliente pasa HostTimeoutSeconds sin recibir NADA del
+    // host, lo da por caído: cubre las caídas sin cierre limpio del socket (Wi-Fi que
+    // se corta, app del host matada o suspendida), en las que nunca llega el EOF. El
+    // margen es amplio para no cortar por un MapData grande o un hipo de la red.
+    public const float HeartbeatInterval  = 1f;
+    public const float HostTimeoutSeconds = 10f;
+
+    // Lo mismo en el otro sentido: cada cliente le manda un Heartbeat al host y el host
+    // da de baja al que pasa ClientTimeoutSeconds sin mandar nada. En la sala el cliente
+    // no manda nada más, así que sin esto un celular que se bloqueó, se quedó sin Wi-Fi
+    // o mató la app seguía contando como conectado para siempre: nunca llegaba a listo,
+    // el contador de la sala quedaba trabado y INICIAR NOCHE bloqueado.
+    public const float ClientTimeoutSeconds = 10f;
 }

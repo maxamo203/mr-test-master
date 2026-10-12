@@ -101,17 +101,26 @@ MonoBehaviour:
     apertura: 0
   sorkenPasos:
     clips:
-    - {fileID: 8300000, guid: 7c68887edd8d2fc018bb537678d8435e, type: 3}
-    - {fileID: 8300000, guid: 2169387da24f46f66e3f66e0e583439a, type: 3}
-    - {fileID: 8300000, guid: 2d8e8e3dfd9d4584b5c3aa17267e4680, type: 3}
-    - {fileID: 8300000, guid: b1b59760b26984ffc75d832114b80a13, type: 3}
-    - {fileID: 8300000, guid: 07a5003cb1956efc6b9fe14806e499a6, type: 3}
-    - {fileID: 8300000, guid: 1874debb25ef97e3e3536ef047dc2433, type: 3}
+    - {fileID: 8300000, guid: e462b557a59e4b60936b56b66df167a4, type: 3}
+    - {fileID: 8300000, guid: a7dc3030caa24081b9e7ee2712de88b7, type: 3}
+    - {fileID: 8300000, guid: d4fd9d7cda4f48349e4f28cff1d5ffda, type: 3}
+    - {fileID: 8300000, guid: 3a9ecc6629404e31906ba0c38bb9bf60, type: 3}
     volumen: 1
-    variacionTono: 0.1
+    variacionTono: 0.035
+    variacionIntensidad: 0.22
+    espacial: 1
+    distanciaMin: 0.8
+    distanciaMax: 14
+    apertura: 0
+  sorkenEntradaPuertaCrujido:
+    clips:
+    - {fileID: 8300000, guid: 29a3e52e3181497ca8218b8717e691d8, type: 3}
+    volumen: 1
+    variacionTono: 0
+    variacionIntensidad: 0.08
     espacial: 1
     distanciaMin: 1
-    distanciaMax: 12
+    distanciaMax: 20
     apertura: 0
   sorkenHuesos:
     clips:
@@ -160,6 +169,27 @@ MonoBehaviour:
     espacial: 1
     distanciaMin: 1
     distanciaMax: 20
+    apertura: 0
+  ambienteGolpesPuerta:
+    clips:
+    - {fileID: 8300000, guid: 57b183e81fba4e849a6ed1b2d90241ab, type: 3}
+    - {fileID: 8300000, guid: c9e6320c2c8a46079109d02094370e4a, type: 3}
+    volumen: 0.9
+    variacionTono: 0.025
+    variacionIntensidad: 0.12
+    espacial: 1
+    distanciaMin: 0.8
+    distanciaMax: 18
+    apertura: 0
+  ambienteManijaPuerta:
+    clips:
+    - {fileID: 8300000, guid: 0f26dbaee3d74f39a6bd8f42a1184827, type: 3}
+    volumen: 0.85
+    variacionTono: 0.02
+    variacionIntensidad: 0.08
+    espacial: 1
+    distanciaMin: 0.8
+    distanciaMax: 18
     apertura: 0
   arbmosAparece:
     clips:
@@ -251,6 +281,16 @@ MonoBehaviour:
     espacial: 1
     distanciaMin: 1
     distanciaMax: 25
+    apertura: 0
+  libroSusurrosConsumo:
+    clips:
+    - {fileID: 8300000, guid: ac83f34d921a41f1a0de708f965ec29a, type: 3}
+    volumen: 0.75
+    variacionTono: 0
+    variacionIntensidad: 0
+    espacial: 1
+    distanciaMin: 0.6
+    distanciaMax: 15
     apertura: 0
   libroDefendiendo:
     clips:

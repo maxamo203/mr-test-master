@@ -312,6 +312,41 @@ public class MRCardboardController : MonoBehaviour
         ApplyEye(_rightImg, offR - conv, sx, new Vector2(W * 0.75f, H * 0.5f), halfW, H, sliceAspect);
     }
 
+    // Dónde cae en pantalla, en cada ojo, el punto que está justo al frente de la cámara a
+    // `distancia` metros: el centro de la mira (RaycastResolver.ResolveFromScreenCenter tira
+    // el rayo por el centro de la cámara). NO es el centro de cada ojo: cada ojo muestra un
+    // recorte distinto de la RT (offset de calibración + convergencia), así que el centro de
+    // la RT cae corrido dentro de cada mitad. En estéreo además cada ojo lo ve desde ±Ipd/2,
+    // y con la distancia del hit la mira queda a la misma profundidad que la superficie.
+    // Píxeles de pantalla con origen arriba-izq (convención IMGUI, sin UIScale).
+    public bool MiraEnOjos(float distancia, out Vector2 izq, out Vector2 der)
+    {
+        izq = der = default;
+        if (!CardboardActive || _leftImg == null || _rightImg == null) return false;
+
+        // Ver ConvergenciaUV: punto al frente a distancia D desde una cámara corrida e sobre
+        // su derecha → u = 0.5 - 0.5*P00*e/D. Ojo izquierdo e = -Ipd/2, derecho +Ipd/2.
+        float du = 0f;
+        if (_stereo && arCamera != null && _calib != null)
+            du = 0.25f * Mathf.Abs(arCamera.projectionMatrix.m00) * _calib.Ipd / Mathf.Max(0.1f, distancia);
+
+        izq = UvAPantalla(_leftImg,  new Vector2(0.5f + du, 0.5f));
+        der = UvAPantalla(_rightImg, new Vector2(0.5f - du, 0.5f));
+        return true;
+    }
+
+    private static Vector2 UvAPantalla(RawImage img, Vector2 uv)
+    {
+        var r    = img.uvRect;
+        var rt   = img.rectTransform;
+        var size = rt.sizeDelta;
+        // El canvas no tiene CanvasScaler y los ojos se anclan en la esquina inf-izq, así
+        // que anchoredPosition/sizeDelta ya son píxeles de pantalla (origen abajo).
+        float x = rt.anchoredPosition.x + ((uv.x - r.x) / r.width  - 0.5f) * size.x;
+        float y = rt.anchoredPosition.y + ((uv.y - r.y) / r.height - 0.5f) * size.y;
+        return new Vector2(x, Screen.height - y);
+    }
+
     // Corrimiento de uv que se suma al ojo izquierdo y se resta al derecho para que un punto a
     // `Convergencia` metros caiga en el MISMO píxel en los dos ojos.
     //

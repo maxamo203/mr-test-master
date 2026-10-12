@@ -91,11 +91,13 @@ namespace Gameplay
 
         private void OnDisable()
         {
+            DetenerAudioConsumo();
             if (Active == this) Active = null;
         }
 
         private void OnDestroy()
         {
+            DetenerAudioConsumo();
             if (_materialOscuridad != null) Destroy(_materialOscuridad);
             if (_materialHumo != null) Destroy(_materialHumo);
             if (_humo != null) Destroy(_humo.gameObject);
@@ -106,6 +108,7 @@ namespace Gameplay
             // El anchor puede corregir su pose en cualquier frame. Los parametros estan
             // en mundo, por eso se refrescan para que el circulo siga pegado al libro.
             ActualizarShader();
+            ActualizarAudioConsumo();
 #if UNITY_EDITOR
             // Tuning en vivo del humo (densidad, vida, textura, color): SOLO en el editor,
             // asi se puede arrastrar los sliders en Play y ver el cambio sin recompilar.
@@ -127,6 +130,7 @@ namespace Gameplay
             if (silencioso)
             {
                 AudioManager.PararBucle(BucleDefensa);
+                DetenerAudioConsumo();
                 _defendiendoHasta = 0f;
             }
             else
@@ -177,8 +181,22 @@ namespace Gameplay
         }
 
         private const string BucleDefensa   = "libro_defensa";
+        private const string BucleConsumo   = "libro_susurros_consumo";
         private const float  GraciaDefensa  = 0.35f;
         private float _defendiendoHasta;
+
+        private void ActualizarAudioConsumo()
+        {
+            if (DebeSonarConsumo(_oscuridad01))
+                AudioManager.Bucle(BucleConsumo, c => c.libroSusurrosConsumo, PuntoDeLuz);
+            else
+                DetenerAudioConsumo();
+        }
+
+        public static bool DebeSonarConsumo(float oscuridad01) =>
+            oscuridad01 > 1e-5f && oscuridad01 < 1f - 1e-5f;
+
+        private static void DetenerAudioConsumo() => AudioManager.PararBucle(BucleConsumo);
 
         public void SetDisponible(bool disponible)
         {

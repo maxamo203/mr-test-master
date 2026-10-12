@@ -74,8 +74,8 @@ namespace Gameplay
             // Cardboard NO se apaga acá: si el dispositivo sigue calibrado en esta sesión
             // AR (el caso normal al reintentar), la sincronización no busca la imagen y el
             // jugador puede seguir con el visor puesto. Los caminos que sí necesitan la
-            // pantalla mono salen solos (ARLobbyManager.ReiniciarSincronizacion /
-            // RecalibrarConImagen → MRCardboardController.SalirSiActivo).
+            // pantalla mono salen solos (ARLobbyManager.RecalibrarConImagen →
+            // MRCardboardController.SalirSiActivo).
 
             // Volver a MOSTRAR las paredes escaneadas. Durante la noche el jugador puede
             // ocultarlas (SceneOccluderMode, botón PAREDES de la sala), pero ese botón
@@ -136,7 +136,12 @@ namespace Gameplay
         {
             DetenerSistemas();
 
-            if (LocalDeath.Instance != null && LocalDeath.Instance.IsDead) return;
+            // Si estaba espectando, la noche ya terminó: vuelve su pantalla de muerte.
+            if (LocalDeath.Instance != null && LocalDeath.Instance.IsDead)
+            {
+                LocalDeath.Instance.TerminarNoche();
+                return;
+            }
 
             NightResult.MarcarSobrevivida();
             NightResult.MarcarObjetosRecolectados(NightLoot.Total);

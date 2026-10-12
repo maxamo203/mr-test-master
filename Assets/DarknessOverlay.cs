@@ -35,6 +35,8 @@ public class DarknessOverlay : MonoBehaviour
     [Range(0f, 1f)] public float rayos = 0.35f;
     [Tooltip("Segundos que tarda el agujero en acompañar un cambio brusco de carga (al recoger una pila).")]
     [Range(0f, 3f)] public float suavizadoCarga = 0.6f;
+    [Tooltip("Segundos que tarda el agujero en cerrarse / abrirse al enfocar la linterna (modo Bright).")]
+    [Range(0f, 1f)] public float suavizadoEnfoque = 0.12f;
 
     [Header("Referencias")]
     public Camera arCamera;
@@ -43,9 +45,13 @@ public class DarknessOverlay : MonoBehaviour
     private GameObject _quad;
     private Material _mat;
     private float _cargaVisible = 1f;
+    private float _enfoque, _enfoqueVel;   // 0 = haz normal, 1 = enfocado (Bright)
     private float _cargaVel;
     private static readonly int ID_DARK      = Shader.PropertyToID("_OverlayDarkness");
     private static readonly int ID_CONE_TAN  = Shader.PropertyToID("_OverlayConeTan");
+    // Qué look de oscuridad dibuja el shader: 1 = cono con halos (Rediseño 2.0), 0 = viñeta
+    // con puntas (la de siempre). Ver Rediseno.Flag.
+    private static readonly int ID_HALOS     = Shader.PropertyToID("_OverlayHalos");
     private static readonly int ID_SOFTNESS  = Shader.PropertyToID("_OverlaySoftness");
     private static readonly int ID_SPIKES    = Shader.PropertyToID("_OverlaySpikes");
     private static readonly int ID_RAYS      = Shader.PropertyToID("_OverlayRays");
@@ -113,6 +119,7 @@ public class DarknessOverlay : MonoBehaviour
             effectiveDark = darkness;
 
         Shader.SetGlobalFloat(ID_DARK, effectiveDark);
+        Shader.SetGlobalFloat(ID_HALOS, Rediseno.Flag.Activo ? 1f : 0f);
         PublicarAgujero();
     }
 
@@ -134,6 +141,17 @@ public class DarknessOverlay : MonoBehaviour
         float t = Mathf.Pow(Mathf.Clamp01(_cargaVisible), curvaCierre);
         float minDeg = Mathf.Min(anguloBateriaVaciaDeg, anguloBateriaLlenaDeg);
         float deg = Mathf.Lerp(minDeg, anguloBateriaLlenaDeg, t);
+
+        // Enfocar (mantener el botón) concentra el haz: la luz sobre el mundo sale más fuerte
+        // y más cerrada (Flashlight.brightConeAngleMultiplier), y la vista tiene que acompañar
+        // cerrando el agujero puntiagudo en la misma proporción. La batería sigue mandando
+        // el tamaño base; el enfoque lo multiplica.
+        float objetivoEnfoque = flashlight != null && flashlight.Mode == FlashlightMode.Bright ? 1f : 0f;
+        _enfoque = suavizadoEnfoque <= 0f
+            ? objetivoEnfoque
+            : Mathf.SmoothDamp(_enfoque, objetivoEnfoque, ref _enfoqueVel, suavizadoEnfoque);
+        if (flashlight != null)
+            deg *= Mathf.Lerp(1f, Mathf.Clamp(flashlight.brightConeAngleMultiplier, 0.1f, 1f), _enfoque);
 
         Shader.SetGlobalFloat(ID_CONE_TAN, Mathf.Tan(deg * Mathf.Deg2Rad));
         Shader.SetGlobalFloat(ID_SOFTNESS, suavidadBorde);

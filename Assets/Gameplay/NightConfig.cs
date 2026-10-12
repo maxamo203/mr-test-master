@@ -41,15 +41,29 @@ namespace Gameplay
         public float entryTriggerDistance = 3f;
 
         [Header("Persecucion")]
-        [Tooltip("Segundos que hay que iluminar al Sorken para ahuyentarlo en el chase.")]
-        public float chaseRepelSeconds = 5f;
-        public float sorkenChaseSpeed = 2.5f;
+        [Tooltip("Tiempo TOTAL de luz intensa valida para ahuyentar al Sorken. El gesto " +
+                 "inicial de cubrirse ya cuenta dentro de este tiempo.")]
+        [Min(0.1f)] public float chaseRepelSeconds = 3.5f;
+        [Tooltip("Pausa inmovil al terminar de entrar. Durante ella puede comenzar la defensa, " +
+                 "pero nunca puede capturar al jugador.")]
+        [Min(0f)] public float sorkenPostEntryPauseSeconds = 2.5f;
+        [Tooltip("Velocidad normal dentro del ambiente, pensada para espacios pequenos.")]
+        [Min(0f)] public float sorkenChaseSpeed = 0.5f;
+        [Tooltip("Velocidad muy lenta mientras recibe luz intensa valida.")]
+        [Min(0f)] public float sorkenIlluminatedSpeed = 0.1f;
+        [Tooltip("Al perder el haz, conserva progreso y posicion durante esta ventana.")]
+        [Min(0f)] public float sorkenAimToleranceSeconds = 2f;
+        [Tooltip("Segundos de progreso que pierde por cada segundo sin luz, una vez agotada la tolerancia.")]
+        [Min(0f)] public float sorkenRepelDecayPerSecond = 0.5f;
+        [Tooltip("Intervalo entre reintentos de ruta cuando existe geometria pero no hay camino valido.")]
+        [Min(0.05f)] public float sorkenBlockedRepathSeconds = 0.4f;
         [Tooltip("Duracion de la animacion inicial al cubrirse el rostro con la linterna.")]
         [Min(0f)] public float sorkenCoverStartSeconds = 3f;
-        [Tooltip("Multiplicador de velocidad mientras avanza cubriendose de la linterna.")]
-        [Range(0.1f, 1f)] public float sorkenCoverWalkSpeedMultiplier = 0.7f;
+        [Tooltip("Multiplicador adicional de la animacion cubierta. La velocidad iluminada " +
+                 "sigue teniendo como techo sorkenIlluminatedSpeed.")]
+        [Range(0.1f, 1f)] public float sorkenCoverWalkSpeedMultiplier = 1f;
         [Tooltip("Velocidad al retirarse tras ser repelido (sale corriendo).")]
-        public float sorkenRetreatSpeed = 3.5f;
+        public float sorkenRetreatSpeed = 2.8f;
         [Tooltip("Distancia (m) a la que el Sorken atrapa al jugador (grab).")]
         public float grabRange = 1.2f;
 
@@ -71,18 +85,20 @@ namespace Gameplay
         [Tooltip("Espera (s) entre alucinaciones del MISMO jugador (rango, al azar).")]
         public float arbmosCooldownMin = 20f;
         public float arbmosCooldownMax = 40f;
-        [Tooltip("A que distancia (m) del jugador, hacia donde mira, aparece el Arbmos.")]
+        [Tooltip("Distancia deseada (m) para buscar una aparicion lateral visible y fuera del haz.")]
         public float arbmosSpawnDistance = 2.5f;
         [Tooltip("Probabilidad base [0..1] de aparicion al terminar el cooldown.")]
         public float arbmosSpawnChancePerAttempt = 0.6f;
         [Tooltip("Segundos continuos con la linterna apagada para ocultar una aparicion normal.")]
         [Min(0.1f)] public float arbmosHideSeconds = 3f;
         [Tooltip("Segundos de luz directa sobre la cabeza necesarios para comprometer el ataque.")]
-        [Min(0.05f)] public float arbmosExposureSeconds = 0.8f;
+        [Min(0.05f)] public float arbmosExposureSeconds = 1.2f;
+        [Tooltip("Gracia al aparecer durante la que la luz no acumula exposición.")]
+        [Min(0f)] public float arbmosExposureGraceSeconds = 1f;
         [Tooltip("Demora breve entre comprometer el ataque normal y aplicar el daño.")]
-        [Min(0f)] public float arbmosAttackCommitSeconds = 0.35f;
+        [Min(0f)] public float arbmosAttackCommitSeconds = 0.5f;
         [Tooltip("Techo de velocidad (m/s). La velocidad real también respeta la distancia por paso del clip.")]
-        [Min(0.1f)] public float arbmosAttackChaseSpeed = 2.5f;
+        [Min(0.1f)] public float arbmosAttackChaseSpeed = 2f;
         [Tooltip("Limite de seguridad (s) del ataque normal si no consigue alcanzar al jugador.")]
         [Min(0.1f)] public float arbmosAttackMaxSeconds = 14f;
         [Tooltip("Distancia horizontal a la que ejecuta el susto y aplica el golpe de cordura.")]
@@ -99,8 +115,8 @@ namespace Gameplay
         public float arbmosLethalStalkSeconds = 3f;
         [Tooltip("Velocidad (m/s) de la embestida letal.")]
         public float arbmosLethalChaseSpeed = 3.5f;
-        [Tooltip("Limite de seguridad de la persecucion final. Al vencer, completa la muerte " +
-                 "aunque la navegacion no encuentre una ruta, para que la secuencia no quede trabada.")]
+        [Tooltip("Limite de seguridad de la persecucion final. Al vencer sin captura valida, " +
+                 "reprograma la aparicion; nunca mata a distancia ni a traves de obstaculos.")]
         [Min(0.1f)] public float arbmosLethalMaxSeconds = 8f;
         [Tooltip("Frecuencia con la que recalcula la ruta durante la persecucion final.")]
         [Min(0.05f)] public float arbmosLethalRepathSeconds = 0.3f;
@@ -116,7 +132,7 @@ namespace Gameplay
         [Tooltip("Espera aleatoria maxima (s) antes de que la oscuridad ataque el libro.")]
         [Min(0f)] public float bookEventDelayMax = 50f;
         [Tooltip("Ventana completa (s) desde que empieza la oscuridad hasta que consume el libro.")]
-        [Min(0.1f)] public float bookConsumeSeconds = 6f;
+        [Min(0.1f)] public float bookConsumeSeconds = 16f;
         [Tooltip("Segundos CONTINUOS de linterna sobre el libro necesarios para salvarlo.")]
         [Min(0.1f)] public float bookDefenseSeconds = 4f;
 
@@ -126,7 +142,7 @@ namespace Gameplay
 
         [Header("Veleth (invocada al perder el libro)")]
         [Tooltip("Velocidad de persecucion. Veleth no puede ser repelida con la linterna.")]
-        [Min(0.1f)] public float velethChaseSpeed = 3.2f;
+        [Min(0.1f)] public float velethChaseSpeed = 2.2f;
         [Tooltip("Distancia horizontal a la que Veleth atrapa al jugador.")]
         [Min(0.05f)] public float velethGrabRange = 1.1f;
         [Tooltip("Frecuencia con la que recalcula su ruta hacia el jugador que se mueve.")]

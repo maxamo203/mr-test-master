@@ -63,6 +63,23 @@ public class AudioCatalogTests
         Assert.That(AudioManager.MezclarVolumen(-3f, 1f), Is.Zero);
     }
 
+    [Test]
+    public void LaVariacionDeIntensidadRespetaElVolumenComoTecho()
+    {
+        Assert.That(AudioManager.VariarIntensidad(0.8f, 0.25f, 0f),
+                    Is.EqualTo(0.6f).Within(1e-5f));
+        Assert.That(AudioManager.VariarIntensidad(0.8f, 0.25f, 1f),
+                    Is.EqualTo(0.8f).Within(1e-5f));
+    }
+
+    [Test]
+    public void LaVariacionDeIntensidadSeLimitaAUnRangoSeguro()
+    {
+        Assert.That(AudioManager.VariarIntensidad(2f, 2f, -1f),
+                    Is.EqualTo(0.5f).Within(1e-5f));
+        Assert.That(AudioManager.VariarIntensidad(-1f, 0.2f, 0.5f), Is.Zero);
+    }
+
     // ── US-4.1: resolucion por tipo de punto de entrada ───────────────────
 
     [Test]
@@ -150,6 +167,24 @@ public class AudioCatalogTests
         Assert.That(p.Vacia, Is.False);
         for (int i = 0; i < 30; i++)
             Assert.That(p.Elegir(), Is.EqualTo(_ventana));
+    }
+
+    [Test]
+    public void VariantesFrecuentesNoSeRepitenDeFormaInmediata()
+    {
+        var p = new AudioCatalog.Pista
+        {
+            clips = new[] { _puertaA, null, _puertaB, _ventana },
+        };
+        int anterior = -1;
+        for (int i = 0; i < 100; i++)
+        {
+            int elegido = p.ElegirIndiceSinRepetir(anterior);
+            Assert.That(elegido, Is.InRange(0, 2));
+            if (anterior >= 0) Assert.That(elegido, Is.Not.EqualTo(anterior));
+            Assert.That(p.ClipValido(elegido), Is.Not.Null);
+            anterior = elegido;
+        }
     }
 
     [Test]

@@ -520,6 +520,16 @@ public class ARImageAnchor : MonoBehaviour
         return dst;
     }
 
+    // Marca el 0,0 cuando el origen lo fijó otro camino que no es la detección
+    // (ManualCalibration): sin esto, en partida no existe el libro y su director
+    // queda frenado toda la noche. Idempotente: recentrar no duplica el libro.
+    public void AsegurarVisual()
+    {
+        if (_anchorVisual != null || WorldOrigin.Instance == null) return;
+        try { SpawnVisual(WorldOrigin.Instance.transform); }
+        catch (Exception e) { Debug.LogWarning($"[ARImageAnchor] SpawnVisual falló: {e.Message}"); }
+    }
+
     private void SpawnVisual(Transform anchorTransform)
     {
         // El visual cuelga de WORLDORIGIN, no del anchor. Marca el 0,0 DEL MAPA: es lo

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   displayName: Noche 5
   briefing: El Arbmos acecha mas seguido. No lo mires con la linterna; ocultate a oscuras.
-  nightDurationSeconds: 360
+  nightDurationSeconds: 300
   sorkenActive: 1
   attemptIntervalMin: 16
   attemptIntervalMax: 26
@@ -22,42 +22,48 @@ MonoBehaviour:
   entryGraceSeconds: 9
   entryAnimationSeconds: 3
   entryTriggerDistance: 2.5
-  chaseRepelSeconds: 6
-  sorkenChaseSpeed: 3.2
+  chaseRepelSeconds: 4
+  sorkenPostEntryPauseSeconds: 2.5
+  sorkenChaseSpeed: 0.5
+  sorkenIlluminatedSpeed: 0.1
+  sorkenAimToleranceSeconds: 2
+  sorkenRepelDecayPerSecond: 0.5
+  sorkenBlockedRepathSeconds: 0.4
   sorkenCoverStartSeconds: 3
-  sorkenCoverWalkSpeedMultiplier: 0.7
-  sorkenRetreatSpeed: 4.3
+  sorkenCoverWalkSpeedMultiplier: 1
+  sorkenRetreatSpeed: 3.4
   grabRange: 1.3
   flashlightMaxCharge: 100
   flashlightDrainPerSecond: 2.15
   flashlightBrightDrainPerSecond: 6
   sanityMax: 100
   arbmosActive: 1
-  arbmosForceSpawnAfterCooldown: 0
-  arbmosCooldownMin: 24
-  arbmosCooldownMax: 42
+  arbmosForceSpawnAfterCooldown: 1
+  arbmosCooldownMin: 12
+  arbmosCooldownMax: 21
   arbmosSpawnDistance: 2.2
-  arbmosSpawnChancePerAttempt: 0.62
+  arbmosSpawnChancePerAttempt: 1
   arbmosHideSeconds: 3
-  arbmosExposureSeconds: 0.8
-  arbmosAttackCommitSeconds: 0.35
-  arbmosAttackChaseSpeed: 2.5
+  arbmosExposureSeconds: 1.2
+  arbmosExposureGraceSeconds: 1
+  arbmosAttackCommitSeconds: 0.5
+  arbmosAttackChaseSpeed: 2
   arbmosAttackMaxSeconds: 14
   arbmosAttackGrabRange: 1
   arbmosSanityDamage: 30
   arbmosLookTargetHeight: 1.65
   arbmosLookTargetRadius: 0.25
   arbmosLethalStalkSeconds: 3
-  arbmosLethalChaseSpeed: 3.8
+  arbmosLethalChaseSpeed: 3
   arbmosLethalMaxSeconds: 8
   arbmosLethalRepathSeconds: 0.3
   arbmosGrabRange: 1.25
   bookActive: 1
   bookEventDelayMin: 29
   bookEventDelayMax: 44
-  bookConsumeSeconds: 8
+  bookConsumeSeconds: 13
   bookDefenseSeconds: 4.5
-  velethChaseSpeed: 3.6
+  velethChaseSpeed: 2.9
   velethGrabRange: 1.2
   velethRepathSeconds: 0.2
   velethGrabHoldSeconds: 0.8

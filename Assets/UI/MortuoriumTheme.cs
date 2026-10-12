@@ -214,7 +214,10 @@ public static class MortuoriumTheme
         GUI.matrix = Matrix4x4.identity;
         Fill(new Rect(0, 0, Screen.width, Screen.height), c);
         // Overlay de scanlines (efecto CRT del prototipo HTML: cada 3px oscurece una fila).
-        if (_scanlines == null)
+        // Forma parte del mismo VHS opcional de los menus. Antes se dibujaba siempre,
+        // aunque la preferencia persistida estuviera apagada, y parecia que la opcion se
+        // habia reactivado al volver a cargar una escena.
+        if (GameOptions.VhsActivo && _scanlines == null)
         {
             _scanlines = new Texture2D(1, 3, TextureFormat.RGBA32, false);
             _scanlines.filterMode = FilterMode.Point;
@@ -225,14 +228,17 @@ public static class MortuoriumTheme
             _scanlines.Apply();
             _scanlines.hideFlags = HideFlags.HideAndDontSave;
         }
-        var prev = GUI.color;
-        GUI.color = Color.white;
-        GUI.DrawTextureWithTexCoords(new Rect(0, 0, Screen.width, Screen.height),
-                                     _scanlines,
-                                     new Rect(0, 0, 1f, Screen.height / 3f));
-        GUI.color = prev;
+        if (GameOptions.VhsActivo)
+        {
+            var prev = GUI.color;
+            GUI.color = Color.white;
+            GUI.DrawTextureWithTexCoords(new Rect(0, 0, Screen.width, Screen.height),
+                                         _scanlines,
+                                         new Rect(0, 0, 1f, Screen.height / 3f));
+            GUI.color = prev;
+        }
         GUI.matrix = m;
-        ScanlinesYaPintadas = true;
+        ScanlinesYaPintadas = GameOptions.VhsActivo;
     }
 
     // ¿Alguna pantalla ya pintó las scanlines del tema en este frame? Lo consulta el

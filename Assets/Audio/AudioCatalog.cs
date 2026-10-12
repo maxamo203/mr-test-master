@@ -38,6 +38,10 @@ public class AudioCatalog : ScriptableObject
                  "de variacion evita que se note la repeticion en sonidos frecuentes (pasos).")]
         [Range(0f, 0.5f)] public float variacionTono = 0f;
 
+        [Tooltip("Variacion aleatoria de intensidad por reproduccion. El volumen configurado " +
+                 "es el maximo y cada disparo puede sonar hasta este porcentaje mas suave.")]
+        [Range(0f, 0.5f)] public float variacionIntensidad = 0f;
+
         [Header("Espacial")]
         [Tooltip("0 = plano, suena igual en los dos oidos (musica, UI). " +
                  "1 = posicional, el jugador puede ubicar de donde viene.")]
@@ -87,6 +91,44 @@ public class AudioCatalog : ScriptableObject
                 elegido--;
             }
             return null;
+        }
+
+        public int CantidadClipsValidos
+        {
+            get
+            {
+                if (clips == null) return 0;
+                int cantidad = 0;
+                for (int i = 0; i < clips.Length; i++)
+                    if (clips[i] != null) cantidad++;
+                return cantidad;
+            }
+        }
+
+        // Indice compacto entre los clips no nulos. Permite que el host replique una
+        // variante exacta sin depender del orden de llamadas a Random en cada cliente.
+        public AudioClip ClipValido(int indice)
+        {
+            if (indice < 0 || clips == null) return null;
+            for (int i = 0; i < clips.Length; i++)
+            {
+                if (clips[i] == null) continue;
+                if (indice-- == 0) return clips[i];
+            }
+            return null;
+        }
+
+        // Devuelve un indice compacto y evita repetir inmediatamente cuando hay mas de
+        // una variante. El llamador conserva `anterior` por entidad/evento.
+        public int ElegirIndiceSinRepetir(int anterior)
+        {
+            int cantidad = CantidadClipsValidos;
+            if (cantidad <= 0) return -1;
+            if (cantidad == 1) return 0;
+
+            int elegido = UnityEngine.Random.Range(0, cantidad - 1);
+            if (elegido >= anterior && anterior >= 0 && anterior < cantidad) elegido++;
+            return elegido;
         }
     }
 
@@ -141,6 +183,9 @@ public class AudioCatalog : ScriptableObject
              "al acercarse (doc: 'pasos cuyo volumen aumenta exponencialmente').")]
     public Pista sorkenPasos = new Pista { variacionTono = 0.1f, distanciaMax = 12f };
 
+    [Tooltip("Crujido real al comenzar una entrada de Sorken por puerta. No se usa para ventanas.")]
+    public Pista sorkenEntradaPuertaCrujido = new Pista { distanciaMax = 20f };
+
     [Tooltip("Huesos rotos al desplazarse (doc: 'movimiento quebrado y erratico').")]
     public Pista sorkenHuesos = new Pista { variacionTono = 0.15f, distanciaMax = 12f };
 
@@ -155,6 +200,21 @@ public class AudioCatalog : ScriptableObject
 
     [Tooltip("US-4.4: apuntas al punto por el que esta entrando (feedback de que lo ubicaste).")]
     public Pista sorkenApuntado = new Pista { distanciaMax = 20f };
+
+    // ─────────────────────────────────────────────────── AMBIENTE DE TENSION
+    [Header("AMBIENTE DE TENSION")]
+
+    [Tooltip("Variantes independientes de golpes falsos en una puerta real del mapa.")]
+    public Pista ambienteGolpesPuerta = new Pista
+    {
+        variacionTono = 0.025f, distanciaMin = 0.8f, distanciaMax = 18f
+    };
+
+    [Tooltip("Falsa alarma independiente: movimiento de manija en una puerta real.")]
+    public Pista ambienteManijaPuerta = new Pista
+    {
+        variacionTono = 0.02f, distanciaMin = 0.8f, distanciaMax = 18f
+    };
 
     // ─────────────────────────────────────────────────────────── ARBMOS
     [Header("ARBMOS  (alucinacion individual: solo la oye el jugador afectado)")]
@@ -196,6 +256,12 @@ public class AudioCatalog : ScriptableObject
 
     [Tooltip("Empieza el ataque de oscuridad: hay que ir a alumbrar el libro.")]
     public Pista libroAtaqueEmpieza = new Pista { distanciaMax = 25f };
+
+    [Tooltip("Loop 3D de susurros durante TODO el consumo, incluso mientras se defiende.")]
+    public Pista libroSusurrosConsumo = new Pista
+    {
+        volumen = 0.75f, distanciaMin = 0.6f, distanciaMax = 15f
+    };
 
     [Tooltip("Loop mientras lo estas defendiendo con la linterna (la oscuridad retrocede).")]
     public Pista libroDefendiendo = new Pista { distanciaMax = 15f };

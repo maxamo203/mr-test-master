@@ -266,12 +266,26 @@ public class GameBootstrapper : MonoBehaviour
         // la partida (p. ej. al volver a sincronizar), sin él no habría forma de volver a
         // ver las paredes. NightTransition.ResetLocal ya lo apaga en el reinicio.
         var occ = SceneOccluderMode.Instance;
-        if (occ != null && (enPartida || occ.Enabled))
+        if (occ != null && (enPartida || occ.Enabled || occ.SolidDebugEnabled))
         {
             string label = occ.Enabled ? "PAREDES: OCULTAS" : "PAREDES: VISIBLES";
             var r = new Rect(Pad, yBotones, bw, bh);
             UIBlocker.AddVirtualRect(r);
             T.Boton(null, r, label, primario: false, () => occ.Toggle(), fontSize: 14);
+            yBotones += bh + gap;
+
+            // Herramienta de PC/development build: superficies opacas con profundidad
+            // real. Es independiente del toggle visible/oculto y no aparece en produccion.
+            if (Application.isEditor || Debug.isDebugBuild)
+            {
+                string solidLabel = occ.SolidDebugEnabled
+                    ? "PAREDES SOLIDAS (DEV): SI"
+                    : "PAREDES SOLIDAS (DEV): NO";
+                var solidRect = new Rect(Pad, yBotones, bw, bh);
+                UIBlocker.AddVirtualRect(solidRect);
+                T.Boton(null, solidRect, solidLabel, primario: false,
+                        () => occ.ToggleSolidDebug(), fontSize: 13);
+            }
         }
     }
 

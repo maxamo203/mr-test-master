@@ -29,6 +29,8 @@ namespace Gameplay
         private float _sendTimer;
         private float _oscuridadRemota;
         private NetworkManager _suscritoA;
+        private bool _bookReserved;
+        private int _bookTraceId;
 
         public static RitualBookDirector Ensure()
         {
@@ -64,6 +66,8 @@ namespace Gameplay
             Alumbrando = 0;
             TodosAlumbrando = false;
             _oscuridadRemota = 0f;
+            _bookReserved = false;
+            _bookTraceId = 0;
 
             if (_night != null && _night.bookActive)
             {
@@ -89,6 +93,8 @@ namespace Gameplay
         // StartRun siempre construye uno nuevo, asi que no hay nada que conservar.
         public void StopRun()
         {
+            EndTelemetry("stopped");
+            ReleaseReservation();
             _running = false;
             _flow = null;
             _oscuridadRemota = 0f;
@@ -98,6 +104,8 @@ namespace Gameplay
 
         public void Reiniciar()
         {
+            EndTelemetry("reset");
+            ReleaseReservation();
             Alumbrando = 0;
             TodosAlumbrando = false;
             _oscuridadRemota = 0f;
@@ -125,6 +133,13 @@ namespace Gameplay
             // defender el libro y no debe perder por una recalibracion.
             var view = RitualBookView.Active;
             if (view == null) return;
+            if (!ThreatCoordinator.HasAnyCapablePlayer) return;
+
+            if (_flow.Phase == RitualBookPhase.Consuming)
+            {
+                if (_bookReserved && !ThreatCoordinator.CanKeepBook())
+                    ReleaseReservation();
+            }
 
             // Se mide tambien durante Waiting. El flow no acumula defensa antes del
             // ataque, pero asi el primer fragmento de frame del evento cuenta si el
@@ -136,21 +151,45 @@ namespace Gameplay
                 ang = angReal;
                 range = rangeReal;
             }
+            if (_flow.Phase == RitualBookPhase.Consuming && !_bookReserved)
+            {
+                if (!ThreatCoordinator.CanBeginBookAt(
+                        view.PuntoDeLuz, range, view.RadioAproximado) ||
+                    !ThreatCoordinator.TryBeginBook()) return;
+                _bookReserved = true;
+            }
             Alumbrando = PlayerLights.CountIlluminating(
                 view.PuntoDeLuz, ang, range, view.RadioAproximado,
-                FlashlightMode.Bright);
+                FlashlightMode.Bright, requireLineOfSight: true);
             int jugadoresVivos = ContarJugadoresVivos(net);
-            TodosAlumbrando = jugadoresVivos > 0 && Alumbrando >= jugadoresVivos;
+            TodosAlumbrando = Alumbrando > 0;
+
+            bool allowStart = _bookReserved || ThreatCoordinator.CanBeginBookAt(
+                view.PuntoDeLuz, range, view.RadioAproximado);
 
             var result = _flow.Tick(Time.deltaTime, Alumbrando, jugadoresVivos,
-                                    _night.bookConsumeSeconds, _night.bookDefenseSeconds);
+                                    _night.bookConsumeSeconds, _night.bookDefenseSeconds,
+                                    allowStart);
+            if ((result & RitualBookTickResult.ConsumptionStarted) != 0)
+            {
+                _bookReserved = ThreatCoordinator.TryBeginBook();
+                _bookTraceId = GameplayTelemetry.BeginThreat(
+                    "book", 0, view.PuntoDeLuz,
+                    $"consume={_night.bookConsumeSeconds:F2};defense={_night.bookDefenseSeconds:F2}");
+            }
             AplicarVista(_flow.Darkness01);
 
             if ((result & RitualBookTickResult.ConsumptionStarted) != 0)
                 Debug.Log("[LibroRitual] La oscuridad empezo a consumir el libro.");
 
             if ((result & RitualBookTickResult.Saved) != 0)
+            {
+                GameplayTelemetry.End(_bookTraceId, "book", "saved", 0,
+                                      view.PuntoDeLuz);
+                _bookTraceId = 0;
+                ReleaseReservation();
                 Debug.Log("[LibroRitual] El libro fue salvado con la linterna.");
+            }
 
             _sendTimer -= Time.deltaTime;
             if (_sendTimer <= 0f || result != RitualBookTickResult.None)
@@ -160,11 +199,17 @@ namespace Gameplay
             }
 
             if ((result & RitualBookTickResult.Consumed) != 0)
+            {
+                GameplayTelemetry.End(_bookTraceId, "book", "consumed", 0,
+                                      view.PuntoDeLuz);
+                _bookTraceId = 0;
                 InvocarVeleth();
+            }
         }
 
         private void InvocarVeleth()
         {
+            ReleaseReservation();
             _running = false;
             NetworkManager.Instance?.ServerSendRitualBook(1f);
             var view = RitualBookView.Active;
@@ -172,10 +217,31 @@ namespace Gameplay
             if (view != null) view.SetDisponible(false);
 
             bool invocada = VelethDirector.Ensure().StartHunt(origen);
+            if (invocada)
+            {
+                GameDirector.Instance?.SuspendForVeleth();
+                ArbmosDirector.Instance?.StopRun();
+            }
             OnVelethInvoked?.Invoke();
             Debug.Log(invocada
                 ? "[LibroRitual] El libro fue consumido: Veleth fue invocada."
                 : "[LibroRitual] El libro fue consumido, pero no se pudo crear a Veleth.");
+        }
+
+        private void ReleaseReservation()
+        {
+            if (!_bookReserved) return;
+            ThreatCoordinator.EndBook();
+            _bookReserved = false;
+        }
+
+        private void EndTelemetry(string result)
+        {
+            if (_bookTraceId == 0) return;
+            GameplayTelemetry.End(_bookTraceId, "book", result, 0,
+                RitualBookView.Active != null
+                    ? RitualBookView.Active.PuntoDeLuz : Vector3.zero);
+            _bookTraceId = 0;
         }
 
         private void SetOscuridadRemota(float oscuridad01)
@@ -206,9 +272,7 @@ namespace Gameplay
             int jugadoresVivos = NetworkManager.Instance != null
                 ? ContarJugadoresVivos(NetworkManager.Instance)
                 : 1;
-            float velocidadAtaque = TodosAlumbrando ? 0f
-                : Alumbrando == 0 ? 1f
-                : 1f - Alumbrando / (float)Mathf.Max(1, jugadoresVivos);
+            float velocidadAtaque = TodosAlumbrando ? 0f : 1f;
             return $"libro={_flow.Phase} oscuridad={_flow.Darkness01:P0} " +
                    $"defensa={_flow.Defense01:P0} alumbrando={Alumbrando} " +
                    $"todos={TodosAlumbrando} velocidadAtaque=" +

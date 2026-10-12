@@ -34,6 +34,15 @@ namespace Gameplay
 
             float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
 
+            // Espectando: sin overlay, sólo la barra para volver a la pantalla de muerte.
+            if (!sobrevivio && ld.Espectando)
+            {
+                _selectorAbierto = false;
+                DrawEspectando(ld, vw);
+                _nav.End();
+                return;
+            }
+
             // Overlay oscuro en toda la pantalla (incluye fuera del área segura).
             T.FillScreen(new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.92f));
             UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
@@ -72,13 +81,28 @@ namespace Gameplay
                           $"Noche {NightResult.NocheDesbloqueada} desbloqueada",
                           T.Estilo(T.FMono, 12, T.Tan, TextAnchor.MiddleCenter));
 
+            // Moriste pero la noche sigue (quedan compañeros vivos): se puede ocultar la
+            // pantalla para mirar la partida sin intervenir.
+            bool espectable = !sobrevivio && ld.PuedeEspectar;
+            if (espectable)
+                GUI.Label(new Rect(Pad, vh * 0.28f + 126f, vw - Pad * 2f, 24f),
+                          "Tus compañeros siguen en pie",
+                          T.Estilo(T.FMono, 12, T.Tan, TextAnchor.MiddleCenter));
+
             // Reintentar / cambiar de noche sólo las decide el host: reinician la noche
             // para TODOS. El cliente espera (al llegar el ResetNight revive).
             bool host = NightTransition.PuedeReiniciar;
             float y = vh - 44f - 58f;
 
             T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 58f),
-                    "VOLVER AL MENÚ", primario: !host, ReturnToMenu);
+                    "VOLVER AL MENÚ", primario: !host && !espectable, ReturnToMenu);
+
+            if (espectable)
+            {
+                y -= 66f;
+                T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 58f),
+                        "ESPECTAR PARTIDA", primario: !host, ld.Espectar);
+            }
 
             if (host)
             {
@@ -106,6 +130,25 @@ namespace Gameplay
             }
 
             _nav.End();
+        }
+
+        // Barra de espectador: arriba, a la izquierda del botón de pausa (vw-84), para
+        // no tapar las barras de cordura/amanecer de abajo. Sólo bloquea su propio rect;
+        // el resto de la pantalla queda libre para mirar.
+        private void DrawEspectando(LocalDeath ld, float vw)
+        {
+            var barra = new Rect(Pad, 28f, vw - Pad - 96f, 60f);
+            UIBlocker.AddVirtualRect(barra);
+            T.Panel(barra, new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.8f), T.Red);
+
+            GUI.Label(new Rect(barra.x + 12f, barra.y + 6f, barra.width - 24f, 26f), "ESPECTANDO",
+                      T.Estilo(T.FBebas, 22, T.Red));
+            GUI.Label(new Rect(barra.x + 12f, barra.y + 32f, barra.width * 0.5f, 20f), "Estás muerto",
+                      T.Estilo(T.FMono, 10, T.Dim));
+
+            const float bw = 110f;
+            T.Boton(_nav, new Rect(barra.xMax - bw - 8f, barra.y + 8f, bw, 44f),
+                    "VOLVER", primario: false, ld.DejarDeEspectar, fontSize: 16);
         }
 
         // ¿La noche recién superada era la ÚLTIMA que habilita la demo, y hay más en el

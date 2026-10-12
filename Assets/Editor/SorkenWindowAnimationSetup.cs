@@ -13,6 +13,10 @@ public static class SorkenWindowAnimationSetup
         "Assets/Entities/Sorken/Animations/Sorken_WindowEntry_v02.fbx";
     private const string LandingPath =
         "Assets/Entities/Sorken/Animations/Sorken_WindowLanding_v02.fbx";
+    private const string GameplayEntryPath =
+        "Assets/Entities/Sorken/Animations/Sorken_WindowEntry_Gameplay.anim";
+    private const string GameplayLandingPath =
+        "Assets/Entities/Sorken/Animations/Sorken_WindowLanding_Gameplay.anim";
     private const string PrefabPath = "Assets/Entities/Prefabs/SorkenGameplay.prefab";
 
     [InitializeOnLoadMethod]
@@ -34,8 +38,11 @@ public static class SorkenWindowAnimationSetup
             return;
         }
 
-        AnimationClip entry = GetClip(EntryPath);
-        AnimationClip landing = GetClip(LandingPath);
+        // Los FBX conservan sus acciones fuente, pero el prefab debe usar los clips
+        // normalizados para el rig real. Asignar los FBX directamente vuelve a dejar
+        // al Sorken en V-pose y, ademas, intercambia visualmente puerta y ventana.
+        AnimationClip entry = AssetDatabase.LoadAssetAtPath<AnimationClip>(GameplayEntryPath);
+        AnimationClip landing = AssetDatabase.LoadAssetAtPath<AnimationClip>(GameplayLandingPath);
         if (entry == null || landing == null) return;
 
         GameObject root = PrefabUtility.LoadPrefabContents(PrefabPath);

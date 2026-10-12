@@ -16,7 +16,8 @@ using UnityEngine;
 // de streaming del chat de voz (Voice/VoiceStream), dejandolo mudo sin forma de recuperarse.
 //
 // Reparto de voces (m_RealVoiceCount = 48 en ProjectSettings/AudioManager.asset):
-//   2 musica (crossfade) + 1 capa de tension + 8 loops + 24 one-shots + 3 del chat de voz.
+//   2 musica (crossfade) + 1 capa de tension + 8 loops + 23 one-shots +
+//   1 evento ambiental dedicado + 3 del chat de voz.
 // Musica y loops NUNCA se roban; si los 24 one-shots estan ocupados se reusa el mas viejo.
 // Asi ningun sonido corta a otro en la practica.
 //
@@ -28,7 +29,7 @@ public class AudioManager : MonoBehaviour
 {
     public static AudioManager Instance { get; private set; }
 
-    private const int CantOneShots = 24;
+    private const int CantOneShots = 23;
     private const int CantBucles   = 8;
 
     private AudioCatalog _cat;
@@ -52,6 +53,12 @@ public class AudioManager : MonoBehaviour
     private AudioSource _tension;
     private float       _tension01;
 
+    // Fuente exclusiva para golpes/manija. Permite impedir solapamientos y cortar con
+    // fade una falsa alarma si empieza una amenaza real.
+    private AudioSource _ambienteEvento;
+    private float _ambienteEventoObjetivo;
+    private float _ambienteEventoFade = 0.12f;
+
     // True solo si hay catalogo con al menos un clip cargado. Mientras no haya audio en el
     // proyecto esto es false y el Update se va en la primera linea: costo cero.
     public static bool Activo => Instance != null && Instance._cat != null &&
@@ -69,6 +76,7 @@ public class AudioManager : MonoBehaviour
         // El watcher traduce el estado de las entidades a sonidos. Va en el mismo objeto
         // para que viva y muera con el motor.
         go.AddComponent<AudioEventWatcher>();
+        go.AddComponent<AmbientAudioScheduler>();
         DontDestroyOnLoad(go);
     }
 
@@ -101,6 +109,7 @@ public class AudioManager : MonoBehaviour
         _musA = NuevaFuente("Musica A", loop: true);
         _musB = NuevaFuente("Musica B", loop: true);
         _tension = NuevaFuente("Capa Tension", loop: true);
+        _ambienteEvento = NuevaFuente("Evento ambiental", loop: false);
 
         _pool      = new AudioSource[CantOneShots];
         _poolDesde = new float[CantOneShots];
@@ -146,6 +155,24 @@ public class AudioManager : MonoBehaviour
     public static void Sonar(Func<AudioCatalog, AudioCatalog.Pista> sel, Vector3 pos, float escala) =>
         Reproducir(sel, pos, true, escala);
 
+    // One-shot con eleccion sin repeticion inmediata. Devuelve el indice compacto usado
+    // para que el llamador lo recuerde por entidad.
+    public static int SonarSinRepetir(Func<AudioCatalog, AudioCatalog.Pista> sel,
+                                      Vector3 pos, int anterior, float escala = 1f,
+                                      float ganancia = 1f)
+    {
+        var m = Instance;
+        if (m == null || m._cat == null || m._pool == null || sel == null) return anterior;
+        var pista = sel(m._cat);
+        if (pista == null || pista.Vacia) return anterior;
+
+        int indice = pista.ElegirIndiceSinRepetir(anterior);
+        var clip = pista.ClipValido(indice);
+        if (clip == null) return anterior;
+        m.ReproducirClip(pista, clip, pos, true, escala, ganancia);
+        return indice;
+    }
+
     private static void Reproducir(Func<AudioCatalog, AudioCatalog.Pista> sel,
                                    Vector3 pos, bool posicionado, float escala)
     {
@@ -158,13 +185,57 @@ public class AudioManager : MonoBehaviour
         var clip = pista.Elegir();
         if (clip == null) return;
 
-        var src = m.TomarDelPool();
-        if (src == null) return;
+        m.ReproducirClip(pista, clip, pos, posicionado, escala);
+    }
 
-        m.Configurar(src, pista, posicionado ? pos : Vector3.zero,
-                     posicionado, GameOptions.VolumenEfectos * Mathf.Clamp01(escala));
+    private void ReproducirClip(AudioCatalog.Pista pista, AudioClip clip, Vector3 pos,
+                                bool posicionado, float escala, float ganancia = 1f)
+    {
+        var src = TomarDelPool();
+        if (src == null || clip == null) return;
+        Configurar(src, pista, posicionado ? pos : Vector3.zero,
+                   posicionado, GameOptions.VolumenEfectos * Mathf.Clamp01(escala));
+        ganancia = Mathf.Max(0f, ganancia);
+        if (Mathf.Approximately(ganancia, 1f))
+        {
+            src.clip = clip;
+            src.Play();
+        }
+        else
+        {
+            // PlayOneShot admite una ganancia adicional mayor a 1. Se usa cuando una
+            // pista ya esta al techo normal de AudioSource.volume pero necesita refuerzo.
+            src.clip = null;
+            src.PlayOneShot(clip, ganancia);
+        }
+    }
+
+    // Evento ambiental compartido. `indice` lo elige el host y todos los peers reciben
+    // la misma variante. Una llamada nueva reemplaza la anterior, nunca se superponen.
+    public static bool EventoAmbiental(Func<AudioCatalog, AudioCatalog.Pista> sel,
+                                       int indice, Vector3 pos)
+    {
+        var m = Instance;
+        if (m == null || m._cat == null || m._ambienteEvento == null || sel == null) return false;
+        var pista = sel(m._cat);
+        var clip = pista?.ClipValido(indice);
+        if (clip == null) return false;
+
+        var src = m._ambienteEvento;
+        src.Stop();
+        m.Configurar(src, pista, pos, true, GameOptions.VolumenEfectos);
         src.clip = clip;
+        m._ambienteEventoObjetivo = src.volume;
         src.Play();
+        return true;
+    }
+
+    public static void PararEventoAmbiental(float fade = 0.12f)
+    {
+        var m = Instance;
+        if (m == null || m._ambienteEvento == null) return;
+        m._ambienteEventoObjetivo = 0f;
+        m._ambienteEventoFade = Mathf.Max(0.01f, fade);
     }
 
     // Loop identificado por clave. Llamalo cada frame mientras el sonido deba sonar:
@@ -259,7 +330,9 @@ public class AudioManager : MonoBehaviour
                             bool posicionado, float bus)
     {
         src.transform.position = pos;
-        src.volume       = MezclarVolumen(p.volumen, bus);
+        src.volume       = VariarIntensidad(MezclarVolumen(p.volumen, bus),
+                                            p.variacionIntensidad,
+                                            UnityEngine.Random.value);
         src.pitch        = p.variacionTono > 0f
                          ? 1f + UnityEngine.Random.Range(-p.variacionTono, p.variacionTono)
                          : 1f;
@@ -273,6 +346,15 @@ public class AudioManager : MonoBehaviour
     // El maestro NO entra aca: lo aplica el motor via AudioListener.volume.
     public static float MezclarVolumen(float volumenPista, float bus) =>
         Mathf.Clamp01(volumenPista) * Mathf.Clamp01(bus);
+
+    // El volumen de la pista representa su techo. La variacion solo puede suavizar el
+    // disparo, nunca superar la mezcla calibrada ni producir clipping.
+    public static float VariarIntensidad(float volumenBase, float variacion, float azar01)
+    {
+        float techo = Mathf.Clamp01(volumenBase);
+        float rango = Mathf.Clamp(variacion, 0f, 0.5f);
+        return techo * Mathf.Lerp(1f - rango, 1f, Mathf.Clamp01(azar01));
+    }
 
     // Toma una fuente libre del pool. Si estan las 24 ocupadas reusa la que arranco hace
     // mas tiempo — nunca un loop ni la musica, que tienen sus propias fuentes.
@@ -329,6 +411,26 @@ public class AudioManager : MonoBehaviour
         }
 
         ActualizarCapaTension(busMusica);
+        ActualizarEventoAmbiental();
+    }
+
+    private void ActualizarEventoAmbiental()
+    {
+        if (_ambienteEvento == null || !_ambienteEvento.isPlaying) return;
+        if (_ambienteEventoObjetivo > 0f)
+        {
+            _ambienteEvento.volume = _ambienteEventoObjetivo;
+            return;
+        }
+
+        _ambienteEvento.volume = Mathf.MoveTowards(
+            _ambienteEvento.volume, 0f,
+            Time.unscaledDeltaTime / Mathf.Max(0.01f, _ambienteEventoFade));
+        if (_ambienteEvento.volume <= 0.001f)
+        {
+            _ambienteEvento.Stop();
+            _ambienteEvento.clip = null;
+        }
     }
 
     // La capa de tension arranca y para sola segun haya o no tension: no hace falta que

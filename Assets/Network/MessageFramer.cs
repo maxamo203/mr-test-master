@@ -11,21 +11,27 @@ public static class MessageFramer
     // cientos de MB desde el hilo de lectura y hacer que iOS matara la app por memoria.
     public const int MaxBodyBytes = 32 * 1024 * 1024;
 
-    public static (MessageType type, byte[] body) ReadOne(NetworkStream stream)
+    // progreso (opcional): (tipo, leídos, total) del cuerpo a medida que llega, desde
+    // el hilo de lectura. Sirve para mostrar el avance de un frame grande (el MapData)
+    // antes de que se complete. Pasar un delegado cacheado: se invoca por chunk.
+    public static (MessageType type, byte[] body) ReadOne(NetworkStream stream,
+        Action<MessageType, int, int> progreso = null)
     {
-        var header = ReadExact(stream, 6);
+        var header = ReadExact(stream, 6, default, null);
         var type   = (MessageType)BitConverter.ToUInt16(header, 0);
         int len    = BitConverter.ToInt32(header, 2);
         if (len < 0 || len > MaxBodyBytes)
             throw new IOException($"Frame inválido ({len} bytes): stream desincronizado");
-        var body   = len > 0 ? ReadExact(stream, len) : Array.Empty<byte>();
+        progreso?.Invoke(type, 0, len);
+        var body   = len > 0 ? ReadExact(stream, len, type, progreso) : Array.Empty<byte>();
         return (type, body);
     }
 
     public static void Write(NetworkStream stream, byte[] framed)
         => stream.Write(framed, 0, framed.Length);
 
-    private static byte[] ReadExact(NetworkStream s, int count)
+    private static byte[] ReadExact(NetworkStream s, int count, MessageType type,
+        Action<MessageType, int, int> progreso)
     {
         var buf    = new byte[count];
         int offset = 0;
@@ -34,6 +40,7 @@ public static class MessageFramer
             int n = s.Read(buf, offset, count - offset);
             if (n == 0) throw new IOException("Connection closed");
             offset += n;
+            progreso?.Invoke(type, offset, count);
         }
         return buf;
     }

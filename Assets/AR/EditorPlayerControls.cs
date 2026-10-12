@@ -16,9 +16,9 @@ using Scanner;   // UIBlocker
 // Controles:
 //   WASD            caminar (horizontal, relativo a hacia dónde estás mirando)
 //   Shift           correr
-//   Espacio         subir      |   Ctrl / Q   bajar   (E es el botón único: linterna)
+//   Espacio / E     subir      |   Ctrl / Q   bajar
 //   clic en el mundo  capturar mouse y mirar libremente
-//   Escape             liberar mouse
+//   Escape            liberar mouse
 //
 // TIER: editor-only. El archivo entero está dentro de #if UNITY_EDITOR: no se compila en
 // ningún build (ni development ni release). Se prende/apaga desde el menú
@@ -52,7 +52,7 @@ public class EditorPlayerControls : MonoBehaviour
         var go = new GameObject("EditorPlayerControls");
         DontDestroyOnLoad(go);
         go.AddComponent<EditorPlayerControls>();
-        Debug.Log("EditorPlayerControls: WASD para caminar, Shift correr, Espacio subir, " +
+        Debug.Log("EditorPlayerControls: WASD para caminar, Shift correr, Espacio/E subir, " +
                   "Ctrl/Q bajar, clic para capturar el mouse y Escape para liberarlo. " +
                   "Se apaga en Mortuorium > Controles WASD en Play.");
     }
@@ -90,11 +90,38 @@ public class EditorPlayerControls : MonoBehaviour
             return;
         }
 
-        Mirar();
         Caminar();
     }
 
+    // La mirada va en LateUpdate a propósito: TransformGizmoController (orden -100) agarra el
+    // handle en SU LateUpdate. Con Mirar() en Update, el frame del clic la cámara ya había
+    // girado cuando el gizmo todavía no sabía que se lo estaba arrastrando.
+    private void LateUpdate()
+    {
+        if (!_controlActivoAnterior || _cam == null ||
+            Gamepad.PauseMenuController.IsOpen) return;
+        Mirar();
+    }
+
     public static bool IsScannerScene(string sceneName) => sceneName == "ScannerScene";
+
+    public static bool ShouldRecaptureAfterDeselect(
+        string sceneName, bool selectionWasCleared, bool pauseMenuOpen) =>
+        IsScannerScene(sceneName) && selectionWasCleared && !pauseMenuOpen;
+
+    // Lo llama ScanStateMachine al cerrar una selección desde la UI del escáner.
+    // Devuelve inmediatamente el control de cámara sin exigir un clic extra en el mundo.
+    public static void RecaptureAfterScannerDeselect()
+    {
+        if (!ShouldRecaptureAfterDeselect(SceneManager.GetActiveScene().name, true,
+                                          Gamepad.PauseMenuController.IsOpen))
+            return;
+
+        var controls = FindFirstObjectByType<EditorPlayerControls>();
+        if (controls == null || !controls.ResolverCamara()) return;
+        controls.SincronizarAngulosConCamara();
+        controls.CapturarCursor();
+    }
 
     // La cámara AR se crea con la escena y cambia al cambiar de escena; además hay que
     // callar al TrackedPoseDriver, que si el editor llegara a entregarle una pose (XR
@@ -129,6 +156,14 @@ public class EditorPlayerControls : MonoBehaviour
         var mouse = Mouse.current;
         if (mouse == null) return;
 
+        // Un handle del gizmo agarrado (mover un vértice de pared, etc.) se lleva el
+        // arrastre: el gizmo calcula el movimiento con un rayo desde la cámara, así que si
+        // además la rotamos, el handle se persigue a sí mismo (gira y titila). No es un
+        // panel IMGUI, por eso UIBlocker no lo cubre.
+        var gizmo = TransformGizmoController.Instance;
+        if (gizmo != null && gizmo.ActiveHandle != null)
+            return;
+
         var keyboard = Keyboard.current;
         if (_cursorCapturado && keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
         {
@@ -142,8 +177,6 @@ public class EditorPlayerControls : MonoBehaviour
                          mouse.rightButton.wasPressedThisFrame;
             if (!click || UIBlocker.IsPointerOver(mouse.position.ReadValue())) return;
 
-            // Re-sincronizar por si otro sistema rotó la cámara mientras el cursor
-            // estaba libre (menú, cambio de escena o tracking simulado).
             SincronizarAngulosConCamara();
             CapturarCursor();
         }

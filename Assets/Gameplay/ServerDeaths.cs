@@ -37,7 +37,12 @@ namespace Gameplay
 
             Vector3 face = FacePosition(killer);
             uint killerNetworkId = KillerNetworkId(killer);
-            foreach (uint cid in killed) DispatchDeath(cid, face, killerNetworkId, AllPlayersDead());
+            // Igual que Kill: si con esto cayeron todos, avisar también a los que ya
+            // estaban muertos (y quizás espectando) para que vuelvan a su pantalla final.
+            if (killed.Count > 0 && AllPlayersDead())
+                foreach (uint deadId in _dead) DispatchDeath(deadId, face, killerNetworkId, true);
+            else
+                foreach (uint cid in killed) DispatchDeath(cid, face, killerNetworkId, false);
             return killed.Count;
         }
 
