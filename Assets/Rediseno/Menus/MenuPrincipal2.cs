@@ -116,7 +116,7 @@ namespace Rediseno.Menus
 
             var iconos = Fila();
             var bVisor = BotonRedondo(IconosMenu.Visor, out _iconoVisor);
-            bVisor.style.marginRight = 22;
+            bVisor.style.marginRight = 28;
             iconos.Add(bVisor);
             var bOpc = BotonRedondo(IconosMenu.Engranaje, out _);
             iconos.Add(bOpc);
@@ -140,6 +140,12 @@ namespace Rediseno.Menus
 
             col.Add(Espacio(1.3f));
 
+            // Visor y opciones: arriba en pantalla, así que son el primer escalón de la pila
+            // (↑ desde CONTINUAR llega acá; ↑ desde acá da la vuelta al último botón de abajo).
+            // Están uno al lado del otro: ←/→ pasan de uno al otro y ↑↓ salen de la fila.
+            nav.FilaHorizontal(nav.Agregar(bVisor, () => ModoVisor.Set(!ModoVisor.Activo)),
+                               nav.Agregar(bOpc, () => Abrir(m => m.AbrirOpciones())));
+
             // Acciones. El orden de agregado es el orden de navegación (↑↓).
             var cta = new VisualElement();
             TemaUI.Radio(cta, 42);
@@ -154,7 +160,8 @@ namespace Rediseno.Menus
             cta.Add(_ctaTitulo);
             cta.Add(_ctaSub);
             col.Add(cta);
-            nav.Agregar(cta, () => Abrir(m => m.AbrirContinuar(_idxContinuar)));
+            // El foco arranca en CONTINUAR, no en la fila de arriba.
+            nav.Enfocar(nav.Agregar(cta, () => Abrir(m => m.AbrirContinuar(_idxContinuar))));
 
             if (BuildVariant.Multijugador)
             {
@@ -171,11 +178,6 @@ namespace Rediseno.Menus
             col.Add(bTuto);
             nav.Agregar(bTuto, null, habilitada: false);
 
-            // Visor y opciones al final de la navegación: arriba en pantalla, pero los
-            // botones grandes son lo primero que se recorre con la ruedita.
-            // Están uno al lado del otro: ←/→ pasan de uno al otro.
-            nav.FilaHorizontal(nav.Agregar(bVisor, () => ModoVisor.Set(!ModoVisor.Activo)),
-                               nav.Agregar(bOpc, () => Abrir(m => m.AbrirOpciones())));
 
             var pie = TemaUI.Texto(BuildVariant.EsDemo ? "DEMO · equipo 112" : "Build interna · equipo 112",
                                    TemaUI.Mono, 24, TemaUI.Dim, 2f, TextAnchor.MiddleCenter);
@@ -268,13 +270,13 @@ namespace Rediseno.Menus
         private static VisualElement BotonRedondo(Texture2D icono, out VisualElement iconoEl)
         {
             var b = new VisualElement();
-            b.style.width = 96; b.style.height = 96;
-            TemaUI.Radio(b, 48);
+            b.style.width = 132; b.style.height = 132;
+            TemaUI.Radio(b, 66);
             TemaUI.Borde(b, 2, new Color(1f, 1f, 1f, 0.25f));
             b.style.backgroundColor = new Color(0.024f, 0.02f, 0.016f, 0.45f);
             b.style.alignItems = Align.Center;
             b.style.justifyContent = Justify.Center;
-            iconoEl = TemaUI.Icono(icono, 46, TemaUI.Cream);
+            iconoEl = TemaUI.Icono(icono, 66, TemaUI.Cream);
             b.Add(iconoEl);
             return b;
         }

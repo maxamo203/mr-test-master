@@ -121,17 +121,33 @@ namespace Rediseno.UI
             Volver();
         }
 
+        // ↑↓: una fila horizontal cuenta como UN escalón de la pila vertical. Se saltean las
+        // opciones de la fila en la que ya estás y, al entrar a una fila, se cae en su primer
+        // botón (el de la izquierda), venga de arriba o de abajo.
         private void Mover(int dir)
         {
             int n = _opciones.Count;
             if (n == 0) return;
             if (_foco < 0) _foco = 0;
+            var filaActual = CabezaDeFila(_opciones[_foco]);
+            int i = _foco;
             for (int s = 0; s < n; s++)
             {
-                _foco = (_foco + dir + n) % n;
-                var o = _opciones[_foco];
-                if (o.Habilitada && !o.SoloPuntero) { AudioManager.Sonar(c => c.uiNavegar); return; }
+                i = (i + dir + n) % n;
+                var o = _opciones[i];
+                if (!o.Habilitada || o.SoloPuntero) continue;
+                var fila = CabezaDeFila(o);
+                if (fila == filaActual) continue;
+                _foco = _opciones.IndexOf(fila.Habilitada ? fila : o);
+                AudioManager.Sonar(c => c.uiNavegar);
+                return;
             }
+        }
+
+        private static Opcion CabezaDeFila(Opcion o)
+        {
+            while (o.Izquierda != null) o = o.Izquierda;
+            return o;
         }
 
         // ── Entrada de mandos (una vez por frame) ─────────────────────────────

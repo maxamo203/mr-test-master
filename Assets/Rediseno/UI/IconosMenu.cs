@@ -75,16 +75,30 @@ namespace Rediseno.UI
             return Borde(T - d);
         }
 
+        // Engranaje de contorno: 8 dientes trapezoidales (más anchos en la base) y el agujero
+        // del eje. Antes eran rayos sueltos alrededor de un aro y se leía como un sol.
         private static float EngranajeA(Vector2 p)
         {
-            float d = Circulo(p, Vector2.zero, 0.42f);
-            d = Mathf.Min(d, Circulo(p, Vector2.zero, 0.14f));
-            for (int i = 0; i < 8; i++)
-            {
-                float a = i * Mathf.PI / 4f;
-                var dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
-                d = Mathf.Min(d, Segmento(p, dir * 0.5f, dir * 0.78f));
-            }
+            const float rI = 0.58f, rO = 0.84f, rEje = 0.24f;
+            const float periodo = Mathf.PI / 4f;               // 8 dientes
+            const float medioBase = 15f * Mathf.Deg2Rad, medioTope = 10f * Mathf.Deg2Rad;
+
+            float largo = p.magnitude;
+            float ang = Mathf.Atan2(p.y, p.x);
+            float a = Mathf.Repeat(ang + periodo * 0.5f, periodo) - periodo * 0.5f;   // respecto del diente
+
+            float d = Mathf.Abs(largo - rEje);
+            if (Mathf.Abs(a) <= medioTope) d = Mathf.Min(d, Mathf.Abs(largo - rO));   // tope del diente
+            if (Mathf.Abs(a) >= medioBase) d = Mathf.Min(d, Mathf.Abs(largo - rI));   // fondo entre dientes
+
+            // Flancos, en el marco del diente más cercano (rotado a ángulo 0).
+            float giro = a - ang;
+            float c = Mathf.Cos(giro), s = Mathf.Sin(giro);
+            var q = new Vector2(p.x * c - p.y * s, p.x * s + p.y * c);
+            var b = new Vector2(Mathf.Cos(medioBase), Mathf.Sin(medioBase)) * rI;
+            var t = new Vector2(Mathf.Cos(medioTope), Mathf.Sin(medioTope)) * rO;
+            d = Mathf.Min(d, Segmento(q, b, t));
+            d = Mathf.Min(d, Segmento(q, new Vector2(b.x, -b.y), new Vector2(t.x, -t.y)));
             return Borde(T - d);
         }
 
