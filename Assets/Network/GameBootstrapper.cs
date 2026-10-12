@@ -25,7 +25,6 @@ public class GameBootstrapper : MonoBehaviour
     private enum Pantalla { Unirse, Sala }
 
     private NetworkManager        _net;
-    private MRCardboardController _cardboard;
     private LanDiscovery          _lan;
     private Pantalla              _pantalla = Pantalla.Unirse;
     private string                _hostIp = "";
@@ -195,12 +194,10 @@ public class GameBootstrapper : MonoBehaviour
 
         // Cabecera. En modo un jugador NO mostramos la dirección de sala (no hay
         // nadie a quien compartírsela): solo el título de la noche.
-        float yBotones;
         if (solo && _isHost)
         {
             GUI.Label(new Rect(Pad, 14f, vw - Pad * 2f, 34f), "TU NOCHE",
                       T.Estilo(T.FBebas, 24, T.Cream));
-            yBotones = 64f;
         }
         else if (_isHost)
         {
@@ -225,7 +222,6 @@ public class GameBootstrapper : MonoBehaviour
                 GUI.Label(new Rect(Pad, 122f, vw - Pad * 2f, 34f),
                           "Compartí la dirección con los demás jugadores",
                           T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
-            yBotones = 164f;
         }
         else
         {
@@ -238,55 +234,10 @@ public class GameBootstrapper : MonoBehaviour
                       "CONECTADO A", T.Estilo(T.FMono, 10, T.Dim));
             GUI.Label(new Rect(caja.x + 14f, caja.y + 26f, caja.width - 28f, 30f),
                       $"{_host} : {_port}", T.Estilo(T.FMono, 18, T.Tan));
-            yBotones = 132f;
         }
 
-        // Botones apilados: Cardboard y (debajo) el toggle del oclusor de paredes.
-        const float bw = 230f, bh = 44f, gap = 10f;
-        bool enPartida = _net != null && _net.GameStarted;
-
-        // Toggle de Cardboard (igual criterio que antes: en partida, touch-only
-        // para que el botón A del mando quede libre para la linterna).
-        if (_cardboard == null) _cardboard = FindFirstObjectByType<MRCardboardController>();
-        if (_cardboard != null)
-        {
-            bool active = _cardboard.CardboardActive;
-            string cbLabel = active ? "SALIR DE CARDBOARD" : "MODO CARDBOARD";
-            var r = new Rect(Pad, yBotones, bw, bh);
-            UIBlocker.AddVirtualRect(r);
-            T.Boton(enPartida ? null : _nav, r, cbLabel, primario: false,
-                    () => _cardboard.ToggleCardboardMode(), fontSize: 14);
-            yBotones += bh + gap;
-        }
-
-        // Oclusor de paredes: ocultar/mostrar la geometría escaneada durante la
-        // partida (antes lo dibujaba SceneOccluderMode abajo a la izquierda). Solo
-        // tiene sentido con la partida arrancada (ya hay mapa/Sorken).
-        // El `|| occ.Enabled` es la red de seguridad: si el modo quedara activo fuera de
-        // la partida (p. ej. al volver a sincronizar), sin él no habría forma de volver a
-        // ver las paredes. NightTransition.ResetLocal ya lo apaga en el reinicio.
-        var occ = SceneOccluderMode.Instance;
-        if (occ != null && (enPartida || occ.Enabled || occ.SolidDebugEnabled))
-        {
-            string label = occ.Enabled ? "PAREDES: OCULTAS" : "PAREDES: VISIBLES";
-            var r = new Rect(Pad, yBotones, bw, bh);
-            UIBlocker.AddVirtualRect(r);
-            T.Boton(null, r, label, primario: false, () => occ.Toggle(), fontSize: 14);
-            yBotones += bh + gap;
-
-            // Herramienta de PC/development build: superficies opacas con profundidad
-            // real. Es independiente del toggle visible/oculto y no aparece en produccion.
-            if (Application.isEditor || Debug.isDebugBuild)
-            {
-                string solidLabel = occ.SolidDebugEnabled
-                    ? "PAREDES SOLIDAS (DEV): SI"
-                    : "PAREDES SOLIDAS (DEV): NO";
-                var solidRect = new Rect(Pad, yBotones, bw, bh);
-                UIBlocker.AddVirtualRect(solidRect);
-                T.Boton(null, solidRect, solidLabel, primario: false,
-                        () => occ.ToggleSolidDebug(), fontSize: 13);
-            }
-        }
+        // MODO CARDBOARD y PAREDES ya no se dibujan acá: viven en el menú de pausa
+        // (PauseMenuController) para no ocupar la pantalla todo el tiempo.
     }
 
     // ── Acciones ──────────────────────────────────────────────────────────
