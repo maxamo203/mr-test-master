@@ -92,7 +92,7 @@ namespace Scanner
             if (!hayImagen)
                 GUI.Label(new Rect(Pad, 234f, vw - Pad * 2f, 44f),
                           "Ojo: este escaneo no tiene imagen de referencia; sin ella no " +
-                          "se puede usar en multijugador.",
+                          "se va a poder jugar (ni solo ni en multijugador). Capturala antes de guardar.",
                           T.Estilo(T.FMono, 11, T.Tan, TextAnchor.UpperLeft, wrap: true));
 
             float y = 292f;

@@ -157,8 +157,10 @@ MonoBehaviour:
   floorSpacing: 1.5
   floorRadius: 3
   maxSpawnPoints: 16
+  objectFootprintRadius: 0.12
   minDistanceFromBatteries: 0.6
   _showDebugHud: 0
+  _drawSpawnGizmos: 0
 --- !u!4 &2684989
 Transform:
   m_ObjectHideFlags: 0
@@ -598,7 +600,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ARImageAnchor
   _anchorManager: {fileID: 223974253}
   _reacquireDelay: 1
-  _minSamples: 5
+  _ventana: 8
+  _intervaloMuestra: 0.05
+  _tolRumboGrados: 2
+  _tolPosMetros: 0.02
   _maxSampleWait: 2.5
 --- !u!114 &223974253 stripped
 MonoBehaviour:
@@ -1084,6 +1089,8 @@ MonoBehaviour:
   _debugHud: 1
   _practiceMode: 0
   _enterClearance: 0.5
+  _windowPerchClearance: 0.25
+  _windowCueLeadSeconds: 1.25
   _doorInsideClearance: 0.08
   _doorOutsideDepth: 1
 --- !u!4 &862056582
@@ -1177,7 +1184,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Bateries.BatteryPickupAction
   priority: 100
   showActionButton: 1
-  aimMaxDistance: 1
+  aimMaxDistance: 1.5
   aimAngle: 12
   aimCheckInterval: 0.1
   blockThroughWalls: 1
@@ -1267,7 +1274,9 @@ MonoBehaviour:
   floorSpacing: 1.5
   floorRadius: 3
   maxSpawnPoints: 12
+  objectFootprintRadius: 0.1
   _showDebugHud: 0
+  _drawSpawnGizmos: 0
 --- !u!4 &1802830352
 Transform:
   m_ObjectHideFlags: 0

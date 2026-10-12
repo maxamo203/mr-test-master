@@ -42,7 +42,7 @@ namespace Gameplay
                 ? _devNights
                 : _nights;
 
-        private enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control }
+        public enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control }
 
         private Pantalla _pantalla = Pantalla.Menu;
 
@@ -79,8 +79,11 @@ namespace Gameplay
 
         private const float Pad = 28f;
 
+        public static NightMenuUI Instance { get; private set; }
+
         private void Awake()
         {
+            Instance = this;
             GameSession.Ensure();
 
             var compat = DeviceCompatibility.Check();
@@ -96,6 +99,75 @@ namespace Gameplay
             // Volvemos de una partida que se cortó sola (el host salió o se cayó la red).
             if (HayAvisoSalida) AudioManager.Sonar(c => c.uiAlerta);
         }
+
+        private void OnEnable()  => Gamepad.ImguiGamepadMenu.PedidoVolver += Volver;
+        private void OnDisable() => Gamepad.ImguiGamepadMenu.PedidoVolver -= Volver;
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        // ── Rediseño 2.0: lo usa el menú principal nuevo (Rediseno.Menus.MenuPrincipal2) ──
+        // ¿Qué pantalla se ve, sin ningún aviso encima? Las pantallas nuevas se muestran en
+        // lugar de la vieja cuando coincide.
+        public bool SinAvisos =>
+            !_versionIncompatible && !HayAvisoSalida &&
+            !_mostrarAvisoVersionDesconocida && !_mostrarAvisoIos && _confirmarBorrar == null;
+        public Pantalla PantallaActual => _pantalla;
+        public bool MostrandoPrincipal => SinAvisos && _pantalla == Pantalla.Menu;
+        public bool Mostrando(Pantalla p) => SinAvisos && _pantalla == p;
+        public void VolverPantalla()     => Volver();
+        public void AbrirControl()       => _pantalla = Pantalla.Control;
+
+        // Flujo de juego para las pantallas nuevas (noches / escenario / sin escenario).
+        public NightConfig[] Catalogo => Nights;
+        public int NocheElegida => _nocheSel;
+        public string EscenarioElegido => _mapSel;
+        public IReadOnlyList<string> Escenarios => _scans;
+        public bool EsJugable(string escena) => _hasImg.TryGetValue(escena, out var ok) && ok;
+        public int ElementosDe(string escena) => _itemCount.TryGetValue(escena, out var n) ? n : 0;
+        public bool CreandoSala => _pendingMode == GameSession.SessionMode.MultiHost;
+
+        // CONTINUAR · NOCHE N del menú nuevo: directo a elegir escenario con esa noche puesta
+        // (con el visor, cada paso de más cuesta). Sin escenario jugable cae en "falta".
+        public void AbrirContinuar(int noche)
+        {
+            ConfigurarPartida(GameSession.SessionMode.SinglePlayer);
+            if (_pantalla != Pantalla.Noches) return;
+            var n = Nights;
+            if (n != null && noche >= 0 && noche < n.Length && n[noche] != null && NightProgress.Desbloqueada(noche))
+                SeleccionarNoche(noche);
+        }
+
+        public void SeleccionarNoche(int i)
+        {
+            _nocheSel = i;
+            PreseleccionarEscenario();
+            _pantalla = Pantalla.Entorno;
+        }
+
+        public void SeleccionarEscenario(string escena) { if (EsJugable(escena)) _mapSel = escena; }
+        public void ConfirmarPartida() => Confirmar();
+        public void ElegirOtraNoche()  => _pantalla = Pantalla.Noches;
+        public void EscanearNuevo()    => IrAlEscaner(null);
+        public void EditarEscenario(string escena) => IrAlEscaner(escena);
+        public void CrearSala() => ConfigurarPartida(GameSession.SessionMode.MultiHost);
+        public void Unirse()    => UnirseComoCliente();
+
+        // El último escenario jugado si sigue siendo jugable; si no, el primero que lo sea.
+        private void PreseleccionarEscenario()
+        {
+            if (!string.IsNullOrEmpty(_mapSel) && EsJugable(_mapSel)) return;
+            var ultimo = GameSession.Instance != null ? GameSession.Instance.SelectedMap : null;
+            if (!string.IsNullOrEmpty(ultimo) && EsJugable(ultimo)) { _mapSel = ultimo; return; }
+            foreach (var n in _scans) if (EsJugable(n)) { _mapSel = n; return; }
+        }
+        public int TotalNoches => Mathf.Max(1, Nights != null ? Nights.Length : 0);
+        public void AbrirJugar()         => ConfigurarPartida(GameSession.SessionMode.SinglePlayer);
+        public void AbrirMultijugador()  { if (BuildVariant.Multijugador) _pantalla = Pantalla.CrearUnirse; }
+        public void AbrirEscenarios()    => OnEscanear();
+        public void AbrirOpciones()      => _pantalla = Pantalla.Opciones;
 
         private void Update()
         {
@@ -117,6 +189,15 @@ namespace Gameplay
             if (_pantalla == Pantalla.Control && Gamepad.GamepadManager.Instance != null &&
                 Gamepad.GamepadManager.Instance.UsesMouseInput) return;
 
+            // Las pantallas nuevas manejan su propio "atrás".
+            if (Rediseno.UI.PantallaUI.AlgunaVisible) return;
+            Volver();
+        }
+
+        // Un paso atrás, con la misma precedencia que OnGUI (overlays primero). Lo usan el
+        // atrás de Android y el ← del mando (ImguiGamepadMenu.PedidoVolver).
+        private void Volver()
+        {
             // Mismo orden de precedencia que OnGUI (qué overlay tapa a qué otro).
             // Bloqueo por versión no compatible: a propósito no tiene botón de
             // volver (no se puede omitir), así que el back tampoco hace nada acá.
@@ -190,6 +271,12 @@ namespace Gameplay
         // ------------------------------------------------------------ OnGUI
         private void OnGUI()
         {
+            // Rediseño 2.0: si una pantalla nueva (UI Toolkit) cubre la actual, la dibuja ella.
+            if (Rediseno.UI.PantallaUI.AlgunaVisible) return;
+            // Pantalla vieja con el visor puesto: todavía no sabe dibujarse en estéreo, así
+            // que se sale del visor en vez de dejar la vista partida.
+            if (Rediseno.UI.ModoVisor.Activo) Rediseno.UI.ModoVisor.Set(false);
+
             UIScale.Begin();
             _nav.Begin();
 

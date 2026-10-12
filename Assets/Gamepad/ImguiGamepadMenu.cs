@@ -37,6 +37,18 @@ namespace Gamepad
         private static int   _focus;
         private static int   _lastCount = -1;
         private static float _navCd;
+        private static readonly Rediseno.RepeticionNav _rep = new();
+
+        // Rediseño 2.0: "volver" pedido con el mando (← de la ruedita del VR BOX, ← o B/○ del
+        // gamepad). Cada pantalla vieja que tenga a dónde volver se suscribe. Sólo se dispara
+        // con Rediseno.Flag prendido; apagado, todo queda como antes.
+        public static event Action PedidoVolver;
+
+        // El botón "volver" (MortuoriumTheme.BotonVolver) que se dibujó en el último pase.
+        // Si nadie está suscripto a PedidoVolver, la ← lo acciona: así toda pantalla vieja
+        // con botón de volver lo hereda sin tocarla.
+        private static Action _volverDelPase;
+        public static void RegistrarVolver(Action volver) => _volverDelPase = volver;
 
         private static readonly Color Highlight = new(0.95f, 0.85f, 0.20f);
 
@@ -53,7 +65,11 @@ namespace Gamepad
         public static void BeginPass()
         {
             _drawIndex = 0;
-            if (Event.current != null && Event.current.type == EventType.Repaint) _frame.Clear();
+            if (Event.current != null && Event.current.type == EventType.Repaint)
+            {
+                _frame.Clear();
+                _volverDelPase = null;   // lo vuelve a registrar el BotonVolver de este pase
+            }
         }
 
         private static bool DoButtonLayout(string label, Action onClick, GUILayoutOption[] options)
@@ -88,7 +104,11 @@ namespace Gamepad
         // armada en el Repaint del frame anterior.
         public static void Tick()
         {
-            if (_frame.Count != _lastCount) { _focus = 0; _lastCount = _frame.Count; }  // cambió el set
+            if (_frame.Count != _lastCount)   // cambió el set (pantalla nueva)
+            {
+                _lastCount = _frame.Count;
+                _focus = PrimerFoco();
+            }
             if (_frame.Count > 0) _focus = Mathf.Clamp(_focus, 0, _frame.Count - 1);
 
             var gm = GamepadManager.Instance;
@@ -98,7 +118,9 @@ namespace Gamepad
             if ((gp == null && !useMouse) || _frame.Count == 0) return;
 
             float dy;
+            float dx = 0f;
             bool confirm;
+            bool volver = false;
 
             if (useMouse)
             {
@@ -106,24 +128,76 @@ namespace Gamepad
                 // Umbral 3 px/frame, escala 12 px/frame = eje completo.
                 float rawY = VRBoxInput.Delta.y;
                 dy      = Mathf.Abs(rawY) > 3f ? Mathf.Clamp(rawY / 12f, -1f, 1f) : 0f;
-                confirm = VRBoxInput.ConfirmDown;
+                float rawX = VRBoxInput.Delta.x;
+                dx      = Mathf.Abs(rawX) > 3f ? Mathf.Clamp(rawX / 12f, -1f, 1f) : 0f;
+                // Rediseño 2.0: eje suavizado (el crudo llega a pulsos y entre pulsos parece
+                // soltado, lo que hacía que mantener la ruedita recorriera todo el menú).
+                if (Rediseno.Flag.Activo) { dy = VRBoxInput.SmoothedStick.y; dx = VRBoxInput.SmoothedStick.x; }
+                // Rediseño 2.0: del VR BOX sólo cuenta la ruedita (→ elige), no la A.
+                confirm = !Rediseno.Flag.Activo && VRBoxInput.ConfirmDown;
             }
             else
             {
                 dy = gp.dpad.ReadValue().y;
                 if (Mathf.Abs(dy) < 0.5f) dy = gp.leftStick.ReadValue().y;
                 confirm = gp.buttonSouth.wasPressedThisFrame;
+                Vector2 h = gp.dpad.ReadValue();
+                dx = Mathf.Abs(h.x) >= 0.5f ? h.x : gp.leftStick.ReadValue().x;
+                volver = gp.buttonEast.wasPressedThisFrame;
             }
 
-            _navCd -= Time.unscaledDeltaTime;
-            if (Mathf.Abs(dy) > 0.5f)
+            // Rediseño 2.0: en todos los menús → elige y ← vuelve, de a un golpe (hay que
+            // volver al centro para repetir). Así toda la app se maneja con el joystick.
+            // Con el bloqueo compartido entre pantallas (Rediseno.BloqueoNav): después de cada
+            // acción hay que soltar la palanca y esperar un instante, así el empuje que eligió
+            // no se lee otra vez en la pantalla siguiente.
+            if (Rediseno.Flag.Activo)
             {
-                if (_navCd <= 0f) { MoveFocus(dy < 0 ? 1 : -1); _navCd = 0.18f; }
+                bool libre = Rediseno.BloqueoNav.Libre(dx, dy);
+                if (libre && Mathf.Abs(dx) > 0.6f && Mathf.Abs(dx) > Mathf.Abs(dy))
+                {
+                    if (dx > 0f) confirm = true; else volver = true;
+                }
+                if (!libre) { confirm = false; volver = false; }
+
+                if (volver)
+                {
+                    Rediseno.BloqueoNav.TrasAccion();
+                    if (PedidoVolver != null) { AudioManager.Sonar(c => c.uiVolver); PedidoVolver(); return; }
+                    if (_volverDelPase != null) { _volverDelPase(); return; }   // ya suena solo
+                }
+                if (confirm) Rediseno.BloqueoNav.TrasAccion();
             }
-            else _navCd = 0f;
+
+            if (Rediseno.Flag.Activo)
+            {
+                // Repetición tipo teclado: un paso, pausa, ritmo fijo.
+                int paso = _rep.Tick(Mathf.Abs(dy) >= Mathf.Abs(dx) ? dy : 0f, Time.unscaledDeltaTime);
+                if (paso != 0) MoveFocus(paso > 0 ? -1 : 1);
+            }
+            else
+            {
+                _navCd -= Time.unscaledDeltaTime;
+                if (Mathf.Abs(dy) > 0.5f)
+                {
+                    if (_navCd <= 0f) { MoveFocus(dy < 0 ? 1 : -1); _navCd = 0.18f; }
+                }
+                else _navCd = 0f;
+            }
 
             if (confirm && _focus >= 0 && _focus < _frame.Count && _frame[_focus].enabled)
                 _frame[_focus].action?.Invoke();
+        }
+
+        // Foco inicial de una pantalla nueva: la primera opción habilitada que NO sea el
+        // botón "volver" (es lo primero que se dibuja, arriba a la izquierda, y con el foco ahí
+        // un → de más te devolvía a la pantalla anterior).
+        private static int PrimerFoco()
+        {
+            if (!Rediseno.Flag.Activo) return 0;
+            for (int i = 0; i < _frame.Count; i++)
+                if (_frame[i].enabled && _frame[i].action != _volverDelPase) return i;
+            return 0;
         }
 
         private static void MoveFocus(int dir)

@@ -339,8 +339,17 @@ public static class MortuoriumTheme
         float w  = HudBarWCardboard;
         float y  = (Screen.height * HudCardboardBaseY - sg.y) / s
                  - HudBarH - fila * (HudBarH + HudBarGap);
-        float cxL = (Screen.width * 0.25f - sg.x) / s;
-        float cxR = (Screen.width * 0.75f - sg.x) / s;
+        float pxL = Screen.width * 0.25f, pxR = Screen.width * 0.75f;
+        // Rediseño 2.0: el centro de cada ojo según la calibración del visor (zoom +
+        // distancia de cada ojo). Con el centro de cada mitad, las dos copias de la barra
+        // no caían en el mismo lugar y no se fusionaban.
+        if (Rediseno.Flag.Activo)
+        {
+            Rediseno.UI.OjosVisor.Centros(out var izq, out var der);
+            pxL = izq.x; pxR = der.x;
+        }
+        float cxL = (pxL - sg.x) / s;
+        float cxR = (pxR - sg.x) / s;
         a = new Rect(cxL - w * 0.5f, y, w, HudBarH);
         b = new Rect(cxR - w * 0.5f, y, w, HudBarH);
         return 2;
@@ -515,6 +524,8 @@ public static class MortuoriumTheme
         var st = Estilo(FBebas, 26, foco ? Cream : Muted, TextAnchor.MiddleCenter);
         var invisible = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
         Action volver = () => { AudioManager.Sonar(c => c.uiVolver); onClick?.Invoke(); };
+        // Rediseño 2.0: la ← del mando hace lo mismo que este botón (ver ImguiGamepadMenu).
+        if (Event.current.type == EventType.Repaint) ImguiGamepadMenu.RegistrarVolver(volver);
         if (nav != null) nav.Button(r, "", invisible, volver);
         else if (GUI.Button(r, "", invisible)) volver();
         GUI.Label(r, "<", st);

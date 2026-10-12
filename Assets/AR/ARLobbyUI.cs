@@ -97,7 +97,16 @@ public class ARLobbyUI : MonoBehaviour
             return;
         }
 
+        // Rediseño 2.0: estas pantallas todavía no se dibujan en estéreo (se manejan
+        // arrastrando con el dedo); con el visor puesto, se sale del visor para usarlas.
+
         // ── COLOCACIÓN DE ANCLAS (pantalla propia, con retícula) ──────────────
+        // Rediseño 2.0: la dibuja Rediseno.Menus.PanelAnclas2 (estéreo, con la ruedita).
+        if (_lobby.State == ARLobbyManager.LobbyState.PlacingAnchors && Rediseno.Menus.PanelAnclas2.Mostrando)
+        {
+            _nav.End();
+            return;
+        }
         if (_lobby.State == ARLobbyManager.LobbyState.PlacingAnchors)
         {
             DrawColocarAnclas(vw, vh);
@@ -106,6 +115,13 @@ public class ARLobbyUI : MonoBehaviour
         }
 
         // ── CALIBRACIÓN MANUAL (sin la imagen física) ────────────────────────
+        // Rediseño 2.0: la dibuja Rediseno.Menus.PanelUbicar2 (estéreo, con la ruedita).
+        if (_lobby.State == ARLobbyManager.LobbyState.CalibrandoManual &&
+            Rediseno.Menus.PanelUbicar2.Mostrando)
+        {
+            _nav.End();
+            return;
+        }
         if (_lobby.State == ARLobbyManager.LobbyState.CalibrandoManual)
         {
             DrawCalibracionManual(vw, vh);
@@ -116,12 +132,21 @@ public class ARLobbyUI : MonoBehaviour
         // ── OBTENIENDO EL ENTORNO DEL HOST (cliente, antes de tener el mapa) ──
         // Sin esto el cliente veía "Buscando la imagen…" sobre una escena vacía y no
         // había forma de saber que en realidad el mapa todavía estaba en camino.
+        // Rediseño 2.0: la carga del escenario la muestra PanelSincronizacion2 (estéreo).
+        if (cargandoMapa && Rediseno.Menus.PanelSincronizacion2.Mostrando)
+        {
+            _nav.End();
+            return;
+        }
         if (cargandoMapa)
         {
             DrawCargaMapa(vw, vh);
             _nav.End();
             return;
         }
+
+        // Rediseño 2.0: la sincronización la dibuja el panel nuevo (estéreo con Cardboard).
+        if (Rediseno.Menus.PanelSincronizacion2.Mostrando) { _nav.End(); return; }
 
         // ── SINCRONIZACIÓN (encima de la cámara, debajo de la franja de sala) ──
         bool solo = Gameplay.GameSession.Instance != null &&
@@ -580,6 +605,15 @@ public class ARLobbyUI : MonoBehaviour
         var prevColor = GUI.color;
         GUI.color = new Color(1f, 1f, 1f, alpha);
 
+        // Rediseño 2.0 con Cardboard: una copia por ojo (a pantalla completa quedaba partida
+        // entre los dos). Mismo contenido, centrado en cada ojo y más angosto.
+        if (Rediseno.Flag.Activo && MRCardboardController.Activo)
+        {
+            BriefingPorOjo(night, slide);
+            GUI.color = prevColor;
+            return;
+        }
+
         float x = Pad + slide;
         float y = vh * 0.30f;
         GUI.Label(new Rect(x, y, vw - Pad * 2f, 24f), "NOCHE",
@@ -601,6 +635,35 @@ public class ARLobbyUI : MonoBehaviour
                   T.Estilo(T.FElite, 14, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
 
         GUI.color = prevColor;
+    }
+
+    private void BriefingPorOjo(Gameplay.NightConfig night, float slide)
+    {
+        var prevM = GUI.matrix;
+        GUI.matrix = Matrix4x4.identity;
+        float s = Screen.height / 1080f;
+        string nombre = night != null
+            ? (string.IsNullOrEmpty(night.displayName) ? night.name : night.displayName)
+            : "LA NOCHE COMIENZA";
+        string texto = night != null && !string.IsNullOrEmpty(night.briefing)
+            ? night.briefing
+            : "Sobreviví hasta el amanecer. El ritual no debe parar.";
+        Rediseno.UI.OjosVisor.Centros(out var centroIzq, out var centroDer);
+        for (int ojo = 0; ojo < 2; ojo++)
+        {
+            float cx = (ojo == 0 ? centroIzq : centroDer).x;
+            float w = Screen.width * 0.36f, x = cx - w * 0.5f + slide * s;
+            float y = Screen.height * 0.28f;
+            GUI.Label(new Rect(x, y, w, 40f * s), "NOCHE",
+                      T.Estilo(T.FBebas, Mathf.RoundToInt(30 * s), T.Red));
+            y += 42f * s;
+            GUI.Label(new Rect(x, y, w, 90f * s), nombre.ToUpperInvariant(),
+                      T.Estilo(T.FBebas, Mathf.RoundToInt(72 * s), T.Cream));
+            y += 96f * s;
+            GUI.Label(new Rect(x, y, w, 240f * s), texto,
+                      T.Estilo(T.FElite, Mathf.RoundToInt(26 * s), T.CreamDim, TextAnchor.UpperLeft, wrap: true));
+        }
+        GUI.matrix = prevM;
     }
 
     // Easing suave para la entrada (desaceleración).

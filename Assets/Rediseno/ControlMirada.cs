@@ -11,9 +11,9 @@ namespace Rediseno
     // dónde mirás:
     //   - Recoger: mirar una pila o reliquia ~1,2 s (se llena un anillo verde con el ícono
     //     de recoger). Acercarse la recoge más rápido.
-    //   - Prender/apagar: mirar el piso ~1 s (anillo rojo = apagar, dorado = prender). Para
-    //     repetir hay que levantar la vista antes; si hay algo recogible a la vista, mirar
-    //     abajo recoge y no apaga.
+    //   - Prender/apagar mirando el piso: DESACTIVADO (mirarPisoApaga) — se superponía con
+    //     alumbrar el libro. Más adelante, quizás un objeto fijo en el escenario.
+    //   - Mirar arriba ~1,5 s: abre la pausa.
     //   - Luz intensa: sola, mientras el libro que se está oscureciendo (o un Sorken) quede
     //     centrado en el haz. El libro y el Sorken sólo cuentan la luz en modo intenso.
     //
@@ -36,11 +36,19 @@ namespace Rediseno
         [SerializeField, Min(0f)]   private float distanciaCerca       = 0.6f;
 
         [Header("Mirar el piso (prender/apagar)")]
+        [Tooltip("DESACTIVADO por ahora: se superpone con alumbrar el libro (que suele estar " +
+                 "abajo, sobre la imagen) y apagaba la linterna justo cuando había que salvarlo.")]
+        [SerializeField] private bool mirarPisoApaga = false;
         [SerializeField, Min(0.1f)] private float segundosMirarPiso = 1.0f;
         [Tooltip("Grados por debajo del horizonte para empezar a llenar el anillo.")]
         [SerializeField, Range(30f, 89f)] private float pisoGrados = 62f;
         [Tooltip("Hay que subir la vista por encima de esto para poder repetir el gesto.")]
         [SerializeField, Range(10f, 80f)] private float pisoRearmeGrados = 45f;
+
+        [Header("Mirar arriba (abrir la pausa)")]
+        [SerializeField, Min(0.1f)] private float segundosMirarArriba = 1.5f;
+        [Tooltip("Grados por encima del horizonte para empezar a llenar el anillo de la pausa.")]
+        [SerializeField, Range(30f, 89f)] private float arribaGrados = 62f;
 
         [Header("Luz intensa automática")]
         [Tooltip("Desvío máximo (grados) del centro de la vista para que se concentre.")]
@@ -51,7 +59,7 @@ namespace Rediseno
         [Tooltip("Pausa (s) después de cada acción, para que un mismo gesto no dispare dos.")]
         [SerializeField, Min(0f)] private float enfriamiento = 0.6f;
 
-        private enum Gesto { Ninguno, Recoger, Linterna }
+        private enum Gesto { Ninguno, Recoger, Linterna, Pausa }
 
         private bool       _activo;
         private Gesto      _gesto;
@@ -100,6 +108,8 @@ namespace Rediseno
             if (PauseMenuController.IsOpen) return false;
             var muerte = LocalDeath.Instance;
             if ((muerte != null && muerte.IsDead) || NightResult.Sobrevivio) return false;
+            // Con un mando (también el VR BOX) manda el mando: la ruedita → recoge / prende y
+            // apaga, ↑ intensa, ↓ apagada, ← pausa. La mirada queda para jugar sin joystick.
             var gm = GamepadManager.Instance;
             if (gm != null && gm.IsConnected) return false;
             return MRCardboardController.Activo || ForzadoEnEditor;
@@ -151,11 +161,24 @@ namespace Rediseno
             {
                 // 2) Mirar el piso: grados por debajo del horizonte.
                 float abajo = Mathf.Asin(Mathf.Clamp(-cam.forward.y, -1f, 1f)) * Mathf.Rad2Deg;
-                if (abajo < pisoRearmeGrados) _pisoArmado = true;
+                if (Mathf.Abs(abajo) < pisoRearmeGrados) _pisoArmado = true;
 
-                bool puede = _pisoArmado && abajo >= pisoGrados && _frio <= 0f &&
+                bool puede = mirarPisoApaga && _pisoArmado && abajo >= pisoGrados && _frio <= 0f &&
                              _fl != null && _fl.Operational;
-                if (puede)
+                // Mirar arriba: abrir la pausa (con el visor no hay botón que tocar).
+                bool arriba = _pisoArmado && -abajo >= arribaGrados && _frio <= 0f &&
+                              PauseMenuController.Instance != null;
+                if (arriba)
+                {
+                    if (_gesto != Gesto.Pausa) { _gesto = Gesto.Pausa; _progreso = 0f; }
+                    _progreso += dt / segundosMirarArriba;
+                    if (_progreso >= 1f)
+                    {
+                        PauseMenuController.Instance.AbrirPausa();
+                        Terminar();
+                    }
+                }
+                else if (puede)
                 {
                     if (_gesto != Gesto.Linterna) { _gesto = Gesto.Linterna; _progreso = 0f; }
                     _progreso += dt / segundosMirarPiso;
@@ -285,8 +308,10 @@ namespace Rediseno
             float s = Screen.height / 1080f;
             if (MRCardboardController.Activo)
             {
-                DibujarMira(new Vector2(Screen.width * 0.25f, Screen.height * 0.5f), s);
-                DibujarMira(new Vector2(Screen.width * 0.75f, Screen.height * 0.5f), s);
+                // Donde cae "el frente" en cada ojo según la calibración (ver OjosVisor).
+                UI.OjosVisor.Centros(out var izq, out var der);
+                DibujarMira(izq, s);
+                DibujarMira(der, s);
             }
             else
             {
@@ -310,6 +335,7 @@ namespace Rediseno
 
             Color col; Texture2D icono;
             if (_gesto == Gesto.Recoger) { col = ColRecoger; icono = IconosMirada.Recoger; }
+            else if (_gesto == Gesto.Pausa) { col = new Color(0.91f, 0.89f, 0.84f, 1f); icono = IconosMirada.Pausa; }
             else
             {
                 bool prendida = _fl != null && _fl.isOn;

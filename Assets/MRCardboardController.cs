@@ -89,10 +89,17 @@ public class MRCardboardController : MonoBehaviour
         // No entrar mientras se está buscando la imagen de referencia (calibrando):
         // el fantasma de esa pantalla se dibuja a pantalla completa, sin contemplar
         // el split de ojos izq/der, y queda superpuesto justo en el medio de los dos.
+        // Sólo mientras la búsqueda está EN CURSO y la noche no arrancó: con la noche activa
+        // (o con el mapa ubicado a mano, o el reintento que conserva la calibración) IsFound
+        // puede seguir en falso y el botón MODO CARDBOARD quedaba muerto en plena partida.
         if (on)
         {
             var anchor = FindFirstObjectByType<ARImageAnchor>();
-            if (anchor != null && !anchor.IsFound)
+            bool enPartida = NetworkManager.Instance != null && NetworkManager.Instance.GameStarted;
+            // Con el rediseño la búsqueda tiene su panel en estéreo (PanelSincronizacion2):
+            // el visor se puede usar en toda la app, también buscando la imagen.
+            if (!Rediseno.Flag.Activo &&
+                anchor != null && anchor.Buscando && !ManualCalibration.Calibrado && !enPartida)
             {
                 Debug.LogWarning("[MRCardboard] No se puede entrar a Cardboard mientras se busca la imagen de referencia.");
                 return;

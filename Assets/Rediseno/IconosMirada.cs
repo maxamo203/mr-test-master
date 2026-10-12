@@ -8,7 +8,17 @@ namespace Rediseno
     {
         private const int N = 64;
 
-        private static Texture2D _punto, _recoger, _linterna;
+        private static Texture2D _punto, _recoger, _linterna, _pausa;
+
+        // Dos barras verticales: abrir la pausa.
+        public static Texture2D Pausa => _pausa != null ? _pausa : (_pausa = Generar(PausaAlfa));
+
+        private static float PausaAlfa(Vector2 p)
+        {
+            float d = Mathf.Min(Segmento(p, new Vector2(-0.3f, 0.62f), new Vector2(-0.3f, -0.62f)),
+                                Segmento(p, new Vector2(0.3f, 0.62f), new Vector2(0.3f, -0.62f)));
+            return Borde(0.14f - d);
+        }
 
         // Círculo lleno de borde suave: la mira y los puntos del anillo.
         public static Texture2D Punto => _punto != null ? _punto : (_punto = Generar(PuntoAlfa));
@@ -53,7 +63,7 @@ namespace Rediseno
         }
 
         // Distancia de p al segmento ab.
-        private static float Segmento(Vector2 p, Vector2 a, Vector2 b)
+        internal static float Segmento(Vector2 p, Vector2 a, Vector2 b)
         {
             Vector2 ab = b - a;
             float h = Mathf.Clamp01(Vector2.Dot(p - a, ab) / Vector2.Dot(ab, ab));
@@ -61,9 +71,9 @@ namespace Rediseno
         }
 
         // Antialias de ~1,5 px: d en unidades normalizadas (1 = medio ancho de la textura).
-        private static float Borde(float d) => Mathf.Clamp01(d * N * 0.5f / 1.5f + 0.5f);
+        internal static float Borde(float d) => Mathf.Clamp01(d * N * 0.5f / 1.5f + 0.5f);
 
-        private static Texture2D Generar(System.Func<Vector2, float> alfa)
+        internal static Texture2D Generar(System.Func<Vector2, float> alfa)
         {
             var tex = new Texture2D(N, N, TextureFormat.RGBA32, false)
             {

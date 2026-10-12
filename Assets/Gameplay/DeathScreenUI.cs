@@ -29,6 +29,9 @@ namespace Gameplay
             bool sobrevivio = NightResult.Sobrevivio;
             if (!muerto && !sobrevivio) { _selectorAbierto = false; return; }
 
+            // Rediseño 2.0: la dibuja la pantalla nueva (UI Toolkit, estéreo con Cardboard).
+            if (Rediseno.Menus.FinDeNoche2.Mostrando) return;
+
             UIScale.Begin();
             _nav.Begin();
 
@@ -154,7 +157,7 @@ namespace Gameplay
         // ¿La noche recién superada era la ÚLTIMA que habilita la demo, y hay más en el
         // catálogo? Lo segundo importa: sin noches de más no hay nada que ofrecer y el
         // cartel sería puro ruido. En la build completa es const false y se compila afuera.
-        private static bool FinDeLaDemo()
+        internal static bool FinDeLaDemo()
         {
             if (!BuildVariant.EsDemo) return false;
 
@@ -184,7 +187,7 @@ namespace Gameplay
         }
 
         // ¿La noche recién superada dejó desbloqueada una siguiente que existe?
-        private static bool SiguienteDesbloqueada(out int index)
+        internal static bool SiguienteDesbloqueada(out int index)
         {
             index = -1;
             var s = GameSession.Instance;

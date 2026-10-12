@@ -314,7 +314,11 @@ namespace Bateries
                                       g.buttonNorth.isPressed || g.buttonWest.isPressed);
 
             // VR Box en modo mouse: el botón de la linterna es la B (ver BotonBDelMando).
-            held |= ClicMandoMouse() || BotonBDelMando();
+            // Rediseño 2.0: del VR BOX sólo cuenta la ruedita. La acción del momento (recoger
+            // lo apuntado; si no, prender/apagar) es la ruedita → — mantenida concentra, igual
+            // que el botón de siempre. ↑ intensa, ↓ apagada y ← (mantener) pausa van aparte.
+            if (!Rediseno.Flag.Activo) held |= ClicMandoMouse() || BotonBDelMando();
+            else held |= PalancaDerecha();
 
             // Mobile sin mando: dos dedos apoyados = el mismo botón (es el gesto que en main
             // prendía/apagaba la linterna). Toque corto prende/apaga, mantener concentra.
@@ -324,6 +328,44 @@ namespace Bateries
             if (Keyboard.current != null) held |= Keyboard.current.eKey.isPressed;
 #endif
             return held || _screenPrimaryHeld;
+        }
+
+        // Ruedita del VR BOX hacia la derecha = el botón primario. Respeta el bloqueo de los
+        // menús (Rediseno.BloqueoNav): la → que eligió REANUDAR en la pausa no tiene que
+        // terminar recogiendo o apagando la linterna al volver a la partida.
+        private static bool PalancaDerecha()
+        {
+            var gm = GamepadManager.Instance;
+            if (gm == null || !gm.UsesMouseInput) return false;
+            Vector2 st = VRBoxInput.SmoothedStick;
+            if (!Rediseno.BloqueoNav.Libre(st.x, st.y)) return false;
+            return st.x > 0.6f && st.x > Mathf.Abs(st.y);
+        }
+
+        // "RECOGER · palanca →" en cada ojo (píxeles de pantalla, centros calibrados del
+        // visor: ver Rediseno.UI.OjosVisor), un poco por debajo del centro de la vista.
+        private static void CartelEnOjos(string accion)
+        {
+            var prevM = GUI.matrix;
+            GUI.matrix = Matrix4x4.identity;
+            float s = Screen.height / 1080f;
+            bool vrBox = GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput;
+            string como = vrBox ? "palanca a la derecha" : "botón A";
+            var stTit = MortuoriumTheme.Estilo(MortuoriumTheme.FBebas, Mathf.RoundToInt(40 * s),
+                                               MortuoriumTheme.Cream, TextAnchor.MiddleCenter);
+            var stSub = MortuoriumTheme.Estilo(MortuoriumTheme.FMono, Mathf.RoundToInt(20 * s),
+                                               MortuoriumTheme.Tan, TextAnchor.MiddleCenter);
+            Rediseno.UI.OjosVisor.Centros(out var izq, out var der);
+            for (int i = 0; i < 2; i++)
+            {
+                var c = i == 0 ? izq : der;
+                float w = 300f * s, h = 86f * s;
+                var r = new Rect(c.x - w * 0.5f, c.y + 120f * s, w, h);
+                MortuoriumTheme.Panel(r, new Color(0.02f, 0.016f, 0.012f, 0.82f), MortuoriumTheme.Tan);
+                GUI.Label(new Rect(r.x, r.y + 6f * s, w, 44f * s), accion.ToUpperInvariant(), stTit);
+                GUI.Label(new Rect(r.x, r.y + 50f * s, w, 26f * s), como, stSub);
+            }
+            GUI.matrix = prevM;
         }
 
         private static bool ClicMandoMouse()
@@ -374,6 +416,17 @@ namespace Bateries
             Scanner.UIScale.Begin();
             float vw = Scanner.UIScale.VirtualWidth, vh = Scanner.UIScale.VirtualHeight;
 
+            // Rediseño 2.0 con Cardboard: no se puede tocar nada, pero hay que saber que lo que
+            // apuntás se puede recoger. Cartel chico en cada ojo, debajo del centro de la vista.
+            if (Rediseno.Flag.Activo && MRCardboardController.Activo)
+            {
+                _screenPrimaryHeld = false;
+                if (_current != null && _current.ShowActionButton && !string.IsNullOrEmpty(_currentLabel) &&
+                    !Rediseno.ControlMirada.Activo && Event.current.type == EventType.Repaint)
+                    CartelEnOjos(_currentLabel);
+                return;
+            }
+
             // Con el control por mirada el celular está en la cabeza: no hay nada que tocar.
             if (!showActionButton || _current == null || !_current.ShowActionButton ||
                 string.IsNullOrEmpty(_currentLabel) || Rediseno.ControlMirada.Activo)
@@ -384,9 +437,12 @@ namespace Bateries
 
             bool pad = GamepadManager.Instance != null && GamepadManager.Instance.IsConnected;
             bool vrBox = pad && GamepadManager.Instance.UsesMouseInput;
+
             string holdTime = brightHoldSeconds.ToString("0.#");
             string hint = vrBox
-                ? $"{_currentLabel} (B) · palanca arriba: intensa · abajo: apagada"
+                ? (Rediseno.Flag.Activo
+                    ? $"{_currentLabel} (palanca a la derecha) · arriba: intensa · abajo: apagada"
+                    : $"{_currentLabel} (B) · palanca arriba: intensa · abajo: apagada")
                 : pad
                 ? $"{_currentLabel} (A) · mantener {holdTime} s: intensa"
                 : $"{_currentLabel}\nMantener {holdTime} s: luz intensa";

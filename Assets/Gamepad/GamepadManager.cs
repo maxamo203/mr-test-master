@@ -145,28 +145,42 @@ namespace Gamepad
         public bool PunteroCapturado { get; private set; }
         private bool _quiereCaptura;
 
+        private bool _quiereBloqueo;
+
         private void ActualizarCapturaPuntero()
         {
-            // Con el cursor bloqueado Unity no le manda eventos de mouse/toque al IMGUI, así
-            // que GUI.Button deja de responder: la pantalla de muerte / noche superada
-            // (DeathScreenUI) quedaba con los botones muertos. Ahí se suelta la captura.
+            // Son dos cosas distintas:
+            //  - La captura de ANDROID (requestPointerCapture): el cursor escondido deja de
+            //    existir y llega el movimiento relativo, sin bordes. No toca los toques de
+            //    pantalla. Con el rediseño va en TODO el juego (menús incluidos): si no, la
+            //    ruedita se trababa al llegar el cursor al borde también en los menús.
+            //  - El BLOQUEO de Unity (Cursor.lockState): con el cursor bloqueado Unity no le
+            //    manda toques al IMGUI y los botones viejos (GUI.Button) quedaban muertos. Va
+            //    sólo en la partida con Cardboard, donde no se toca nada viejo.
             var muerte = Gameplay.LocalDeath.Instance;
             bool pantallaFinal = (muerte != null && muerte.PresentationReady) || Gameplay.NightResult.Sobrevivio;
-            bool quiere = UsesMouseInput && !pantallaFinal &&
-                          NetworkManager.Instance != null && NetworkManager.Instance.GameStarted;
-            if (quiere == _quiereCaptura) return;
-            _quiereCaptura = quiere;
-            PedirCaptura(quiere);
+            bool partidaConVisor = UsesMouseInput && !pantallaFinal && MRCardboardController.Activo &&
+                                   NetworkManager.Instance != null && NetworkManager.Instance.GameStarted;
+            bool captura = partidaConVisor || (UsesMouseInput && Rediseno.Flag.Activo);
+
+            if (partidaConVisor != _quiereBloqueo)
+            {
+                _quiereBloqueo = partidaConVisor;
+                Cursor.lockState = partidaConVisor ? CursorLockMode.Locked : CursorLockMode.None;
+            }
+            if (captura == _quiereCaptura) return;
+            _quiereCaptura = captura;
+            PedirCapturaAndroid(captura);
         }
 
         private void OnApplicationFocus(bool foco)
         {
-            if (foco && _quiereCaptura) PedirCaptura(true);
+            // Android suelta la captura al perder el foco (cortina, otra app): se vuelve a pedir.
+            if (foco && _quiereCaptura) PedirCapturaAndroid(true);
         }
 
-        private static void PedirCaptura(bool capturar)
+        private static void PedirCapturaAndroid(bool capturar)
         {
-            Cursor.lockState = capturar ? CursorLockMode.Locked : CursorLockMode.None;
 #if UNITY_ANDROID && !UNITY_EDITOR
             ConVistaEnfocada(v => v.Call(capturar ? "requestPointerCapture" : "releasePointerCapture"));
 #endif
