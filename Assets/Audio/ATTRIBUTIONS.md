@@ -69,3 +69,19 @@ Usado en: `Sorken/paso_01..06`.
   mudo sin ningún error visible.
 - Los clips 3D se importan con `forceToMono`: un clip estéreo en una fuente 3D ensucia la
   localización, y mono además ocupa la mitad.
+
+---
+
+## Fuentes aportadas — licencia pendiente de verificar
+
+Estos clips fueron aportados directamente para prototipado. Antes de incluirlos en una
+versión pública hay que confirmar sus autores, fuentes originales y permisos de uso.
+
+- `Ambiente/golpes_puerta_01.wav` y `Ambiente/golpes_puerta_02.wav`: derivados de
+  `bruit-de-porte-toc-toc.mp3`.
+- `Ambiente/manija_puerta_01.wav`: derivado de
+  `phasmophobia-sound-board-effects-21-sound-effects-door-handle-open_Jv9oBbR.mp3`.
+- `Sorken/entrada_puerta_crujido.wav` y `Sorken/paso_entrada_puerta_01..04.wav`:
+  derivados de `door-creaks-open-footsteps.mp3`.
+- `Libro/susurros_superpuestos_consumo_loop.wav`: aportado como
+  `libro_susurros_superpuestos_loop.wav`.

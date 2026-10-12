@@ -17,12 +17,13 @@ using UnityEngine.SceneManagement;
 [DefaultExecutionOrder(-44)]
 public class AudioEventWatcher : MonoBehaviour
 {
-    // Claves de los loops (ver AudioManager.Bucle). Los pasos del Sorken NO estan aca:
-    // son one-shots a intervalo, ver el bloque de Chasing.
+    // Claves de los loops (ver AudioManager.Bucle). Las pisadas son contactos discretos
+    // emitidos por SorkenAnimator y consumidos por este watcher.
     private const string BucleVeleth     = "veleth_persecucion";
     private const string BucleDrena      = "arbmos_drena";
     private const string BucleSusurros   = "arbmos_susurros";
     private const string BucleGritos     = "arbmos_gritos";
+    private const float GananciaPasosSorken = 3f;
 
     // Foto del frame anterior de una entidad, para detectar transiciones.
     private struct Foto
@@ -31,22 +32,18 @@ public class AudioEventWatcher : MonoBehaviour
         public int  estado;
         public bool letal;
         public bool jumpscareHecho;
+        public bool entradaSonada;
     }
 
     private readonly Dictionary<uint, Foto> _previo  = new();
     private readonly HashSet<uint>          _vistos  = new();
     private readonly List<uint>             _muertos = new();
+    private readonly Dictionary<uint, int>  _ultimaPisada = new();
 
     private Camera _cam;
     private bool   _partidaAnterior;
     private string _escenaActual;
 
-    // Cadencia de los pasos del Sorken (segundos entre pisadas). Se interpola por
-    // cercania: camina "mas rapido" cuanto mas encima tuyo esta.
-    private const float IntervaloPasoLejos = 0.75f;
-    private const float IntervaloPasoCerca = 0.38f;
-
-    private float _proximoPaso;
     private float _proximoHueso;
 
     private void OnEnable()
@@ -161,21 +158,42 @@ public class AudioEventWatcher : MonoBehaviour
         bool nuevo = !_previo.TryGetValue(e.NetworkId, out var antes);
         int  estado = (int)s.State;
 
-        if (nuevo)
+        bool entradaSonada = !nuevo && antes.entradaSonada;
+        if (!entradaSonada)
         {
-            // Aparece asomando por un punto de entrada: US-4.1, el ruido depende del TIPO
-            // de punto (puerta/ventana/...) y varia al azar entre los clips de ese tipo.
-            byte idx = s.MarkerTypeIndex;
-            AudioManager.Sonar(c => c.EntradaPorIndice(idx), s.Position);
+            if (s.State == SorkenState.EmergingDoor)
+            {
+                // El crujido pertenece al inicio real de la animacion, no al spawn en
+                // espera ni a la posterior transicion a persecucion.
+                AudioManager.Sonar(c => c.sorkenEntradaPuertaCrujido, s.Position);
+                entradaSonada = true;
+            }
+            else if (s.State == SorkenState.EmergingWindow)
+            {
+                byte idx = s.MarkerTypeIndex;
+                AudioManager.Sonar(c => c.EntradaPorIndice(idx), s.Position);
+                entradaSonada = true;
+            }
         }
-        else if (antes.estado != estado)
+
+        if (!nuevo && antes.estado != estado)
         {
             switch (s.State)
             {
-                case SorkenState.Chasing:    AudioManager.Sonar(c => c.sorkenEntra,    s.Position); break;
                 case SorkenState.Grabbing:   AudioManager.Sonar(c => c.sorkenGrab,     s.Position); break;
                 case SorkenState.Retreating: AudioManager.Sonar(c => c.sorkenRepelido, s.Position); break;
             }
+        }
+
+        var animator = e.GetComponent<SorkenAnimator>();
+        if (animator != null && animator.TryConsumeFootstep(out Vector3 footPosition,
+                                                             out float intensity))
+        {
+            _ultimaPisada.TryGetValue(e.NetworkId, out int anterior);
+            if (!_ultimaPisada.ContainsKey(e.NetworkId)) anterior = -1;
+            _ultimaPisada[e.NetworkId] = AudioManager.SonarSinRepetir(
+                c => c.sorkenPasos, footPosition, anterior, intensity,
+                ganancia: GananciaPasosSorken);
         }
 
         if (s.State == SorkenState.Chasing)
@@ -183,16 +201,6 @@ public class AudioEventWatcher : MonoBehaviour
             // Doc: "pasos cuyo volumen aumenta exponencialmente al acercarse". La curva
             // cuadratica va ENCIMA de la atenuacion 3D, asi los ultimos metros pegan fuerte.
             float cerca = Cercania(s.Position, 12f);
-
-            // Los pasos son one-shots a intervalo, NO un loop: una pisada es un evento
-            // discreto, y ademas el paso se acelera al acercarse (el Sorken encima tuyo
-            // camina mas rapido de lo que suena a 12 m). Con varios clips en la pista, cada
-            // pisada sale distinta y no se oye el bucle.
-            if (Time.time >= _proximoPaso)
-            {
-                AudioManager.Sonar(c => c.sorkenPasos, s.Position, Mathf.Max(0.2f, cerca * cerca));
-                _proximoPaso = Time.time + Mathf.Lerp(IntervaloPasoLejos, IntervaloPasoCerca, cerca);
-            }
 
             // Huesos: mas espaciados que los pasos, encima de ellos.
             if (Time.time >= _proximoHueso)
@@ -202,7 +210,12 @@ public class AudioEventWatcher : MonoBehaviour
             }
         }
 
-        _previo[e.NetworkId] = new Foto { tipo = e.EntityTypeId, estado = estado };
+        _previo[e.NetworkId] = new Foto
+        {
+            tipo = e.EntityTypeId,
+            estado = estado,
+            entradaSonada = entradaSonada,
+        };
     }
 
     // ─────────────────────────────────────────────────────────── Veleth
@@ -319,6 +332,8 @@ public class AudioEventWatcher : MonoBehaviour
                 AudioManager.PararBucle(BucleSusurros);
                 AudioManager.PararBucle(BucleGritos);
             }
+            if (foto.tipo == EntityTypeIds.Sorken)
+                _ultimaPisada.Remove(_muertos[i]);
             _previo.Remove(_muertos[i]);
         }
     }
@@ -326,6 +341,7 @@ public class AudioEventWatcher : MonoBehaviour
     private void LimpiarTodo()
     {
         _previo.Clear();
+        _ultimaPisada.Clear();
         AudioManager.PararBucle(BucleVeleth);
         AudioManager.PararBucle(BucleDrena);
         AudioManager.PararBucle(BucleSusurros);

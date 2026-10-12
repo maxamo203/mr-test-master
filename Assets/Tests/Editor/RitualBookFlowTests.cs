@@ -261,6 +261,16 @@ public class RitualBookFlowTests
         Assert.That(escala * escala, Is.EqualTo(0.5f).Within(0.0001f));
     }
 
+    [TestCase(0f, false)]
+    [TestCase(0.25f, true)]
+    [TestCase(0.75f, true)]
+    [TestCase(1f, false)]
+    public void SusurrosSuenanDuranteTodoElConsumoInclusoSiLaOscuridadRetrocede(
+        float oscuridad01, bool esperado)
+    {
+        Assert.That(RitualBookView.DebeSonarConsumo(oscuridad01), Is.EqualTo(esperado));
+    }
+
     private static RitualBookFlow Crear(float delay)
     {
         var flow = new RitualBookFlow(() => delay);

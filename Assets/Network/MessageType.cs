@@ -29,4 +29,5 @@ public enum MessageType : ushort
     Heartbeat       = 27,  // ambos sentidos: latido (1 Hz, sin cuerpo) para detectar un par caído sin cierre limpio
     LobbyStatus     = 28,  // server → all: jugadores en la sala y cuántos ya ubicaron el entorno (host incluido)
     AnchorUnresolved = 29, // client → server: volvió a ubicar el entorno (AJUSTAR / BUSCAR IMAGEN), ya no está listo
+    AmbientAudio    = 30,  // server → all: falsa alarma ambiental compartida
 }

@@ -376,6 +376,39 @@ public class RitualBookMsg
     }
 }
 
+// Server → all: un evento ambiental elegido una sola vez por el host. La posicion es
+// anchor-relativa para que la misma puerta suene en el lugar correcto de cada dispositivo.
+public class AmbientAudioMsg
+{
+    public uint Sequence;
+    public byte Kind;
+    public byte Variant;
+    public Vector3 RelativePosition;
+
+    public byte[] Serialize()
+    {
+        using var ms = new MemoryStream(18);
+        using var w = new BinaryWriter(ms);
+        w.Write(Sequence);
+        w.Write(Kind);
+        w.Write(Variant);
+        MsgHelper.WriteV3(w, RelativePosition);
+        return ms.ToArray();
+    }
+
+    public static AmbientAudioMsg Deserialize(byte[] data)
+    {
+        using var r = new BinaryReader(new MemoryStream(data));
+        return new AmbientAudioMsg
+        {
+            Sequence = r.ReadUInt32(),
+            Kind = r.ReadByte(),
+            Variant = r.ReadByte(),
+            RelativePosition = MsgHelper.ReadV3(r),
+        };
+    }
+}
+
 // Un frame de voz (~30 ms) codificado en IMA ADPCM. Viaja cliente → server y el server
 // lo reenvía al resto poniendo el SenderId real (ver NetworkManager.ServerSendVoice).
 //

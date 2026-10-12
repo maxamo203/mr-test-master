@@ -55,6 +55,7 @@ public class NetworkManager : MonoBehaviour
     private Flashlight _localFlashlight;
 
     private float _tickTimer;
+    private uint _nextAmbientAudioSequence = 1;
 
     // Tiempo acumulado hasta el próximo Heartbeat (ver NetworkConfig). Lo usan el
     // server (latido a todos) y el cliente (latido al host); nunca los dos a la vez.
@@ -84,6 +85,7 @@ public class NetworkManager : MonoBehaviour
     public event Action         OnNightSurvived;       // todos: amaneció, noche ganada
     public event Action<int,int> OnNightClock;         // client: (restantes, totales) del amanecer
     public event Action<float>  OnRitualBook;          // client: oscuridad del libro ritual (0..1)
+    public event Action<AmbientAudioMsg> OnAmbientAudio; // todos: evento ambiental del host
     public event Action<byte[]> OnMapReceived;         // client: recibió el .mscn del mapa
     public event Action<string, string> OnMapAnnounced; // client: (hash, nombre) del mapa que eligió el host
     public event Action<byte, float> OnBatteryCollected; // client: recogió pila (rarityIndex, charge)
@@ -394,6 +396,22 @@ public class NetworkManager : MonoBehaviour
         if (_srv == null) return;
         var body = new RitualBookMsg { Oscuridad = Mathf.Clamp01(oscuridad01) }.Serialize();
         _srv.Broadcast(MsgHelper.Frame(MessageType.RitualBook, body));
+    }
+
+    // Host autoritativo: elige tipo, variante y puerta una sola vez. El host reproduce
+    // por el evento local y los clientes reciben exactamente el mismo mensaje por TCP.
+    public void ServerSendAmbientAudio(byte kind, byte variant, Vector3 worldPosition)
+    {
+        if (_srv == null || !IsServer || !GameStarted || WorldOrigin.Instance == null) return;
+        var msg = new AmbientAudioMsg
+        {
+            Sequence = _nextAmbientAudioSequence++,
+            Kind = kind,
+            Variant = variant,
+            RelativePosition = WorldOrigin.Instance.ToRelative(worldPosition),
+        };
+        _srv.Broadcast(MsgHelper.Frame(MessageType.AmbientAudio, msg.Serialize()));
+        OnAmbientAudio?.Invoke(msg);
     }
 
     // ── Chat de voz y sala ────────────────────────────────────────────────
@@ -1021,6 +1039,11 @@ public class NetworkManager : MonoBehaviour
             {
                 var m = RitualBookMsg.Deserialize(msg.Body);
                 OnRitualBook?.Invoke(m.Oscuridad);
+                break;
+            }
+            case MessageType.AmbientAudio:
+            {
+                OnAmbientAudio?.Invoke(AmbientAudioMsg.Deserialize(msg.Body));
                 break;
             }
             case MessageType.MapAnnounce:
