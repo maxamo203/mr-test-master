@@ -2,10 +2,11 @@
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 using Scanner;   // UIBlocker
 
-// Movimiento del jugador para el PLAY MODE DEL EDITOR: WASD para caminar y arrastrar con
-// el mouse para mirar. En el editor no hay tracking AR (ver ARImageAnchor.EditorStub), así
+// Movimiento del jugador para el PLAY MODE DEL EDITOR: WASD para caminar y mouse capturado
+// para mirar. En el editor no hay tracking AR (ver ARImageAnchor.EditorStub), así
 // que la cámara se queda clavada en el origen y no hay forma de recorrer el cuarto
 // escaneado ni de ver los efectos de pantalla completa desde otro ángulo. Mueve la cámara
 // AR directamente, que es lo que el resto del juego lee como posición del jugador
@@ -16,7 +17,8 @@ using Scanner;   // UIBlocker
 //   WASD            caminar (horizontal, relativo a hacia dónde estás mirando)
 //   Shift           correr
 //   Espacio / E     subir      |   Ctrl / Q   bajar
-//   arrastrar mouse mirar — sólo mientras mantenés el botón apretado, nunca por defecto
+//   clic en el mundo  capturar mouse y mirar libremente
+//   Escape            liberar mouse
 //
 // TIER: editor-only. El archivo entero está dentro de #if UNITY_EDITOR: no se compila en
 // ningún build (ni development ni release). Se prende/apaga desde el menú
@@ -40,7 +42,8 @@ public class EditorPlayerControls : MonoBehaviour
     private Transform _cam;
     private Behaviour _poseDriver;   // TrackedPoseDriver de la cámara AR, si lo hay
     private float _yaw, _pitch;
-    private bool  _arrastrando;
+    private bool  _cursorCapturado;
+    private bool  _controlActivoAnterior;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
@@ -50,16 +53,42 @@ public class EditorPlayerControls : MonoBehaviour
         DontDestroyOnLoad(go);
         go.AddComponent<EditorPlayerControls>();
         Debug.Log("EditorPlayerControls: WASD para caminar, Shift correr, Espacio/E subir, " +
-                  "Ctrl/Q bajar, arrastrar con el mouse para mirar. " +
+                  "Ctrl/Q bajar, clic para capturar el mouse y Escape para liberarlo. " +
                   "Se apaga en Mortuorium > Controles WASD en Play.");
     }
 
     private void Update()
     {
+        bool nocheEnCurso = NetworkManager.Instance != null &&
+                            NetworkManager.Instance.GameStarted;
+        bool escaneando = IsScannerScene(SceneManager.GetActiveScene().name);
+        bool controlActivo = nocheEnCurso || escaneando;
+        if (!controlActivo)
+        {
+            _controlActivoAnterior = false;
+            LiberarCursor();
+            return;
+        }
+
         if (!ResolverCamara()) return;
+
+        // El menú y el lobby mantienen el cursor libre. La noche y ScannerScene usan
+        // primera persona: se captura al entrar, Escape lo libera para tocar botones y
+        // un clic fuera de la UI vuelve a capturarlo.
+        if (!_controlActivoAnterior)
+        {
+            _controlActivoAnterior = true;
+            SincronizarAngulosConCamara();
+            CapturarCursor();
+        }
+
         // El menú de pausa se queda con el input (y con el teclado, si estás editando un
         // valor a mano): mover la cámara desde atrás sería un accidente, no una acción.
-        if (Gamepad.PauseMenuController.IsOpen) return;
+        if (Gamepad.PauseMenuController.IsOpen)
+        {
+            LiberarCursor();
+            return;
+        }
 
         Caminar();
     }
@@ -69,8 +98,29 @@ public class EditorPlayerControls : MonoBehaviour
     // girado cuando el gizmo todavía no sabía que se lo estaba arrastrando.
     private void LateUpdate()
     {
-        if (_cam == null || Gamepad.PauseMenuController.IsOpen) return;
+        if (!_controlActivoAnterior || _cam == null ||
+            Gamepad.PauseMenuController.IsOpen) return;
         Mirar();
+    }
+
+    public static bool IsScannerScene(string sceneName) => sceneName == "ScannerScene";
+
+    public static bool ShouldRecaptureAfterDeselect(
+        string sceneName, bool selectionWasCleared, bool pauseMenuOpen) =>
+        IsScannerScene(sceneName) && selectionWasCleared && !pauseMenuOpen;
+
+    // Lo llama ScanStateMachine al cerrar una selección desde la UI del escáner.
+    // Devuelve inmediatamente el control de cámara sin exigir un clic extra en el mundo.
+    public static void RecaptureAfterScannerDeselect()
+    {
+        if (!ShouldRecaptureAfterDeselect(SceneManager.GetActiveScene().name, true,
+                                          Gamepad.PauseMenuController.IsOpen))
+            return;
+
+        var controls = FindFirstObjectByType<EditorPlayerControls>();
+        if (controls == null || !controls.ResolverCamara()) return;
+        controls.SincronizarAngulosConCamara();
+        controls.CapturarCursor();
     }
 
     // La cámara AR se crea con la escena y cambia al cambiar de escena; además hay que
@@ -112,32 +162,24 @@ public class EditorPlayerControls : MonoBehaviour
         // panel IMGUI, por eso UIBlocker no lo cubre.
         var gizmo = TransformGizmoController.Instance;
         if (gizmo != null && gizmo.ActiveHandle != null)
+            return;
+
+        var keyboard = Keyboard.current;
+        if (_cursorCapturado && keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
         {
-            _arrastrando = false;
+            LiberarCursor();
             return;
         }
 
-        // Botón izquierdo o derecho: el derecho es la salida cuando el izquierdo se lo
-        // lleva otro sistema (en el escáner un clic coloca/selecciona, ver
-        // SelectionController).
-        bool apretado = mouse.leftButton.isPressed || mouse.rightButton.isPressed;
-        bool empezo   = mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame;
-
-        if (empezo)
+        if (!_cursorCapturado)
         {
-            // Un clic que empieza sobre un panel IMGUI es del panel, no de la cámara
-            // (misma regla que SelectionController / LiDARScanner).
-            _arrastrando = !UIBlocker.IsPointerOver(mouse.position.ReadValue());
-            if (_arrastrando)
-            {
-                // Re-sincronizar por si algo más rotó la cámara desde el último arrastre.
-                var e  = _cam.eulerAngles;
-                _yaw   = e.y;
-                _pitch = NormalizarPitch(e.x);
-            }
+            bool click = mouse.leftButton.wasPressedThisFrame ||
+                         mouse.rightButton.wasPressedThisFrame;
+            if (!click || UIBlocker.IsPointerOver(mouse.position.ReadValue())) return;
+
+            SincronizarAngulosConCamara();
+            CapturarCursor();
         }
-        if (!apretado) _arrastrando = false;
-        if (!_arrastrando) return;
 
         var d = mouse.delta.ReadValue();
         if (d.sqrMagnitude <= 0f) return;
@@ -145,6 +187,29 @@ public class EditorPlayerControls : MonoBehaviour
         _yaw   += d.x * GradosPorPx;
         _pitch  = Mathf.Clamp(_pitch - d.y * GradosPorPx, -PitchMax, PitchMax);
         _cam.rotation = Quaternion.Euler(_pitch, _yaw, 0f);
+    }
+
+    private void SincronizarAngulosConCamara()
+    {
+        if (_cam == null) return;
+        var e  = _cam.eulerAngles;
+        _yaw   = e.y;
+        _pitch = NormalizarPitch(e.x);
+    }
+
+    private void CapturarCursor()
+    {
+        _cursorCapturado = true;
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+    }
+
+    private void LiberarCursor()
+    {
+        if (!_cursorCapturado && Cursor.lockState == CursorLockMode.None) return;
+        _cursorCapturado = false;
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
     }
 
     private void Caminar()
@@ -175,7 +240,13 @@ public class EditorPlayerControls : MonoBehaviour
     private void OnDestroy()
     {
         // Devolver la cámara como estaba por si el objeto se destruye en pleno play.
+        LiberarCursor();
         if (_poseDriver != null) _poseDriver.enabled = true;
+    }
+
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        if (!hasFocus) LiberarCursor();
     }
 }
 #endif

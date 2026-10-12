@@ -52,6 +52,7 @@ namespace Gameplay
             int n = 0;
 
             if (Camera.main != null && ServerDeaths.IsAlive(0) &&
+                TrackingReliability.LocalIsReliable() &&
                 ModeAtLeast(net.LocalFlashlightMode(), minimumMode) &&
                 Alcanza(Camera.main.transform.position, Camera.main.transform.forward,
                         target, angleDeg, range, radioObjetivo) &&
@@ -62,6 +63,8 @@ namespace Gameplay
             foreach (var cid in net.ConnectedClients)
             {
                 if (ServerDeaths.IsDead(cid)) continue;
+                if (!net.IsClientPoseReliable(
+                        cid, TrackingReliability.RemotePoseMaxAgeSeconds)) continue;
                 if (!net.TryGetClientFlashlightMode(cid, out var mode) ||
                     !ModeAtLeast(mode, minimumMode)) continue;
                 if (!net.TryGetClientWorldPosition(cid, out var pos)) continue;
@@ -90,6 +93,7 @@ namespace Gameplay
         {
             var net = NetworkManager.Instance;
             if (net == null || ServerDeaths.IsDead(clientId)) return false;
+            if (!TrackingReliability.PlayerIsReliable(clientId)) return false;
 
             Vector3 pos;
             Vector3 forward;
@@ -146,7 +150,7 @@ namespace Gameplay
         private static bool ModeAtLeast(FlashlightMode actual, FlashlightMode minimum) =>
             actual != FlashlightMode.Off && actual >= minimum;
 
-        private static bool HasLineOfSight(Vector3 origin, Vector3 target, float targetRadius)
+        public static bool HasLineOfSight(Vector3 origin, Vector3 target, float targetRadius)
         {
             Vector3 delta = target - origin;
             float distance = delta.magnitude;

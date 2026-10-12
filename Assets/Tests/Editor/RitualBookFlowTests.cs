@@ -29,33 +29,29 @@ public class RitualBookFlowTests
         Assert.That(flow.Darkness01, Is.EqualTo(0.5f).Within(0.0001f));
     }
 
-    [TestCase(0, 4, 0.5f)]
-    [TestCase(1, 4, 0.375f)]
-    [TestCase(2, 4, 0.25f)]
-    [TestCase(3, 4, 0.125f)]
-    public void JugadoresQueApuntanDemoranElAtaqueHastaQueEstenTodos(
-        int apuntando, int jugadores, float oscuridadEsperada)
+    [TestCase(1, 2)]
+    [TestCase(1, 4)]
+    [TestCase(3, 4)]
+    public void UnSoloJugadorPuedeDefenderElLibroEnMultijugador(
+        int apuntando, int jugadores)
     {
         var flow = Crear(delay: 0f);
 
         flow.Tick(3f, apuntando, jugadores, consumeSeconds: 6f, defenseSeconds: 4f);
 
         Assert.That(flow.Phase, Is.EqualTo(RitualBookPhase.Consuming));
-        Assert.That(flow.Darkness01, Is.EqualTo(oscuridadEsperada).Within(0.0001f));
-        Assert.That(flow.Defense01, Is.Zero);
+        Assert.That(flow.Darkness01, Is.Zero.Within(0.0001f));
+        Assert.That(flow.Defense01, Is.EqualTo(0.75f).Within(0.0001f));
     }
 
-    [TestCase(1, 2, 0.25f)]
-    [TestCase(1, 3, 1f / 3f)]
-    [TestCase(2, 3, 1f / 6f)]
-    public void LaFormulaSeAjustaAlTamanoRealDeLaSesion(
-        int apuntando, int jugadores, float oscuridadEsperada)
+    [Test]
+    public void SinDefensorElConsumoNoDependeDelTamanoDeLaSesion()
     {
         var flow = Crear(delay: 0f);
 
-        flow.Tick(3f, apuntando, jugadores, consumeSeconds: 6f, defenseSeconds: 4f);
+        flow.Tick(3f, 0, 4, consumeSeconds: 6f, defenseSeconds: 4f);
 
-        Assert.That(flow.Darkness01, Is.EqualTo(oscuridadEsperada).Within(0.0001f));
+        Assert.That(flow.Darkness01, Is.EqualTo(0.5f).Within(0.0001f));
         Assert.That(flow.Defense01, Is.Zero);
     }
 
@@ -72,12 +68,12 @@ public class RitualBookFlowTests
     }
 
     [Test]
-    public void TodosLosJugadoresHacenRetrocederLaOscuridadYProtegenElLibro()
+    public void UnJugadorHaceRetrocederLaOscuridadYProtegeElLibro()
     {
         var flow = Crear(delay: 0f);
         flow.Tick(3f, 0, 4, 6f, 4f);
 
-        var result = flow.Tick(4f, 4, 4, 6f, 4f);
+        var result = flow.Tick(4f, 1, 4, 6f, 4f);
 
         Assert.That(result.HasFlag(RitualBookTickResult.Saved), Is.True);
         Assert.That(flow.Phase, Is.EqualTo(RitualBookPhase.Waiting));
@@ -85,16 +81,30 @@ public class RitualBookFlowTests
     }
 
     [Test]
-    public void PerderLaProteccionTotalRetomaDesdeElPorcentajeReducido()
+    public void PerderLaProteccionRetomaDesdeElPorcentajeReducido()
     {
         var flow = Crear(delay: 0f);
         flow.Tick(3f, 0, 4, 6f, 4f); // 50%
-        flow.Tick(2f, 4, 4, 6f, 4f); // vuelve a 25%
+        flow.Tick(2f, 1, 4, 6f, 4f); // vuelve a 25%
 
-        flow.Tick(3f, 2, 4, 6f, 4f); // media velocidad: 1.5 s de la nueva ventana
+        flow.Tick(1.5f, 0, 4, 6f, 4f); // 1.5 s de la nueva ventana
 
         Assert.That(flow.Darkness01, Is.EqualTo(0.4375f).Within(0.0001f));
         Assert.That(flow.Defense01, Is.Zero);
+    }
+
+    [Test]
+    public void EventoListoEsperaHastaQueElCoordinadorLeDeCupo()
+    {
+        var flow = Crear(delay: 0f);
+
+        var bloqueado = flow.Tick(2f, 0, 1, 6f, 4f, allowStart: false);
+        Assert.That(bloqueado, Is.EqualTo(RitualBookTickResult.None));
+        Assert.That(flow.Phase, Is.EqualTo(RitualBookPhase.Waiting));
+
+        var iniciado = flow.Tick(0.1f, 0, 1, 6f, 4f, allowStart: true);
+        Assert.That(iniciado.HasFlag(RitualBookTickResult.ConsumptionStarted), Is.True);
+        Assert.That(flow.Phase, Is.EqualTo(RitualBookPhase.Consuming));
     }
 
     [Test]

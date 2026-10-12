@@ -6,12 +6,13 @@ using UnityEngine.Rendering;
 public sealed class SorkenDarknessCue : MonoBehaviour
 {
     [Header("Timing")]
-    [Min(0.1f)] [SerializeField] private float _buildSeconds = 5f;
-    [Min(0.1f)] [SerializeField] private float _fadeSeconds = 0.45f;
+    [Min(0.1f)] [SerializeField] private float _buildSeconds = 0.75f;
+    [Min(0.1f)] [SerializeField] private float _fadeSeconds = 0.7f;
+    [Min(0.1f)] [SerializeField] private float _entryRevealSeconds = 1.8f;
 
     [Header("Black mist")]
-    [Min(0.1f)] [SerializeField] private float _maxRadius = 1.35f;
-    [Min(1)] [SerializeField] private int _maxParticles = 260;
+    [Min(0.1f)] [SerializeField] private float _maxRadius = 1.9f;
+    [Min(1)] [SerializeField] private int _maxParticles = 560;
 
     private SorkenEntity _sorken;
     private ParticleSystem _mist;
@@ -25,34 +26,45 @@ public sealed class SorkenDarknessCue : MonoBehaviour
         _createdAt = Time.time;
         CreateMist();
 
-        // La señal debe existir desde el mismo fotograma del spawn. Se crea ya con su
-        // intensidad máxima y se pre-simula para que no empiece como un emisor vacío.
-        _amount = 1f;
+        // La masa negra ya es evidente en el primer fotograma: avisa enseguida por donde
+        // entrara el Sorken y oculta la parte mas mecanica del cruce.
+        _amount = 0.82f;
         ApplyMist();
-        _mist.Simulate(0.5f, true, true, true);
+        _mist.Simulate(0.9f, true, true, true);
         _mist.Play(true);
     }
 
     private void Update()
     {
-        // La niebla delata el punto de entrada durante toda la secuencia. Solo se
-        // desvanece cuando el Sorken ya termino de entrar y comienza la persecucion.
-        bool entering = _sorken != null && KeepsMistBuilt(_sorken.State);
-
-        float speed = entering ? 1f / Mathf.Max(0.1f, _buildSeconds)
-                               : 1f / Mathf.Max(0.1f, _fadeSeconds);
-        _amount = Mathf.MoveTowards(_amount, entering ? 1f : 0f, speed * Time.deltaTime);
+        // La niebla conserva casi toda su densidad durante el cruce y solo comienza a
+        // abrirse durante el aterrizaje. Asi se percibe la silueta, no el traspaso.
+        float target = _sorken != null ? TargetAmount(_sorken.State) : 0f;
+        float seconds = target > _amount
+            ? Mathf.Max(0.1f, _buildSeconds)
+            : target > 0f
+                ? Mathf.Max(0.1f, _entryRevealSeconds)
+                : Mathf.Max(0.1f, _fadeSeconds);
+        _amount = Mathf.MoveTowards(_amount, target, Time.deltaTime / seconds);
         ApplyMist();
 
-        if (!entering && _amount <= 0.001f && Time.time > _createdAt + 0.2f)
+        if (target <= 0f && _amount <= 0.001f && Time.time > _createdAt + 0.2f)
             Destroy(this);
     }
 
+    public static float TargetAmount(SorkenState state)
+    {
+        return state switch
+        {
+            SorkenState.Idle => 1f,
+            SorkenState.EmergingDoor => 0.96f,
+            SorkenState.EmergingWindow => 1f,
+            SorkenState.WindowLanding => 0.78f,
+            _ => 0f,
+        };
+    }
+
     public static bool KeepsMistBuilt(SorkenState state) =>
-        state == SorkenState.Idle ||
-        state == SorkenState.EmergingDoor ||
-        state == SorkenState.EmergingWindow ||
-        state == SorkenState.WindowLanding;
+        TargetAmount(state) > 0f;
 
     private void CreateMist()
     {
@@ -69,36 +81,52 @@ public sealed class SorkenDarknessCue : MonoBehaviour
         main.loop = true;
         main.playOnAwake = true;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.startLifetime = 1.8f;
-        main.startSpeed = 0.08f;
-        main.startSize = new ParticleSystem.MinMaxCurve(0.35f, 0.9f);
+        main.startLifetime = new ParticleSystem.MinMaxCurve(1.7f, 2.7f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.04f, 0.2f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.55f, 1.3f);
+        main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
         main.maxParticles = _maxParticles;
-        main.gravityModifier = 0.01f;
+        main.gravityModifier = -0.015f;
 
         var emission = _mist.emission;
         emission.rateOverTime = 0f;
 
         var shape = _mist.shape;
         shape.shapeType = ParticleSystemShapeType.Sphere;
-        shape.radius = 0.1f;
+        shape.radius = 0.18f;
         shape.radiusThickness = 1f;
 
         var noise = _mist.noise;
         noise.enabled = true;
-        noise.frequency = 0.3f;
-        noise.strength = 0.12f;
+        noise.frequency = 0.48f;
+        noise.strength = 0.34f;
+        noise.scrollSpeed = 0.22f;
+        noise.octaveCount = 3;
+        noise.damping = true;
+
+        var velocity = _mist.velocityOverLifetime;
+        velocity.enabled = true;
+        velocity.space = ParticleSystemSimulationSpace.World;
+        velocity.x = new ParticleSystem.MinMaxCurve(-0.1f, 0.1f);
+        velocity.y = new ParticleSystem.MinMaxCurve(0.03f, 0.19f);
+        velocity.z = new ParticleSystem.MinMaxCurve(-0.08f, 0.08f);
+
+        var rotation = _mist.rotationOverLifetime;
+        rotation.enabled = true;
+        rotation.z = new ParticleSystem.MinMaxCurve(-0.65f, 0.65f);
 
         var color = _mist.colorOverLifetime;
         color.enabled = true;
         var gradient = new Gradient();
         gradient.SetKeys(
             new[] { new GradientColorKey(Color.black, 0f), new GradientColorKey(Color.black, 1f) },
-            new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.68f, 0.25f),
+            new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.9f, 0.12f),
+                    new GradientAlphaKey(0.76f, 0.68f),
                     new GradientAlphaKey(0f, 1f) });
         color.color = gradient;
 
         var renderer = go.GetComponent<ParticleSystemRenderer>();
-        _material = ArbmosGfx.ParticleMaterial(false, new Color(0f, 0f, 0f, 0.75f),
+        _material = ArbmosGfx.ParticleMaterial(false, new Color(0f, 0f, 0f, 0.9f),
                                                ArbmosGfx.SmokeTexture(0.92f));
         renderer.material = _material;
         renderer.shadowCastingMode = ShadowCastingMode.Off;
@@ -112,18 +140,18 @@ public sealed class SorkenDarknessCue : MonoBehaviour
     {
         if (_mist == null) return;
         var emission = _mist.emission;
-        emission.rateOverTime = Mathf.Lerp(0f, 180f, _amount);
+        emission.rateOverTime = Mathf.Lerp(0f, 430f, _amount);
 
         var shape = _mist.shape;
-        shape.radius = Mathf.Lerp(0.1f, _maxRadius, _amount);
+        shape.radius = Mathf.Lerp(0.18f, _maxRadius, _amount);
 
         var main = _mist.main;
         main.startSize = new ParticleSystem.MinMaxCurve(
-            Mathf.Lerp(0.18f, 0.55f, _amount), Mathf.Lerp(0.35f, 1.1f, _amount));
+            Mathf.Lerp(0.28f, 0.78f, _amount), Mathf.Lerp(0.55f, 1.65f, _amount));
 
         if (_material != null)
         {
-            var c = new Color(0f, 0f, 0f, Mathf.Lerp(0f, 0.78f, _amount));
+            var c = new Color(0f, 0f, 0f, Mathf.Lerp(0f, 0.94f, _amount));
             if (_material.HasProperty("_TintColor")) _material.SetColor("_TintColor", c);
             if (_material.HasProperty("_Color")) _material.SetColor("_Color", c);
         }

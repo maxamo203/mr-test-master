@@ -103,7 +103,20 @@ namespace Gameplay
             _quad.transform.localRotation = Quaternion.identity;
             _quad.transform.localScale = new Vector3(w, h, 1f);
 
-            _renderer.enabled = EnPartida && (VHSSettings.Activo || Tension >= _minVisible);
+            // El interruptor VHS desactiva el pase completo, incluida la deformacion de
+            // tension que comparte este shader. DarknessOverlay es otro renderer y sigue
+            // funcionando, por lo que apagar VHS no aclara la noche.
+            _renderer.enabled = ShouldRender(
+                EnPartida, GameOptions.VhsActivo, VHSSettings.Activo,
+                Tension, _minVisible);
+        }
+
+        public static bool ShouldRender(
+            bool enPartida, bool vhsActivo, bool vhsTieneIngredientes,
+            float tension, float minVisible)
+        {
+            return enPartida && vhsActivo &&
+                   (vhsTieneIngredientes || tension >= minVisible);
         }
 
         private static float Tension =>

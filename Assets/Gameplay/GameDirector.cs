@@ -29,6 +29,11 @@ namespace Gameplay
                  "El apoyo de los pies agrega despues su pequena compensacion.")]
         [Min(0f)] [SerializeField] private float _windowPerchClearance = 0.25f;
 
+        [Tooltip("Tiempo minimo durante el que solo se anuncia la entrada por ventana " +
+                 "antes de iniciar el clip. Evita que una noche de prueba corta reproduzca " +
+                 "toda la animacion detras del humo inicial.")]
+        [Min(0f)] [SerializeField] private float _windowCueLeadSeconds = 1.25f;
+
         [Tooltip("Separacion final respecto del plano interior de la puerta. Solo unos " +
                  "centimetros: la persecucion agrega el resto del desplazamiento.")]
         [Min(0f)] [SerializeField] private float _doorInsideClearance = 0.08f;
@@ -37,7 +42,17 @@ namespace Gameplay
                  "completo afuera y visible antes de comenzar a atravesar la pared.")]
         [Min(0f)] [SerializeField] private float _doorOutsideDepth = 1f;
 
-        private enum Phase { Idle, Entering, WindowLanding, Chasing, CoverStarting, Grabbed, Retreating }
+        private enum Phase
+        {
+            Idle,
+            Entering,
+            WindowLanding,
+            PostEntryPause,
+            Chasing,
+            CoverStarting,
+            Grabbed,
+            Retreating,
+        }
 
         private NightConfig _night;
 
@@ -49,6 +64,8 @@ namespace Gameplay
 
         private bool  _running;
         private Phase _phase = Phase.Idle;
+        private bool  _sorkenReserved;
+        private int   _sorkenTraceId;
 
         // Reloj de la noche (condicion de victoria). 0 = noche sin limite de tiempo.
         private float _nightDuration;
@@ -61,7 +78,6 @@ namespace Gameplay
         private float _grace;          // Entering: cuenta a la entrada
         private float _phaseTimer;     // Grabbed / Retreating
         private bool  _coverStartPlayedThisAttempt;
-        private bool  _firstAttemptPending;
 
         // Sorken actual (null entre intentos).
         private SorkenEntity _sorken;
@@ -72,6 +88,11 @@ namespace Gameplay
         private readonly List<Vector3> _path = new();
         private int   _pathIndex;
         private float _repathTimer;
+        private float _lightLostSeconds;
+        private uint  _targetClientId;
+        private bool  _hasTarget;
+        private Vector3 _entryForward;
+        private bool _entryPathPending;
 
         // Trayectoria de la ventana al piso. Se guarda al terminar el emerge para que el
         // movimiento sea continuo aunque el marcador o el origen AR se actualicen.
@@ -114,8 +135,10 @@ namespace Gameplay
             }
 
             ServerDeaths.Reset();
+            ThreatCoordinator.ResetAll();
+            GameplayTelemetry.BeginSession(_night, CountAlivePlayers());
+            _sorkenReserved = false;
             _coverStartPlayedThisAttempt = false;
-            _firstAttemptPending = true;
             _phase = Phase.Idle;
             _attemptTimer = _night.initialAttemptDelay;
 
@@ -145,6 +168,13 @@ namespace Gameplay
         // soltamos las referencias y frenamos. El próximo OnGameStarted re-inicializa.
         public void StopRun()
         {
+            if (_sorkenTraceId != 0)
+            {
+                GameplayTelemetry.End(_sorkenTraceId, "sorken", "stopped", 0,
+                    _sorken != null ? _sorken.Position : Vector3.zero);
+                _sorkenTraceId = 0;
+            }
+            ReleaseSorkenReservation();
             _running      = false;
             _phase        = Phase.Idle;
             _sorken       = null;
@@ -152,7 +182,17 @@ namespace Gameplay
             _marker       = null;
             _path.Clear();
             _pathIndex    = 0;
-            _repel = _grace = _phaseTimer = 0f;
+            _repel = _grace = _phaseTimer = _lightLostSeconds = 0f;
+            _hasTarget = false;
+            _entryPathPending = false;
+        }
+
+        // Veleth es una consecuencia global y tiene prioridad sobre las amenazas
+        // normales. A diferencia del reset de noche, acá sí despawneamos el Sorken.
+        public void SuspendForVeleth()
+        {
+            if (_sorken != null || _sorkenNetId != 0) DespawnSorken();
+            StopRun();
         }
 
         private void Update()
@@ -179,11 +219,22 @@ namespace Gameplay
                 }
             }
 
+            // El reloj de la noche continúa, pero ninguna amenaza avanza ni daña si
+            // todos los jugadores perdieron tracking fiable. Al relocalizar hay 2 s
+            // de recuperación antes de retomar.
+            if (_phase != Phase.Idle && !AnyReliableAlivePlayer()) return;
+            if (_phase != Phase.Idle && ThreatCoordinator.LethalConsequenceActive)
+            {
+                EndAttempt();
+                return;
+            }
+
             switch (_phase)
             {
                 case Phase.Idle:       TickIdle(dt);       break;
                 case Phase.Entering:   TickEntering(dt);   break;
                 case Phase.WindowLanding: TickWindowLanding(dt); break;
+                case Phase.PostEntryPause: TickPostEntryPause(dt); break;
                 case Phase.Chasing:       TickChasing(dt);       break;
                 case Phase.CoverStarting: TickCoverStarting(dt); break;
                 case Phase.Grabbed:    TickGrabbed(dt);    break;
@@ -216,23 +267,36 @@ namespace Gameplay
                 return;
             }
 
-            int nightIndex = GameSession.Instance != null ? GameSession.Instance.NightIndex : -1;
-            bool forceFirstDoor = ShouldForceDoorOnFirstAttempt(nightIndex, _firstAttemptPending);
-            _marker = forceFirstDoor ? RandomDoorMarker(markers) : null;
-            if (_marker == null)
-            {
-                if (forceFirstDoor)
-                    Debug.LogWarning("[GameDirector] Noche 1: no hay marcador de puerta; " +
-                                     "el primer intento usara cualquier entrada disponible.");
-                _marker = markers[UnityEngine.Random.Range(0, markers.Count)];
-            }
+            _marker = markers[UnityEngine.Random.Range(0, markers.Count)];
             if (_marker == null) { _attemptTimer = 1f; return; }
+
+            Vector3 defenseTarget = EmergePosition() + Vector3.up;
+            float defenseRange = _night.flashlightRange;
+            if (PlayerLights.TryConoReal(out _, out float realRange))
+                defenseRange = realRange;
+            if (!ThreatCoordinator.CanBeginSorkenEntryAt(
+                    defenseTarget, defenseRange, 0.4f))
+            {
+                GameplayTelemetry.Postponed("sorken", "no_viable_defender");
+                _marker = null;
+                _attemptTimer = 2f;
+                return;
+            }
 
             // Spawn ya a la altura del piso (EmergePosition con _sorken null usa depth 0);
             // luego lo reposicionamos aplicando el EmergeDepth del modelo.
             _sorkenNetId = NetworkManager.Instance.ServerSpawn(EntityTypeIds.Sorken, EmergePosition(), 0);
             _sorken = GetSorken(_sorkenNetId);
-            if (_sorken == null) { _attemptTimer = 2f; return; }
+            if (_sorken == null)
+            {
+                ReleaseSorkenReservation();
+                _marker = null;
+                _attemptTimer = 2f;
+                return;
+            }
+            _sorkenTraceId = GameplayTelemetry.BeginThreat(
+                "sorken", 0, _sorken.Position,
+                $"marker={_marker.KindId};entry={_night.entryGraceSeconds:F2}");
 
             // US-4.1: que tipo de punto es (puerta/ventana/...), para que suene distinto.
             // Se resuelve contra el AudioCatalog y viaja como un byte junto al estado, asi
@@ -249,37 +313,12 @@ namespace Gameplay
             // solo arranca en el tramo final configurado de la ventana.
             _sorken.SetState(SorkenState.Idle);
             _coverStartPlayedThisAttempt = false;
-            _firstAttemptPending = false;
 
             _repel = 0f; _grace = 0f; _windowLandingDuration = 0f;
+            _lightLostSeconds = 0f;
+            _hasTarget = false;
             _phase = Phase.Entering;
             Debug.Log($"[GameDirector] Emerge netId={_sorkenNetId} en marcador {_marker.name}.");
-        }
-
-        public static bool ShouldForceDoorOnFirstAttempt(int nightIndex, bool firstAttemptPending) =>
-            nightIndex == 0 && firstAttemptPending;
-
-        public static bool IsDoorKind(string kindId)
-        {
-            string kind = kindId != null ? kindId.ToLowerInvariant() : string.Empty;
-            return kind.Contains("door") || kind.Contains("puerta");
-        }
-
-        private static MarkerObject RandomDoorMarker(IReadOnlyList<MarkerObject> markers)
-        {
-            int doorCount = 0;
-            for (int i = 0; i < markers.Count; i++)
-                if (markers[i] != null && IsDoorKind(markers[i].KindId)) doorCount++;
-
-            if (doorCount == 0) return null;
-            int selected = UnityEngine.Random.Range(0, doorCount);
-            for (int i = 0; i < markers.Count; i++)
-            {
-                MarkerObject marker = markers[i];
-                if (marker == null || !IsDoorKind(marker.KindId)) continue;
-                if (selected-- == 0) return marker;
-            }
-            return null;
         }
 
         // --- Entering ---
@@ -299,7 +338,8 @@ namespace Gameplay
             float animationDuration = window
                 ? Mathf.Max(0.2f, _sorken.WindowEntryDuration)
                 : Mathf.Max(0.2f, _night.entryAnimationSeconds);
-            float animationStart = Mathf.Max(0f, _night.entryGraceSeconds - animationDuration);
+            float animationStart = EntryAnimationStart(
+                window, _night.entryGraceSeconds, animationDuration, _windowCueLeadSeconds);
             if (_grace >= animationStart &&
                 _sorken.State != SorkenState.EmergingDoor &&
                 _sorken.State != SorkenState.EmergingWindow)
@@ -336,14 +376,40 @@ namespace Gameplay
             // Una ventana puede necesitar un clip mas largo que la gracia configurada.
             // No iniciamos la caida hasta que termino el traspaso y el segundo pie esta
             // apoyado; asi el cambio de clip no lo despega del marco a mitad de gesto.
-            float entryEnd = window
-                ? Mathf.Max(_night.entryGraceSeconds, animationStart + animationDuration)
-                : _night.entryGraceSeconds;
+            float entryEnd = EntryEnd(
+                window, _night.entryGraceSeconds, animationStart, animationDuration);
             if (_grace >= entryEnd) EnterChase();
+        }
+
+        public static float EntryAnimationStart(
+            bool window, float graceSeconds, float animationDuration,
+            float minimumWindowCueSeconds)
+        {
+            float fittedStart = Mathf.Max(0f, graceSeconds - animationDuration);
+            return window
+                ? Mathf.Max(fittedStart, Mathf.Max(0f, minimumWindowCueSeconds))
+                : fittedStart;
+        }
+
+        public static float EntryEnd(
+            bool window, float graceSeconds, float animationStart, float animationDuration)
+        {
+            return window
+                ? Mathf.Max(graceSeconds, animationStart + animationDuration)
+                : graceSeconds;
         }
 
         private void EnterChase()
         {
+            // Hasta este punto el Sorken seguía fuera/cruzando y no participaba del
+            // presupuesto de amenazas. Al terminar el cruce ya está dentro, incluso si
+            // todavía debe bajar desde una ventana hasta el piso.
+            ThreatCoordinator.BeginSorkenInside();
+            _sorkenReserved = true;
+            _entryForward = _marker.transform.forward;
+            _entryForward.y = 0f;
+            if (_entryForward.sqrMagnitude > 1e-6f) _entryForward.Normalize();
+            _entryPathPending = true;
             Vector3 floorEntry = ChaseEntryPosition();
             if (IsWindowMarker() && _sorken.Position.y > floorEntry.y + 0.05f)
             {
@@ -383,11 +449,40 @@ namespace Gameplay
 
         private void BeginChaseAt(Vector3 position)
         {
-            _sorken.SetPositionDirectly(position);
+            // Al terminar el aterrizaje ya estamos exactamente en la posicion final.
+            // No volver a resolverla contra el marcador: conserva el ultimo fotograma
+            // como origen de la persecucion y evita un salto junto a la pared.
+            if (_phase != Phase.WindowLanding)
+                _sorken.SetPositionDirectly(position);
             _sorken.SetState(SorkenState.Chasing);
-            _repel = 0f; _path.Clear(); _pathIndex = 0; _repathTimer = 0f;
-            _phase = Phase.Chasing;
-            Debug.Log("[GameDirector] El Sorken ENTRO: chase.");
+            _repel = 0f;
+            _lightLostSeconds = 0f;
+            _path.Clear();
+            _pathIndex = 0;
+            _repathTimer = 0f;
+            _phaseTimer = 0f;
+            _hasTarget = TryAcquireTarget(_sorken.Position, out _targetClientId, out _);
+            _phase = Phase.PostEntryPause;
+            Debug.Log("[GameDirector] El Sorken ENTRO: pausa de reaccion.");
+        }
+
+        private void TickPostEntryPause(float dt)
+        {
+            if (_sorken == null) { EndAttempt(); return; }
+            if (!TryGetLockedTarget(out _)) { Retreat(); return; }
+
+            _phaseTimer += dt;
+            if (IsSorkenDirectlyLit())
+            {
+                _repel += dt; // El gesto cuenta dentro del tiempo total comunicado.
+                _lightLostSeconds = 0f;
+                if (_repel >= _night.chaseRepelSeconds) { Retreat(); return; }
+                BeginCoverStart();
+                return;
+            }
+
+            if (_phaseTimer >= Mathf.Max(0f, _night.sorkenPostEntryPauseSeconds))
+                _phase = Phase.Chasing;
         }
 
         // Baja de forma controlada: conserva un instante el apoyo de la ventana, desplaza
@@ -448,16 +543,56 @@ namespace Gameplay
         }
 
         // --- Chasing ---
-private void TickChasing(float dt)
+        public readonly struct DefenseTick
+        {
+            public readonly float Progress;
+            public readonly float LightLostSeconds;
+            public readonly bool HoldPosition;
+
+            public DefenseTick(float progress, float lightLostSeconds, bool holdPosition)
+            {
+                Progress = progress;
+                LightLostSeconds = lightLostSeconds;
+                HoldPosition = holdPosition;
+            }
+        }
+
+        // Regla pura y testeable de defensa: la luz suma; una interrupcion de hasta el
+        // limite conserva progreso y posicion; despues el progreso cae gradualmente.
+        public static DefenseTick StepDefense(
+            float progress, float lightLostSeconds, bool illuminated, float deltaTime,
+            float toleranceSeconds, float decayPerSecond)
+        {
+            float dt = Mathf.Max(0f, deltaTime);
+            if (illuminated)
+                return new DefenseTick(progress + dt, 0f, false);
+
+            if (progress <= 0f)
+                return new DefenseTick(0f, 0f, false);
+
+            float lost = lightLostSeconds + dt;
+            float tolerance = Mathf.Max(0f, toleranceSeconds);
+            if (lost <= tolerance + 0.0001f)
+                return new DefenseTick(progress, lost, true);
+
+            float degraded = Mathf.Max(0f, progress - Mathf.Max(0f, decayPerSecond) * dt);
+            return new DefenseTick(degraded, lost, false);
+        }
+
+        private void TickChasing(float dt)
         {
             if (_sorken == null) { EndAttempt(); return; }
-            if (!NearestAlivePlayer(_sorken.Position, out _, out var tpos)) { Retreat(); return; }
-
-            // El agarre es la acción de máxima prioridad: gana aun si el jugador lo
-            // ilumina cuando ya está dentro del rango.
-            if (HorizDist(_sorken.Position, tpos) <= _night.grabRange) { Grab(); return; }
+            if (_hasTarget && ServerDeaths.IsAlive(_targetClientId) &&
+                !TrackingReliability.PlayerIsReliable(_targetClientId)) return;
+            if (!TryGetLockedTarget(out var tpos)) { Retreat(); return; }
 
             bool iluminado = IsSorkenDirectlyLit();
+            DefenseTick defense = StepDefense(
+                _repel, _lightLostSeconds, iluminado, dt,
+                _night.sorkenAimToleranceSeconds, _night.sorkenRepelDecayPerSecond);
+            _repel = defense.Progress;
+            _lightLostSeconds = defense.LightLostSeconds;
+
             if (iluminado)
             {
                 // Ante una nueva exposición, primero se detiene para cubrirse. La
@@ -473,34 +608,53 @@ private void TickChasing(float dt)
                 if (_sorken.State != SorkenState.CoverWalking)
                     _sorken.SetState(SorkenState.CoverWalking);
 
-                // Tras completar la transición, puede seguir cubierto un rato antes de
-                // que la linterna sostenida lo repela por completo.
-                _repel += dt;
                 if (_repel >= _night.chaseRepelSeconds) { Retreat(); return; }
             }
             else
             {
-                _repel = 0f;
-                if (_sorken.State == SorkenState.CoverWalking)
+                // Durante la tolerancia no avanza, no captura y no pierde progreso.
+                if (defense.HoldPosition) return;
+
+                if (_sorken.State == SorkenState.CoverWalking ||
+                    _sorken.State == SorkenState.CoverStarting)
                     _sorken.SetState(SorkenState.Chasing);
+            }
+
+            // Una defensa valida siempre gana el tick. La captura solo se evalua sin
+            // luz y fuera de tolerancia, y nunca a traves de paredes u obstaculos.
+            if (!iluminado && CanCapture(_sorken.Position, tpos, _night.grabRange))
+            {
+                GrabLockedTarget();
+                return;
             }
 
             // Path-following con SorkerNav (A* respeta paredes/puertas/cubos).
             _repathTimer -= dt;
             if (_repathTimer <= 0f || _pathIndex >= _path.Count)
             {
-                _repathTimer = 0.3f;
+                _repathTimer = Mathf.Max(0.05f, _night.sorkenBlockedRepathSeconds);
                 if (SorkerNav.Instance != null && SorkerNav.Instance.TryGetPath(_sorken.Position, tpos, _path))
+                {
                     _pathIndex = 0;
+                    if (_entryPathPending)
+                        _pathIndex = FirstForwardEntryWaypoint(
+                            _path, _pathIndex, _sorken.Position, _entryForward);
+                    _entryPathPending = false;
+                }
                 else
                     _path.Clear();
             }
 
-            Vector3 step = _pathIndex < _path.Count ? _path[_pathIndex] : tpos;
-            float speed = _night.sorkenChaseSpeed *
-                          (_sorken.State == SorkenState.CoverWalking
-                              ? _night.sorkenCoverWalkSpeedMultiplier
-                              : 1f);
+            // Con un grid real, una ruta fallida significa ESPERAR y recalcular. Ir al
+            // jugador como fallback atravesaba exactamente las paredes que bloquearon A*.
+            bool hasPath = _pathIndex < _path.Count;
+            bool hasObstacleGrid = SorkerNav.Instance != null && SorkerNav.Instance.HasObstacleGrid;
+            if (!hasPath && !CanAdvanceWithoutPath(hasObstacleGrid)) return;
+
+            Vector3 step = hasPath ? _path[_pathIndex] : tpos;
+            float speed = iluminado
+                ? _night.sorkenIlluminatedSpeed * _night.sorkenCoverWalkSpeedMultiplier
+                : _night.sorkenChaseSpeed;
             _sorken.MoveTo(step, speed * EntitySpeedSettings.Multiplier *
                            _sorken.MovementMultiplier, dt);
             if (_pathIndex < _path.Count && HorizDist(_sorken.Position, _path[_pathIndex]) <= 0.2f) _pathIndex++;
@@ -517,25 +671,31 @@ private void BeginCoverStart()
         private void TickCoverStarting(float dt)
         {
             if (_sorken == null) { EndAttempt(); return; }
-            if (!NearestAlivePlayer(_sorken.Position, out _, out var target)) { Retreat(); return; }
+            if (_hasTarget && ServerDeaths.IsAlive(_targetClientId) &&
+                !TrackingReliability.PlayerIsReliable(_targetClientId)) return;
+            if (!TryGetLockedTarget(out _)) { Retreat(); return; }
 
-            // El agarre conserva la máxima prioridad durante la transición.
-            if (HorizDist(_sorken.Position, target) <= _night.grabRange) { Grab(); return; }
+            bool illuminated = IsSorkenDirectlyLit();
+            DefenseTick defense = StepDefense(
+                _repel, _lightLostSeconds, illuminated, dt,
+                _night.sorkenAimToleranceSeconds, _night.sorkenRepelDecayPerSecond);
+            _repel = defense.Progress;
+            _lightLostSeconds = defense.LightLostSeconds;
+            if (_repel >= _night.chaseRepelSeconds) { Retreat(); return; }
 
-            // Si la luz deja de tocarlo antes de completar el gesto, retoma la
-            // persecución normal y el próximo haz iniciará una nueva transición.
-            if (!IsSorkenDirectlyLit())
+            // La animacion puede terminar durante una interrupcion corta, pero el Sorken
+            // sigue quieto hasta recuperar el haz o agotar los dos segundos acordados.
+            _phaseTimer += dt;
+            if (!illuminated && !defense.HoldPosition)
             {
                 _sorken.SetState(SorkenState.Chasing);
                 _phase = Phase.Chasing;
                 return;
             }
 
-            _phaseTimer += dt;
             if (_phaseTimer >= _night.sorkenCoverStartSeconds)
             {
                 _sorken.SetState(SorkenState.CoverWalking);
-                _repel = 0f;
                 _phase = Phase.Chasing;
             }
         }
@@ -547,7 +707,8 @@ private void BeginCoverStart()
             // exactamente a un punto infinitesimal y usa el cono real de la linterna.
             return PlayerLights.AnyIlluminating(_sorken.Position + Vector3.up * 1f,
                                                 angle, range, 0.4f,
-                                                FlashlightMode.Bright);
+                                                FlashlightMode.Bright,
+                                                requireLineOfSight: true);
         }
 
         private SorkenState EmergingStateForMarker()
@@ -579,6 +740,57 @@ private void BeginCoverStart()
                 Debug.Log($"[GameDirector] GRAB: jugador {victim} atrapado.");
                 KillPlayer(victim);
             }
+        }
+
+        private void GrabLockedTarget()
+        {
+            if (_sorken == null || !_hasTarget) return;
+            _sorken.SetState(SorkenState.Grabbing);
+            _phaseTimer = 0f;
+            _phase = Phase.Grabbed;
+            Debug.Log($"[GameDirector] GRAB: jugador {_targetClientId} atrapado.");
+            KillPlayer(_targetClientId);
+        }
+
+        private bool CanCapture(Vector3 from, Vector3 target, float range)
+        {
+            bool navClear = SorkerNav.Instance == null ||
+                            SorkerNav.Instance.HasClearLine(from, target);
+            bool physicsClear = PlayerLights.HasLineOfSight(
+                from + Vector3.up, target, 0.25f);
+            return CanCaptureAtDistance(HorizDist(from, target), range,
+                                        navClear && physicsClear);
+        }
+
+        public static bool CanCaptureAtDistance(float distance, float range, bool hasClearLine) =>
+            hasClearLine && distance <= Mathf.Max(0f, range);
+
+        public static bool CanAdvanceWithoutPath(bool hasObstacleGrid) => !hasObstacleGrid;
+
+        // El A* incluye el centro de la celda inicial. Cerca de una abertura esa celda
+        // puede quedar del lado exterior de la pared y hacer que, tras aterrizar, el
+        // Sorken retroceda antes de perseguir. Sólo en la primera ruta de la entrada
+        // saltamos centros redundantes o ubicados detrás del plano de ingreso.
+        public static int FirstForwardEntryWaypoint(
+            IReadOnlyList<Vector3> path, int startIndex,
+            Vector3 origin, Vector3 inwardForward)
+        {
+            if (path == null || path.Count == 0) return 0;
+            int index = Mathf.Clamp(startIndex, 0, path.Count - 1);
+            inwardForward.y = 0f;
+            if (inwardForward.sqrMagnitude <= 1e-6f) return index;
+            inwardForward.Normalize();
+
+            while (index < path.Count - 1)
+            {
+                Vector3 delta = path[index] - origin;
+                delta.y = 0f;
+                bool redundantCellCenter = delta.sqrMagnitude <= 0.04f;
+                bool returnsOutside = Vector3.Dot(delta, inwardForward) < 0f;
+                if (!redundantCellCenter && !returnsOutside) break;
+                index++;
+            }
+            return index;
         }
 
         private void TickGrabbed(float dt)
@@ -615,7 +827,13 @@ private void BeginCoverStart()
         // Cierra el intento: despawnea el Sorken y agenda el proximo.
         private void EndAttempt()
         {
+            string result = _phase == Phase.Retreating ? "repelled" :
+                            _phase == Phase.Grabbed ? "capture" : "ended";
+            GameplayTelemetry.End(_sorkenTraceId, "sorken", result, 0,
+                                  _sorken != null ? _sorken.Position : Vector3.zero);
+            _sorkenTraceId = 0;
             DespawnSorken();
+            ReleaseSorkenReservation();
             _attemptTimer = UnityEngine.Random.Range(_night.attemptIntervalMin, _night.attemptIntervalMax);
             _phase = Phase.Idle;
             Debug.Log($"[GameDirector] Fin del intento. Proximo en {_attemptTimer:F1}s.");
@@ -626,6 +844,15 @@ private void BeginCoverStart()
             if (_sorkenNetId != 0 && NetworkManager.Instance != null)
                 NetworkManager.Instance.ServerDespawn(_sorkenNetId);
             _sorken = null; _sorkenNetId = 0; _marker = null;
+            _hasTarget = false;
+            _entryPathPending = false;
+        }
+
+        private void ReleaseSorkenReservation()
+        {
+            if (!_sorkenReserved) return;
+            ThreatCoordinator.EndSorken();
+            _sorkenReserved = false;
         }
 
         // --- Muerte ---
@@ -645,6 +872,19 @@ private void BeginCoverStart()
             return false;
         }
 
+        private bool AnyReliableAlivePlayer()
+        {
+            var net = NetworkManager.Instance;
+            if (Camera.main != null && ServerDeaths.IsAlive(0) &&
+                TrackingReliability.LocalIsReliable()) return true;
+            if (net == null) return false;
+            foreach (var cid in net.ConnectedClients)
+                if (ServerDeaths.IsAlive(cid) &&
+                    net.IsClientPoseReliable(
+                        cid, TrackingReliability.RemotePoseMaxAgeSeconds)) return true;
+            return false;
+        }
+
         private bool AnyAlivePlayerWithin(Vector3 world, float dist)
         {
             // Horizontal: proximidad al punto sin contar la altura de la camara AR.
@@ -659,7 +899,8 @@ private void BeginCoverStart()
             float best = float.MaxValue; bool found = false;
             var net = NetworkManager.Instance;
 
-            if (Camera.main != null && ServerDeaths.IsAlive(0))
+            if (Camera.main != null && ServerDeaths.IsAlive(0) &&
+                TrackingReliability.LocalIsReliable())
             {
                 best  = (Camera.main.transform.position - from).sqrMagnitude;
                 pos   = Camera.main.transform.position;
@@ -668,6 +909,7 @@ private void BeginCoverStart()
             foreach (var cid in net.ConnectedClients)
             {
                 if (ServerDeaths.IsDead(cid)) continue;
+                if (!TrackingReliability.PlayerIsReliable(cid)) continue;
                 if (!net.TryGetClientWorldPosition(cid, out var p)) continue;
                 float d = (p - from).sqrMagnitude;
                 if (d < best) { best = d; pos = p; clientId = cid; found = true; }
@@ -675,12 +917,45 @@ private void BeginCoverStart()
             return found;
         }
 
+        private bool TryAcquireTarget(Vector3 from, out uint clientId, out Vector3 pos)
+        {
+            bool found = NearestAlivePlayer(from, out clientId, out pos);
+            _hasTarget = found;
+            if (found) _targetClientId = clientId;
+            return found;
+        }
+
+        private bool TryGetLockedTarget(out Vector3 pos)
+        {
+            if (_hasTarget && TryGetPlayerPosition(_targetClientId, out pos)) return true;
+            return TryAcquireTarget(_sorken != null ? _sorken.Position : Vector3.zero,
+                                    out _, out pos);
+        }
+
+        private bool TryGetPlayerPosition(uint clientId, out Vector3 pos)
+        {
+            pos = Vector3.zero;
+            if (ServerDeaths.IsDead(clientId)) return false;
+            if (!TrackingReliability.PlayerIsReliable(clientId)) return false;
+            if (clientId == 0)
+            {
+                if (Camera.main == null) return false;
+                pos = Camera.main.transform.position;
+                return true;
+            }
+            return NetworkManager.Instance != null &&
+                   NetworkManager.Instance.TryGetClientWorldPosition(clientId, out pos);
+        }
+
         private IEnumerable<Vector3> AlivePlayerPositions()
         {
             var net = NetworkManager.Instance;
-            if (Camera.main != null && ServerDeaths.IsAlive(0)) yield return Camera.main.transform.position;
+            if (Camera.main != null && ServerDeaths.IsAlive(0) &&
+                TrackingReliability.LocalIsReliable())
+                yield return Camera.main.transform.position;
             foreach (var cid in net.ConnectedClients)
-                if (ServerDeaths.IsAlive(cid) && net.TryGetClientWorldPosition(cid, out var p)) yield return p;
+                if (ServerDeaths.IsAlive(cid) && TrackingReliability.PlayerIsReliable(cid) &&
+                    net.TryGetClientWorldPosition(cid, out var p)) yield return p;
         }
 
         // --- Repel: hay algun jugador iluminando el objetivo con su linterna? ---
@@ -691,10 +966,19 @@ private void BeginCoverStart()
         // afuera del Sorken. El libro ya usa el cono real; esto sigue con el de la noche
         // para no cambiar la dificultad del Sorken sin querer — cuando se decida, es
         // pasarle PlayerLights.TryConoReal como hace RitualBookDirector.
-        private bool AnyIlluminating(Vector3 target) =>
-            PlayerLights.AnyIlluminating(target, _night.flashlightConeAngleDeg,
-                                         _night.flashlightRange, 0f,
-                                         FlashlightMode.Bright);
+        private bool AnyIlluminating(Vector3 target)
+        {
+            float angle = _night.flashlightConeAngleDeg;
+            float range = _night.flashlightRange;
+            if (PlayerLights.TryConoReal(out var realAngle, out var realRange))
+            {
+                angle = realAngle;
+                range = realRange;
+            }
+            return PlayerLights.AnyIlluminating(target, angle, range, 0.25f,
+                                                FlashlightMode.Bright,
+                                                requireLineOfSight: true);
+        }
 
         private static float HorizDist(Vector3 a, Vector3 b) { a.y = 0f; b.y = 0f; return Vector3.Distance(a, b); }
 

@@ -1255,7 +1255,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Bateries.BatterySpawnManager
   rarities: {fileID: 11400000, guid: 4b58f66058486454ab713a9f32092b0a, type: 2}
-  respawnSeconds: 60
+  respawnSeconds: 30
   playerBlockRadius: 1.5
   initialSpawnDelay: 2
   pickupMaxDistance: 1.5

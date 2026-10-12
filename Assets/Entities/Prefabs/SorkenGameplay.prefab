@@ -169,14 +169,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SorkenAnimator
   idleClip: {fileID: -7599046162845208736, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
-  emergeClip: {fileID: -9140088788670272114, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
-  emergeWindowClip: {fileID: -623603649343465320, guid: 5aafee8ed2d2d9c44b4fcc7e5813b28f, type: 3}
-  windowLandingClip: {fileID: -623603649343465320, guid: 1559261d7224cda45b27d16dd4c1a65d, type: 3}
+  emergeClip: {fileID: 7400000, guid: 90b1ff057b7045a49a558a9f3cb14780, type: 2}
+  emergeWindowClip: {fileID: 7400000, guid: 669857f9e8447994187c269f218ecb01, type: 2}
+  windowLandingClip: {fileID: 7400000, guid: 08a132741bdc39f489508fa610a65b13, type: 2}
   chaseClip: {fileID: -4210252291810635023, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
   grabClip: {fileID: 6370830557663677281, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
   retreatClip: {fileID: 7400000, guid: 61fa5437a5509a64f9358a157b956565, type: 2}
   coverStartClip: {fileID: -451874083850841385, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
-  coverWalkClip: {fileID: 5564560033215620744, guid: 9056c7324e7a9d34bad4c05f3b0b9dc4, type: 3}
+  coverWalkClip: {fileID: 7400000, guid: ac8fc6cd389f97049b74d0772b2c1f58, type: 2}
   _blendSpeed: 6
   _entryToChaseBlendSeconds: 0.75
   _chaseStepsPerLoop: 12
@@ -202,5 +202,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SorkenDarknessCue
   _buildSeconds: 5
   _fadeSeconds: 0.45
+  _entryRevealSeconds: 0.8
   _maxRadius: 1.35
   _maxParticles: 260

@@ -15,7 +15,10 @@ public static class GameOptions
     private const string KeyVozSens     = "opt_voz_sensibilidad";
     private const string KeyCalidadAR   = "opt_calidad_ar";
     private const string KeyAvisoIos    = "opt_aviso_ios_visto";
-    private const string KeyVhsMenus    = "opt_vhs_menus";
+    private const string KeyVhsActivo   = "opt_vhs_activo";
+    // Clave anterior: se conserva como fallback para no reactivar el efecto a quienes
+    // ya lo habian apagado cuando la opcion solo mencionaba los menus.
+    private const string KeyVhsMenusLegacy = "opt_vhs_menus";
     private const string KeyAvisoVerDesc = "opt_aviso_version_desconocida_visto";
 
     // Volumen maestro 0..1 (AudioListener.volume). Persiste entre sesiones.
@@ -157,18 +160,33 @@ public static class GameOptions
         }
     }
 
-    // US-11.1: ¿el filtro VHS / cámara antigua también se dibuja sobre los MENÚS?
-    // En partida el filtro es parte de la atmósfera y no se apaga acá; sobre los menús
-    // es cuestión de gusto (y de legibilidad), así que el jugador lo decide.
-    // Ver VHSOverlayUI. Default: encendido.
-    public static bool VhsEnMenus
+    // US-11.1: interruptor global del filtro de camara antigua. Apaga grano, scanlines,
+    // tracking, jitter, aberracion, distorsion de tension y REC, tanto en menus como en
+    // partida. No toca DarknessOverlay ni la iluminacion: la noche sigue siendo oscura.
+    // Default: encendido.
+    public static bool VhsActivo
     {
-        get => PlayerPrefs.GetInt(KeyVhsMenus, 1) == 1;
+        get
+        {
+            if (PlayerPrefs.HasKey(KeyVhsActivo))
+                return PlayerPrefs.GetInt(KeyVhsActivo, 1) == 1;
+            return PlayerPrefs.GetInt(KeyVhsMenusLegacy, 1) == 1;
+        }
         set
         {
-            PlayerPrefs.SetInt(KeyVhsMenus, value ? 1 : 0);
+            int stored = value ? 1 : 0;
+            PlayerPrefs.SetInt(KeyVhsActivo, stored);
+            PlayerPrefs.SetInt(KeyVhsMenusLegacy, stored);
             PlayerPrefs.Save();
+            Gameplay.VHSSettings.Publicar();
         }
+    }
+
+    // Alias para escenas o builds viejas que todavia usan el nombre anterior.
+    public static bool VhsEnMenus
+    {
+        get => VhsActivo;
+        set => VhsActivo = value;
     }
 
     // US-1.1: ¿ya se le mostró al jugador el aviso de que no se pudo determinar la

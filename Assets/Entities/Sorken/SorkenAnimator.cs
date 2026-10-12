@@ -15,9 +15,9 @@ public class SorkenAnimator : MonoBehaviour
 {
     [Header("Clips por estado (arrastrar). Si falta uno, cae a Idle.")]
     public AnimationClip idleClip;
-    [Tooltip("Emergencia por puerta.")]
+    [Tooltip("Entrada por puerta. Debe apuntar al asset semantico DoorEntry.")]
     public AnimationClip emergeClip;
-    [Tooltip("Emergencia por ventana.")]
+    [Tooltip("Entrada por ventana. Debe apuntar al asset semantico WindowEntry.")]
     public AnimationClip emergeWindowClip;
     [Tooltip("Pose base del aterrizaje. Si falta, usa Idle y agrega la compresion procedural.")]
     public AnimationClip windowLandingClip;
@@ -32,6 +32,9 @@ public class SorkenAnimator : MonoBehaviour
     [SerializeField] private float _blendSpeed = 6f;
     [Tooltip("Duracion del fundido entre la entrada y la primera zancada.")]
     [Min(0.1f)] [SerializeField] private float _entryToChaseBlendSeconds = 0.75f;
+    [Tooltip("Velocidad de reproduccion de la marcha de persecucion. La traslacion " +
+             "sigue determinada por NightConfig.")]
+    [Range(0.1f, 1f)] [SerializeField] private float _chasePlaybackSpeed = 0.75f;
 
     [Header("Desplazamiento sincronizado")]
     [Tooltip("Apoyos contenidos en el loop de marcha herida.")]
@@ -66,6 +69,9 @@ public class SorkenAnimator : MonoBehaviour
     private float _windowLandingElapsed;
     private float _activeWindowLandingDuration;
     private bool _entryToChaseBlendActive;
+    private bool _landingHipsReferenceCaptured;
+    private Vector3 _neutralHipsLocalPosition;
+    private Vector3 _landingHipsReferencePosition;
 
     public float WindowEntryDuration => emergeWindowClip != null && emergeWindowClip.length > 0.01f
         ? emergeWindowClip.length
@@ -169,9 +175,15 @@ public class SorkenAnimator : MonoBehaviour
         if (state == SorkenState.WindowLanding)
         {
             _windowLandingElapsed = 0f;
+            _landingHipsReferencePosition = _neutralHipsLocalPosition;
+            _landingHipsReferenceCaptured = _hips != null;
             AnimationClip clip = windowLandingClip != null ? windowLandingClip : idleClip;
             if (clip != null && clip.length > 0.001f)
                 _clipPlayables[target].SetSpeed(clip.length / WindowLandingDuration);
+        }
+        else if (state == SorkenState.Chasing)
+        {
+            _clipPlayables[target].SetSpeed(Mathf.Clamp(_chasePlaybackSpeed, 0.1f, 1f));
         }
         else
         {
@@ -185,6 +197,7 @@ public class SorkenAnimator : MonoBehaviour
         var animator = GetComponent<Animator>();
         _hips = animator.isHuman ? animator.GetBoneTransform(HumanBodyBones.Hips) : null;
         _hips ??= FindDescendant(transform, "Hips");
+        if (_hips != null) _neutralHipsLocalPosition = _hips.localPosition;
         _activeWindowLandingDuration = Mathf.Max(0.2f, _windowLandingDuration);
         animator.applyRootMotion = false; // el codigo controla pos/rot, no la animacion
 
@@ -273,19 +286,55 @@ public class SorkenAnimator : MonoBehaviour
             _windowLandingElapsed += Time.deltaTime;
     }
 
-    // La traslacion completa desde la ventana la controla GameDirector. Esta capa agrega
-    // la reaccion corporal que hace legible el aterrizaje: impacto, flexion y recuperacion.
-    // Se aplica despues del Animator, por lo que funciona tanto con un clip dedicado como
-    // con el fallback a Idle y no modifica el root que replica la red.
+    // La traslacion completa desde la ventana la controla GameDirector. El rig importado
+    // esta rotado: su Y local es profundidad mundial, no altura. El clip de aterrizaje
+    // desplaza ese eje unos 0.61 m hacia atras. Lo anclamos a la pose neutra del rig y
+    // dejamos X/Z animados; asi el fundido a persecucion no produce el retroceso visible.
     private void LateUpdate()
     {
-        if (_hips == null || _sorken == null || _sorken.State != SorkenState.WindowLanding)
+        if (_hips == null || _sorken == null || _weights == null)
             return;
+
+        int landingIndex = (int)SorkenState.WindowLanding;
+        if (landingIndex >= _weights.Length) return;
+
+        float totalWeight = 0f;
+        for (int i = 0; i < _weights.Length; i++) totalWeight += _weights[i];
+        float landingWeight = totalWeight > 1e-4f
+            ? Mathf.Clamp01(_weights[landingIndex] / totalWeight)
+            : 0f;
+
+        // Durante el fundido a persecucion el input de aterrizaje sigue teniendo peso.
+        // Mantener la correccion hasta que llegue a cero evita que reaparezca desde abajo.
+        if (!_landingHipsReferenceCaptured || landingWeight <= 0.0001f)
+        {
+            if (_sorken.State != SorkenState.WindowLanding)
+                _landingHipsReferenceCaptured = false;
+            return;
+        }
 
         float t = Mathf.Clamp01(_windowLandingElapsed / WindowLandingDuration);
         float impact = Mathf.Sin(Mathf.Clamp01(Mathf.InverseLerp(0.56f, 0.86f, t)) * Mathf.PI);
-        _hips.localPosition += Vector3.down * (_landingCompression * impact);
-        _hips.localRotation *= Quaternion.Euler(_landingPitch * impact, 0f, -2.5f * impact);
+        float parentScaleY = _hips.parent != null ? Mathf.Abs(_hips.parent.lossyScale.y) : 1f;
+        float localCompression = _landingCompression / Mathf.Max(0.0001f, parentScaleY);
+        _hips.localPosition = CorrectLandingHipsPosition(
+            _hips.localPosition, _landingHipsReferencePosition,
+            localCompression, impact, landingWeight);
+        _hips.localRotation *= Quaternion.Slerp(
+            Quaternion.identity,
+            Quaternion.Euler(_landingPitch * impact, 0f, -2.5f * impact),
+            landingWeight);
+    }
+
+    public static Vector3 CorrectLandingHipsPosition(
+        Vector3 animatedPosition, Vector3 referencePosition,
+        float localCompression, float impact, float landingWeight)
+    {
+        float targetY = referencePosition.y -
+                        (Mathf.Max(0f, localCompression) * Mathf.Clamp01(impact));
+        Vector3 corrected = animatedPosition;
+        corrected.y = Mathf.Lerp(animatedPosition.y, targetY, Mathf.Clamp01(landingWeight));
+        return corrected;
     }
 
     private static Transform FindDescendant(Transform root, string wantedName)

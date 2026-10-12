@@ -22,11 +22,16 @@ MonoBehaviour:
   entryGraceSeconds: 4
   entryAnimationSeconds: 3
   entryTriggerDistance: 3
-  chaseRepelSeconds: 3
-  sorkenChaseSpeed: 2.5
+  chaseRepelSeconds: 4
+  sorkenPostEntryPauseSeconds: 2.5
+  sorkenChaseSpeed: 0.5
+  sorkenIlluminatedSpeed: 0.1
+  sorkenAimToleranceSeconds: 2
+  sorkenRepelDecayPerSecond: 0.5
+  sorkenBlockedRepathSeconds: 0.4
   sorkenCoverStartSeconds: 3
-  sorkenCoverWalkSpeedMultiplier: 0.7
-  sorkenRetreatSpeed: 3.5
+  sorkenCoverWalkSpeedMultiplier: 1
+  sorkenRetreatSpeed: 3.6
   grabRange: 1.2
   flashlightMaxCharge: 200
   flashlightDrainPerSecond: 1
@@ -39,25 +44,26 @@ MonoBehaviour:
   arbmosSpawnDistance: 2.5
   arbmosSpawnChancePerAttempt: 0.9
   arbmosHideSeconds: 3
-  arbmosExposureSeconds: 0.8
-  arbmosAttackCommitSeconds: 0.35
-  arbmosAttackChaseSpeed: 2.5
+  arbmosExposureSeconds: 1.2
+  arbmosExposureGraceSeconds: 1
+  arbmosAttackCommitSeconds: 0.5
+  arbmosAttackChaseSpeed: 2
   arbmosAttackMaxSeconds: 14
   arbmosAttackGrabRange: 1
   arbmosSanityDamage: 30
   arbmosLookTargetHeight: 1.65
   arbmosLookTargetRadius: 0.25
   arbmosLethalStalkSeconds: 2.5
-  arbmosLethalChaseSpeed: 3.5
+  arbmosLethalChaseSpeed: 3.4
   arbmosLethalMaxSeconds: 8
   arbmosLethalRepathSeconds: 0.3
   arbmosGrabRange: 1.2
   bookActive: 1
   bookEventDelayMin: 10
   bookEventDelayMax: 20
-  bookConsumeSeconds: 10
+  bookConsumeSeconds: 6
   bookDefenseSeconds: 4
-  velethChaseSpeed: 3.2
+  velethChaseSpeed: 3
   velethGrabRange: 1.1
   velethRepathSeconds: 0.2
   velethGrabHoldSeconds: 0.8
