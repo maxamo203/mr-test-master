@@ -173,8 +173,9 @@ namespace Rediseno.Menus
 
             // Visor y opciones al final de la navegación: arriba en pantalla, pero los
             // botones grandes son lo primero que se recorre con la ruedita.
-            nav.Agregar(bVisor, () => ModoVisor.Set(!ModoVisor.Activo));
-            nav.Agregar(bOpc, () => Abrir(m => m.AbrirOpciones()));
+            // Están uno al lado del otro: ←/→ pasan de uno al otro.
+            nav.FilaHorizontal(nav.Agregar(bVisor, () => ModoVisor.Set(!ModoVisor.Activo)),
+                               nav.Agregar(bOpc, () => Abrir(m => m.AbrirOpciones())));
 
             var pie = TemaUI.Texto(BuildVariant.EsDemo ? "DEMO · equipo 112" : "Build interna · equipo 112",
                                    TemaUI.Mono, 24, TemaUI.Dim, 2f, TextAnchor.MiddleCenter);

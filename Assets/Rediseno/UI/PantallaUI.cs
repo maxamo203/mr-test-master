@@ -190,9 +190,11 @@ namespace Rediseno.UI
             bool hayMando = gm != null && gm.IsConnected;
             Nav.MostrarFoco = hayMando || EnVisor;
 
-            // Atrás de Android / Escape: en el visor, sale del visor.
+            // Atrás de Android / Escape: en el visor, sale del visor. Con el VR BOX el escape
+            // es la B (Android reenvía su BUTTON_BACK como "atrás"): eso lo maneja Nav como
+            // volver, sin salir del visor ni volver dos veces.
             var kb = Keyboard.current;
-            if (kb != null && kb.escapeKey.wasPressedThisFrame)
+            if (kb != null && kb.escapeKey.wasPressedThisFrame && !VRBoxInput.CancelDown)
             {
                 if (EnVisor) ModoVisor.Salir();
                 else Nav.PedirVolver();

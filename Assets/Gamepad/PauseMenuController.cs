@@ -967,7 +967,7 @@ namespace Gamepad
                 // Con el rediseño el puntero está capturado en todo el juego: la A llega como
                 // CLIC de mouse, no como toque. Sólo eso abre la pausa; los dedos no (soltar
                 // los dos dedos de concentrar la linterna la abría por error).
-                bool aDelVRBox = !_open && vrBoxMouse && (!Rediseno.Flag.Activo || tapDeMouse) &&
+                bool aDelVRBox = !_open && vrBoxMouse && (!Rediseno.Flag.Activo || (tapDeMouse && !VRBoxInput.AConsumida)) &&
                                  NetworkManager.Instance != null && NetworkManager.Instance.GameStarted &&
                                  !UIBlocker.IsPointerOver(tapPx);
                 if (_pauseBtnRect.Contains(pv) || aDelVRBox)

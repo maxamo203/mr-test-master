@@ -10,9 +10,11 @@ namespace Rediseno.UI
     // pantalla se use con el dedo, con un gamepad, con la ruedita del VR BOX o con la mirada
     // (modo visor). Cada entrada sólo mueve el foco o activa; la pantalla no sabe cuál fue.
     //
-    // Ruedita del VR BOX (modo mouse): ↑↓ mueve, → elige, ← vuelve. No se usan la A ni la
-    // B: la A llega como toque de pantalla y la B manda pulsos poco confiables.
-    // Gamepad: cruceta/stick ↑↓ mueve, abajo (A/✕) o → elige, derecha (B/○) o ← vuelve.
+    // VR BOX (modo mouse): ruedita ↑↓ mueve, A elige, B vuelve (prueba: con la captura de
+    // puntero la A llega como clic y la B como pulso, ver VRBoxInput).
+    // Gamepad: cruceta/stick ↑↓ mueve, abajo (A/✕) elige, derecha (B/○) vuelve.
+    // ←/→: en una fila horizontal (Izquierda/Derecha) pasan al botón de al lado; si no hay
+    // vecino de ese lado, → elige y ← vuelve, como antes.
     public sealed class MenuNavegable
     {
         public sealed class Opcion
@@ -26,6 +28,8 @@ namespace Rediseno.UI
             // Sólo para el dedo o la mirada (los botones − / + de un deslizador): la
             // navegación con mando los saltea, porque para eso están ←/→ sobre la fila.
             public bool SoloPuntero;
+            // Vecinos en una fila horizontal (ver FilaHorizontal): ←/→ pasan a ellos.
+            public Opcion Izquierda, Derecha;
             internal Color BordeNormal;
             internal float AnchoBorde;
         }
@@ -66,6 +70,16 @@ namespace Rediseno.UI
             Agregar(menos, () => ajustar(-1)).SoloPuntero = true;
             Agregar(mas, () => ajustar(+1)).SoloPuntero = true;
             return o;
+        }
+
+        // Encadena opciones que se ven una al lado de la otra, de izquierda a derecha.
+        public void FilaHorizontal(params Opcion[] fila)
+        {
+            for (int i = 0; i < fila.Length; i++)
+            {
+                fila[i].Izquierda = i > 0 ? fila[i - 1] : null;
+                fila[i].Derecha = i < fila.Length - 1 ? fila[i + 1] : null;
+            }
         }
 
         public void Limpiar()
@@ -137,6 +151,8 @@ namespace Rediseno.UI
                 // soltado). Ver VRBoxInput.SmoothedStick.
                 Vector2 d = VRBoxInput.SmoothedStick;
                 dy = d.y; dx = d.x;
+                elegir = VRBoxInput.APressedThisFrame;
+                volver = VRBoxInput.CancelDown;
             }
             else
             {
@@ -171,11 +187,19 @@ namespace Rediseno.UI
 
             if (libre && Mathf.Abs(dx) > 0.6f && Mathf.Abs(dx) > Mathf.Abs(dy))
             {
+                var vecino = dx > 0f ? enf?.Derecha : enf?.Izquierda;
+                if (vecino != null && vecino.Habilitada)
+                {
+                    BloqueoNav.TrasAccion();
+                    Enfocar(vecino);
+                    AudioManager.Sonar(c => c.uiNavegar);
+                    return;
+                }
                 if (dx > 0f) elegir = true; else volver = true;
             }
             if (!libre) { elegir = false; volver = false; }
 
-            if (elegir) { BloqueoNav.TrasAccion(); ActivarEnfocada(); }
+            if (elegir) { BloqueoNav.TrasAccion(); VRBoxInput.ConsumirA(); ActivarEnfocada(); }
             else if (volver) { BloqueoNav.TrasAccion(); PedirVolver(); }
         }
 

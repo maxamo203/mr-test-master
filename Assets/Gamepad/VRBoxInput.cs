@@ -33,6 +33,17 @@ namespace Gamepad
         // entre ellos) y suma el escape: si la app no consume el BUTTON_BACK del mouse,
         // Android lo reenvía como la tecla "atrás".
         private static InputAction _botonB;
+        // Botón A como acción (no polling de Mouse.current): ve cada evento de todos los mouse
+        // aunque bajada y subida lleguen en el mismo frame. Sólo la bajada cuenta.
+        private static InputAction _botonA;
+        private static int _aFrame = -1;
+        // Una pulsación de la A este frame (Rediseño 2.0: elegir en los menús).
+        public static bool APressedThisFrame => ModoMouse && Time.frameCount == _aFrame;
+        // Pulsación de A que ya usó un menú. La pausa se abre al SOLTAR la A: sin esto, elegir
+        // REANUDAR (o REINTENTAR) con la A la cerraba y al soltar se volvía a abrir.
+        private static int _aId, _aConsumida = -1;
+        public static void ConsumirA() => _aConsumida = _aId;
+        public static bool AConsumida => _aConsumida == _aId;
         private const float AntiRebote = 0.08f;
         private static int   _bFrame = -1;        // frame de la última pulsación
         private static float _bPulsoT = -10f;     // Time.unscaledTime de la última pulsación
@@ -90,6 +101,11 @@ namespace Gamepad
             _botonB.performed += Flanco;
             _botonB.canceled  += Flanco;
             _botonB.Enable();
+
+            _botonA = new InputAction("VRBoxA", InputActionType.Button);
+            _botonA.AddBinding("<Mouse>/leftButton");
+            _botonA.performed += _ => { _aFrame = Time.frameCount; _aId++; };
+            _botonA.Enable();
         }
 
         private static void Flanco(InputAction.CallbackContext ctx)
