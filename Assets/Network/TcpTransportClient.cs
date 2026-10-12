@@ -19,6 +19,38 @@ public class TcpTransportClient
 
     public bool IsConnected => _connected;
 
+    // Frame que el hilo de lectura está recibiendo AHORA. Se escribe desde ese hilo y
+    // se lee desde el principal sólo para UI: que los tres valores no sean atómicos
+    // entre sí a lo sumo muestra un porcentaje desfasado un frame.
+    private volatile int _frameTipo = -1, _frameLeidos, _frameTotal;
+
+    // Sube con cada chunk recibido, aunque el frame todavía no esté completo. Un
+    // MapData grande en una red lenta puede tardar más que el timeout del host:
+    // mientras esto se mueva, el host sigue vivo.
+    private volatile int _actividad;
+    public int Actividad => _actividad;
+
+    // Cacheado: ReadOne lo invoca por chunk de cada frame (voz incluida).
+    private readonly Action<MessageType, int, int> _onProgreso;
+
+    public TcpTransportClient() => _onProgreso = OnProgreso;
+
+    private void OnProgreso(MessageType tipo, int leidos, int total)
+    {
+        _frameTipo   = (int)tipo;
+        _frameTotal  = total;
+        _frameLeidos = leidos;
+        _actividad++;   // un solo escritor: el hilo de lectura
+    }
+
+    // ¿Se está recibiendo (sin completar) un frame de este tipo? leídos / total del cuerpo.
+    public bool Recibiendo(MessageType tipo, out int leidos, out int total)
+    {
+        leidos = _frameLeidos;
+        total  = _frameTotal;
+        return _frameTipo == (int)tipo && leidos < total;
+    }
+
     public void Connect(string host, int port)
     {
         _tcp = new TcpClient();
@@ -57,7 +89,7 @@ public class TcpTransportClient
         {
             while (_connected)
             {
-                var (type, body) = MessageFramer.ReadOne(_stream);
+                var (type, body) = MessageFramer.ReadOne(_stream, _onProgreso);
                 _inbox.Enqueue(new IncomingMsg { Type = type, Body = body });
             }
         }

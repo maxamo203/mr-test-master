@@ -20,9 +20,15 @@ public class EnvironmentLightingController : MonoBehaviour
 
     // Estado persistido. Default ON (preserva la oscuridad de terror actual). El setter
     // guarda y re-aplica en vivo.
+    //
+    // El toggle sólo existe en development build (página LINTERNA (DEV) de la pausa), así
+    // que en release se ignora lo guardado: si un build dev con el mismo bundle id lo dejó
+    // en 0, `adb install -r` conserva PlayerPrefs y el release quedaba sin oscuridad para
+    // siempre, sin ningún botón para volver a prenderla. (SampleScene trae el
+    // DarknessOverlay deshabilitado y depende de este Apply para encenderlo.)
     public static bool Enabled
     {
-        get => PlayerPrefs.GetInt(PrefKey, 1) == 1;
+        get => !Debug.isDebugBuild || PlayerPrefs.GetInt(PrefKey, 1) == 1;
         set
         {
             PlayerPrefs.SetInt(PrefKey, value ? 1 : 0);

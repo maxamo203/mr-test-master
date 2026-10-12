@@ -206,6 +206,7 @@ public class ManualCalibration : MonoBehaviour
         // El jugador declaró que no tiene la imagen: cortamos la búsqueda para que
         // una detección tardía no le mueva el mapa después de haberlo acomodado.
         _imageAnchor?.StopTracking();
+        _imageAnchor?.AsegurarVisual();
 
         Debug.Log($"[CalibraciónManual] Origen recentrado en {hit.Position} (fuente {hit.Source}).");
 
@@ -248,6 +249,7 @@ public class ManualCalibration : MonoBehaviour
         // Sin visual propio: el 0,0 YA está marcado por el visual del anchor, que cuelga
         // de WorldOrigin (ver ARImageAnchor.SpawnVisual) — el LIBRO en partida, las
         // esferas en el escáner. Agregar otra esfera encima sólo tapaba el libro.
+        // Sin imagen, ese visual lo crea CentrarBajoLaMira (AsegurarVisual).
 
         // moveOnly:false + sinEscala:true = flechas XYZ + anillo de yaw, sin cubos
         // de escala: escalar el origen deformaría todo el mapa.

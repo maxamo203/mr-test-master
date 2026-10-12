@@ -60,7 +60,7 @@ namespace Bateries
         }
     }
 
-    // Hub del BOTÓN PRIMARIO (A del joystick / botón en pantalla / tecla E en editor).
+    // Hub del BOTÓN PRIMARIO (A del joystick / dos dedos en pantalla / tecla E en editor).
     // Cada frame elige, entre las acciones registradas, la disponible de mayor Priority.
     // Un toque se ejecuta al soltar; mantener activa la luz intensa. Así el mismo botón:
     // si estás apuntando una pila la recoge; si no, prende/apaga la linterna; y se puede
@@ -138,6 +138,17 @@ namespace Bateries
 
         private void Update()
         {
+            // Muerto (con la pantalla de muerte o espectando): el botón primario no hace
+            // nada — ni recoger, ni linterna. El espectador mira, no interviene.
+            var ld = Gameplay.LocalDeath.Instance;
+            if (ld != null && ld.IsDead)
+            {
+                if (_primaryGesture.IsPressed || _current != null) CancelPrimaryGesture();
+                _current = null;
+                _currentLabel = null;
+                return;
+            }
+
             ResolveCurrent();
             UpdatePrimaryGesture();
         }
@@ -209,10 +220,25 @@ namespace Bateries
                 if (mouse != null) held |= mouse.leftButton.isPressed;
             }
 
+            // Mobile sin mando: dos dedos apoyados = el mismo botón (es el gesto que en main
+            // prendía/apagaba la linterna). Toque corto prende/apaga, mantener concentra.
+            held |= DosDedosApoyados();
+
 #if UNITY_EDITOR
             if (Keyboard.current != null) held |= Keyboard.current.eKey.isPressed;
 #endif
             return held || _screenPrimaryHeld;
+        }
+
+        private static bool DosDedosApoyados()
+        {
+            var ts = Touchscreen.current;
+            if (ts == null) return false;
+            int dedos = 0;
+            var touches = ts.touches;
+            for (int i = 0; i < touches.Count; i++)
+                if (touches[i].press.isPressed && ++dedos >= 2) return true;
+            return false;
         }
 
         // ── Carga de pila recibida del server (cliente) ───────────────────────

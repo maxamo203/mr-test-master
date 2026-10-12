@@ -13,6 +13,13 @@ namespace Gameplay
         public bool IsDead { get; private set; }
         public bool PresentationReady { get; private set; }
 
+        // Modo espectador: el jugador muerto ocultó la pantalla de muerte para mirar
+        // cómo siguen los demás. Sólo se puede mientras la noche sigue en juego; al
+        // terminar (todos muertos o amanecer) se cierra solo y vuelve el overlay.
+        public bool Espectando { get; private set; }
+        public bool PuedeEspectar => IsDead && PresentationReady && !_nocheTerminada;
+
+        private bool _nocheTerminada;
         private bool _subscribed;
         private Camera _camera;
         private Vector3 _cameraStart;
@@ -76,7 +83,8 @@ namespace Gameplay
         {
             if (IsDead)
             {
-                if (allPlayersDead) StopGameplayForAll();
+                // Ya estaba muerto (quizás espectando) y acaba de caer el último.
+                if (allPlayersDead) { TerminarNoche(); StopGameplayForAll(); }
                 return;
             }
 
@@ -93,8 +101,29 @@ namespace Gameplay
             AudioManager.Musica(c => c.derrotaMuerte, fade: 0.4f);
             ZoomTowardsFace(killerFacePosition);
 
-            if (allPlayersDead) StopGameplayForAll();
+            if (allPlayersDead) { TerminarNoche(); StopGameplayForAll(); }
             _sequence = StartCoroutine(ShowScreenAfterReveal());
+        }
+
+        // Ocultar la pantalla de muerte y mirar la partida. Suelta la cámara (vuelve a
+        // manejarla el tracking AR) y devuelve la copia local del asesino, que se había
+        // ocultado sólo para no tenerlo pegado a la cara detrás del overlay.
+        public void Espectar()
+        {
+            if (!PuedeEspectar) return;
+            Espectando = true;
+            _lockCamera = false;
+            MostrarAsesino();
+        }
+
+        public void DejarDeEspectar() => Espectando = false;
+
+        // La noche terminó para todos (cayó el último o amaneció): no hay más que
+        // mirar, así que se vuelve al overlay. Lo llaman Die y NightTransition.NocheSuperada.
+        public void TerminarNoche()
+        {
+            _nocheTerminada = true;
+            Espectando = false;
         }
 
         private static void StopGameplayForAll()
@@ -139,15 +168,22 @@ namespace Gameplay
             }
         }
 
+        private void MostrarAsesino()
+        {
+            foreach (var renderer in _hiddenKillerRenderers)
+                if (renderer != null) renderer.enabled = true;
+            _hiddenKillerRenderers.Clear();
+        }
+
         public void Revive()
         {
             if (_sequence != null) StopCoroutine(_sequence);
             _sequence = null;
-            foreach (var renderer in _hiddenKillerRenderers)
-                if (renderer != null) renderer.enabled = true;
-            _hiddenKillerRenderers.Clear();
+            MostrarAsesino();
             IsDead = false;
             PresentationReady = false;
+            Espectando = false;
+            _nocheTerminada = false;
             _lockCamera = false;
             _camera = null;
             _killerNetworkId = 0;

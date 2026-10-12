@@ -75,7 +75,14 @@ namespace Scanner
         public ResolvedHit ResolveFromScreenPoint(Vector2 screenPoint)
         {
             if (_arCamera == null) return ResolvedHit.Miss;
-            var ray = _arCamera.ScreenPointToRay(screenPoint);
+            // Por viewport y no ScreenPointToRay: en Cardboard la cámara rendea a una RT
+            // escalada (ARQuality.RenderScale) y ScreenPointToRay mide en píxeles de ESA
+            // RT, así que el centro de la pantalla caía corrido hacia una esquina. La RT
+            // tiene el aspecto de la pantalla, así que normalizar por Screen da lo mismo
+            // en los dos casos (y sin RT es idéntico a ScreenPointToRay).
+            var vp  = new Vector3(screenPoint.x / Mathf.Max(1, Screen.width),
+                                  screenPoint.y / Mathf.Max(1, Screen.height), 0f);
+            var ray = _arCamera.ViewportPointToRay(vp);
 
             // 1) Physics contra mesh LiDAR.
             if (_lidarLayerMask != 0 && Physics.Raycast(ray, out var phHit, _lidarMaxDistance, _lidarLayerMask))

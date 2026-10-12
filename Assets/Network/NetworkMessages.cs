@@ -276,6 +276,31 @@ public class MapDataMsg
     }
 }
 
+// Server → client: qué mapa se juega (hash de contenido, ver Scanner.ScanHash). El
+// cliente busca uno local con ese hash y sólo si no lo tiene manda MapRequest.
+public class MapAnnounceMsg
+{
+    public string Hash;
+    public string Name;
+    public int    Size;
+
+    public byte[] Serialize()
+    {
+        using var ms = new MemoryStream();
+        using var w  = new BinaryWriter(ms);
+        w.Write(Hash ?? "");
+        w.Write(Name ?? "");
+        w.Write(Size);
+        return ms.ToArray();
+    }
+
+    public static MapAnnounceMsg Deserialize(byte[] d)
+    {
+        using var r = new BinaryReader(new MemoryStream(d));
+        return new() { Hash = r.ReadString(), Name = r.ReadString(), Size = r.ReadInt32() };
+    }
+}
+
 // Client → server: si este dispositivo usa anchor points extra, cuántos colocó y si
 // ya cerró la colocación. El host no puede arrancar la noche mientras algún jugador
 // tenga la opción activada y no haya terminado. Ver AnchorPointManager.
@@ -409,7 +434,21 @@ public class PlayerRosterMsg
     }
 }
 
-// AnchorResolved, StartGame, ResetNight y NightSurvived no llevan payload — body vacío
+// Server → all: contador de la sala de sincronización. Lo calcula el host (es el único
+// que sabe quién está listo) y lo reparte para que lo vean todos, no sólo él. Ambos
+// cuentan al host.
+public class LobbyStatusMsg
+{
+    public byte Jugadores;   // conectados, host incluido
+    public byte Listos;      // ya ubicaron el entorno (y cerraron sus anclas)
+
+    public byte[] Serialize() => new[] { Jugadores, Listos };
+
+    public static LobbyStatusMsg Deserialize(byte[] d) =>
+        new() { Jugadores = d[0], Listos = d[1] };
+}
+
+// AnchorResolved, AnchorUnresolved, StartGame, ResetNight, NightSurvived, MapRequest y Heartbeat no llevan payload — body vacío
 // server → client: muerte local, con el punto de enfoque y el atacante a ocultar.
 public class PlayerDeathMsg
 {

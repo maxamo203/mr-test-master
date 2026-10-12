@@ -11,6 +11,9 @@ public class VelethGfx : MonoBehaviour
     private const string ShaderResource = "VelethApparition";
     private Mesh _mesh;
     private Material _material;
+    private Mesh _eyesMesh;
+    private Material _eyesMaterial;
+    private VelethEntity _entity;
 
     private void Awake()
     {
@@ -44,20 +47,24 @@ public class VelethGfx : MonoBehaviour
         renderer.lightProbeUsage = LightProbeUsage.Off;
         renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
 
-        CreateEyes(visual.transform, shader);
+        CreateEyes(visual.transform, shader, out _eyesMesh, out _eyesMaterial);
+        _entity = GetComponent<VelethEntity>();
     }
 
     private void Update()
     {
-        if (_material == null) return;
-        var entity = GetComponent<VelethEntity>();
-        _material.SetFloat("_Threat", entity.State == VelethState.Grabbing ? 1f : 0f);
+        if (_material == null || _entity == null) return;
+        _material.SetFloat("_Threat", _entity.State == VelethState.Grabbing ? 1f : 0f);
     }
 
+    // Los ojos también son recursos runtime propios. Su material lleva DontSave (que
+    // incluye DontUnloadUnusedAsset): ni siquiera el cambio de escena lo liberaba.
     private void OnDestroy()
     {
         if (_mesh != null) Destroy(_mesh);
         if (_material != null) Destroy(_material);
+        if (_eyesMesh != null) Destroy(_eyesMesh);
+        if (_eyesMaterial != null) Destroy(_eyesMaterial);
     }
 
     private static Mesh BuildWraithMesh(int segments)
@@ -101,13 +108,13 @@ public class VelethGfx : MonoBehaviour
         return mesh;
     }
 
-    private static void CreateEyes(Transform parent, Shader shader)
+    private static void CreateEyes(Transform parent, Shader shader, out Mesh mesh, out Material material)
     {
         var eyes = new GameObject("OjosVeleth");
         eyes.transform.SetParent(parent, false);
         eyes.transform.localPosition = new Vector3(0f, 1.78f, 0.245f);
 
-        var mesh = new Mesh { name = "VelethEyes" };
+        mesh = new Mesh { name = "VelethEyes" };
         mesh.vertices = new[]
         {
             new Vector3(-0.13f, -0.025f, 0f), new Vector3(-0.035f, -0.015f, 0f),
@@ -122,7 +129,7 @@ public class VelethGfx : MonoBehaviour
         var filter = eyes.AddComponent<MeshFilter>();
         filter.sharedMesh = mesh;
         var renderer = eyes.AddComponent<MeshRenderer>();
-        var material = new Material(shader)
+        material = new Material(shader)
         {
             name = "Ojos Veleth (runtime)",
             hideFlags = HideFlags.DontSave,

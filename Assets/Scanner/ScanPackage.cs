@@ -96,11 +96,20 @@ namespace Scanner
                 var scan = JsonUtility.FromJson<ScanData>(json);
                 if (scan == null) { Debug.LogWarning("[ScanPackage] JSON inválido."); return null; }
 
+                // Ya está instalado (mismo contenido, cualquier nombre): no se duplica.
+                var existente = ScanSerializer.BuscarPorHash(scan.contentHash);
+                if (existente != null)
+                {
+                    Debug.Log($"[ScanPackage] Ya existía como '{existente}' (mismo hash); no se reimporta.");
+                    return existente;
+                }
+
                 string name = UniqueName(string.IsNullOrWhiteSpace(scan.name) ? "importado" : scan.name);
                 scan.name = name;
-                ScanSerializer.Save(name, scan);
+                // PNG primero: Save lo lee si tiene que calcular el hash (paquetes viejos).
                 if (pngBytes.Length > 0)
                     File.WriteAllBytes(ScanSerializer.RefImagePathFor(name), pngBytes);
+                ScanSerializer.Save(name, scan, recalcularHash: false);
 
                 Debug.Log($"[ScanPackage] Importado '{name}' ({scan.walls?.Count ?? 0} walls, " +
                           $"{scan.cubes?.Count ?? 0} cubes, img={pngBytes.Length} bytes)");

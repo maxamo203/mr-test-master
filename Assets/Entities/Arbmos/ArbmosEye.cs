@@ -28,7 +28,8 @@ public class ArbmosEye : MonoBehaviour
     public float lightRange = 2.2f;
     public float lightIntensity = 1.4f;
 
-    private Transform _glow;   // orbe "EyeGlow" (hijo de este GameObject)
+    private Transform _glow;    // orbe "EyeGlow" (hijo de este GameObject)
+    private Material  _glowMat; // material runtime propio: Unity no lo libera solo
 
     private void Start()
     {
@@ -43,7 +44,8 @@ public class ArbmosEye : MonoBehaviour
         glowGo.transform.localPosition = Vector3.zero;
         glowGo.AddComponent<MeshFilter>().sharedMesh = ArbmosGfx.QuadMesh();
         var mr = glowGo.AddComponent<MeshRenderer>();
-        mr.sharedMaterial = ArbmosGfx.ParticleMaterial(additive: true, tint: color * glow);
+        _glowMat = ArbmosGfx.ParticleMaterial(additive: true, tint: color * glow);
+        mr.sharedMaterial = _glowMat;
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         mr.receiveShadows = false;
         mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
@@ -89,5 +91,11 @@ public class ArbmosEye : MonoBehaviour
 
     private void OnEnable()  { if (_glow != null) _glow.gameObject.SetActive(true); }
     private void OnDisable() { if (_glow != null) _glow.gameObject.SetActive(false); }
-    private void OnDestroy() { if (_glow != null) Destroy(_glow.gameObject); }
+    // El material se crea por ojo y por spawn. Con el reinicio de noche no hay recarga de
+    // escena que lo barra, así que sin este Destroy se acumulaban dos por Arbmos invocado.
+    private void OnDestroy()
+    {
+        if (_glow != null) Destroy(_glow.gameObject);
+        if (_glowMat != null) Destroy(_glowMat);
+    }
 }

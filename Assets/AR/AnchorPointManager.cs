@@ -79,7 +79,6 @@ public class AnchorPointManager : MonoBehaviour
     private Quaternion _imgLocalRot = Quaternion.identity;
 
     private ARImageAnchor        _imageAnchor;
-    private MRCardboardController _cardboard;
     private Transform            _camT;
 
     private float _evalTimer;
@@ -101,11 +100,6 @@ public class AnchorPointManager : MonoBehaviour
     public int  Count    => _anclas.Count;
     public bool PuedeColocar => _anclas.Count < MaxAnclas;
     public bool PuedeCerrar  => _anclas.Count >= MinAnclas;
-
-    // El jugador está en Cardboard: la retícula del centro de pantalla no coincide
-    // con lo que ve ninguno de los dos ojos (ver MRCardboardController), así que no
-    // se puede apuntar. Colocar queda bloqueado mientras tanto.
-    public bool CardboardBloquea => _cardboard != null && _cardboard.CardboardActive;
 
     // ¿Hay una UI de colocación abierta? Mientras sea true medimos calidad del punto
     // y NO corregimos: mover el mapa bajo los pies del jugador justo cuando está
@@ -144,7 +138,6 @@ public class AnchorPointManager : MonoBehaviour
     private void Start()
     {
         _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
-        _cardboard   = FindFirstObjectByType<MRCardboardController>();
 
         if (_imageAnchor != null)
         {
@@ -192,7 +185,6 @@ public class AnchorPointManager : MonoBehaviour
         if (wo == null || !wo.IsReady) { error = "todavía no hay calibración"; return false; }
         if (!HayCalibracion) { error = "buscando la imagen…"; return false; }
         if (_anclas.Count >= MaxAnclas) { error = $"máximo {MaxAnclas} anclas"; return false; }
-        if (CardboardBloquea) { error = "salí de Cardboard para colocar anclas"; return false; }
 
         var camT = CamaraT();
         if (camT == null) { error = "sin cámara"; return false; }
@@ -336,7 +328,7 @@ public class AnchorPointManager : MonoBehaviour
 #if UNITY_EDITOR
         NudgeCamaraEditor();
 #endif
-        bool colocando = Colocando && HayCalibracion && !CardboardBloquea;
+        bool colocando = Colocando && HayCalibracion;
 
         var calidad = AnchorQuality.Instance;
         if (!colocando)
