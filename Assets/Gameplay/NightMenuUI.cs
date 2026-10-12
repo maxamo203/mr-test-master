@@ -868,6 +868,18 @@ namespace Gameplay
 
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f), "DESARROLLO", T.Estilo(T.FMono, 11, T.Red));
             y += 22f;
+
+            // Catálogo de noches: dev (default de este build) o prod, para probar con los
+            // datos reales. Cada uno tiene su propio progreso (NightProgress), así que el
+            // contador de abajo cambia con él. Rige desde la próxima partida que se arme.
+            T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
+                         "NOCHES DE PROD",
+                         PlayDataProfile.UseProduction ? "Usando Nights/prod (datos reales)"
+                                                       : "Usando Nights/dev",
+                         PlayDataProfile.UseProduction,
+                         () => { PlayDataProfile.UseProduction = !PlayDataProfile.UseProduction;
+                                 _nocheSel = -1; });
+            y += 64f;
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f),
                       $"Progreso: {NightProgress.Desbloqueadas} de {total} noches desbloqueadas",
                       T.Estilo(T.FMono, 11, T.CreamDim));

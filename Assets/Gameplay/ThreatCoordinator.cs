@@ -41,20 +41,15 @@ namespace Gameplay
             return true;
         }
 
-        public static bool TryBeginSorkenAt(Vector3 target, float range,
-                                            float targetRadius)
-        {
-            return CanAnyCapableReach(target, range, targetRadius) &&
-                   TryBeginSorken();
-        }
-
         // La entrada desde el exterior es un aviso y no consume un defensor. Esto permite
         // que el libro o un Arbmos comiencen mientras el Sorken todavía cruza la abertura.
         // Recién se registra como amenaza normal cuando ya alcanzó el interior.
-        public static bool CanBeginSorkenEntryAt(Vector3 target, float range,
-                                                  float targetRadius) =>
-            !LethalConsequenceActive &&
-            CanAnyCapableReach(target, range, targetRadius);
+        //
+        // A propósito NO mira si hay un jugador cerca o con línea de vista: Sorken entra
+        // por cualquier abertura al azar, esté quien esté (antes se exigía un defensor que
+        // alcanzara el punto, y como las puertas quedan detrás de la pared, nunca salía
+        // por ellas).
+        public static bool CanBeginSorkenEntry() => !LethalConsequenceActive;
 
         public static void BeginSorkenInside() => _sorken = true;
 
@@ -64,10 +59,6 @@ namespace Gameplay
             (!LethalConsequenceActive &&
              CanFit(CurrentCapablePlayers(), GenericTasks() + 1,
                     NormalArbmosOwners.Count));
-
-        public static bool CanBeginBookAt(Vector3 target, float range,
-                                          float targetRadius) =>
-            CanBeginBook() && CanAnyCapableReach(target, range, targetRadius);
 
         public static bool TryBeginBook()
         {
@@ -123,28 +114,6 @@ namespace Gameplay
         {
             int total = Mathf.Max(0, genericTasks) + Mathf.Max(0, ownedTasks);
             return total <= Mathf.Min(MaxConcurrentThreats, Mathf.Max(0, capablePlayers));
-        }
-
-        public static bool CanAnyCapableReach(Vector3 target, float range,
-                                              float targetRadius)
-        {
-            var net = NetworkManager.Instance;
-            if (net == null) return false;
-            float maxDistance = Mathf.Max(0f, range) + Mathf.Max(0f, targetRadius);
-
-            if (IsCapable(0) && Camera.main != null &&
-                Vector3.Distance(Camera.main.transform.position, target) <= maxDistance &&
-                PlayerLights.HasLineOfSight(Camera.main.transform.position,
-                                             target, targetRadius)) return true;
-
-            foreach (uint clientId in net.ConnectedClients)
-            {
-                if (!IsCapable(clientId) ||
-                    !net.TryGetClientWorldPosition(clientId, out Vector3 position)) continue;
-                if (Vector3.Distance(position, target) <= maxDistance &&
-                    PlayerLights.HasLineOfSight(position, target, targetRadius)) return true;
-            }
-            return false;
         }
 
         private static int GenericTasks() => (_sorken ? 1 : 0) + (_book ? 1 : 0);
