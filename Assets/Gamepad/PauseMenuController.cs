@@ -168,6 +168,8 @@ namespace Gamepad
                 // que el jugador decide es si además cubre los menús.
                 AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS en pausa",
                           GameOptions.VhsEnMenus); y += 64f;
+                AddToggle("rediseno", new Rect(x, y, w, 52f), "Rediseño 2.0 (experimental)",
+                          GameOptions.Rediseno2); y += 64f;
                 if (Debug.isDebugBuild)
                 {
                     AddButton("vhs",      new Rect(x, y, w, 64f), "VHS (DEV)");      y += 76f;
@@ -614,7 +616,7 @@ namespace Gamepad
                 // +64 por el toggle "Filtro VHS en menús" (prod), +76 por "VHS (DEV)" y
                 // +76 por "ARBMOS (DEV)". El volumen dejó de ser un slider acá: ahora es el
                 // botón AUDIO (mismo alto que el slider que reemplazó, +4).
-                case Page.Options:    return (Debug.isDebugBuild ? 1068f : 624f) + (hayVoz ? 76f : 0f);
+                case Page.Options:    return (Debug.isDebugBuild ? 1132f : 688f) + (hayVoz ? 76f : 0f);
                 // 3 sliders + la nota sobre el chat de voz.
                 case Page.Audio:      return 420f;
                 case Page.ARCalidad:  return 490f;
@@ -1093,6 +1095,7 @@ namespace Gamepad
 
                 // ── US-11.1 (VHS) ────────────────────────────────────────────
                 case "vhsmenus":  GameOptions.VhsEnMenus = !GameOptions.VhsEnMenus; break;
+                case "rediseno":  GameOptions.Rediseno2 = !GameOptions.Rediseno2; break;
                 case "vhs":
                     if (Debug.isDebugBuild) { _page = Page.VHS; _focus = 0; _focusLast = true; }
                     break;

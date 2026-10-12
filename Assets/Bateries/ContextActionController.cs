@@ -100,6 +100,8 @@ namespace Bateries
             EnsureComponent<FlashlightToggleAction>();
             EnsureComponent<BatteryPickupAction>();
             EnsureComponent<Collectibles.CollectiblePickupAction>();
+            // Rediseño 2.0: control por mirada (sólo actúa con el flag; ver Rediseno.Flag).
+            EnsureComponent<Rediseno.ControlMirada>();
         }
 
         private void Start()
@@ -135,6 +137,10 @@ namespace Bateries
         }
 
         public void Unregister(IContextAction a) => _actions.Remove(a);
+
+        // La acción disponible de mayor prioridad este frame (o null). La usa el control por
+        // mirada para saber qué hay apuntado.
+        public IContextAction AccionActual => _current;
 
         private void Update()
         {
@@ -357,8 +363,9 @@ namespace Bateries
             Scanner.UIScale.Begin();
             float vw = Scanner.UIScale.VirtualWidth, vh = Scanner.UIScale.VirtualHeight;
 
+            // Con el control por mirada el celular está en la cabeza: no hay nada que tocar.
             if (!showActionButton || _current == null || !_current.ShowActionButton ||
-                string.IsNullOrEmpty(_currentLabel))
+                string.IsNullOrEmpty(_currentLabel) || Rediseno.ControlMirada.Activo)
             {
                 _screenPrimaryHeld = false;
                 return;

@@ -8,6 +8,7 @@ public static class MortuoriumEditorPlayMenu
     private const string RutaFondo      = "Mortuorium/Fondo 360 en Play";
     private const string RutaControles  = "Mortuorium/Controles WASD en Play";
     private const string RutaPerfilDev  = "Mortuorium/Datos en Play/DEV";
+    private const string RutaMirada     = "Mortuorium/Modo mirada en Play";
     private const string RutaPerfilProd = "Mortuorium/Datos en Play/PROD";
 
     // Fondo panorámico como skybox: sin él no hay imagen detrás y los efectos de pantalla
@@ -40,6 +41,23 @@ public static class MortuoriumEditorPlayMenu
     private static bool ToggleControlesValidate()
     {
         Menu.SetChecked(RutaControles, EditorPlayerControls.Activo);
+        return true;
+    }
+
+    // Control por mirada (Rediseño 2.0) sin Cardboard ni dispositivo: con los controles
+    // WASD + arrastre se prueba recoger mirando, apagar mirando el piso y la intensa sobre
+    // el libro. Además hace falta el flag del rediseño prendido en OPCIONES.
+    [MenuItem(RutaMirada)]
+    private static void ToggleMirada()
+    {
+        Rediseno.ControlMirada.ForzadoEnEditor = !Rediseno.ControlMirada.ForzadoEnEditor;
+        Menu.SetChecked(RutaMirada, Rediseno.ControlMirada.ForzadoEnEditor);
+    }
+
+    [MenuItem(RutaMirada, true)]
+    private static bool ToggleMiradaValidate()
+    {
+        Menu.SetChecked(RutaMirada, Rediseno.ControlMirada.ForzadoEnEditor);
         return true;
     }
 

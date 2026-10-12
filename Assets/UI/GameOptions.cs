@@ -16,6 +16,7 @@ public static class GameOptions
     private const string KeyCalidadAR   = "opt_calidad_ar";
     private const string KeyAvisoIos    = "opt_aviso_ios_visto";
     private const string KeyVhsMenus    = "opt_vhs_menus";
+    private const string KeyRediseno2   = "opt_rediseno2";
     private const string KeyAvisoVerDesc = "opt_aviso_version_desconocida_visto";
 
     // Volumen maestro 0..1 (AudioListener.volume). Persiste entre sesiones.
@@ -153,6 +154,20 @@ public static class GameOptions
         set
         {
             PlayerPrefs.SetInt(KeyAvisoIos, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    // Rediseño 2.0 (experimental): controles por mirada en Cardboard sin joystick, menús
+    // nuevos, etc. Apagado = la app exactamente como venía funcionando. Todo lo nuevo vive
+    // en Assets/Rediseno/ y se lee SOLO a través de Rediseno.Flag.Activo, para que mergear
+    // develop toque lo mínimo del código existente. Default: apagado.
+    public static bool Rediseno2
+    {
+        get => PlayerPrefs.GetInt(KeyRediseno2, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeyRediseno2, value ? 1 : 0);
             PlayerPrefs.Save();
         }
     }

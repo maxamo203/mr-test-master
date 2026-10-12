@@ -731,6 +731,14 @@ namespace Gameplay
 
             float y = 160f;
 
+            // Rediseño 2.0: apagado = la app como venía funcionando (ver Rediseno.Flag).
+            T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
+                         "REDISEÑO 2.0 (EXPERIMENTAL)",
+                         "Controles por mirada con el visor y lo nuevo. Apagalo para la versión de siempre",
+                         GameOptions.Rediseno2,
+                         () => GameOptions.Rediseno2 = !GameOptions.Rediseno2);
+            y += 68f;
+
             // Volumen maestro (persistente).
             int volPct = Mathf.RoundToInt(GameOptions.Volumen * 100f);
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f - 70f, 22f), "VOLUMEN",
