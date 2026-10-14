@@ -43,6 +43,11 @@ public class ArbmosAnimator : MonoBehaviour
     [Tooltip("Velocidad del cross-fade entre clips (unidades de peso por segundo).")]
     [SerializeField] private float _blendSpeed = 6f;
 
+    [Header("Contactos de pisada (fase normalizada)")]
+    [Tooltip("Seis apoyos visibles del ciclo propio de Arbmos; no usa los tiempos de Sorken.")]
+    [SerializeField] private float[] _footContacts =
+        { 0.07f, 0.235f, 0.405f, 0.57f, 0.735f, 0.905f };
+
     private ArbmosEntity _arbmos;
     private PlayableGraph _graph;
     private AnimationMixerPlayable _mixer;
@@ -50,6 +55,19 @@ public class ArbmosAnimator : MonoBehaviour
     private float[] _weights;   // peso actual de cada input (index = (int)ArbmosState)
     private int _inputCount;
     private int _lastTarget = -1;
+    private readonly SorkenFootstepClock _footstepClock = new();
+    private bool _pendingFootstep;
+    private Vector3 _pendingFootstepPosition;
+    private float _pendingFootstepIntensity;
+
+    public bool TryConsumeFootstep(out Vector3 position, out float intensity)
+    {
+        position = _pendingFootstepPosition;
+        intensity = _pendingFootstepIntensity;
+        bool result = _pendingFootstep;
+        _pendingFootstep = false;
+        return result;
+    }
 
     // Velocidad media que corresponde físicamente a los seis pasos del clip. Evita que
     // una configuración antigua de varios m/s haga recorrer metros durante un solo paso.
@@ -101,6 +119,8 @@ public class ArbmosAnimator : MonoBehaviour
         int target = (int)state;
         if (target < 0 || target >= _inputCount) target = 0;
         _lastTarget = target;
+        _footstepClock.Reset(target, 0f);
+        _pendingFootstep = false;
 
         if (_clipPlayables == null || target >= _clipPlayables.Length ||
             !_clipPlayables[target].IsValid())
@@ -198,6 +218,21 @@ public class ArbmosAnimator : MonoBehaviour
         if (sum <= 1e-4f) { _weights[target] = 1f; sum = 1f; }
         for (int i = 0; i < _inputCount; i++)
             _mixer.SetInputWeight(i, _weights[i] / sum);
+
+        if ((target == (int)ArbmosState.Chasing ||
+             target == (int)ArbmosState.Attacking) &&
+            chaseClip != null && _clipPlayables[target].IsValid())
+        {
+            float phase = Mathf.Repeat((float)(_clipPlayables[target].GetTime() /
+                                               Mathf.Max(0.001f, chaseClip.length)), 1f);
+            if (_footstepClock.Advance(target, phase, true, _footContacts, out int contact))
+            {
+                _pendingFootstep = true;
+                _pendingFootstepPosition = transform.position + Vector3.up * 0.03f;
+                _pendingFootstepIntensity = (contact & 1) == 0 ? 1f : 0.9f;
+            }
+        }
+        else _footstepClock.Clear();
     }
 
     private void OnDestroy()

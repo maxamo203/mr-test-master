@@ -166,8 +166,8 @@ public class AudioCatalog : ScriptableObject
     [Tooltip("Amanecer: sobreviviste la noche.")]
     public Pista victoriaAmanecer = new Pista { espacial = 0f };
 
-    [Tooltip("Moriste.")]
-    public Pista derrotaMuerte = new Pista { espacial = 0f };
+    [Tooltip("Coro breve que marca una muerte local sin reemplazar ni reiniciar el fondo.")]
+    public Pista gameOverStinger = new Pista { espacial = 0f, volumen = 0.85f };
 
     // ─────────────────────────────────────────────────────────── SORKEN
     [Header("SORKEN")]
@@ -195,11 +195,17 @@ public class AudioCatalog : ScriptableObject
     [Tooltip("Repelido con la linterna: se retira.")]
     public Pista sorkenRepelido = new Pista { distanciaMax = 20f };
 
-    [Tooltip("Te atrapo.")]
-    public Pista sorkenGrab = new Pista { distanciaMax = 20f };
-
     [Tooltip("US-4.4: apuntas al punto por el que esta entrando (feedback de que lo ubicaste).")]
     public Pista sorkenApuntado = new Pista { distanciaMax = 20f };
+
+    [Tooltip("Dos reacciones alternativas al comenzar a cubrirse por primera vez.")]
+    public Pista sorkenCubrirse = new Pista { distanciaMax = 20f, volumen = 0.85f };
+
+    [Tooltip("Vocalizaciones espaciadas que acompañan solamente la marcha cubierta.")]
+    public Pista sorkenMarchaCubierta = new Pista { distanciaMax = 20f, volumen = 0.72f };
+
+    [Tooltip("Grito local de la victima cuando Sorken resuelve una captura fatal.")]
+    public Pista sorkenCapturaFatal = new Pista { espacial = 0f };
 
     // ─────────────────────────────────────────────────── AMBIENTE DE TENSION
     [Header("AMBIENTE DE TENSION")]
@@ -219,43 +225,62 @@ public class AudioCatalog : ScriptableObject
     // ─────────────────────────────────────────────────────────── ARBMOS
     [Header("ARBMOS  (alucinacion individual: solo la oye el jugador afectado)")]
 
-    [Tooltip("Aparece la alucinacion.")]
-    public Pista arbmosAparece = new Pista { distanciaMax = 12f };
+    [Tooltip("Exhalacion intermitente y espacial de la presencia individual.")]
+    public Pista arbmosExhalacion = new Pista { volumen = 0.72f, distanciaMin = 0.7f, distanciaMax = 12f };
 
-    [Tooltip("Loop mientras te drena la cordura porque te estas moviendo.")]
-    public Pista arbmosDrena = new Pista { distanciaMax = 12f };
+    [Tooltip("Entrada de la resonancia al encender la luz con Arbmos presente.")]
+    public Pista arbmosResonanciaEntrada = new Pista { volumen = 0.55f, distanciaMax = 12f };
 
-    [Tooltip("US-6.4: susurros. Suenan en la fase letal y suben con la escalada de distorsion.")]
-    public Pista arbmosSusurros = new Pista { espacial = 0.5f, distanciaMax = 12f };
+    [Tooltip("Sostenido preparado para loop mientras la luz permanece encendida.")]
+    public Pista arbmosResonanciaSostenida = new Pista { volumen = 0.46f, distanciaMax = 12f };
 
-    [Tooltip("US-6.4: gritos/guturales. Se mezclan sobre los susurros a medida que la " +
-             "distorsion llega al maximo, justo antes del jumpscare.")]
-    public Pista arbmosGritos = new Pista { espacial = 0.5f, distanciaMax = 12f };
+    [Tooltip("Caida natural al apagar la luz; cruza con el sostenido.")]
+    public Pista arbmosResonanciaSalida = new Pista { volumen = 0.5f, distanciaMax = 12f };
 
-    [Tooltip("Termina de acecharte inmovil y embiste.")]
-    public Pista arbmosEmbestida = new Pista { distanciaMax = 12f };
+    [Tooltip("Tres variantes de enfado al comprometer la persecucion normal por luz.")]
+    public Pista arbmosEnfado = new Pista { volumen = 0.85f, distanciaMax = 12f };
 
-    [Tooltip("Jumpscare final en primer plano.")]
-    public Pista arbmosJumpscare = new Pista { espacial = 0f };
+    [Tooltip("Banco independiente: un clip por apoyo real de la persecucion.")]
+    public Pista arbmosPasos = new Pista
+    {
+        volumen = 0.9f, variacionTono = 0.035f, variacionIntensidad = 0.18f,
+        distanciaMin = 0.7f, distanciaMax = 12f
+    };
+
+    [Tooltip("Jadeo local al recibir un agarre que deja cordura restante.")]
+    public Pista arbmosAgarreNoLetal = new Pista { espacial = 0f, volumen = 0.8f };
+
+    [Tooltip("Primera onda local al morir por una captura letal de Arbmos.")]
+    public Pista arbmosAgarreLetal = new Pista { espacial = 0f };
 
     // ─────────────────────────────────────────────────────────── VELETH
     [Header("VELETH  (invocada al perder el libro)")]
 
-    [Tooltip("Invocacion. Si lo dejas vacio se usa el sonido sintetizado por codigo que ya " +
-             "tenia el juego (VelethPresentation), asi no se pierde nada.")]
-    public Pista velethInvocacion = new Pista { distanciaMax = 25f };
+    [Tooltip("Capa organica de 8,3 s durante la emergencia efectiva del libro.")]
+    public Pista velethSalidaLibro = new Pista { volumen = 0.9f, distanciaMax = 20f };
 
-    [Tooltip("Loop mientras te persigue. Veleth no se puede repeler: el sonido no deberia dar tregua.")]
-    public Pista velethPersecucion = new Pista { distanciaMax = 20f };
+    [Tooltip("Contactos breves de apoyo, sincronizados con emergencia y locomocion.")]
+    public Pista velethApoyos = new Pista
+    {
+        volumen = 0.88f, variacionTono = 0.035f, variacionIntensidad = 0.15f,
+        distanciaMin = 0.7f, distanciaMax = 18f
+    };
 
-    [Tooltip("Te alcanzo.")]
-    public Pista velethGrab = new Pista { distanciaMax = 20f };
+    [Tooltip("Roces prolongados alternados, sincronizados con el arrastre.")]
+    public Pista velethRoces = new Pista
+    {
+        volumen = 0.72f, variacionTono = 0.025f, variacionIntensidad = 0.12f,
+        distanciaMin = 0.7f, distanciaMax = 18f
+    };
+
+    [Tooltip("Capa espectral secundaria, en loop solo durante la persecucion.")]
+    public Pista velethPersecucionEspectral = new Pista { volumen = 0.62f, distanciaMax = 20f };
+
+    [Tooltip("Grito local de la victima al resolver una captura fatal de Veleth.")]
+    public Pista velethCapturaFatal = new Pista { espacial = 0f };
 
     // ─────────────────────────────────────────────────── LIBRO RITUAL
     [Header("LIBRO RITUAL")]
-
-    [Tooltip("Empieza el ataque de oscuridad: hay que ir a alumbrar el libro.")]
-    public Pista libroAtaqueEmpieza = new Pista { distanciaMax = 25f };
 
     [Tooltip("Loop 3D de susurros durante TODO el consumo, incluso mientras se defiende.")]
     public Pista libroSusurrosConsumo = new Pista
@@ -265,9 +290,6 @@ public class AudioCatalog : ScriptableObject
 
     [Tooltip("Loop mientras lo estas defendiendo con la linterna (la oscuridad retrocede).")]
     public Pista libroDefendiendo = new Pista { distanciaMax = 15f };
-
-    [Tooltip("Lo salvaste.")]
-    public Pista libroSalvado = new Pista { distanciaMax = 15f };
 
     [Tooltip("US-7: LO PERDISTE. Es el sonido de alerta que invoca a Veleth; " +
              "deberia ser el mas reconocible del juego.")]

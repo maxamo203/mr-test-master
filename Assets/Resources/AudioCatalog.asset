@@ -17,15 +17,17 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 5323d8d5612c5fe79e0d30a9d3de058f, type: 3}
     volumen: 0.7
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
     apertura: 0
   ambienteNoche:
     clips:
-    - {fileID: 8300000, guid: 1b7ab7d2a196a0d5ffb4cbfa4be6cd2a, type: 3}
-    volumen: 0.5
+    - {fileID: 8300000, guid: d6df488b206553c468e6f5b2698c3aed, type: 3}
+    volumen: 0.46
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -35,6 +37,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 3a7d4bb8f333e3808ff08a13dfbfc05c, type: 3}
     volumen: 0.6
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -44,6 +47,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: ae21dc5ec8f331b56036f79ff644a787, type: 3}
     volumen: 1
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -53,15 +57,17 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 70c2434cf72a67bfb6d851a86d99568d, type: 3}
     volumen: 1
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
     apertura: 0
-  derrotaMuerte:
+  gameOverStinger:
     clips:
-    - {fileID: 8300000, guid: 53bc7cd2ff8e46ebf74dca66b7325028, type: 3}
-    volumen: 1
+    - {fileID: 8300000, guid: 01238a6eb8094f94398fadd805c52bdb, type: 3}
+    volumen: 0.85
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -74,6 +80,7 @@ MonoBehaviour:
       - {fileID: 8300000, guid: 4243e699c397f3a35d0d6f325f2c0d4f, type: 3}
       volumen: 1
       variacionTono: 0.05
+      variacionIntensidad: 0
       espacial: 1
       distanciaMin: 1
       distanciaMax: 20
@@ -85,6 +92,7 @@ MonoBehaviour:
       - {fileID: 8300000, guid: 7e3f56de9be7ee308547494756c3953f, type: 3}
       volumen: 1
       variacionTono: 0.05
+      variacionIntensidad: 0
       espacial: 1
       distanciaMin: 1
       distanciaMax: 20
@@ -95,6 +103,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: b128f1da12617e020dbc5714809bea7b, type: 3}
     volumen: 1
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 1
     distanciaMin: 1
     distanciaMax: 20
@@ -130,6 +139,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: cc433912a33b9463f4a6b52f5f222c39, type: 3}
     volumen: 1
     variacionTono: 0.15
+    variacionIntensidad: 0
     espacial: 1
     distanciaMin: 1
     distanciaMax: 12
@@ -139,6 +149,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: adb221aa8841edc33b7a253faafaf59e, type: 3}
     volumen: 1
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 1
     distanciaMin: 1
     distanciaMax: 20
@@ -148,15 +159,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: d935e2142d7b8b3fe7a8ea1e3e0c6863, type: 3}
     volumen: 1
     variacionTono: 0
-    espacial: 1
-    distanciaMin: 1
-    distanciaMax: 20
-    apertura: 0
-  sorkenGrab:
-    clips:
-    - {fileID: 8300000, guid: 2ecbdb65d0a1f3e5202879bc59f2ba8d, type: 3}
-    volumen: 1
-    variacionTono: 0
+    variacionIntensidad: 0
     espacial: 1
     distanciaMin: 1
     distanciaMax: 20
@@ -166,9 +169,45 @@ MonoBehaviour:
     - {fileID: 8300000, guid: bc131fc801aacdfae2d26a766076e2fc, type: 3}
     volumen: 1
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 1
     distanciaMin: 1
     distanciaMax: 20
+    apertura: 0
+  sorkenCubrirse:
+    clips:
+    - {fileID: 8300000, guid: 8533112b95723af45aac4037ca59ec43, type: 3}
+    - {fileID: 8300000, guid: 8a07e23792cda104b9670e8e55e8fd79, type: 3}
+    volumen: 0.85
+    variacionTono: 0
+    variacionIntensidad: 0
+    espacial: 1
+    distanciaMin: 0.8
+    distanciaMax: 20
+    apertura: 0
+  sorkenMarchaCubierta:
+    clips:
+    - {fileID: 8300000, guid: ca629a91546cc0c4ab94c9592a9e7aa7, type: 3}
+    - {fileID: 8300000, guid: fe670df6ccaa34d47b800df47921a251, type: 3}
+    - {fileID: 8300000, guid: ee43e7d674d2d3d4dbcb91cb6ef6233e, type: 3}
+    - {fileID: 8300000, guid: 93e11db9c6fc3274481797556cfc8237, type: 3}
+    - {fileID: 8300000, guid: 67a645988ed3f634ca700a6acbc67ee6, type: 3}
+    volumen: 0.72
+    variacionTono: 0
+    variacionIntensidad: 0
+    espacial: 1
+    distanciaMin: 0.8
+    distanciaMax: 20
+    apertura: 0
+  sorkenCapturaFatal:
+    clips:
+    - {fileID: 8300000, guid: c7db869e419551c43a1e04eef50c13e6, type: 3}
+    volumen: 1
+    variacionTono: 0
+    variacionIntensidad: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
     apertura: 0
   ambienteGolpesPuerta:
     clips:
@@ -191,96 +230,148 @@ MonoBehaviour:
     distanciaMin: 0.8
     distanciaMax: 18
     apertura: 0
-  arbmosAparece:
+  arbmosExhalacion:
     clips:
-    - {fileID: 8300000, guid: c3d7cf2f94060527324c17c63e22482b, type: 3}
-    volumen: 1
+    - {fileID: 8300000, guid: 6287ee97a768e2e4fb1b103f1cc858e0, type: 3}
+    volumen: 0.72
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 1
-    distanciaMin: 1
+    distanciaMin: 0.7
     distanciaMax: 12
     apertura: 0
-  arbmosDrena:
+  arbmosResonanciaEntrada:
     clips:
-    - {fileID: 8300000, guid: 19c61d6d111b0ccc714554ff3a0462bc, type: 3}
-    volumen: 1
+    - {fileID: 8300000, guid: 107f0a3935377224d9b40c710d286555, type: 3}
+    volumen: 0.55
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 1
-    distanciaMin: 1
+    distanciaMin: 0.7
     distanciaMax: 12
     apertura: 0
-  arbmosSusurros:
+  arbmosResonanciaSostenida:
     clips:
-    - {fileID: 8300000, guid: a53af80dcc9fa6fed0fa870d7fa194d1, type: 3}
-    volumen: 1
+    - {fileID: 8300000, guid: e76f325145d2a9a43985280a03c283ee, type: 3}
+    volumen: 0.46
     variacionTono: 0
-    espacial: 0.5
-    distanciaMin: 1
-    distanciaMax: 12
-    apertura: 0
-  arbmosGritos:
-    clips:
-    - {fileID: 8300000, guid: 4e39c204487505f0b49ad0eea05fb268, type: 3}
-    volumen: 1
-    variacionTono: 0
-    espacial: 0.5
-    distanciaMin: 1
-    distanciaMax: 12
-    apertura: 0
-  arbmosEmbestida:
-    clips:
-    - {fileID: 8300000, guid: be1b5b1ee2684fe5377c74ac80a98714, type: 3}
-    volumen: 1
-    variacionTono: 0
+    variacionIntensidad: 0
     espacial: 1
-    distanciaMin: 1
+    distanciaMin: 0.7
     distanciaMax: 12
     apertura: 0
-  arbmosJumpscare:
+  arbmosResonanciaSalida:
     clips:
-    - {fileID: 8300000, guid: 819122347f5cc96ac431264b6ca02ef5, type: 3}
-    volumen: 1
+    - {fileID: 8300000, guid: 0fd118a255a0361468b929701fd32ecd, type: 3}
+    volumen: 0.5
     variacionTono: 0
+    variacionIntensidad: 0
+    espacial: 1
+    distanciaMin: 0.7
+    distanciaMax: 12
+    apertura: 0
+  arbmosEnfado:
+    clips:
+    - {fileID: 8300000, guid: 17279d2c02c489c4a8828586bd996d78, type: 3}
+    - {fileID: 8300000, guid: 356fc7fc9709627488567ed40bf85d45, type: 3}
+    - {fileID: 8300000, guid: 685e7d8c8d818cf41b6fb13b77fb116f, type: 3}
+    volumen: 0.85
+    variacionTono: 0
+    variacionIntensidad: 0
+    espacial: 1
+    distanciaMin: 0.7
+    distanciaMax: 12
+    apertura: 0
+  arbmosPasos:
+    clips:
+    - {fileID: 8300000, guid: 88cfd934f53d8d34c953574652c3cef5, type: 3}
+    - {fileID: 8300000, guid: f390d48f099656b4fa4088fe4a75b0ab, type: 3}
+    - {fileID: 8300000, guid: 4fe2cc1630df77f46acbe7755506c7ce, type: 3}
+    - {fileID: 8300000, guid: faea00004276685408b3dbb6107a48ee, type: 3}
+    volumen: 0.9
+    variacionTono: 0.035
+    variacionIntensidad: 0.18
+    espacial: 1
+    distanciaMin: 0.7
+    distanciaMax: 12
+    apertura: 0
+  arbmosAgarreNoLetal:
+    clips:
+    - {fileID: 8300000, guid: 5b814fe3d85a3324d97cf264ff408187, type: 3}
+    volumen: 0.8
+    variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
     apertura: 0
-  velethInvocacion:
+  arbmosAgarreLetal:
     clips:
-    - {fileID: 8300000, guid: 317f7f04cfad51ab286b20f5a219e543, type: 3}
-    - {fileID: 8300000, guid: 3396a2d7d6c3e09d37bc159e53e05a31, type: 3}
+    - {fileID: 8300000, guid: 8e9413b71fb764a48b57cbb524e73627, type: 3}
     volumen: 1
     variacionTono: 0
-    espacial: 1
+    variacionIntensidad: 0
+    espacial: 0
     distanciaMin: 1
-    distanciaMax: 25
+    distanciaMax: 15
     apertura: 0
-  velethPersecucion:
+  velethSalidaLibro:
     clips:
-    - {fileID: 8300000, guid: 2927e611547bd941b51726f865d8e508, type: 3}
-    volumen: 1
+    - {fileID: 8300000, guid: 1afe8a64360f3d941a0a3a59464a13f0, type: 3}
+    volumen: 0.9
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 1
-    distanciaMin: 1
+    distanciaMin: 0.7
     distanciaMax: 20
     apertura: 0
-  velethGrab:
+  velethApoyos:
     clips:
-    - {fileID: 8300000, guid: d816100cc8a97bbc4bf9f0c08cfd0a80, type: 3}
-    volumen: 1
-    variacionTono: 0
+    - {fileID: 8300000, guid: 9b5c9f78c9e51634eab4130a59ece335, type: 3}
+    - {fileID: 8300000, guid: 80a6d15e3571aee46a8ad88a06fa8515, type: 3}
+    - {fileID: 8300000, guid: ad942100e3b69124f9623cbc8d131b47, type: 3}
+    - {fileID: 8300000, guid: 830a849b884aa1244b24545298c24b82, type: 3}
+    - {fileID: 8300000, guid: 52ce4873063f55d46b3c9e89203b2671, type: 3}
+    volumen: 0.88
+    variacionTono: 0.035
+    variacionIntensidad: 0.15
     espacial: 1
-    distanciaMin: 1
+    distanciaMin: 0.7
+    distanciaMax: 18
+    apertura: 0
+  velethRoces:
+    clips:
+    - {fileID: 8300000, guid: cfb3f19152979cb4881c45a003d56fe1, type: 3}
+    - {fileID: 8300000, guid: 0aa01106050a41d479f6062946ad686e, type: 3}
+    - {fileID: 8300000, guid: 80c0b2aae7ea8d74a992328435242ad2, type: 3}
+    - {fileID: 8300000, guid: 6c1de4f2a06fba740bcb6e522501c2e0, type: 3}
+    - {fileID: 8300000, guid: bd23cc9110a20424d92cd35731fa114d, type: 3}
+    volumen: 0.72
+    variacionTono: 0.025
+    variacionIntensidad: 0.12
+    espacial: 1
+    distanciaMin: 0.7
+    distanciaMax: 18
+    apertura: 0
+  velethPersecucionEspectral:
+    clips:
+    - {fileID: 8300000, guid: 86946ce8ea7d44040b8e1e03d0b34d44, type: 3}
+    volumen: 0.62
+    variacionTono: 0
+    variacionIntensidad: 0
+    espacial: 1
+    distanciaMin: 0.7
     distanciaMax: 20
     apertura: 0
-  libroAtaqueEmpieza:
+  velethCapturaFatal:
     clips:
-    - {fileID: 8300000, guid: 92471cfaaa3dfe4a115dd6cab1efbb90, type: 3}
+    - {fileID: 8300000, guid: 406bfd1e9270dcf4192d692ab10d6a2a, type: 3}
     volumen: 1
     variacionTono: 0
-    espacial: 1
+    variacionIntensidad: 0
+    espacial: 0
     distanciaMin: 1
-    distanciaMax: 25
+    distanciaMax: 15
     apertura: 0
   libroSusurrosConsumo:
     clips:
@@ -297,15 +388,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 143da89153f5249d10e49d51939c0c75, type: 3}
     volumen: 1
     variacionTono: 0
-    espacial: 1
-    distanciaMin: 1
-    distanciaMax: 15
-    apertura: 0
-  libroSalvado:
-    clips:
-    - {fileID: 8300000, guid: 56c560986875fe37912c2affe6a5cf55, type: 3}
-    volumen: 1
-    variacionTono: 0
+    variacionIntensidad: 0
     espacial: 1
     distanciaMin: 1
     distanciaMax: 15
@@ -315,6 +398,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 2ef45039cb8458a1c070b269fbef1ada, type: 3}
     volumen: 1
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -324,6 +408,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: a268cc79ddc397fb7647729c4029fbb1, type: 3}
     volumen: 0.8
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -333,6 +418,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: db378b7e0f5e7759e5e68b8fe4c5b1d4, type: 3}
     volumen: 0.8
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -342,6 +428,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 87b6aa3d14256278cf0f405d7ae0ea7d, type: 3}
     volumen: 0.8
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -351,6 +438,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: b90bdd32267511b11f00d1da0d4d8edd, type: 3}
     volumen: 1
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -360,6 +448,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: ee0d9f831f15032f316fac2f12a00240, type: 3}
     volumen: 1
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -369,6 +458,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 82fbcf5ca832f398a742033a37330f16, type: 3}
     volumen: 0.458
     variacionTono: 0.2
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -378,6 +468,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: e55e72a6ce887279dd1885b1de2a5997, type: 3}
     volumen: 0.6
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 1
     distanciaMin: 1
     distanciaMax: 10
@@ -387,6 +478,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 212a04a41631969b45ea2a7b92a52bfa, type: 3}
     volumen: 1
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -396,6 +488,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 749dcf781c81b0c7f0deba3b62b3014e, type: 3}
     volumen: 1
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -405,6 +498,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 7b6ba1049a5a70c4ed02c256bf429f00, type: 3}
     volumen: 0.7
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -414,6 +508,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: fce7841d12826203a42b87a5d7a52b2b, type: 3}
     volumen: 1
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -423,6 +518,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: e7e31ae0a7f74e4cbd4950c626a30e2b, type: 3}
     volumen: 0.5
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -432,6 +528,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: e07a755fe549e73f52855a5e6dbf8ecc, type: 3}
     volumen: 0.6
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -441,6 +538,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 7abf33eaab261b0280665995be9b15d9, type: 3}
     volumen: 0.5
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15
@@ -450,6 +548,7 @@ MonoBehaviour:
     - {fileID: 8300000, guid: 968e0af7fd23bbd3435303640e30fb2b, type: 3}
     volumen: 1
     variacionTono: 0
+    variacionIntensidad: 0
     espacial: 0
     distanciaMin: 1
     distanciaMax: 15

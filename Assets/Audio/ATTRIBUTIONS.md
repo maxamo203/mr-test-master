@@ -1,10 +1,65 @@
 # Atribuciones de audio — Mortuorium
 
-Todos los clips de `Assets/Audio/Clips/` son **placeholder**: sirven para que el sistema
-de audio funcione y se pueda calibrar la mezcla, y están pensados para reemplazarse por
-audio propio o definitivo más adelante.
+El catálogo combina audio definitivo/preparado con algunos placeholders históricos. Las
+fuentes, licencias y modificaciones de la entrega del 13/10/2026 quedan registradas abajo;
+los assets de fuente, demostraciones y alternativas de revisión no forman parte del catálogo.
 
-Fuente de todos: [OpenGameArt.org](https://opengameart.org).
+## Entrega integrada — 13/10/2026
+
+### Créditos obligatorios
+
+- **Monster Growls — MeijstroAudio**, Freesound,
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+  [fuente](https://freesound.org/people/MeijstroAudio/sounds/410523/). Usado en
+  `Arbmos/arbmos_enfado_01..03`; modificado mediante recortes, fades y ajuste de nivel.
+- **Male Gasp.wav — nicklas3799**, Freesound,
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+  [fuente](https://freesound.org/people/nicklas3799/sounds/467363/). Usado en el agarre
+  no letal de Arbmos; modificado mediante fades, conversión y ajuste de nivel.
+- **Male Inhale scream 5 — jorickhoofd**, Freesound,
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+  [fuente](https://freesound.org/people/jorickhoofd/sounds/180300/). Usado en la captura
+  letal de Arbmos; modificado mediante recorte, ecualización, fades y ajuste de nivel.
+- **Alien is crawling-003.wav — tosha73**, Freesound,
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+  [fuente](https://freesound.org/people/tosha73/sounds/512951/). Usado durante la salida
+  de Veleth; modificado mediante recorte, conversión mono y fades.
+- **Zombie/Monster roars, growls, grunts, devouring sounds (juicy) — umnachtung**,
+  Freesound, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+  [fuente](https://freesound.org/people/umnachtung/sounds/533165/). Usado en las dos
+  reacciones de cobertura y cinco vocalizaciones de marcha cubierta de Sorken; modificado
+  mediante segmentación, ajuste temporal sin pitch en dos cortes, downmix, fades y nivel.
+
+### CC0 y créditos voluntarios
+
+- **Cello bow + small beer glass — giddster**, [fuente](https://freesound.org/people/giddster/sounds/662230/):
+  resonancia de Arbmos; cortes, loop interno, crossfade y nivel.
+- **Monster scream 1 — giddster**, [fuente](https://freesound.org/people/giddster/sounds/416049/):
+  captura fatal de Sorken; mono, fades y nivel.
+- **Crawling on a Wooden Floor.wav — krnash**, [fuente](https://freesound.org/people/krnash/sounds/389794/):
+  apoyos y roces de Veleth; recortes, filtrado, fades y nivel.
+- **Demonic Woman Scream.wav — nick121087**, [fuente](https://freesound.org/people/nick121087/sounds/333832/):
+  captura fatal de Veleth; mono, fades y nivel.
+- **Ghost Monster Scream — NachtmahrTV**, [fuente](https://freesound.org/people/NachtmahrTV/sounds/556701/):
+  capa de persecución de Veleth; mono, unión de loop, fades y nivel.
+- **Dark Choir Stinger — zombieallen**, [fuente](https://freesound.org/people/zombieallen/sounds/725222/):
+  stinger de muerte; preview HQ recortado a 6 segundos, fade y nivel ajustados.
+
+Los seis elementos anteriores declaran **CC0** en sus fichas:
+[Creative Commons Zero 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+
+### Otras licencias y material aportado
+
+- **Dark Choir Singing — freesound_community/BrainClaim**, Pixabay,
+  [fuente](https://pixabay.com/sound-effects/horror-dark-choir-singing-16805/) y
+  [licencia de contenido de Pixabay](https://pixabay.com/service/license-summary/). Preparado
+  como loop de fondo mediante crossfade, recorte inicial y ajuste de nivel.
+- **Creepy demon heavy breathing 2240**, Mixkit,
+  [licencia Mixkit](https://mixkit.co/license/#sfxFree). Usado como exhalación de Arbmos;
+  conversión mono y fades.
+- `Libro/susurros_superpuestos_consumo_loop.wav`: reemplazado por el derivado final
+  `libro_susurros_superpuestos_fondo_x2_loop.wav` aportado por el usuario. Autor, fuente
+  original y permiso siguen pendientes de confirmación antes de una publicación.
 
 ---
 
@@ -27,14 +82,11 @@ www.littlerobotsoundfactory.com  (CC-BY 3.0)
 Mientras esos clips estén en el juego, **esta línea tiene que aparecer en los créditos**.
 Si se reemplazan todos por audio propio, la obligación desaparece.
 
-Clips usados de este pack (34):
-`Musica/ambiente_noche`, `Musica/victoria_amanecer`, `Musica/derrota_muerte`,
+Clips históricos aún usados de este pack:
+`Musica/victoria_amanecer`,
 `Sorken/entrada_puerta_01`, `Sorken/entrada_ventana_01`, `Sorken/entrada_ventana_02`,
 `Sorken/entrada_generica_01`, `Sorken/entrada_generica_02`, `Sorken/hueso_01..04`,
-`Sorken/entra`, `Sorken/repelido`, `Sorken/grab`, `Sorken/apuntado`,
-`Arbmos/drena_loop`, `Arbmos/susurros_loop`, `Arbmos/gritos_loop`,
-`Arbmos/embestida`, `Arbmos/jumpscare`,
-`Veleth/invocacion_01`, `Veleth/persecucion_loop`, `Veleth/grab`,
+`Sorken/entra`, `Sorken/repelido`, `Sorken/apuntado`,
 `Libro/defendiendo_loop`, `Libro/perdido`,
 `Cordura/cordura_baja`, `Cordura/cordura_cero`, `Cordura/noche_desbloqueada`
 
@@ -47,7 +99,7 @@ Estos no exigen nada. El crédito es opcional y sólo por cortesía.
 **RPG Sound Pack** — artisticdude
 [opengameart.org/content/rpg-sound-pack](https://opengameart.org/content/rpg-sound-pack) — **CC0**
 Usado en: `Sorken/entrada_puerta_02`, `Arbmos/aparece`, `Veleth/invocacion_02`,
-`Libro/ataque_empieza`, `Libro/salvado`, toda la carpeta `Linterna/`,
+`Libro/ataque_empieza`, toda la carpeta `Linterna/`,
 `Cordura/reloj_final`, toda la carpeta `UI/`.
 
 **Ambience Pack 1 – Sci Fi Horror** — Joth
@@ -83,5 +135,5 @@ versión pública hay que confirmar sus autores, fuentes originales y permisos d
   `phasmophobia-sound-board-effects-21-sound-effects-door-handle-open_Jv9oBbR.mp3`.
 - `Sorken/entrada_puerta_crujido.wav` y `Sorken/paso_entrada_puerta_01..04.wav`:
   derivados de `door-creaks-open-footsteps.mp3`.
-- `Libro/susurros_superpuestos_consumo_loop.wav`: aportado como
-  `libro_susurros_superpuestos_loop.wav`.
+- El origen inicial del audio del libro permanece pendiente; el derivado activo se detalla
+  en la sección de la entrega del 13/10/2026.

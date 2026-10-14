@@ -31,6 +31,7 @@ public class AudioManager : MonoBehaviour
 
     private const int CantOneShots = 23;
     private const int CantBucles   = 8;
+    private const int CantTransitorios = 4;
 
     private AudioCatalog _cat;
 
@@ -43,11 +44,33 @@ public class AudioManager : MonoBehaviour
     private readonly Dictionary<string, AudioSource> _bucles = new();
     private AudioSource[] _buclesLibres;
 
+    // Voces con identidad y cancelacion suave (reacciones/fases). A diferencia de un
+    // one-shot del pool, pueden apagarse cuando la animacion que las justifica termina.
+    private AudioSource[] _transitoriosLibres;
+    private readonly Dictionary<string, AudioSource> _transitorios = new();
+    private readonly Dictionary<string, float> _transitorioFade = new();
+
     // Musica: dos fuentes para poder hacer crossfade entre pistas.
     private AudioSource _musA, _musB;
     private bool        _usandoA;
     private AudioClip   _musActual;
     private float       _musObjetivo, _musFade;
+    private float       _musDuck = 1f;
+
+    // Captura local y stinger usan voces propias: no pueden ser robados por un paso y se
+    // cancelan limpiamente al reintentar/salir. El fondo permanece en sus fuentes.
+    private AudioSource _deathVoice, _deathStinger;
+    private float _deathStingerStartsAt = -1f;
+
+    // Resonancia de Arbmos: tres voces dedicadas permiten entrada -> loop -> salida con
+    // cruce real, incluso si la luz se apaga a mitad del sostenido.
+    private AudioSource _resonanceIntro, _resonanceLoop, _resonanceExit;
+    private bool _resonanceRequested;
+    private bool _resonanceActive;
+    private float _resonanceTarget;
+    private float _resonanceLoopStartAt;
+    private Vector3 _resonancePosition;
+    private const float ResonanceCrossfade = 0.15f;
 
     // Capa de tension (US-11.3): loop propio cuyo volumen sigue a TensionSystem.
     private AudioSource _tension;
@@ -110,6 +133,11 @@ public class AudioManager : MonoBehaviour
         _musB = NuevaFuente("Musica B", loop: true);
         _tension = NuevaFuente("Capa Tension", loop: true);
         _ambienteEvento = NuevaFuente("Evento ambiental", loop: false);
+        _deathVoice = NuevaFuente("Captura local", loop: false);
+        _deathStinger = NuevaFuente("Stinger derrota", loop: false);
+        _resonanceIntro = NuevaFuente("Arbmos resonancia entrada", loop: false);
+        _resonanceLoop = NuevaFuente("Arbmos resonancia sostenida", loop: true);
+        _resonanceExit = NuevaFuente("Arbmos resonancia salida", loop: false);
 
         _pool      = new AudioSource[CantOneShots];
         _poolDesde = new float[CantOneShots];
@@ -119,6 +147,10 @@ public class AudioManager : MonoBehaviour
         _buclesLibres = new AudioSource[CantBucles];
         for (int i = 0; i < CantBucles; i++)
             _buclesLibres[i] = NuevaFuente("Bucle " + i, loop: true);
+
+        _transitoriosLibres = new AudioSource[CantTransitorios];
+        for (int i = 0; i < CantTransitorios; i++)
+            _transitoriosLibres[i] = NuevaFuente("Fase " + i, loop: false);
     }
 
     private AudioSource NuevaFuente(string nombre, bool loop)
@@ -279,6 +311,124 @@ public class AudioManager : MonoBehaviour
         m._bucles.Remove(clave);
     }
 
+    // One-shot de fase cancelable. Devuelve la duracion elegida para programar la
+    // siguiente emision desde el final real del clip, no desde un timer de gameplay.
+    public static float TransitorioSinRepetir(string clave,
+        Func<AudioCatalog, AudioCatalog.Pista> sel, Vector3 pos, int anterior,
+        out int elegido, float escala = 1f)
+    {
+        elegido = anterior;
+        var m = Instance;
+        if (m == null || m._cat == null || string.IsNullOrEmpty(clave) || sel == null)
+            return 0f;
+        var pista = sel(m._cat);
+        if (pista == null || pista.Vacia) return 0f;
+
+        if (m._transitorios.TryGetValue(clave, out var existente) && existente != null &&
+            existente.isPlaying)
+        {
+            existente.transform.position = pos;
+            return 0f;
+        }
+
+        elegido = pista.ElegirIndiceSinRepetir(anterior);
+        var clip = pista.ClipValido(elegido);
+        if (clip == null) return 0f;
+        var src = existente != null ? existente : m.TomarTransitorioLibre();
+        if (src == null) return 0f;
+        m._transitorios[clave] = src;
+        m._transitorioFade.Remove(clave);
+        src.Stop();
+        src.clip = clip;
+        m.Configurar(src, pista, pos, pista.espacial > 0f,
+                     GameOptions.VolumenEfectos * Mathf.Clamp01(escala));
+        src.Play();
+        return clip.length / Mathf.Max(0.01f, Mathf.Abs(src.pitch));
+    }
+
+    public static void PararTransitorio(string clave, float fade = 0.12f)
+    {
+        var m = Instance;
+        if (m == null || string.IsNullOrEmpty(clave) ||
+            !m._transitorios.TryGetValue(clave, out var src) || src == null) return;
+        m._transitorioFade[clave] = Mathf.Max(0.01f, fade);
+    }
+
+    public static bool TransitorioActivo(string clave)
+    {
+        var m = Instance;
+        return m != null && m._transitorios.TryGetValue(clave, out var src) &&
+               src != null && src.isPlaying && !m._transitorioFade.ContainsKey(clave);
+    }
+
+    public static void PosicionarTransitorio(string clave, Vector3 pos)
+    {
+        var m = Instance;
+        if (m != null && m._transitorios.TryGetValue(clave, out var src) && src != null)
+            src.transform.position = pos;
+    }
+
+    // Capa individual de Arbmos. Se llama cada frame mientras la aparicion visible exista;
+    // `encendida` representa la linterna local, no una regla de daño.
+    public static void ResonanciaArbmos(Vector3 pos, bool encendida)
+    {
+        var m = Instance;
+        if (m == null || m._cat == null) return;
+        m._resonancePosition = pos;
+        if (encendida && !m._resonanceRequested) m.IniciarResonancia();
+        else if (!encendida && m._resonanceRequested) m.FinalizarResonancia(true);
+        m._resonanceRequested = encendida;
+    }
+
+    public static void DetenerResonanciaArbmos(bool salidaNatural)
+    {
+        var m = Instance;
+        if (m == null) return;
+        if (m._resonanceRequested || m._resonanceActive)
+            m.FinalizarResonancia(salidaNatural);
+        m._resonanceRequested = false;
+    }
+
+    // Presentacion local de muerte. El tipo del asesino decide la vocalizacion; el coro
+    // breve se programa una vez y nunca reemplaza la cama musical.
+    public static void PresentarMuerte(byte killerType)
+    {
+        var m = Instance;
+        if (m == null || m._cat == null || m._deathVoice == null) return;
+        m.CancelarPresentacionMuerteInterna();
+
+        AudioCatalog.Pista causa = killerType switch
+        {
+            EntityTypeIds.Sorken => m._cat.sorkenCapturaFatal,
+            EntityTypeIds.Veleth => m._cat.velethCapturaFatal,
+            EntityTypeIds.Arbmos => m._cat.arbmosAgarreLetal,
+            _ => null,
+        };
+        var causeClip = causa?.Elegir();
+        if (causeClip != null)
+        {
+            m._deathVoice.clip = causeClip;
+            m.Configurar(m._deathVoice, causa, Vector3.zero, false,
+                         GameOptions.VolumenEfectos);
+            m._deathVoice.Play();
+        }
+
+        var stinger = m._cat.gameOverStinger;
+        var stingerClip = stinger?.Elegir();
+        if (stingerClip == null) return;
+        const float delay = 0.55f; // conserva el ataque de la captura sin retrasar la UI
+        m._deathStinger.clip = stingerClip;
+        m.Configurar(m._deathStinger, stinger, Vector3.zero, false,
+                     GameOptions.VolumenEfectos);
+        m._deathStinger.PlayDelayed(delay);
+        m._deathStingerStartsAt = Time.unscaledTime + delay;
+    }
+
+    public static void CancelarPresentacionMuerte()
+    {
+        Instance?.CancelarPresentacionMuerteInterna();
+    }
+
     // Cambia la musica de fondo con crossfade. Si ya suena esa misma pista, no hace nada
     // (asi se puede llamar sin miedo desde un cambio de escena o al reanudar).
     public static void Musica(Func<AudioCatalog, AudioCatalog.Pista> sel, float fade = 1.5f)
@@ -401,7 +551,7 @@ public class AudioManager : MonoBehaviour
 
         if (entra != null)
         {
-            float objetivo = MezclarVolumen(_musObjetivo, busMusica);
+            float objetivo = MezclarVolumen(_musObjetivo, busMusica) * _musDuck;
             entra.volume = Mathf.MoveTowards(entra.volume, objetivo, dt / _musFade);
         }
         if (sale != null && sale.volume > 0f)
@@ -412,6 +562,131 @@ public class AudioManager : MonoBehaviour
 
         ActualizarCapaTension(busMusica);
         ActualizarEventoAmbiental();
+        ActualizarTransitorios();
+        ActualizarResonancia();
+        ActualizarMuerte();
+    }
+
+    private AudioSource TomarTransitorioLibre()
+    {
+        for (int i = 0; i < _transitoriosLibres.Length; i++)
+        {
+            var src = _transitoriosLibres[i];
+            if (src != null && !src.isPlaying && !_transitorios.ContainsValue(src)) return src;
+        }
+        return null;
+    }
+
+    private void ActualizarTransitorios()
+    {
+        if (_transitorios.Count == 0) return;
+        var borrar = new List<string>();
+        foreach (var pair in _transitorios)
+        {
+            var src = pair.Value;
+            if (src == null) { borrar.Add(pair.Key); continue; }
+            if (_transitorioFade.TryGetValue(pair.Key, out float fade))
+            {
+                src.volume = Mathf.MoveTowards(src.volume, 0f,
+                    Time.unscaledDeltaTime / Mathf.Max(0.01f, fade));
+                if (src.volume <= 0.001f) { src.Stop(); src.clip = null; borrar.Add(pair.Key); }
+            }
+            else if (!src.isPlaying) { src.clip = null; borrar.Add(pair.Key); }
+        }
+        foreach (string key in borrar)
+        {
+            _transitorios.Remove(key);
+            _transitorioFade.Remove(key);
+        }
+    }
+
+    private void IniciarResonancia()
+    {
+        var entrada = _cat.arbmosResonanciaEntrada;
+        var sostenido = _cat.arbmosResonanciaSostenida;
+        var introClip = entrada?.Elegir();
+        var loopClip = sostenido?.Elegir();
+        if (introClip == null || loopClip == null) return;
+
+        _resonanceExit.Stop();
+        _resonanceIntro.Stop();
+        _resonanceLoop.Stop();
+        _resonanceIntro.clip = introClip;
+        _resonanceLoop.clip = loopClip;
+        Configurar(_resonanceIntro, entrada, _resonancePosition, true,
+                   GameOptions.VolumenEfectos);
+        Configurar(_resonanceLoop, sostenido, _resonancePosition, true, 0f);
+        _resonanceTarget = MezclarVolumen(sostenido.volumen, GameOptions.VolumenEfectos);
+        _resonanceIntro.Play();
+        _resonanceLoopStartAt = Time.unscaledTime + Mathf.Max(0f, introClip.length - ResonanceCrossfade);
+        _resonanceActive = true;
+    }
+
+    private void FinalizarResonancia(bool salidaNatural)
+    {
+        if (!_resonanceActive) return;
+        _resonanceActive = false;
+        if (salidaNatural)
+        {
+            var salida = _cat.arbmosResonanciaSalida;
+            var clip = salida?.Elegir();
+            if (clip != null)
+            {
+                _resonanceExit.Stop();
+                _resonanceExit.clip = clip;
+                Configurar(_resonanceExit, salida, _resonancePosition, true,
+                           GameOptions.VolumenEfectos);
+                _resonanceExit.Play();
+            }
+        }
+    }
+
+    private void ActualizarResonancia()
+    {
+        if (_resonanceIntro == null) return;
+        _resonanceIntro.transform.position = _resonancePosition;
+        _resonanceLoop.transform.position = _resonancePosition;
+        _resonanceExit.transform.position = _resonancePosition;
+
+        if (_resonanceActive && !_resonanceLoop.isPlaying &&
+            Time.unscaledTime >= _resonanceLoopStartAt)
+            _resonanceLoop.Play();
+
+        float step = Time.unscaledDeltaTime / ResonanceCrossfade;
+        float target = _resonanceActive && _resonanceLoop.isPlaying ? _resonanceTarget : 0f;
+        _resonanceLoop.volume = Mathf.MoveTowards(_resonanceLoop.volume, target, step);
+        if (_resonanceActive && _resonanceLoop.isPlaying && _resonanceIntro.isPlaying)
+        {
+            _resonanceIntro.volume = Mathf.MoveTowards(_resonanceIntro.volume, 0f, step);
+            if (_resonanceIntro.volume <= 0.001f) _resonanceIntro.Stop();
+        }
+        if (!_resonanceActive)
+        {
+            _resonanceIntro.volume = Mathf.MoveTowards(_resonanceIntro.volume, 0f, step);
+            if (_resonanceIntro.volume <= 0.001f && _resonanceIntro.isPlaying) _resonanceIntro.Stop();
+            if (_resonanceLoop.volume <= 0.001f && _resonanceLoop.isPlaying) _resonanceLoop.Stop();
+        }
+    }
+
+    private void ActualizarMuerte()
+    {
+        bool stingerActivo = _deathStinger != null && _deathStinger.isPlaying &&
+                             Time.unscaledTime >= _deathStingerStartsAt;
+        float target = stingerActivo ? 0.42f : 1f;
+        float seconds = stingerActivo ? 0.25f : 1.5f;
+        _musDuck = Mathf.MoveTowards(_musDuck, target,
+            Time.unscaledDeltaTime / Mathf.Max(0.01f, seconds));
+        if (!stingerActivo && _deathStingerStartsAt >= 0f &&
+            Time.unscaledTime > _deathStingerStartsAt)
+            _deathStingerStartsAt = -1f;
+    }
+
+    private void CancelarPresentacionMuerteInterna()
+    {
+        if (_deathVoice != null) { _deathVoice.Stop(); _deathVoice.clip = null; }
+        if (_deathStinger != null) { _deathStinger.Stop(); _deathStinger.clip = null; }
+        _deathStingerStartsAt = -1f;
+        _musDuck = 1f;
     }
 
     private void ActualizarEventoAmbiental()

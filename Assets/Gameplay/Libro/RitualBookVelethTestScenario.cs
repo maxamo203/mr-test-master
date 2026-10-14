@@ -342,7 +342,6 @@ namespace Gameplay
             _veleth.SetState(VelethState.Hunting);
             float emergenceDuration = _veleth.BeginEmergence();
             _book?.PreservarHastaAparicionDeVeleth(_veleth.BookDisappearDelay);
-            VelethPresentation.PlayInvocation(spawn);
             _hunting = true;
             _emerging = true;
             StartCoroutine(EmpezarCaceriaTrasEmergencia(emergenceDuration));

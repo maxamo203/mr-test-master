@@ -145,7 +145,7 @@ namespace Gameplay
             ActualizarShader();
         }
 
-        // Los eventos del libro (empieza / salvado / perdido) son flags de
+        // Los eventos del libro (empieza / perdido) son flags de
         // RitualBookTickResult que MUEREN en el host: por red solo viaja el float de
         // oscuridad. Por eso el audio se deduce acá, de las transiciones de ese float —
         // este método corre en TODOS los peers, así que host y clientes oyen lo mismo
@@ -154,11 +154,6 @@ namespace Gameplay
         {
             const float Cero = 1e-5f;
             const float Todo = 1f - 1e-5f;
-
-            if (antes <= Cero && ahora > Cero)
-                AudioManager.Sonar(c => c.libroAtaqueEmpieza, transform.position);
-            else if (antes > Cero && ahora <= Cero)
-                AudioManager.Sonar(c => c.libroSalvado, transform.position);
 
             // US-7: el libro se perdió. Es el sonido de alerta que invoca a Veleth.
             if (antes < Todo && ahora >= Todo)

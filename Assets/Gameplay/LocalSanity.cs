@@ -44,10 +44,19 @@ namespace Gameplay
         // solo baja, por eso alcanza con comparar contra el valor anterior.
         public void Set(float value, float max)
         {
+            float antes = Value;
             float antes01 = Value01;
             Value = value;
             Max   = max;
             float ahora01 = Value01;
+
+            // El resultado autoritativo llega por este único punto en host y cliente.
+            // Sólo el golpe normal que deja cordura reproduce el jadeo; llegar a cero
+            // abre la persecución letal y no debe anticipar su grito de muerte.
+            var arbmos = ArbmosEntity.Active;
+            if (Value < antes && Value > 0f && arbmos != null && arbmos.Rendered &&
+                !arbmos.Lethal && arbmos.State == ArbmosState.Attacking)
+                AudioManager.Sonar(c => c.arbmosAgarreNoLetal);
 
             if (antes01 > 0f && ahora01 <= 0f)
                 AudioManager.Sonar(c => c.corduraCero);          // a partir de aca el Arbmos mata

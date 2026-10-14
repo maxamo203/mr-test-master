@@ -2,21 +2,20 @@ fileFormatVersion: 2
 guid: ac83f34d921a41f1a0de708f965ec29a
 AudioImporter:
   externalObjects: {}
-  serializedVersion: 7
+  serializedVersion: 8
   defaultSettings:
     serializedVersion: 2
-    loadType: 1
+    loadType: 2
     sampleRateSetting: 0
     sampleRateOverride: 44100
     compressionFormat: 1
-    quality: 0.7
+    quality: 0.72
     conversionMode: 0
     preloadAudioData: 0
   platformSettingOverrides: {}
   forceToMono: 1
   normalize: 1
-  preloadAudioData: 0
-  loadInBackground: 0
+  loadInBackground: 1
   ambisonic: 0
   3D: 1
   userData: Susurros 3D en loop durante el consumo del libro ritual

@@ -98,7 +98,7 @@ namespace Gameplay
                                                   NightLoot.Total);
             PresentationReady = false;
             _killerNetworkId = killerNetworkId;
-            AudioManager.Musica(c => c.derrotaMuerte, fade: 0.4f);
+            AudioManager.PresentarMuerte(ResolverTipoAsesino(killerNetworkId));
             ZoomTowardsFace(killerFacePosition);
 
             if (allPlayersDead) { TerminarNoche(); StopGameplayForAll(); }
@@ -187,7 +187,16 @@ namespace Gameplay
             _lockCamera = false;
             _camera = null;
             _killerNetworkId = 0;
+            AudioManager.CancelarPresentacionMuerte();
             Time.timeScale = 1f;
+        }
+
+        private static byte ResolverTipoAsesino(uint networkId)
+        {
+            if (networkId == 0 || EntityRegistry.Instance == null ||
+                !EntityRegistry.Instance.TryGet(networkId, out var killer) || killer == null)
+                return 0;
+            return killer.EntityTypeId;
         }
 
         public static LocalDeath Ensure()

@@ -23,7 +23,6 @@ public class VelethNetwork : NetworkEntity
     {
         _veleth.BeginEmergence();
         RitualBookView.Active?.PreservarHastaAparicionDeVeleth(_veleth.BookDisappearDelay);
-        VelethPresentation.PlayInvocation(_veleth.Position);
     }
 
     public override byte[] SerializeState(uint tick)

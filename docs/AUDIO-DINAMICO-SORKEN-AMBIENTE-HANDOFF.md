@@ -8,6 +8,8 @@ El usuario recopiló sonidos en `docs/REGLAS-SONIDOS-AMBIENTALES.md` y quiere in
 
 En esta entrega sólo se documenta. No se modificaron scripts, escenas, prefabs, clips ni catálogo. Este documento no autoriza iniciar implementación por sí solo: el agente implementador debe recibir la instrucción del usuario de ejecutar el trabajo.
 
+Actualización de assets (2026-10-13): respiración, coro nuevo, susurros y bancos segmentados están preparados en el proyecto. El banco inicial de Arbmos está en `output/arbmos-pasos/arbmos_paso_01.wav` a `04`; son copias de Sorken para la prueba con configuración propia. Los reemplazos de música y retirada de efectos acordados después de este handoff se rigen por el documento principal; conservar otras pistas no anula esas decisiones.
+
 Fuente principal de reglas: `docs/REGLAS-SONIDOS-AMBIENTALES.md`. Contexto de gameplay: `docs/GAMEPLAY-REFINAMIENTO-PENDIENTES.md` (avance muy lento bajo luz, tolerancia de 2 s, espacios pequeños y reparto de eventos multijugador). Las propuestas aquí identificadas como tales necesitan validación; no tratar cifras antiguas del gameplay como implementación vigente sin revisar el código actual.
 
 ## 2. Assets nuevos y comportamiento requerido
@@ -19,7 +21,7 @@ Fuente principal de reglas: `docs/REGLAS-SONIDOS-AMBIENTALES.md`. Contexto de ga
 | Entrada por puerta | `Assets/Audio/Clips/Sorken/entrada_puerta_crujido.wav` | Una vez cuando Sorken comienza efectivamente a entrar por puerta |
 | Pisadas | `Assets/Audio/Clips/Sorken/paso_entrada_puerta_01.wav` a `paso_entrada_puerta_04.wav` | Cada archivo contiene una pisada; una variante por apoyo, sin concatenar las cuatro |
 
-Los siete WAV y sus `.meta` existen en las carpetas revisadas. No se audicionaron ni se midieron duración, silencios, calidad o intensidad en esta tarea. El implementador debe inspeccionarlos antes de calibrar.
+Los ocho WAV y sus `.meta` existen en las carpetas revisadas. La revisión del 2026-10-13 verificó existencia, duración/formato, decodificación completa y picos. La audición y calibración en dispositivo siguen pendientes. Inventario de todos los audios seleccionados: [INVENTARIO-AUDIOS-PREPARADOS.md](C:/Users/fnval/Desktop/git/mr-test-master/output/audio-entrega/INVENTARIO-AUDIOS-PREPARADOS.md). No dejar descargas ni recortes seleccionados como tarea pendiente de este handoff.
 
 La regla 1–2 por noche corresponde al grupo de golpes, no a cada variante por separado. La fuente no define cuota de manija: dejarla configurable y documentar una propuesta moderada, sin inventar que comparte obligatoriamente esa cuota. Si no existen ventanas elegibles durante la noche, no forzar golpes para alcanzar el mínimo.
 
@@ -115,7 +117,19 @@ El ambiente es una falsa alarma de tensión: no debe crear Sorken ni modificar p
 
 ## 8. Trabajo y validación del implementador
 
-1. Auditar reglas, clips, referencias y escenas actuales. Escuchar los siete WAV y medir inicio audible, duración y nivel relativo.
+### Extensión acordada: locomoción y emergencia de Veleth (2026-10-13)
+
+Usar [Crawling on a Wooden Floor.wav — krnash](https://freesound.org/people/krnash/sounds/389794/) para apoyos/arrastres de locomoción y para la salida del libro. Segmentar el audio, con perfiles propios por animación y velocidad efectiva, reutilizando el criterio de sincronía de Sorken. No ejecutar el archivo completo como loop fijo ni copiar cadencia bípeda.
+
+En emergencia, sincronizar con brazos y torso aunque el root esté quieto. En persecución, los roces siguen apoyo y traslación real. Veleth se escucha espacialmente en todos los peers, a diferencia del audio individual de Arbmos. Evitar duplicar sonidos actuales de invocación/persecución. Ya hay cinco apoyos y cinco roces preparados en `output/veleth-arrastre`; rutas absolutas, duraciones y cortes en `docs/REGLAS-SONIDOS-AMBIENTALES.md`. Perfil, mezcla e integración pendientes. Las capas vocales de esfuerzo y tensión de salida aún no fueron seleccionadas.
+
+### Extensión acordada: pasos de Arbmos (2026-10-13)
+
+Incluir pisadas durante persecución normal y letal de Arbmos con las mismas reglas de sincronía que Sorken. Compartir infraestructura de contactos y reproducción cuando sea conveniente, manteniendo perfiles de animación y configuración de mezcla propios. No reutilizar los 12/5 apoyos de Sorken ni su cadencia. El banco inicial está preparado en `output/arbmos-pasos`, con cuatro copias exactas de Sorken para probar en una pista independiente. Un timbre distinto para Arbmos aún no fue elegido; no asumir una descarga pendiente para el banco inicial.
+
+Aplicar detección de apoyos, variación sin repetición inmediata, emisión espacial, limpieza y deduplicación. Arbmos sólo suena al dueño de la aparición: las copias ocultas del host no emiten audio. El apagado de luz termina la resonancia según su regla, pero no cancela pisadas si el ataque ya comprometido sigue avanzando. Probar normal/letal, velocidad efectiva, inmovilidad, bloqueo de ruta, transiciones y clientes. Ver detalles en `docs/REGLAS-SONIDOS-AMBIENTALES.md`.
+
+1. Auditar reglas, clips, referencias y escenas actuales. Escuchar los ocho WAV y medir inicio audible, duración y nivel relativo.
 2. Mapear apoyos viendo entrada, persecución, cobertura y retirada; verificar rig y tiempos realmente usados en prefabs.
 3. Implementar perfiles/detector y reemplazar el temporizador antiguo, usando catálogo y motor existentes.
 4. Implementar scheduler ambiental y disparo exacto de crujido, con reproducción compartida sin duplicación.
@@ -141,3 +155,22 @@ El ambiente es una falsa alarma de tensión: no debe crear Sorken ni modificar p
 Propuesta de medición: error entre contacto visible y transitorio audible, objetivo inicial ≤80 ms en dispositivo (validar viabilidad y latencia de salida); conteo de contactos/sonidos por ciclo; duplicados = 0; motivos de postergación ambiental; cuota por noche; coste y voces simultáneas. Probar lógica con tests y sincronía/mezcla con revisión audiovisual real. No declarar sincronía basándose sólo en el contador.
 
 Entrega del agente: tabla de referencias reemplazadas, archivos modificados, perfiles de contacto y parámetros, decisiones de ventana/cuota de manija, pruebas en host/cliente y dispositivo, y limitaciones. No borrar assets antiguos sólo para limpiar; dejar reversión sencilla.
+
+## Salida orgánica de Veleth — selección confirmada
+
+Usar `output/veleth-emergencia/veleth_salida_libro_organica_8_3s.wav`, derivado preparado de Alien is crawling-003 — tosha73, como complemento del banco de apoyos/roces. Dura 8,3 s según el prefab actual: inicia al comenzar la emergencia y finaliza al comenzar la persecución. Si cambia la duración efectiva, adaptar la edición sin alterar gameplay. Retirar primero el sonido antiguo de salida; conservar los susurros. No hacer loop ni continuar esta capa al perseguir. Rutas, licencia CC BY 4.0, edición y sincronización detalladas en el documento principal y en `output/veleth-emergencia/ATRIBUCION-Y-EDICION.md`.
+
+## Vocalizaciones de Veleth — selección confirmada
+
+- Captura fatal: `output/veleth-vocalizaciones/veleth_captura_fatal_scream.wav`, Demonic Woman Scream — nick121087, 4,458 s completos. Una vez al resolver muerte por captura de Veleth; deduplicar por víctima/evento. Preservar grito al pasar al stinger de derrota; no bloquear UI ni reiniciar fondo.
+- Persecución: `output/veleth-vocalizaciones/veleth_persecucion_espectral_loop.wav`, Ghost Monster Scream — NachtmahrTV, ciclo preparado de 14,628 s (fuente 15,378 s, crossfade 750 ms). Capa espacial adicional desde Veleth, una voz por entidad/dispositivo, complemento del arrastre dinámico. No usarla como reloj de pasos, ni durante emergencia.
+- Al capturar, atenuar la capa espectral para la víctima; limpiar/salir durante pausa de agarre y reactivar sin duplicados si continúa persiguiendo a otros jugadores vivos. Despawn/fin de noche limpian la voz. La muerte local no silencia globalmente amenazas de otros jugadores.
+- Fuentes HQ descargadas y WAV mono PCM24/48 kHz preparados, licencia CC0 de ambas fichas y edición en `output/veleth-vocalizaciones/ATRIBUCION-Y-EDICION.md`. Reglas completas y rutas absolutas en el documento principal. Audición y calibración de mezcla en dispositivo pendientes; no se modificó código.
+
+## Captura fatal de Sorken — audio seleccionado y preparado
+
+Usar `output/sorken-vocalizaciones/sorken_captura_fatal_scream.wav` (2,747 s), Monster scream 1 — giddster. Una vez por captura fatal autoritativa de Sorken, deduplicada por víctima/evento. Auditar y sustituir efectos antiguos equivalentes para evitar dobles screams; conservar entrada y pasos. Preservar grito al pasar al stinger de derrota, sin bloquear pantalla ni interacción; Dark Choir Singing continúa sin reiniciarse. Fuente HQ descargada, WAV mono PCM24/48 kHz preparado, CC0 y edición registradas en `output/sorken-vocalizaciones/ATRIBUCION-Y-EDICION.md`. Reglas completas y ruta absoluta en documento principal; mezcla/animación por validar en dispositivo. No se modificó código.
+
+## Sorken — reacción de cobertura y voces de marcha cubierta
+
+Fuente elegida: Zombie/Monster roars, growls, grunts (juicy) — umnachtung; HQ descargado, siete clips preparados en `output/sorken-cobertura`. Dos primeras vocalizaciones en `sorken_cubrirse_dolor_enfado_01.wav` y `02.wav`, 3 s cada una ajustados sin pitch: alternar entre intentos, una sola al primer `CoverStarting`, conforme a `_coverStartPlayedThisAttempt`. Duración sigue animación/fase, no gobierna gameplay. Cinco vocalizaciones de 9–23 segundos de la fuente en `sorken_marcha_cubierta_vocal_01.wav` a `05.wav`, sólo para `CoverWalking`, independientes de cadencia de pasos. No superponer vocalizaciones de la misma entidad; cancelar y salir suavemente al cambiar de estado. No apilar sobre captura ni reiniciar fondo. Propuesta de silencios vocales, cortes, rutas absolutas y validación en documento principal. Licencia CC BY 4.0 y edición en `output/sorken-cobertura/ATRIBUCION-Y-EDICION.md`. Preparación técnica completa; audición/calibración en dispositivo e integración pendientes. No se modificó código.
