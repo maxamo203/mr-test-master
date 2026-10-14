@@ -27,6 +27,8 @@ namespace Rediseno.Menus
             if (Object.FindAnyObjectByType<MenuEscenario2>() == null) new GameObject("MenuEscenario2").AddComponent<MenuEscenario2>();
             if (Object.FindAnyObjectByType<MenuSinEscenario2>() == null) new GameObject("MenuSinEscenario2").AddComponent<MenuSinEscenario2>();
             if (Object.FindAnyObjectByType<MenuCrearUnirse2>() == null) new GameObject("MenuCrearUnirse2").AddComponent<MenuCrearUnirse2>();
+            if (Object.FindAnyObjectByType<MenuEscenarios2>() == null) new GameObject("MenuEscenarios2").AddComponent<MenuEscenarios2>();
+            if (Object.FindAnyObjectByType<AvisoMenu2>() == null) new GameObject("AvisoMenu2").AddComponent<AvisoMenu2>();
         }
     }
 
@@ -64,7 +66,7 @@ namespace Rediseno.Menus
             Desplazable = sv;
             col.Add(sv);
             Lista = sv;
-            nav.Volver = () => NightMenuUI.Instance?.VolverPantalla();
+            nav.Volver = AlVolver;
             Rearmar();
         }
 
@@ -76,8 +78,12 @@ namespace Rediseno.Menus
             Nav.Limpiar();
             Armar(Lista, Nav);
             // "Volver" al final del orden: el foco inicial cae en el contenido.
-            Nav.Agregar(_volver, () => NightMenuUI.Instance?.VolverPantalla());
+            Nav.Agregar(_volver, AlVolver);
         }
+
+        // "Volver" (botón del encabezado, ← / B, atrás de Android). Una pantalla con un paso
+        // interno (p. ej. confirmar un borrado) lo redefine para cerrar ese paso primero.
+        protected virtual void AlVolver() => NightMenuUI.Instance?.VolverPantalla();
 
         protected abstract void Armar(VisualElement lista, MenuNavegable nav);
 

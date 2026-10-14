@@ -167,6 +167,20 @@ namespace Gameplay
         public void AbrirJugar()         => ConfigurarPartida(GameSession.SessionMode.SinglePlayer);
         public void AbrirMultijugador()  { if (BuildVariant.Multijugador) _pantalla = Pantalla.CrearUnirse; }
         public void AbrirEscenarios()    => OnEscanear();
+        public void BorrarEscenario(string escena) { ScanSerializer.Delete(escena); RefrescarScans(); }
+
+        // Avisos modales del menú, en el mismo orden de precedencia que OnGUI. Los dibuja
+        // Rediseno.Menus.AvisoMenu2 con el flag prendido.
+        public enum AvisoMenu { Ninguno, VersionIncompatible, Salida, VersionDesconocida, Ios }
+        public AvisoMenu AvisoActual =>
+            _versionIncompatible            ? AvisoMenu.VersionIncompatible :
+            HayAvisoSalida                  ? AvisoMenu.Salida :
+            _mostrarAvisoVersionDesconocida ? AvisoMenu.VersionDesconocida :
+            _mostrarAvisoIos                ? AvisoMenu.Ios : AvisoMenu.Ninguno;
+        public string TextoAvisoSalida => GameSession.Instance != null ? GameSession.Instance.AvisoSalida : null;
+        // El bloqueo por versión no se cierra (Volver tampoco lo hace): sólo SALIR.
+        public void CerrarAviso() => Volver();
+        public static void Salir() => SalirDelJuego();
         public void AbrirOpciones()      => _pantalla = Pantalla.Opciones;
 
         private void Update()
