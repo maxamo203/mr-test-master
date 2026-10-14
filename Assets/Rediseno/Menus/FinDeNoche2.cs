@@ -141,7 +141,7 @@ namespace Rediseno.Menus
                 PiezasUI.Info(_cuerpo, "Esperando a que el host reinicie la noche…");
             }
 
-            if (espectable && !EnVisor)
+            if (espectable)
                 _cuerpo.Add(PiezasUI.Boton(Nav, "ESPECTAR PARTIDA", ld.Espectar));
 
             _cuerpo.Add(PiezasUI.Boton(Nav, "VOLVER AL MENÚ", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));

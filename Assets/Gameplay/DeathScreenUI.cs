@@ -30,7 +30,7 @@ namespace Gameplay
             if (!muerto && !sobrevivio) { _selectorAbierto = false; return; }
 
             // Rediseño 2.0: la dibuja la pantalla nueva (UI Toolkit, estéreo con Cardboard).
-            if (Rediseno.Menus.FinDeNoche2.Mostrando) return;
+            if (Rediseno.Menus.FinDeNoche2.Mostrando || Rediseno.Menus.Espectando2.Mostrando) return;
 
             UIScale.Begin();
             _nav.Begin();
