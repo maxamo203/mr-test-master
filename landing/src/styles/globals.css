@@ -63,6 +63,7 @@
   --bg-alt: var(--c-bg-2);
   --surface: var(--c-panel);
   --surface-2: var(--c-panel-2);
+  --field: var(--c-field);
 
   --text: var(--c-cream);
   --text-soft: var(--c-cream-dim);

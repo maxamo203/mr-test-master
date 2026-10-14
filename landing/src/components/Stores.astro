@@ -1,8 +1,9 @@
 ---
 /**
- * Sección 04 — "Descargar". Las dos tiendas están puestas pero INACTIVAS a
- * propósito: el juego todavía no salió, así que son tarjetas con el sello
- * PRÓXIMAMENTE y no links (no hay a dónde ir, y un link muerto se siente roto).
+ * Sección 04 — "Descargar". El juego todavía no salió: App Store sigue
+ * INACTIVA a propósito (tarjeta con el sello PRÓXIMAMENTE y no link — no hay a
+ * dónde ir, y un link muerto se siente roto). Google Play, en cambio, ya tiene
+ * prueba cerrada: su tarjeta es un link a /prueba-cerrada para anotarse.
  */
 ---
 
@@ -18,8 +19,8 @@
     </p>
 
     <div class="cards">
-      <div class="store" aria-disabled="true" data-reveal>
-        <span class="store__badge">Próximamente</span>
+      <a class="store store--live" href="/prueba-cerrada" data-reveal>
+        <span class="store__badge">Prueba cerrada</span>
         <span class="store__logo" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path
@@ -32,10 +33,11 @@
           </svg>
         </span>
         <div class="store__text">
-          <span class="store__pre">Disponible en</span>
+          <span class="store__pre">Anotate a la prueba en</span>
           <span class="store__name">Google Play</span>
+          <span class="store__cta">Tocá para registrarte &rarr;</span>
         </div>
-      </div>
+      </a>
 
       <div class="store" aria-disabled="true" data-reveal style="--reveal-delay:110ms">
         <span class="store__badge">Próximamente</span>
@@ -97,6 +99,33 @@
     border-color: var(--rule);
   }
 
+  /* Activa: link real, sin el apagado de las "próximamente" */
+  .store--live {
+    cursor: pointer;
+    filter: none;
+    opacity: 1;
+    color: inherit;
+    border-color: var(--accent-deep);
+  }
+
+  .store--live:hover,
+  .store--live:focus-visible {
+    opacity: 1;
+    filter: none;
+    color: inherit;
+    border-color: var(--accent);
+    background-image: var(--card-bg-hover);
+    box-shadow: 0 0 1.6rem var(--glow-gold-soft);
+  }
+
+  .store--live .store__logo {
+    color: var(--accent);
+  }
+
+  .store--live .store__badge {
+    border-color: var(--accent);
+  }
+
   .store__badge {
     position: absolute;
     top: -0.62rem;
@@ -143,6 +172,20 @@
     font-size: 1.5rem;
     letter-spacing: 0.04em;
     color: var(--text);
+  }
+
+  .store__cta {
+    margin-top: 0.3rem;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    transition: color 0.3s var(--ease-out);
+  }
+
+  .store--live:hover .store__cta {
+    color: var(--accent-soft);
   }
 
   .stores__note {

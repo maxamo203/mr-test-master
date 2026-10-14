@@ -1,0 +1,250 @@
+---
+/**
+ * Aviso flotante de la prueba cerrada de Google Play (sólo en la home).
+ *
+ * Existe para que nadie tenga que bajar hasta "Descargar" para enterarse de
+ * que ya puede anotarse. Por eso:
+ *  - aparece solo, con un pequeño retraso para no pisar la entrada del hero;
+ *  - se va en cuanto la sección #descargar entra en pantalla (ahí ya está la
+ *    tarjeta de Google Play diciendo lo mismo) y no vuelve más abajo, donde
+ *    taparía los controles del tráiler;
+ *  - se puede cerrar, y el cierre se recuerda en el navegador.
+ *
+ * Sin JS no se muestra (arranca con `hidden`): la tarjeta de la sección sigue
+ * estando, así que no se pierde nada.
+ */
+---
+
+<aside class="bn" aria-label="Prueba cerrada en Google Play" hidden data-beta-notice>
+  <a class="bn__link" href="/prueba-cerrada">
+    <span class="bn__dot" aria-hidden="true"></span>
+    <span class="bn__text">
+      <span class="bn__pre">Google Play · Prueba cerrada</span>
+      <span class="bn__main">Anotate y jugá antes que nadie</span>
+    </span>
+    <span class="bn__arrow" aria-hidden="true">&rarr;</span>
+  </a>
+  <button class="bn__close" type="button" aria-label="Cerrar aviso" data-beta-notice-close>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18"></path>
+    </svg>
+  </button>
+</aside>
+
+<style>
+  .bn {
+    position: fixed;
+    right: clamp(1rem, 2.5vw, 1.75rem);
+    bottom: clamp(1rem, 2.5vw, 1.75rem);
+    z-index: 60; /* sobre el riel (50), bajo el grano del body (999) */
+    display: flex;
+    align-items: stretch;
+    max-width: min(24rem, calc(100vw - 2rem));
+    border: 1px solid var(--accent-deep);
+    background-color: var(--surface);
+    box-shadow: var(--shadow-card);
+    opacity: 0;
+    translate: 0 1rem;
+    /* visibility (no sólo opacity): oculto, tampoco debe recibir foco con Tab.
+       Se apaga recién al terminar el fundido de salida. */
+    visibility: hidden;
+    transition:
+      opacity 0.5s var(--ease-out),
+      translate 0.5s var(--ease-out),
+      border-color 0.3s var(--ease-out),
+      visibility 0s linear 0.5s;
+  }
+
+  .bn.is-on {
+    opacity: 1;
+    translate: 0 0;
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  .bn:hover {
+    border-color: var(--accent);
+  }
+
+  /* Filete dorado arriba, como el resto de los paneles */
+  .bn::before {
+    content: '';
+    position: absolute;
+    inset: -1px -1px auto;
+    height: 2px;
+    background-image: var(--grad-frame);
+  }
+
+  /* Mobile: centrado, encima del dock inferior del riel */
+  @media (max-width: 60rem) {
+    .bn {
+      left: 1rem;
+      right: 1rem;
+      bottom: calc(var(--dock-h) + 0.75rem);
+      max-width: none;
+    }
+  }
+
+  .bn__link {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.8rem 0.4rem 0.8rem 1rem;
+    color: var(--text);
+  }
+
+  .bn__link:hover {
+    color: var(--text);
+  }
+
+  .bn__dot {
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background-color: var(--accent);
+    box-shadow: 0 0 0 0 var(--glow-gold);
+    animation: bn-pulse 2.4s var(--ease-out) infinite;
+  }
+
+  @keyframes bn-pulse {
+    0% {
+      box-shadow: 0 0 0 0 var(--glow-gold);
+    }
+    70%,
+    100% {
+      box-shadow: 0 0 0 0.6rem transparent;
+    }
+  }
+
+  .bn__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.3;
+  }
+
+  .bn__pre {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .bn__main {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    letter-spacing: 0.04em;
+  }
+
+  .bn__arrow {
+    flex: none;
+    margin-left: auto;
+    color: var(--accent);
+    transition: translate 0.3s var(--ease-out);
+  }
+
+  .bn__link:hover .bn__arrow {
+    translate: 0.2rem 0;
+  }
+
+  .bn__close {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    padding: 0;
+    border: 0;
+    border-left: 1px solid var(--rule-soft);
+    background: transparent;
+    color: var(--text-faint);
+    cursor: pointer;
+    transition:
+      color 0.2s var(--ease-out),
+      background-color 0.2s var(--ease-out);
+  }
+
+  .bn__close:hover {
+    color: var(--text);
+    background-color: var(--tint-hover);
+  }
+
+  .bn__close svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bn {
+      translate: none;
+      transition:
+        opacity 0.2s linear,
+        visibility 0s linear 0.2s;
+    }
+
+    .bn__dot {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  const notice = document.querySelector<HTMLElement>('[data-beta-notice]');
+  const close = document.querySelector<HTMLButtonElement>('[data-beta-notice-close]');
+  const descargar = document.getElementById('descargar');
+
+  const STORAGE_KEY = 'mortuorium-aviso-prueba-cerrada';
+  // localStorage puede tirar (modo privado, datos bloqueados): sin él el aviso
+  // simplemente vuelve a aparecer en la próxima visita.
+  const cerradoAntes = () => {
+    try {
+      return localStorage.getItem(STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  };
+
+  if (notice && close && !cerradoAntes()) {
+    let listo = false; // pasó el retraso inicial
+    let cerrado = false;
+
+    // Visible sólo mientras #descargar no haya entrado en pantalla todavía.
+    const antesDeDescargar = () =>
+      !descargar || descargar.getBoundingClientRect().top > window.innerHeight * 0.85;
+
+    const actualizar = () => {
+      notice.classList.toggle('is-on', listo && !cerrado && antesDeDescargar());
+    };
+
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        actualizar();
+      });
+    };
+
+    notice.hidden = false;
+    setTimeout(() => {
+      listo = true;
+      actualizar();
+    }, 1400);
+    addEventListener('scroll', onScroll, { passive: true });
+    addEventListener('resize', onScroll);
+
+    close.addEventListener('click', () => {
+      cerrado = true;
+      actualizar();
+      try {
+        localStorage.setItem(STORAGE_KEY, '1');
+      } catch {}
+      removeEventListener('scroll', onScroll);
+      removeEventListener('resize', onScroll);
+    });
+  }
+</script>
