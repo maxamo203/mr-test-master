@@ -270,14 +270,12 @@ namespace Gameplay
             _marker = markers[UnityEngine.Random.Range(0, markers.Count)];
             if (_marker == null) { _attemptTimer = 1f; return; }
 
-            Vector3 defenseTarget = EmergePosition() + Vector3.up;
-            float defenseRange = _night.flashlightRange;
-            if (PlayerLights.TryConoReal(out _, out float realRange))
-                defenseRange = realRange;
-            if (!ThreatCoordinator.CanBeginSorkenEntryAt(
-                    defenseTarget, defenseRange, 0.4f))
+            // Sin chequeo de cercanía: el punto sale al azar y Sorken entra esté quien
+            // esté (ver ThreatCoordinator.CanBeginSorkenEntry). Sólo espera si hay una
+            // consecuencia letal de Arbmos en curso.
+            if (!ThreatCoordinator.CanBeginSorkenEntry())
             {
-                GameplayTelemetry.Postponed("sorken", "no_viable_defender");
+                GameplayTelemetry.Postponed("sorken", "lethal_consequence");
                 _marker = null;
                 _attemptTimer = 2f;
                 return;

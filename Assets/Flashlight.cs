@@ -103,9 +103,17 @@ public class Flashlight : MonoBehaviour
     public bool requireMatchToOperate = true;
 
     // True si la linterna puede operar ahora (en partida, o si no se exige partida).
+    // Espectando (muerto en multijugador, mirando a los demás) tampoco: la linterna deja
+    // de existir para ese jugador, y con ella el overlay de oscuridad (DarknessOverlay lee
+    // Operational) — el espectador tiene que ver la partida clara, no a través de un cono.
     private bool CanOperate =>
-        !requireMatchToOperate ||
-        (NetworkManager.Instance != null && NetworkManager.Instance.GameStarted);
+        (!requireMatchToOperate ||
+         (NetworkManager.Instance != null && NetworkManager.Instance.GameStarted)) &&
+        !(Gameplay.LocalDeath.Instance != null && Gameplay.LocalDeath.Instance.Espectando);
+
+    // Muerto (pantalla de muerte o espectando) no se drena: la batería ya no le sirve a nadie.
+    private static bool LocalMuerto =>
+        Gameplay.LocalDeath.Instance != null && Gameplay.LocalDeath.Instance.IsDead;
 
     // Publico para la UI (FlashlightHUD): no mostrar nada fuera de partida.
     public bool Operational => CanOperate;
@@ -336,7 +344,7 @@ static readonly int ID_COS_INNER = Shader.PropertyToID("_FlashlightCosInner");
         }
 
         // Drenar la batería mientras está encendida; apagar al agotarse.
-        if (Mode != FlashlightMode.Off)
+        if (Mode != FlashlightMode.Off && !LocalMuerto)
         {
             if (currentCharge > 0f)
             {

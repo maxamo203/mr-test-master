@@ -153,9 +153,7 @@ namespace Gameplay
             }
             if (_flow.Phase == RitualBookPhase.Consuming && !_bookReserved)
             {
-                if (!ThreatCoordinator.CanBeginBookAt(
-                        view.PuntoDeLuz, range, view.RadioAproximado) ||
-                    !ThreatCoordinator.TryBeginBook()) return;
+                if (!ThreatCoordinator.TryBeginBook()) return;
                 _bookReserved = true;
             }
             Alumbrando = PlayerLights.CountIlluminating(
@@ -164,8 +162,9 @@ namespace Gameplay
             int jugadoresVivos = ContarJugadoresVivos(net);
             TodosAlumbrando = Alumbrando > 0;
 
-            bool allowStart = _bookReserved || ThreatCoordinator.CanBeginBookAt(
-                view.PuntoDeLuz, range, view.RadioAproximado);
+            // Arranca cuando le toca, haya o no alguien cerca del libro: sólo respeta el
+            // presupuesto de amenazas simultáneas (ThreatCoordinator.CanBeginBook).
+            bool allowStart = _bookReserved || ThreatCoordinator.CanBeginBook();
 
             var result = _flow.Tick(Time.deltaTime, Alumbrando, jugadoresVivos,
                                     _night.bookConsumeSeconds, _night.bookDefenseSeconds,

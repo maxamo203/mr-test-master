@@ -77,12 +77,12 @@ namespace Gameplay
             // pantalla mono salen solos (ARLobbyManager.RecalibrarConImagen →
             // MRCardboardController.SalirSiActivo).
 
-            // Volver a MOSTRAR las paredes escaneadas. Durante la noche el jugador puede
-            // ocultarlas (SceneOccluderMode, botón PAREDES de la sala), pero ese botón
-            // sólo se dibuja con la partida arrancada: si el modo quedaba activo, al
-            // reintentar se volvía a la pantalla de sincronización sin ver el mapa —
-            // justo cuando hay que verlo para saber si está alineado— y sin botón para
-            // devolverlo.
+            // Volver a MOSTRAR las paredes escaneadas. Durante la noche están ocultas
+            // (SceneOccluderMode las oculta solo al arrancar; el toggle de la pausa sólo
+            // aparece con la partida arrancada): si el modo quedaba activo, al reintentar
+            // se volvía a la pantalla de sincronización sin ver el mapa — justo cuando hay
+            // que verlo para saber si está alineado. Al arrancar la noche de nuevo,
+            // SceneOccluderMode las vuelve a ocultar.
             SceneOccluderMode.Instance?.Restore();
 
             DetenerSistemas();

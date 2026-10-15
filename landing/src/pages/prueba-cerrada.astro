@@ -1,0 +1,668 @@
+---
+/**
+ * Registro a la prueba cerrada de Google Play.
+ *
+ * El sitio es 100% estático (no hay servidor), así que el formulario lo recibe
+ * Web3Forms (plan gratis: 250 envíos/mes): reenvía cada alta por mail al
+ * correo dueño de la access key. Se envía por fetch (AJAX) para no sacar al
+ * visitante del sitio hacia la página de gracias genérica de Web3Forms.
+ *
+ * Capas contra el abuso (ninguna alcanza sola; juntas sí para este volumen):
+ *  1. Honeypot `botcheck`: checkbox invisible que una persona nunca marca. Si
+ *     llega marcado, Web3Forms descarta el envío.
+ *  2. hCaptcha: el único freno real contra un bot que pega directo a la API.
+ *     En el plan gratis Web3Forms NO acepta claves propias: se usa su site key
+ *     compartida (HCAPTCHA_SITEKEY) y el captcha se activa en el panel de
+ *     Web3Forms, en la configuración del formulario. Si el panel lo exige y la
+ *     página no lo muestra, todos los envíos fallan — van juntos.
+ *  3. El filtro de spam del lado del servidor que Web3Forms aplica siempre.
+ *     ("Restrict to domain" es Pro: en el plan gratis no hay.)
+ *  4. Del lado del navegador: botón deshabilitado mientras envía y recuerdo
+ *     local de "ya te anotaste", para que nadie dispare el mismo alta diez veces
+ *     sin querer. Es comodidad, no seguridad: un bot no pasa por acá.
+ */
+import Base from "../layouts/Base.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import { betaItems } from "../nav";
+
+/** Access key de Web3Forms (web3forms.com → mail → llega la key). Es pública por diseño: sólo sirve para enviar a ese mail. */
+const WEB3FORMS_ACCESS_KEY = "8dd5115e-1a55-42d0-bd5d-b5e624fd458c";
+/** Site key de hCaptcha COMPARTIDA de Web3Forms (la única que acepta el plan gratis). Vacía = sin captcha. */
+const HCAPTCHA_SITEKEY = "50b2fe65-b00b-4b9e-ad62-3ba471098be2";
+
+const endpoint = WEB3FORMS_ACCESS_KEY ? "https://api.web3forms.com/submit" : "";
+---
+
+<Base
+  title="Prueba cerrada — Mortuorium"
+  description="Anotate a la prueba cerrada de Mortuorium en Google Play y jugá antes que nadie."
+  items={betaItems}
+  back={{ href: "/#descargar", label: "Volver" }}
+>
+  {
+    HCAPTCHA_SITEKEY && (
+      <script
+        is:inline
+        src="https://js.hcaptcha.com/1/api.js?hl=es&recaptchacompat=off"
+        async
+        defer
+      />
+    )
+  }
+
+  <header class="phead">
+    <div class="wrap">
+      <p class="eyebrow">Google Play — Prueba cerrada</p>
+      <h1 class="title phead__title">Entrá al ritual<br />antes que nadie</h1>
+      <p class="lead">
+        Estamos abriendo una prueba cerrada en Android. Dejanos tu nombre y el
+        mail de tu cuenta de Google, te sumamos a la lista de testers y te
+        avisamos cuando puedas instalarlo.
+      </p>
+    </div>
+  </header>
+
+  <section class="section beta" id="registro">
+    <div class="wrap beta__grid">
+      <div class="beta__panel" data-reveal>
+        <form
+          class="form"
+          action={endpoint || undefined}
+          method="POST"
+          novalidate
+          data-beta-form
+        >
+          <input type="hidden" name="access_key" value={WEB3FORMS_ACCESS_KEY} />
+          <input
+            type="hidden"
+            name="subject"
+            value="Mortuorium — nuevo tester de la prueba cerrada"
+          />
+          <input
+            type="hidden"
+            name="from_name"
+            value="Mortuorium — prueba cerrada"
+          />
+
+          <div class="field">
+            <label for="beta-nombre">Nombre completo</label>
+            <input
+              id="beta-nombre"
+              name="nombre"
+              type="text"
+              autocomplete="name"
+              required
+              minlength="3"
+              maxlength="80"
+              aria-describedby="beta-nombre-error"
+            />
+            <p
+              class="field__error"
+              id="beta-nombre-error"
+              data-error-for="nombre"
+            >
+            </p>
+          </div>
+
+          <div class="field">
+            <label for="beta-email">Email</label>
+            <input
+              id="beta-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              inputmode="email"
+              required
+              maxlength="120"
+              aria-describedby="beta-email-hint beta-email-error"
+            />
+            <p class="field__hint" id="beta-email-hint">
+              El de tu cuenta de Google — el mismo con el que entrás a Play
+              Store en el celular.
+            </p>
+            <p
+              class="field__error"
+              id="beta-email-error"
+              data-error-for="email"
+            >
+            </p>
+          </div>
+
+          {
+            /* Honeypot: fuera de pantalla (no display:none, que algunos bots
+              detectan) y fuera del orden de tabulación. */
+          }
+          <div class="trap" aria-hidden="true">
+            <label for="beta-botcheck">No marcar</label>
+            <input
+              id="beta-botcheck"
+              type="checkbox"
+              name="botcheck"
+              tabindex="-1"
+              autocomplete="off"
+            />
+          </div>
+
+          {
+            HCAPTCHA_SITEKEY && (
+              <div
+                class="h-captcha"
+                data-sitekey={HCAPTCHA_SITEKEY}
+                data-theme="dark"
+              />
+            )
+          }
+
+          <button class="submit" type="submit" data-submit>
+            <span data-submit-label>Anotarme</span>
+          </button>
+
+          <p class="form__status" role="status" aria-live="polite" data-status>
+          </p>
+
+          <p class="form__legal">
+            Usamos estos datos sólo para sumarte a la prueba y avisarte
+            novedades de ella. Para darte de baja escribinos a
+            <a
+              href="https://www.instagram.com/mortuorium_unlam/"
+              target="_blank"
+              rel="noopener noreferrer">@mortuorium_unlam</a
+            >.
+          </p>
+        </form>
+
+        <div class="done" hidden data-done>
+          <p class="done__kicker">El pacto está sellado</p>
+          <h2 class="done__title">Ya estás en la lista</h2>
+          <p class="done__text">
+            Anotamos <strong data-done-email></strong>. Cuando te sumemos como
+            tester te llega un mail con el link para instalar Mortuorium desde
+            Google Play.
+          </p>
+          <button class="done__again" type="button" data-again
+            >Anotar otra cuenta</button
+          >
+        </div>
+      </div>
+
+      <aside
+        class="beta__aside"
+        id="despues"
+        data-reveal
+        style="--reveal-delay:110ms"
+      >
+        <h2 class="beta__aside-title">Qué sigue</h2>
+        <ol class="steps">
+          <li>
+            <span class="steps__num">01</span>
+            <p>Te anotás con el mail de tu cuenta de Google.</p>
+          </li>
+          <li>
+            <span class="steps__num">02</span>
+            <p>Lo agregamos a la lista de testers en Google Play.</p>
+          </li>
+          <li>
+            <span class="steps__num">03</span>
+            <p>
+              Te mandamos por mail el link de acceso: lo abrís con tu cuenta de
+              Google e instalás el juego desde Play Store.
+            </p>
+          </li>
+        </ol>
+        <p class="beta__req">
+          Necesitás un Android compatible con ARCore (Servicios de Google Play
+          para RA) —
+          <a
+            href="https://developers.google.com/ar/devices"
+            target="_blank"
+            rel="noopener noreferrer">fijate si tu celular está en la lista</a
+          >. La versión de iOS llega más adelante.
+        </p>
+      </aside>
+    </div>
+  </section>
+
+  <SiteFooter />
+</Base>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>("[data-beta-form]");
+  const done = document.querySelector<HTMLElement>("[data-done]");
+
+  if (form && done) {
+    const STORAGE_KEY = "mortuorium-prueba-cerrada";
+    const submit = form.querySelector<HTMLButtonElement>("[data-submit]")!;
+    const label = form.querySelector<HTMLElement>("[data-submit-label]")!;
+    const status = form.querySelector<HTMLElement>("[data-status]")!;
+    const doneEmail = done.querySelector<HTMLElement>("[data-done-email]")!;
+    const again = done.querySelector<HTMLButtonElement>("[data-again]")!;
+    const nombre = form.elements.namedItem("nombre") as HTMLInputElement;
+    const email = form.elements.namedItem("email") as HTMLInputElement;
+
+    // hCaptcha sólo existe si se configuró HCAPTCHA_SITEKEY.
+    const captcha = () =>
+      (
+        window as unknown as {
+          hcaptcha?: { reset(): void; getResponse(): string };
+        }
+      ).hcaptcha;
+    const conCaptcha = !!form.querySelector(".h-captcha");
+
+    // localStorage puede tirar (modo privado, datos bloqueados): nunca debe
+    // romper el formulario, sólo pierde el recuerdo de "ya te anotaste".
+    const leer = () => {
+      try {
+        return localStorage.getItem(STORAGE_KEY);
+      } catch {
+        return null;
+      }
+    };
+    const guardar = (v: string | null) => {
+      try {
+        if (v === null) localStorage.removeItem(STORAGE_KEY);
+        else localStorage.setItem(STORAGE_KEY, v);
+      } catch {}
+    };
+
+    const mostrarListo = (mail: string) => {
+      doneEmail.textContent = mail;
+      form.hidden = true;
+      done.hidden = false;
+    };
+
+    const previo = leer();
+    if (previo) mostrarListo(previo);
+
+    again.addEventListener("click", () => {
+      guardar(null);
+      form.reset();
+      status.textContent = "";
+      done.hidden = true;
+      form.hidden = false;
+      nombre.focus();
+    });
+
+    const setError = (input: HTMLInputElement, msg: string) => {
+      const out = form.querySelector<HTMLElement>(
+        `[data-error-for="${input.name}"]`,
+      );
+      if (out) out.textContent = msg;
+      if (msg) input.setAttribute("aria-invalid", "true");
+      else input.removeAttribute("aria-invalid");
+    };
+
+    const validar = () => {
+      let ok = true;
+      const n = nombre.value.trim();
+      if (n.length < 3) {
+        setError(nombre, "Escribí tu nombre y apellido.");
+        ok = false;
+      } else setError(nombre, "");
+
+      if (!email.value.trim()) {
+        setError(email, "Falta el email.");
+        ok = false;
+      } else if (!email.validity.valid) {
+        setError(email, "Ese email no parece válido.");
+        ok = false;
+      } else setError(email, "");
+
+      return ok;
+    };
+
+    // Revalidar al corregir, pero recién después del primer intento.
+    let intentado = false;
+    for (const input of [nombre, email]) {
+      input.addEventListener("input", () => {
+        if (intentado) validar();
+      });
+    }
+
+    const enviando = (on: boolean) => {
+      submit.disabled = on;
+      label.textContent = on ? "Enviando…" : "Anotarme";
+    };
+
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      intentado = true;
+      status.textContent = "";
+      status.removeAttribute("data-kind");
+
+      if (!validar()) {
+        (nombre.hasAttribute("aria-invalid") ? nombre : email).focus();
+        return;
+      }
+
+      if (!form.getAttribute("action")) {
+        status.dataset.kind = "error";
+        status.textContent = "El formulario todavía no está configurado.";
+        return;
+      }
+
+      // Sin el token del captcha el envío va a rebotar igual: mejor avisar acá.
+      if (conCaptcha && !captcha()?.getResponse()) {
+        status.dataset.kind = "error";
+        status.textContent = "Completá la verificación antes de enviar.";
+        return;
+      }
+
+      nombre.value = nombre.value.trim();
+      email.value = email.value.trim();
+      enviando(true);
+
+      try {
+        // JSON y no FormData: es lo que muestra el ejemplo AJAX oficial de
+        // Web3Forms. El checkbox `botcheck` sin marcar ni viaja (FormData lo
+        // omite), que es justo lo que Web3Forms espera de una persona.
+        //
+        // Sin `g-recaptcha-response`: hCaptcha lo agrega por compatibilidad con
+        // reCAPTCHA (duplicando su token), y Web3Forms lo interpreta como
+        // reCAPTCHA — que es Pro — y rechaza el envío con 400. El script ya se
+        // carga con recaptchacompat=off; esto es por si igual aparece.
+        const datos = Object.fromEntries(new FormData(form));
+        delete datos["g-recaptcha-response"];
+        const res = await fetch(form.action, {
+          method: "POST",
+          body: JSON.stringify(datos),
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+        });
+
+        // Web3Forms responde { success: boolean, message: string }.
+        const data = await res.json().catch(() => null);
+
+        if (res.ok && data?.success) {
+          guardar(email.value);
+          mostrarListo(email.value);
+          return;
+        }
+
+        const msg = String(data?.message ?? data?.body?.message ?? "");
+        status.dataset.kind = "error";
+        if (/captcha/i.test(msg))
+          status.textContent = "Completá la verificación antes de enviar.";
+        else if (/email/i.test(msg))
+          setError(email, "Ese email no parece válido.");
+        else if (res.status === 429)
+          status.textContent =
+            "Demasiados intentos. Probá de nuevo en unos minutos.";
+        else
+          status.textContent =
+            "No pudimos registrarte. Probá de nuevo en un rato.";
+      } catch {
+        status.dataset.kind = "error";
+        status.textContent =
+          "Sin conexión. Revisá tu internet y probá de nuevo.";
+      } finally {
+        enviando(false);
+        captcha()?.reset();
+      }
+    });
+  }
+</script>
+
+<style>
+  .phead {
+    padding: clamp(5rem, 16vh, 9rem) var(--pad-x) clamp(1rem, 3vh, 2rem);
+  }
+
+  .phead__title {
+    margin-bottom: 0.5rem;
+  }
+
+  .beta {
+    padding-top: clamp(2rem, 5vh, 3.5rem);
+  }
+
+  .beta__grid {
+    display: grid;
+    gap: 2.5rem;
+  }
+
+  @media (min-width: 55rem) {
+    .beta__grid {
+      grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+      gap: 4rem;
+      align-items: start;
+    }
+  }
+
+  /* --- panel del formulario ---------------------------------------- */
+  .beta__panel {
+    position: relative;
+    padding: clamp(1.5rem, 4vw, 2.5rem);
+    border: 1px solid var(--rule);
+    background-color: var(--card-fill);
+    background-image: var(--card-bg);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Filete dorado arriba, como el marco del ícono */
+  .beta__panel::before {
+    content: "";
+    position: absolute;
+    inset: -1px -1px auto;
+    height: 2px;
+    background-image: var(--grad-frame);
+  }
+
+  .form {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .field {
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .field label {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .field input {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--rule);
+    border-radius: 0;
+    background-color: var(--field);
+    color: var(--text);
+    font-family: var(--font-mono);
+    /* 16px mínimo: por debajo, iOS Safari hace zoom al enfocar el campo */
+    font-size: max(1rem, 16px);
+    transition:
+      border-color 0.25s var(--ease-out),
+      box-shadow 0.25s var(--ease-out);
+  }
+
+  .field input:hover {
+    border-color: var(--accent-deep);
+  }
+
+  .field input:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--glow-gold-soft);
+  }
+
+  .field input[aria-invalid="true"] {
+    border-color: var(--danger-bright);
+  }
+
+  .field__hint {
+    color: var(--text-faint);
+    font-size: 0.82em;
+    line-height: 1.5;
+  }
+
+  .field__error {
+    color: var(--danger-bright);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .field__error:empty {
+    display: none;
+  }
+
+  .trap {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  .submit,
+  .done__again {
+    justify-self: start;
+    padding: 0.95rem 2.2rem;
+    border: 1px solid var(--accent);
+    background-color: var(--tint-hover);
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition:
+      background-color 0.25s var(--ease-out),
+      border-color 0.25s var(--ease-out),
+      box-shadow 0.25s var(--ease-out);
+  }
+
+  .submit:hover:not(:disabled),
+  .done__again:hover {
+    background-color: var(--tint-active);
+    border-color: var(--accent-soft);
+    box-shadow: 0 0 1.4rem var(--glow-gold-soft);
+  }
+
+  .submit:disabled {
+    cursor: progress;
+    opacity: 0.6;
+  }
+
+  .form__status {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+
+  .form__status:empty {
+    display: none;
+  }
+
+  .form__status[data-kind="error"] {
+    color: var(--danger-bright);
+  }
+
+  .form__legal {
+    padding-top: 1.2rem;
+    border-top: 1px solid var(--rule-soft);
+    color: var(--text-faint);
+    font-size: 0.78em;
+    line-height: 1.6;
+  }
+
+  .form__legal a,
+  .beta__req a {
+    text-decoration: underline;
+    text-decoration-color: var(--accent-deep);
+    text-underline-offset: 0.2em;
+  }
+
+  /* --- estado "ya anotado" ----------------------------------------- */
+  .done {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .done[hidden],
+  .form[hidden] {
+    display: none;
+  }
+
+  .done__kicker {
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+
+  .done__title {
+    font-size: clamp(2rem, 4.5vw, 3rem);
+  }
+
+  .done__text {
+    color: var(--text-soft);
+    max-width: 44ch;
+  }
+
+  .done__text strong {
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-weight: 500;
+    word-break: break-all;
+  }
+
+  .done__again {
+    margin-top: 0.6rem;
+    font-size: 1.1rem;
+    padding: 0.7rem 1.5rem;
+    border-color: var(--rule);
+    background-color: transparent;
+  }
+
+  /* --- columna "qué sigue" ----------------------------------------- */
+  .beta__aside {
+    scroll-margin-top: 2rem;
+  }
+
+  .beta__aside-title {
+    font-size: clamp(1.8rem, 3vw, 2.4rem);
+    margin-bottom: 1.4rem;
+  }
+
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 1.1rem;
+  }
+
+  .steps li {
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
+    padding-bottom: 1.1rem;
+    border-bottom: 1px solid var(--rule-soft);
+    color: var(--text-soft);
+    line-height: 1.6;
+  }
+
+  .steps__num {
+    flex: none;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+  }
+
+  .beta__req {
+    margin-top: 1.6rem;
+    color: var(--text-faint);
+    font-size: 0.85em;
+    line-height: 1.6;
+  }
+</style>

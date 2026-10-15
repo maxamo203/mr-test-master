@@ -155,6 +155,17 @@ namespace Bateries
                 return;
             }
 
+            // Pausa abierta: el South/A navega la pausa, no prende la linterna ni recoge.
+            // Y al cerrarla con A (REANUDAR) el botón sigue apretado: se ignora hasta que
+            // se suelte, si no el release contaba como un tap de gameplay.
+            if (PauseMenuController.IsOpen) _esperarSoltarTrasPausa = true;
+            if (_esperarSoltarTrasPausa)
+            {
+                if (_primaryGesture.IsPressed) CancelPrimaryGesture();
+                if (PauseMenuController.IsOpen || PrimaryHeld()) return;
+                _esperarSoltarTrasPausa = false;
+            }
+
             ResolveCurrent();
             UpdatePrimaryGesture();
             if (Debug.isDebugBuild) DiagnosticoInput();
@@ -200,6 +211,8 @@ namespace Bateries
         // con ese mismo botón) hay que esperar a que se suelte, o esa misma pulsación
         // terminaba como un toque sobre la linterna.
         private bool _esperarSoltar;
+
+        private bool _esperarSoltarTrasPausa;
 
         private void UpdatePrimaryGesture()
         {

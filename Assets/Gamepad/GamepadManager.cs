@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.EnhancedTouch;
+using UnityEngine.SceneManagement;
 
 namespace Gamepad
 {
@@ -86,6 +87,7 @@ namespace Gamepad
         private void OnEnable()
         {
             InputSystem.onDeviceChange += OnDeviceChange;
+            SceneManager.sceneLoaded += OnSceneLoaded;
             // Estado inicial: puede ya haber un gamepad emparejado al arrancar.
             Refresh();
         }
@@ -93,6 +95,7 @@ namespace Gamepad
         private void OnDisable()
         {
             InputSystem.onDeviceChange -= OnDeviceChange;
+            SceneManager.sceneLoaded -= OnSceneLoaded;
         }
 
         private void Update()
@@ -120,7 +123,7 @@ namespace Gamepad
             ActualizarCapturaPuntero();
 
             // Navegación con gamepad de los menús IMGUI (foco global compartido). Ver
-            // ImguiGamepadMenu: GamepadManager es el driver (BeginPass en OnGUI + Tick acá).
+            // ImguiGamepadMenu: GamepadManager es el driver (Tick acá, una vez por frame).
             ImguiGamepadMenu.Tick();
         }
 
@@ -219,9 +222,7 @@ namespace Gamepad
         }
 #endif
 
-        // Corre ANTES que los OnGUI de los menús (execution order -60) en cada pass: resetea el
-        // índice de dibujo del navegador de menús. Ver ImguiGamepadMenu.
-        private void OnGUI() => ImguiGamepadMenu.BeginPass();
+        private static void OnSceneLoaded(Scene s, LoadSceneMode m) => ImguiGamepadMenu.ResetEscena();
 
         private void OnDeviceChange(InputDevice device, InputDeviceChange change)
         {
