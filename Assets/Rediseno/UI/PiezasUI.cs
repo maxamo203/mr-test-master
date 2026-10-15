@@ -151,6 +151,10 @@ namespace Rediseno.UI
                     ? new Color(TemaUI.Tan.r, TemaUI.Tan.g, TemaUI.Tan.b, 0.14f) : Color.clear;
             }
             Pintar();
+            // El valor también puede cambiar desde afuera (p. ej. el visor se prende desde el
+            // menú principal, y la pantalla ya estaba armada de antes): repintar seguido. El
+            // scheduler de UI Toolkit no corre mientras el panel está oculto.
+            t.schedule.Execute(Pintar).Every(250);
             nav.Agregar(t, () => { escribir(!leer()); Pintar(); });
             return t;
         }
