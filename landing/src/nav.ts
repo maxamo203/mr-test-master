@@ -41,3 +41,9 @@ export const privacyItems: RailItem[] = [
   { href: '#retencion', label: 'Retención', num: '04' },
   { href: '#contacto', label: 'Contacto', num: '05' },
 ];
+
+/** Secciones de la página de registro a la prueba cerrada (prueba-cerrada.astro). */
+export const betaItems: RailItem[] = [
+  { href: '#registro', label: 'Anotarme', num: '01' },
+  { href: '#despues', label: 'Qué sigue', num: '02' },
+];

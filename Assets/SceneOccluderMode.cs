@@ -11,9 +11,12 @@ using Scanner;
 // SolidDebug sirve para probar en PC la lectura espacial equivalente a produccion:
 // solo se modifican paredes y obstaculos del SceneRegistry, nunca las entidades 3D.
 //
-// Es un toggle: el botón que lo activa/desactiva lo dibuja GameBootstrapper en la
-// pantalla de sala (bajo el de Cardboard), llamando a Enabled/Toggle. Se auto-crea
-// via RuntimeInitializeOnLoadMethod, no hay que ponerlo en la escena.
+// Al ARRANCAR cada partida (NetworkManager.GameStarted pasa a true, también al reintentar
+// la noche) las paredes se ocultan solas: es como se juega. Durante la noche el jugador
+// puede volver a mostrarlas con el toggle "Paredes visibles" del menú de pausa
+// (PauseMenuController), que llama a Enabled/Toggle. NightTransition.ResetLocal las
+// vuelve a mostrar para la sincronización. Se auto-crea via RuntimeInitializeOnLoadMethod,
+// no hay que ponerlo en la escena.
 //
 // Tecnica: swap del sharedMaterial de cada MeshRenderer al material "Hidden/
 // SceneOccluder" (depth-only, ColorMask 0). Guarda el material original para
@@ -55,6 +58,21 @@ public class SceneOccluderMode : MonoBehaviour
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
+    }
+
+    // Flanco de subida de GameStarted. Polling (un bool por frame) en vez de suscribirse a
+    // OnGameStarted: este objeto sobrevive a las escenas y NetworkManager se destruye y
+    // recrea en cada SceneFlow.GoTo.
+    private bool _enPartida;
+
+    private void Update()
+    {
+        var net = NetworkManager.Instance;
+        bool enPartida = net != null && net.GameStarted;
+        // SolidDebug se respeta: es una herramienta de prueba que el dev prendió a propósito.
+        if (enPartida && !_enPartida && _mode == DisplayMode.Original)
+            SetMode(DisplayMode.InvisibleOccluder);
+        _enPartida = enPartida;
     }
 
     // API publica: activar/desactivar el modo (para un Toggle de UI o por codigo).

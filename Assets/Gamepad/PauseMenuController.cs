@@ -149,6 +149,29 @@ namespace Gamepad
             if (_page == Page.Main)
             {
                 GUI.Label(new Rect(x, y, w, 50f), "PAUSA", _title); y += 64f;
+
+                // Toggles de partida (antes eran botones fijos en la pantalla de sala,
+                // GameBootstrapper.DrawSala): sólo existen en la escena de juego.
+                var mrcb = GetModoCardboard();
+                if (mrcb != null)
+                {
+                    AddToggle("modocardboard", new Rect(x, y, w, 52f), "Modo Cardboard",
+                              mrcb.CardboardActive); y += 64f;
+                }
+                var occ = OclusorDisponible();
+                if (occ != null)
+                {
+                    AddToggle("paredes", new Rect(x, y, w, 52f), "Paredes visibles",
+                              !occ.Enabled); y += 64f;
+                    // Herramienta de PC/development build: superficies opacas con
+                    // profundidad real. No aparece en producción.
+                    if (Application.isEditor || Debug.isDebugBuild)
+                    {
+                        AddToggle("paredessolidas", new Rect(x, y, w, 52f), "Paredes sólidas (dev)",
+                                  occ.SolidDebugEnabled); y += 64f;
+                    }
+                }
+
                 AddButton("opciones", new Rect(x, y, w, 64f), "OPCIONES"); y += 76f;
                 AddButton("salir",    new Rect(x, y, w, 64f),
                           _confirmSalir ? "¿SEGURO? TOCÁ DE NUEVO" : "SALIR AL MENÚ"); y += 76f;
@@ -571,6 +594,24 @@ namespace Gamepad
             return _fl;
         }
 
+        private MRCardboardController _mrcb;
+        private MRCardboardController GetModoCardboard()
+        {
+            if (_mrcb == null) _mrcb = FindFirstObjectByType<MRCardboardController>();
+            return _mrcb;
+        }
+
+        // El toggle de paredes sólo tiene sentido con la partida arrancada (ya hay mapa y
+        // entidades). El `|| Enabled/SolidDebug` es la red de seguridad: si el modo quedara
+        // activo fuera de la partida, sin él no habría forma de volver a ver las paredes.
+        private static SceneOccluderMode OclusorDisponible()
+        {
+            var occ = SceneOccluderMode.Instance;
+            if (occ == null) return null;
+            bool enPartida = NetworkManager.Instance != null && NetworkManager.Instance.GameStarted;
+            return enPartida || occ.Enabled || occ.SolidDebugEnabled ? occ : null;
+        }
+
         private CardboardCalibrationUI GetCardboard()
         {
             if (_cb == null) _cb = FindFirstObjectByType<CardboardCalibrationUI>();
@@ -621,6 +662,14 @@ namespace Gamepad
                 {
                     int n = DebugHud.Paneles.Count;
                     return 176f + (n > 0 ? n * 58f : 66f);
+                }
+                case Page.Main:
+                {
+                    // +64 por cada toggle de partida (Cardboard / paredes / sólidas dev).
+                    int toggles = (GetModoCardboard() != null ? 1 : 0);
+                    if (OclusorDisponible() != null)
+                        toggles += Application.isEditor || Debug.isDebugBuild ? 2 : 1;
+                    return 400f + toggles * 64f;
                 }
                 default: return 400f;
             }
@@ -1044,6 +1093,18 @@ namespace Gamepad
                 case "arq_2":     ARQuality.Actual = ARQuality.Nivel.Calidad;     break;
                 case "voz":       _page = Page.Voice;      _focus = 0; _focusLast = true; break;
                 case "vozmic":    GameOptions.VozMic = !GameOptions.VozMic; break;
+                case "modocardboard":
+                {
+                    var mrcb = GetModoCardboard();
+                    if (mrcb == null) break;
+                    mrcb.ToggleCardboardMode();
+                    // Entrar al visor: la pausa se cierra sola, con el teléfono puesto en
+                    // el Cardboard no se puede leer ni tocar.
+                    if (mrcb.CardboardActive) { _open = false; SaveCardboard(); }
+                    break;
+                }
+                case "paredes":        SceneOccluderMode.Instance?.Toggle();          break;
+                case "paredessolidas": SceneOccluderMode.Instance?.ToggleSolidDebug(); break;
                 case "estereo3d": { var cb = GetCardboard(); if (cb != null) cb.Estereo3D = !cb.Estereo3D; break; }
                 case "linterna":
                     if (Debug.isDebugBuild) { _page = Page.Flashlight; _focus = 0; _focusLast = true; }

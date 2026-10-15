@@ -1,0 +1,182 @@
+<!doctype html>
+<!--
+  Mail de acceso a la prueba cerrada — plantilla para mandar A MANO desde Gmail.
+
+  CÓMO USARLA
+    1. Abrí este archivo en Chrome (doble clic).
+    2. Ctrl+A, Ctrl+C.
+    3. En Gmail: Redactar → Ctrl+V en el cuerpo. Gmail conserva colores, bordes,
+       el botón y el logo.
+    4. Reemplazá [NOMBRE] y enviá.
+    Atajo: con Configuración → Avanzado → Plantillas activado, pegala una vez y
+    guardala desde ⋮ → Plantillas → Guardar borrador como plantilla. Después es
+    insertar plantilla + cambiar el nombre.
+
+  POR QUÉ ESTÁ ESCRITA ASÍ (y no como el resto del sitio)
+    - Todo con tablas y estilos INLINE: Gmail descarta <style>, clases y
+      variables CSS. Por eso acá los colores son hex literales — la regla de
+      "colores sólo en globals.css" es del sitio, no aplica a un mail. Son los
+      mismos valores de globals.css / MortuoriumTheme.cs.
+    - Gmail no carga fuentes web: Bebas Neue → Impact y Special Elite →
+      Courier New, que son los respaldos más parecidos que tiene todo el mundo.
+      El logo va como imagen para que se vea igual en todos lados.
+    - El logo se sirve desde el sitio (public/email/wordmark.jpg), con URL
+      absoluta: sólo aparece una vez publicado el sitio. Está aplanado sobre el
+      fondo del mail (JPG, sin transparencia) porque algunos clientes pintan las
+      transparencias de blanco.
+    - Este archivo vive fuera de src/ y public/: no se publica.
+-->
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="supported-color-schemes" content="dark" />
+    <title>Mortuorium — Acceso a la prueba cerrada</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#060504;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#060504" style="background-color:#060504;">
+      <tr>
+        <td align="center" style="padding:32px 12px;">
+
+          <!-- Contenedor -->
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#0b0908" style="width:100%; max-width:560px; background-color:#0b0908; border:1px solid #3a322a;">
+
+            <!-- Filete dorado -->
+            <tr>
+              <td height="3" bgcolor="#c98a3d" style="height:3px; line-height:3px; font-size:0; background-color:#c98a3d;">&nbsp;</td>
+            </tr>
+
+            <!-- Logo -->
+            <tr>
+              <td align="center" style="padding:36px 40px 8px;">
+                <a href="https://www.mortuorium.com" style="text-decoration:none;">
+                  <img src="https://www.mortuorium.com/email/wordmark.jpg" width="320" alt="MORTUORIUM" style="display:block; width:320px; max-width:100%; height:auto; border:0; color:#e9e3d6; font-family:Impact, 'Arial Narrow', sans-serif; font-size:40px; letter-spacing:2px;" />
+                </a>
+              </td>
+            </tr>
+
+            <!-- Antetítulo + título -->
+            <tr>
+              <td style="padding:28px 40px 0;">
+                <p style="margin:0 0 14px; font-family:'Courier New', Courier, monospace; font-size:11px; letter-spacing:4px; text-transform:uppercase; color:#c98a3d;">
+                  Google Play &mdash; Prueba cerrada
+                </p>
+                <h1 style="margin:0; font-family:Impact, 'Arial Narrow Bold', 'Arial Narrow', sans-serif; font-weight:normal; font-size:38px; line-height:1.05; letter-spacing:1px; text-transform:uppercase; color:#e9e3d6;">
+                  Las puertas del ritual<br />están abiertas
+                </h1>
+              </td>
+            </tr>
+
+            <!-- Cuerpo -->
+            <tr>
+              <td style="padding:24px 40px 0; font-family:'Courier New', Courier, monospace; font-size:15px; line-height:1.7; color:#c9c2b4;">
+                <p style="margin:0 0 16px;">Hola [NOMBRE]:</p>
+                <p style="margin:0 0 16px;">
+                  Ya estás en la lista de testers de Mortuorium. Con el link de abajo
+                  entrás a la prueba cerrada e instalás el juego desde Play Store.
+                </p>
+                <p style="margin:0;">
+                  Abrilo con la misma cuenta de Google con la que te anotaste
+                  &mdash; con otra, Play Store no te va a dejar entrar.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Botón -->
+            <tr>
+              <td align="left" style="padding:30px 40px 6px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td bgcolor="#1a1513" style="background-color:#1a1513; border:1px solid #c98a3d;">
+                      <a href="https://play.google.com/apps/testing/com.equipo112.mortuorium.demo" target="_blank" style="display:inline-block; padding:14px 30px; font-family:Impact, 'Arial Narrow Bold', 'Arial Narrow', sans-serif; font-size:20px; letter-spacing:2px; text-transform:uppercase; color:#e9e3d6; text-decoration:none;">
+                        Entrar a la prueba &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:10px 40px 0; font-family:'Courier New', Courier, monospace; font-size:12px; line-height:1.6; color:#6b6459;">
+                ¿Ya entraste? Instalalo directo desde
+                <a href="https://play.google.com/store/apps/details?id=com.equipo112.mortuorium.demo" target="_blank" style="color:#c98a3d; text-decoration:underline;">la ficha de Play Store</a>.
+              </td>
+            </tr>
+
+            <!-- Divisor -->
+            <tr>
+              <td style="padding:30px 40px 0;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr><td height="1" bgcolor="#2a231c" style="height:1px; line-height:1px; font-size:0; background-color:#2a231c;">&nbsp;</td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Pasos -->
+            <tr>
+              <td style="padding:26px 40px 0;">
+                <p style="margin:0 0 16px; font-family:Impact, 'Arial Narrow Bold', 'Arial Narrow', sans-serif; font-size:22px; letter-spacing:1px; text-transform:uppercase; color:#e9e3d6;">
+                  Cómo seguir
+                </p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-family:'Courier New', Courier, monospace; font-size:14px; line-height:1.6; color:#c9c2b4;">
+                  <tr>
+                    <td width="36" valign="top" style="padding:0 0 12px; font-size:12px; letter-spacing:1px; color:#c98a3d;">01</td>
+                    <td valign="top" style="padding:0 0 12px;">Tocá <strong style="color:#e9e3d6; font-weight:normal;">Entrar a la prueba</strong> y después <strong style="color:#e9e3d6; font-weight:normal;">Convertirse en tester</strong>.</td>
+                  </tr>
+                  <tr>
+                    <td width="36" valign="top" style="padding:0 0 12px; font-size:12px; letter-spacing:1px; color:#c98a3d;">02</td>
+                    <td valign="top" style="padding:0 0 12px;">Instalá Mortuorium desde Play Store. Si todavía no aparece, esperá unos minutos y volvé a probar.</td>
+                  </tr>
+                  <tr>
+                    <td width="36" valign="top" style="padding:0; font-size:12px; letter-spacing:1px; color:#c98a3d;">03</td>
+                    <td valign="top" style="padding:0;">Escaneá tu habitación, anclá el ritual y sobreviví hasta el amanecer.</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Requisitos + feedback -->
+            <tr>
+              <td style="padding:26px 40px 0; font-family:'Courier New', Courier, monospace; font-size:13px; line-height:1.65; color:#a89e90;">
+                <p style="margin:0 0 14px;">
+                  Necesitás un Android compatible con ARCore &mdash;
+                  <a href="https://developers.google.com/ar/devices" target="_blank" style="color:#c98a3d; text-decoration:underline;">fijate si tu celular está en la lista</a>.
+                </p>
+                <p style="margin:0;">
+                  Es una prueba: puede haber errores. Si algo falla o se siente raro,
+                  respondé este mail y contanos qué pasó y con qué celular.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Firma -->
+            <tr>
+              <td style="padding:30px 40px 36px; font-family:'Courier New', Courier, monospace; font-size:14px; line-height:1.6; color:#c9c2b4;">
+                Nos vemos en la oscuridad,<br />
+                <span style="color:#e9e3d6;">Equipo 112 &middot; Mortuorium</span>
+              </td>
+            </tr>
+
+          </table>
+
+          <!-- Pie -->
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:560px;">
+            <tr>
+              <td align="center" style="padding:22px 20px 0; font-family:'Courier New', Courier, monospace; font-size:11px; line-height:1.7; color:#6b6459;">
+                <span style="letter-spacing:3px; text-transform:uppercase; color:#8a5f2b;">El ritual no debe parar</span><br />
+                <a href="https://www.mortuorium.com" target="_blank" style="color:#a89e90; text-decoration:none;">mortuorium.com</a>
+                &nbsp;&middot;&nbsp;
+                <a href="https://www.instagram.com/mortuorium_unlam/" target="_blank" style="color:#a89e90; text-decoration:none;">@mortuorium_unlam</a>
+                &nbsp;&middot;&nbsp;
+                <a href="https://www.mortuorium.com/politica-de-privacidad" target="_blank" style="color:#a89e90; text-decoration:none;">Privacidad</a><br />
+                Recibís este mail porque te anotaste en la prueba cerrada de Mortuorium.
+              </td>
+            </tr>
+          </table>
+
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

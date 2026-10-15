@@ -44,7 +44,26 @@ namespace Gameplay
 
         private enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control }
 
-        private Pantalla _pantalla = Pantalla.Menu;
+        private Pantalla _pantallaActual = Pantalla.Menu;
+
+        // Cada cambio de pantalla lleva el foco del mando a lo primero útil EN EL MISMO frame
+        // en que se dibuja la pantalla nueva (sin esto se veía un frame resaltado el botón
+        // con el índice viejo). En el menú raíz no hay flecha volver: el 0 es UN JUGADOR; en
+        // el resto el 0 es la flecha y se arranca en el 1. Si se vuelve a una pantalla con
+        // algo ya elegido, el foco va directo al "siguiente paso" (CONTINUAR / CONFIRMAR).
+        private Pantalla PantallaActual
+        {
+            get => _pantallaActual;
+            set
+            {
+                if (_pantallaActual == value) return;
+                _pantallaActual = value;
+                bool hayEleccion = (value == Pantalla.Noches  && _nocheSel >= 0) ||
+                                   (value == Pantalla.Entorno && !string.IsNullOrEmpty(_mapSel));
+                if (hayEleccion) Gamepad.ImguiGamepadMenu.EnfocarMarcado();
+                else Gamepad.ImguiGamepadMenu.Enfocar(value == Pantalla.Menu ? 0 : 1);
+            }
+        }
 
         // Modo que se está configurando en el sub-flujo Noche->Entorno (un jugador o
         // crear sala). MultiClient no pasa por acá (se une directo).
@@ -121,15 +140,15 @@ namespace Gameplay
             if (_mostrarAvisoIos) { CerrarAvisoIos(); return; }
             if (_confirmarBorrar != null) { _confirmarBorrar = null; return; }
 
-            switch (_pantalla)
+            switch (PantallaActual)
             {
-                case Pantalla.CrearUnirse: _pantalla = Pantalla.Menu; break;
+                case Pantalla.CrearUnirse: PantallaActual = Pantalla.Menu; break;
                 case Pantalla.SinEntorno:
                 case Pantalla.Noches:      VolverDeSubflujo(); break;
-                case Pantalla.Entorno:     _pantalla = Pantalla.Noches; break;
-                case Pantalla.Escaneos:    _pantalla = Pantalla.Menu; break;
-                case Pantalla.Opciones:    _pantalla = Pantalla.Menu; break;
-                case Pantalla.Control:     _pantalla = Pantalla.Opciones; break;
+                case Pantalla.Entorno:     PantallaActual = Pantalla.Noches; break;
+                case Pantalla.Escaneos:    PantallaActual = Pantalla.Menu; break;
+                case Pantalla.Opciones:    PantallaActual = Pantalla.Menu; break;
+                case Pantalla.Control:     PantallaActual = Pantalla.Opciones; break;
                 // Pantalla.Menu: pantalla raíz, sin destino — no forzamos salir de
                 // la app, dejamos que el SO maneje el back (minimizar).
             }
@@ -174,12 +193,12 @@ namespace Gameplay
             if (!HayEntornoJugable())
             {
                 AudioManager.Sonar(c => c.uiAlerta);
-                _pantalla = Pantalla.SinEntorno;
+                PantallaActual = Pantalla.SinEntorno;
                 return;
             }
             _nocheSel = -1;
             _mapSel = null;
-            _pantalla = Pantalla.Noches;
+            PantallaActual = Pantalla.Noches;
         }
 
         // ------------------------------------------------------------ OnGUI
@@ -219,10 +238,10 @@ namespace Gameplay
                 // Red de seguridad de la demo: ningún camino debería llevar a la
                 // pantalla de sesión compartida con el botón oculto, pero si alguno
                 // apareciera, cae al menú en vez de dejar entrar al multijugador.
-                if (!BuildVariant.Multijugador && _pantalla == Pantalla.CrearUnirse)
-                    _pantalla = Pantalla.Menu;
+                if (!BuildVariant.Multijugador && PantallaActual == Pantalla.CrearUnirse)
+                    PantallaActual = Pantalla.Menu;
 
-                switch (_pantalla)
+                switch (PantallaActual)
                 {
                     case Pantalla.Menu:        DrawMenu(vw, vh);        break;
                     case Pantalla.CrearUnirse: DrawCrearUnirse(vw, vh); break;
@@ -262,12 +281,12 @@ namespace Gameplay
             if (BuildVariant.Multijugador)
             {
                 T.Boton(_nav, new Rect(x, y, bw, bh), "MULTIJUGADOR", false,
-                        () => _pantalla = Pantalla.CrearUnirse);
+                        () => PantallaActual = Pantalla.CrearUnirse);
                 y += bh + 14f;
             }
             T.Boton(_nav, new Rect(x, y, bw, bh), "ESCANEAR ENTORNO", false, OnEscanear);
             y += bh + 14f;
-            T.Boton(_nav, new Rect(x, y, bw, bh), "OPCIONES", false, () => _pantalla = Pantalla.Opciones);
+            T.Boton(_nav, new Rect(x, y, bw, bh), "OPCIONES", false, () => PantallaActual = Pantalla.Opciones);
 
             GUI.Label(new Rect(0, vh - 36f, vw, 20f),
                       BuildVariant.EsDemo ? "DEMO · equipo 112" : "Build interna · equipo 112",
@@ -278,12 +297,12 @@ namespace Gameplay
         {
             RefrescarScans();
             if (_scans.Count == 0) IrAlEscaner(null);
-            else _pantalla = Pantalla.Escaneos;
+            else PantallaActual = Pantalla.Escaneos;
         }
 
         private void DrawCrearUnirse(float vw, float vh)
         {
-            T.BotonVolver(_nav, () => _pantalla = Pantalla.Menu);
+            T.BotonVolver(_nav, () => PantallaActual = Pantalla.Menu);
 
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "SESIÓN COMPARTIDA",
                       T.Estilo(T.FBebas, 28, T.Cream));
@@ -345,7 +364,7 @@ namespace Gameplay
         // para host).
         private void VolverDeSubflujo()
         {
-            _pantalla = _pendingMode == GameSession.SessionMode.MultiHost
+            PantallaActual = _pendingMode == GameSession.SessionMode.MultiHost
                 ? Pantalla.CrearUnirse : Pantalla.Menu;
         }
 
@@ -412,7 +431,9 @@ namespace Gameplay
 
                 int idx = i;   // captura por iteración para el closure
                 bool sel = _nocheSel == i;
-                T.Celda(_nav, r, primario: false, () => _nocheSel = idx,
+                // Elegida la noche, el foco salta a CONTINUAR (marcado abajo).
+                T.Celda(_nav, r, primario: false,
+                        () => { _nocheSel = idx; Gamepad.ImguiGamepadMenu.EnfocarMarcado(); },
                         bordeOverride: sel ? T.Red : (Color?)null,
                         fillOverride: sel ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.14f) : (Color?)null);
                 GUI.Label(new Rect(r.x, r.y + 8f, r.width, 30f), (i + 1).ToString(),
@@ -442,14 +463,15 @@ namespace Gameplay
                     ? $"NOCHE {_nocheSel + 1}" : nights[_nocheSel].displayName;
                 GUI.Label(new Rect(Pad, vh - 44f - 58f - 30f, vw - Pad * 2f, 26f), nombre,
                           T.Estilo(T.FElite, 16, T.Muted, TextAnchor.MiddleCenter));
+                Gamepad.ImguiGamepadMenu.Marcar();
                 T.Boton(_nav, new Rect(Pad, vh - 44f - 58f, vw - Pad * 2f, 58f),
-                        "CONTINUAR", primario: true, () => _pantalla = Pantalla.Entorno);
+                        "CONTINUAR", primario: true, () => PantallaActual = Pantalla.Entorno);
             }
         }
 
         private void DrawEntorno(float vw, float vh)
         {
-            T.BotonVolver(_nav, () => _pantalla = Pantalla.Noches);
+            T.BotonVolver(_nav, () => PantallaActual = Pantalla.Noches);
 
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "ELEGÍ EL ENTORNO",
                       T.Estilo(T.FBebas, 28, T.Cream));
@@ -482,7 +504,9 @@ namespace Gameplay
                 var mapName = name;   // captura por iteración
 
                 bool sel = _mapSel == name;
-                T.Celda(_nav, fila, primario: false, () => _mapSel = mapName, enabled: ok,
+                // Elegido el entorno, el foco salta a CONFIRMAR (marcado abajo).
+                T.Celda(_nav, fila, primario: false,
+                        () => { _mapSel = mapName; Gamepad.ImguiGamepadMenu.EnfocarMarcado(); }, enabled: ok,
                         bordeOverride: sel ? T.Red : (Color?)null,
                         fillOverride: sel ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.14f) : (Color?)null);
                 GUI.Label(new Rect(fila.x + 14f, y, w - 160f, rowH),
@@ -498,6 +522,7 @@ namespace Gameplay
             if (host) DrawAvanzadoPuerto(vw, avanzadoY);
 
             bool puedeConfirmar = !string.IsNullOrEmpty(_mapSel);
+            Gamepad.ImguiGamepadMenu.Marcar();
             T.Boton(_nav, new Rect(Pad, vh - 44f - confirmH, vw - Pad * 2f, confirmH),
                     "CONFIRMAR", primario: true, Confirmar, enabled: puedeConfirmar);
         }
@@ -552,7 +577,7 @@ namespace Gameplay
         // ── Gestión de escaneos (desde "ESCANEAR ENTORNO") ────────────────────
         private void DrawEscaneos(float vw, float vh)
         {
-            T.BotonVolver(_nav, () => _pantalla = Pantalla.Menu);
+            T.BotonVolver(_nav, () => PantallaActual = Pantalla.Menu);
 
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "ESCANEO DE ENTORNO",
                       T.Estilo(T.FBebas, 28, T.Cream));
@@ -761,7 +786,7 @@ namespace Gameplay
 
         private void DrawOpciones(float vw, float vh)
         {
-            T.BotonVolver(_nav, () => _pantalla = Pantalla.Menu);
+            T.BotonVolver(_nav, () => PantallaActual = Pantalla.Menu);
 
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "OPCIONES",
                       T.Estilo(T.FBebas, 28, T.Cream));
@@ -830,7 +855,7 @@ namespace Gameplay
                       estado, T.Estilo(T.FMono, 15, gm != null && gm.IsConnected ? T.CreamDim : T.Muted, TextAnchor.UpperLeft, wrap: true));
             y += 68f;
             T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 52f), "CONTROL (MANDO)", false,
-                    () => _pantalla = Pantalla.Control);
+                    () => PantallaActual = Pantalla.Control);
             y += 64f;
 
             // ── Herramientas de desarrollo ────────────────────────────────────
@@ -843,6 +868,18 @@ namespace Gameplay
 
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f), "DESARROLLO", T.Estilo(T.FMono, 11, T.Red));
             y += 22f;
+
+            // Catálogo de noches: dev (default de este build) o prod, para probar con los
+            // datos reales. Cada uno tiene su propio progreso (NightProgress), así que el
+            // contador de abajo cambia con él. Rige desde la próxima partida que se arme.
+            T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
+                         "NOCHES DE PROD",
+                         PlayDataProfile.UseProduction ? "Usando Nights/prod (datos reales)"
+                                                       : "Usando Nights/dev",
+                         PlayDataProfile.UseProduction,
+                         () => { PlayDataProfile.UseProduction = !PlayDataProfile.UseProduction;
+                                 _nocheSel = -1; });
+            y += 64f;
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f),
                       $"Progreso: {NightProgress.Desbloqueadas} de {total} noches desbloqueadas",
                       T.Estilo(T.FMono, 11, T.CreamDim));
@@ -874,7 +911,7 @@ namespace Gameplay
 
         private void DrawControl(float vw, float vh)
         {
-            T.BotonVolver(_nav, () => _pantalla = Pantalla.Opciones);
+            T.BotonVolver(_nav, () => PantallaActual = Pantalla.Opciones);
 
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "CONTROL",
                       T.Estilo(T.FBebas, 28, T.Cream));

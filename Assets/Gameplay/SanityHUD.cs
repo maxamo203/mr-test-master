@@ -29,15 +29,22 @@ namespace Gameplay
 
             float pct = ls.Value01;
 
+            // Espectando: la cordura ya no es suya. Ni distorsión (la partida tiene que
+            // verse clara) ni barra; sólo queda el reloj del amanecer.
+            bool espectando = LocalDeath.Instance != null && LocalDeath.Instance.Espectando;
+
             // ── Distorsion a cordura 0 (full-screen, sin la matriz de UIScale) ──
-            if (pct <= 0f) DrawDistortion();
-            else           Shader.SetGlobalFloat(ID_DISTORT, 0f);
+            if (pct <= 0f && !espectando) DrawDistortion();
+            else                          Shader.SetGlobalFloat(ID_DISTORT, 0f);
 
             // ── Barra (fila 1: encima de la batería) ──────────────────────────
             UIScale.Begin();
             float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
-            Color fill = Color.Lerp(T.Red, T.Blue, pct);
-            T.HudBarra(vw, vh, 1, pct, fill, "CORDURA", $"{Mathf.RoundToInt(pct * 100f)}%");
+            if (!espectando)
+            {
+                Color fill = Color.Lerp(T.Red, T.Blue, pct);
+                T.HudBarra(vw, vh, 1, pct, fill, "CORDURA", $"{Mathf.RoundToInt(pct * 100f)}%");
+            }
 
             // ── Amanecer (fila 2): cuánto falta para ganar la noche ───────────
             // Sin esto la condición de victoria es invisible. Las noches con
