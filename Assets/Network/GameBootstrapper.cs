@@ -99,6 +99,9 @@ public class GameBootstrapper : MonoBehaviour
 
     private void OnGUI()
     {
+        // Rediseño 2.0: debajo de la pausa no se dibuja lo viejo (UNIRSE, franja de sala).
+        if (Rediseno.Flag.Activo && Gamepad.PauseMenuController.IsOpen) return;
+
         UIScale.Begin();
         _nav.Begin();
 

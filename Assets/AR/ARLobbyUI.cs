@@ -75,6 +75,10 @@ public class ARLobbyUI : MonoBehaviour
     {
         if (_lobby == null || _net == null) return;
         if (_lobby.State == ARLobbyManager.LobbyState.Idle) return;
+        // Rediseño 2.0: con la pausa abierta los paneles nuevos se esconden; sin esto, las
+        // pantallas viejas (sincronización, imagen fantasma, anclas…) volvían a dibujarse
+        // debajo de la pausa y parecían parte de ella.
+        if (Rediseno.Flag.Activo && Gamepad.PauseMenuController.IsOpen) return;
 
         // El overlay de carga del mapa oscurece toda la pantalla: se dibuja DETRÁS de la
         // franja de sala de GameBootstrapper (mayor depth = más al fondo) para que

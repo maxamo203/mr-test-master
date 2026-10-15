@@ -1010,12 +1010,18 @@ namespace Gamepad
             }
             else _mantenerPausa = 0f;
 
-            // Rediseño 2.0: la B del VR BOX abre la pausa en plena noche y en el escáner (en los
-            // menús es "volver"; con la pausa abierta vuelve/cierra desde la pausa misma). El
+            // Rediseño 2.0: la B del VR BOX abre la pausa en plena noche, en el escáner y en las
+            // pantallas previas a la noche (sincronización, ubicar el entorno, anclas), donde la
+            // B no hace otra cosa: con el visor puesto es el camino para volver al menú. En los
+            // menús es "volver"; con la pausa abierta vuelve/cierra desde la pausa misma. El
             // bloqueo evita que la misma B que cerró la pausa la vuelva a abrir.
+            bool previaNoche = Rediseno.Menus.PanelSincronizacion2.Mostrando ||
+                               Rediseno.Menus.PanelUbicar2.Mostrando ||
+                               Rediseno.Menus.PanelAnclas2.Mostrando;
             if (Rediseno.Flag.Activo && !_open && vrBoxMouse && VRBoxInput.CancelDown &&
                 Rediseno.BloqueoNav.Libre(0f, 0f) &&
-                (_enEscaner || (NetworkManager.Instance != null && NetworkManager.Instance.GameStarted)))
+                (_enEscaner || previaNoche ||
+                 (NetworkManager.Instance != null && NetworkManager.Instance.GameStarted)))
             {
                 Toggle();
                 Rediseno.BloqueoNav.TrasAccion();
