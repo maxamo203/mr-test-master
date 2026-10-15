@@ -82,6 +82,7 @@ namespace Gamepad
         // jugador): ni botón ni menú. Se cachea por escena para no comparar el nombre en
         // cada evento de OnGUI.
         private bool _enMenuPrincipal;
+        private bool _enEscaner;
 
         private void Awake()
         {
@@ -104,6 +105,7 @@ namespace Gamepad
         private void ResolverEscena(Scene s)
         {
             _enMenuPrincipal = s.name == SceneFlow.EscenaMenu;
+            _enEscaner = s.name == SceneFlow.EscenaEscaner;
             if (_enMenuPrincipal) _open = false;
         }
 
@@ -150,9 +152,18 @@ namespace Gamepad
         }
 
         // ----------------------------------------------------------------- OnGUI
+        // La noche terminó para este jugador: MORISTE (sin estar espectando) o SOBREVIVISTE.
+        // Ahí la pausa no existe: quedaba debajo de la pantalla final y el mando movía y
+        // elegía en los dos menús a la vez. Espectando sí se puede pausar (para salir).
+        private static bool PantallaFinal()
+        {
+            var ld = Gameplay.LocalDeath.Instance;
+            return (ld != null && ld.PresentationReady && !ld.Espectando) || Gameplay.NightResult.Sobrevivio;
+        }
+
         private void OnGUI()
         {
-            if (_enMenuPrincipal) return;
+            if (_enMenuPrincipal || PantallaFinal()) return;
             if (_mantenerPausa > 0.12f)
                 Rediseno.AnilloHud.Dibujar(_mantenerPausa / SegundosParaPausa, T.Cream, Rediseno.IconosMirada.Pausa);
             UIScale.Begin();
@@ -958,6 +969,13 @@ namespace Gamepad
         // ---------------------------------------------------------------- Update
         private void Update()
         {
+            if (PantallaFinal())
+            {
+                if (_open) { CommitEdit(); _open = false; _page = Page.Main; _confirmSalir = false; }
+                _mantenerPausa = 0f;
+                return;
+            }
+
             var gp = GamepadManager.Instance != null ? GamepadManager.Instance.Current : null;
 
             // Abrir/cerrar con Start del gamepad.
@@ -991,6 +1009,18 @@ namespace Gamepad
                 }
             }
             else _mantenerPausa = 0f;
+
+            // Rediseño 2.0: la B del VR BOX abre la pausa en plena noche y en el escáner (en los
+            // menús es "volver"; con la pausa abierta vuelve/cierra desde la pausa misma). El
+            // bloqueo evita que la misma B que cerró la pausa la vuelva a abrir.
+            if (Rediseno.Flag.Activo && !_open && vrBoxMouse && VRBoxInput.CancelDown &&
+                Rediseno.BloqueoNav.Libre(0f, 0f) &&
+                (_enEscaner || (NetworkManager.Instance != null && NetworkManager.Instance.GameStarted)))
+            {
+                Toggle();
+                Rediseno.BloqueoNav.TrasAccion();
+                return;   // que esta misma B no la cierre más abajo
+            }
 
             // Tap (dedos/mouse): botón de pausa siempre; ítems si está abierto.
             if (TryGetTapRelease(out var tapPx, out bool tapDeMouse))
@@ -1075,7 +1105,7 @@ namespace Gamepad
                 if (_items.Count > 0)
                 {
                     // Rediseño 2.0: la B (pulsos poco confiables) ya no vuelve; vuelve la ruedita ←.
-                    if (!probandoB && !Rediseno.Flag.Activo && VRBoxInput.CancelDown) { Back(); return; }
+                    if (!probandoB && VRBoxInput.CancelDown) { Back(); return; }
                     if (!Rediseno.Flag.Activo && VRBoxInput.ConfirmDown) Activate(_items[_focus].id);
 
                     var delta = VRBoxInput.Delta;

@@ -32,6 +32,7 @@ namespace Rediseno.Menus
         }
 
         private static MenuPausa2 _instancia;
+        public static bool Mostrando => _instancia != null && _instancia.EsVisible();
 
         // Ids de páginas que todavía son viejas: no se pueden usar con el visor puesto.
         private static readonly HashSet<string> SinVisor = new() { "control" };
