@@ -151,28 +151,7 @@ namespace Rediseno.Menus
                                  !string.IsNullOrEmpty(noches[n].displayName)
                 ? noches[n].displayName.ToUpperInvariant() : "";
 
-            // JUGAR arriba y primero en el orden: con el escenario ya preseleccionado, con
-            // el visor puesto basta un → para arrancar.
             string esc = menu.EscenarioElegido;
-            var jugar = new VisualElement();
-            TemaUI.Radio(jugar, 42);
-            TemaUI.Relleno(jugar, 34, 46);
-            TemaUI.Borde(jugar, 2, new Color(1f, 1f, 1f, 0.1f));
-            jugar.style.backgroundImage = TemaUI.DegradeRojo;
-            jugar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
-            jugar.style.marginBottom = 18;
-            jugar.Add(TemaUI.Texto($"JUGAR · NOCHE {n + 1}", TemaUI.Bebas, 70, TemaUI.Cream, 7f));
-            var sub = TemaUI.Texto(string.IsNullOrEmpty(esc) ? "Elegí un escenario abajo"
-                                   : $"{(nombreNoche.Length > 0 ? nombreNoche + " · " : "")}en {esc}",
-                                   TemaUI.Mono, 28, new Color(TemaUI.Cream.r, TemaUI.Cream.g, TemaUI.Cream.b, 0.85f));
-            sub.style.marginTop = 6;
-            jugar.Add(sub);
-            if (string.IsNullOrEmpty(esc)) jugar.style.opacity = 0.5f;
-            lista.Add(jugar);
-            nav.Agregar(jugar, () => NightMenuUI.Instance?.ConfirmarPartida(), habilitada: !string.IsNullOrEmpty(esc));
-
-            lista.Add(PiezasUI.Boton(nav, "ELEGIR OTRA NOCHE", () => NightMenuUI.Instance?.ElegirOtraNoche()));
-
             lista.Add(PiezasUI.Seccion("ESCENARIO"));
             foreach (var nombre in menu.Escenarios)
             {
@@ -204,6 +183,29 @@ namespace Rediseno.Menus
                     Rearmar();
                 }, habilitada: ok);
             }
+
+            // JUGAR abajo de los escenarios (se elige dónde y después se juega), pero con el
+            // foco puesto: con el escenario ya preseleccionado, basta una A para arrancar.
+            var jugar = new VisualElement();
+            TemaUI.Radio(jugar, 42);
+            TemaUI.Relleno(jugar, 34, 46);
+            TemaUI.Borde(jugar, 2, new Color(1f, 1f, 1f, 0.1f));
+            jugar.style.backgroundImage = TemaUI.DegradeRojo;
+            jugar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
+            jugar.style.marginTop = 10;
+            jugar.style.marginBottom = 18;
+            jugar.Add(TemaUI.Texto($"JUGAR · NOCHE {n + 1}", TemaUI.Bebas, 70, TemaUI.Cream, 7f));
+            var sub = TemaUI.Texto(string.IsNullOrEmpty(esc) ? "Elegí un escenario arriba"
+                                   : $"{(nombreNoche.Length > 0 ? nombreNoche + " · " : "")}en {esc}",
+                                   TemaUI.Mono, 28, new Color(TemaUI.Cream.r, TemaUI.Cream.g, TemaUI.Cream.b, 0.85f));
+            sub.style.marginTop = 6;
+            jugar.Add(sub);
+            if (string.IsNullOrEmpty(esc)) jugar.style.opacity = 0.5f;
+            lista.Add(jugar);
+            var opJugar = nav.Agregar(jugar, () => NightMenuUI.Instance?.ConfirmarPartida(), habilitada: !string.IsNullOrEmpty(esc));
+            if (opJugar.Habilitada) nav.Enfocar(opJugar);
+
+            lista.Add(PiezasUI.Boton(nav, "ELEGIR OTRA NOCHE", () => NightMenuUI.Instance?.ElegirOtraNoche()));
 
             if (menu.CreandoSala)
                 lista.Add(PiezasUI.Seccion($"SALA EN EL PUERTO {NetworkConfig.DefaultPort} (para cambiarlo, apagá el rediseño)"));
