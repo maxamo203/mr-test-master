@@ -169,6 +169,9 @@ public class AudioCatalog : ScriptableObject
     [Tooltip("Coro breve que marca una muerte local sin reemplazar ni reiniciar el fondo.")]
     public Pista gameOverStinger = new Pista { espacial = 0f, volumen = 0.85f };
 
+    [Tooltip("Pareja de golpes graves repetida exactamente tres veces por muerte local.")]
+    public Pista golpesGravesMuerte = new Pista { espacial = 0f, volumen = 1f };
+
     // ─────────────────────────────────────────────────────────── SORKEN
     [Header("SORKEN")]
 

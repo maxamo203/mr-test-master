@@ -57,10 +57,35 @@ public class AudioManager : MonoBehaviour
     private float       _musObjetivo, _musFade;
     private float       _musDuck = 1f;
 
-    // Captura local y stinger usan voces propias: no pueden ser robados por un paso y se
-    // cancelan limpiamente al reintentar/salir. El fondo permanece en sus fuentes.
-    private AudioSource _deathVoice, _deathStinger;
+    // Captura local, stinger y percusion usan voces propias: no pueden ser robados por un
+    // paso y se cancelan limpiamente al reintentar/salir. El fondo permanece intacto.
+    private AudioSource _deathVoice, _deathStinger, _deathHits;
     private float _deathStingerStartsAt = -1f;
+    private float _deathHitsTarget;
+    private bool _deathHitsCanceling;
+    private DeathPresentationLatch _deathLatch;
+    public const int DeathPercussionRepeats = 3;
+    private const float DeathPercussionCancelFade = 0.14f;
+
+    // Segunda barrera contra mensajes duplicados. LocalDeath ya ignora una segunda muerte,
+    // pero el motor conserva este latch durante game over/espectador hasta reintentar/salir.
+    public struct DeathPresentationLatch
+    {
+        public bool Active { get; private set; }
+
+        public bool TryBegin()
+        {
+            if (Active) return false;
+            Active = true;
+            return true;
+        }
+
+        public void Reset() => Active = false;
+    }
+
+    public static double DeathPercussionDurationSeconds(float clipLength, float pitch = 1f) =>
+        Mathf.Max(0f, clipLength) * DeathPercussionRepeats /
+        Mathf.Max(0.01f, Mathf.Abs(pitch));
 
     // Resonancia de Arbmos: tres voces dedicadas permiten entrada -> loop -> salida con
     // cruce real, incluso si la luz se apaga a mitad del sostenido.
@@ -135,6 +160,7 @@ public class AudioManager : MonoBehaviour
         _ambienteEvento = NuevaFuente("Evento ambiental", loop: false);
         _deathVoice = NuevaFuente("Captura local", loop: false);
         _deathStinger = NuevaFuente("Stinger derrota", loop: false);
+        _deathHits = NuevaFuente("Golpes graves derrota", loop: true);
         _resonanceIntro = NuevaFuente("Arbmos resonancia entrada", loop: false);
         _resonanceLoop = NuevaFuente("Arbmos resonancia sostenida", loop: true);
         _resonanceExit = NuevaFuente("Arbmos resonancia salida", loop: false);
@@ -395,7 +421,8 @@ public class AudioManager : MonoBehaviour
     {
         var m = Instance;
         if (m == null || m._cat == null || m._deathVoice == null) return;
-        m.CancelarPresentacionMuerteInterna();
+        if (!m._deathLatch.TryBegin()) return;
+        m.DetenerGolpesMuerte(inmediato: true);
 
         AudioCatalog.Pista causa = killerType switch
         {
@@ -412,6 +439,8 @@ public class AudioManager : MonoBehaviour
                          GameOptions.VolumenEfectos);
             m._deathVoice.Play();
         }
+
+        m.IniciarGolpesMuerte();
 
         var stinger = m._cat.gameOverStinger;
         var stingerClip = stinger?.Elegir();
@@ -679,14 +708,68 @@ public class AudioManager : MonoBehaviour
         if (!stingerActivo && _deathStingerStartsAt >= 0f &&
             Time.unscaledTime > _deathStingerStartsAt)
             _deathStingerStartsAt = -1f;
+
+        if (_deathHits == null) return;
+        if (_deathHitsCanceling)
+        {
+            float step = _deathHitsTarget * Time.unscaledDeltaTime /
+                         Mathf.Max(0.01f, DeathPercussionCancelFade);
+            _deathHits.volume = Mathf.MoveTowards(_deathHits.volume, 0f, step);
+            if (_deathHits.volume <= 0.001f) DetenerGolpesMuerte(inmediato: true);
+        }
+        else if (!_deathHits.isPlaying && _deathHits.clip != null)
+        {
+            // SetScheduledEndTime detuvo la fuente exactamente al final de la tercera
+            // vuelta. Liberar el clip no resetea el latch de esta muerte.
+            _deathHits.clip = null;
+        }
     }
 
     private void CancelarPresentacionMuerteInterna()
     {
+        _deathLatch.Reset();
         if (_deathVoice != null) { _deathVoice.Stop(); _deathVoice.clip = null; }
         if (_deathStinger != null) { _deathStinger.Stop(); _deathStinger.clip = null; }
+        if (_deathHits != null)
+        {
+            if (_deathHits.isPlaying) _deathHitsCanceling = true;
+            else DetenerGolpesMuerte(inmediato: true);
+        }
         _deathStingerStartsAt = -1f;
         _musDuck = 1f;
+    }
+
+    private void IniciarGolpesMuerte()
+    {
+        var pista = _cat.golpesGravesMuerte;
+        var clip = pista?.Elegir();
+        if (clip == null || _deathHits == null) return;
+
+        _deathHits.clip = clip;
+        _deathHits.loop = true;
+        Configurar(_deathHits, pista, Vector3.zero, false, GameOptions.VolumenEfectos);
+        _deathHitsTarget = _deathHits.volume;
+        _deathHitsCanceling = false;
+
+        double start = AudioSettings.dspTime + 0.04;
+        _deathHits.PlayScheduled(start);
+        _deathHits.SetScheduledEndTime(
+            start + DeathPercussionDurationSeconds(clip.length, _deathHits.pitch));
+    }
+
+    private void DetenerGolpesMuerte(bool inmediato)
+    {
+        if (_deathHits == null) return;
+        if (!inmediato && _deathHits.isPlaying)
+        {
+            _deathHitsCanceling = true;
+            return;
+        }
+        _deathHits.Stop();
+        _deathHits.clip = null;
+        _deathHits.loop = true;
+        _deathHitsCanceling = false;
+        _deathHitsTarget = 0f;
     }
 
     private void ActualizarEventoAmbiental()

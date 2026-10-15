@@ -21,6 +21,8 @@ public static class AudioDecisions20261013Setup
             "Assets/Audio/Clips/Musica/dark_choir_singing_loop.wav");
         cat.gameOverStinger = Track(0.85f, 0f, 1f, 15f,
             "Assets/Audio/Clips/Musica/gameover_coro_breve.wav");
+        cat.golpesGravesMuerte = Track(1f, 0f, 1f, 15f,
+            "Assets/Audio/Clips/Musica/golpes_graves_muerte.wav");
 
         cat.sorkenCubrirse = Track(0.85f, 1f, 0.8f, 20f,
             "Assets/Audio/Clips/Sorken/sorken_cubrirse_dolor_enfado_01.wav",
@@ -122,13 +124,16 @@ public static class AudioDecisions20261013Setup
             bool streaming = path.Contains("_loop") &&
                              (path.Contains("dark_choir") || path.Contains("Libro/") ||
                               path.Contains("veleth_persecucion"));
+            bool gaplessDeathHits = path.Contains("golpes_graves_muerte");
             importer.forceToMono = !flat;
             importer.loadInBackground = streaming;
             var settings = importer.defaultSampleSettings;
             settings.loadType = streaming ? AudioClipLoadType.Streaming
-                                          : AudioClipLoadType.CompressedInMemory;
+                              : gaplessDeathHits ? AudioClipLoadType.DecompressOnLoad
+                                                 : AudioClipLoadType.CompressedInMemory;
             settings.preloadAudioData = !streaming;
-            settings.compressionFormat = AudioCompressionFormat.Vorbis;
+            settings.compressionFormat = gaplessDeathHits ? AudioCompressionFormat.PCM
+                                                          : AudioCompressionFormat.Vorbis;
             settings.quality = streaming ? 0.72f : 0.82f;
             importer.defaultSampleSettings = settings;
             importer.SaveAndReimport();
@@ -137,6 +142,7 @@ public static class AudioDecisions20261013Setup
 
     private static bool IsNewSelection(string path) =>
         path.Contains("dark_choir_singing") || path.Contains("gameover_coro_breve") ||
+        path.Contains("golpes_graves_muerte") ||
         path.Contains("susurros_superpuestos_consumo") ||
         path.Contains("/Arbmos/arbmos_") || path.Contains("/Veleth/veleth_") ||
         path.Contains("sorken_captura_fatal") ||

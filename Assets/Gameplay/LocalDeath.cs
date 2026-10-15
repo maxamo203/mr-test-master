@@ -73,6 +73,7 @@ namespace Gameplay
         {
             if (_subscribed && NetworkManager.Instance != null)
                 NetworkManager.Instance.OnPlayerDied -= DieFromNetwork;
+            if (IsDead) AudioManager.CancelarPresentacionMuerte();
             if (Instance == this) Instance = null;
         }
 

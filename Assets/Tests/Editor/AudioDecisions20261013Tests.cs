@@ -18,6 +18,28 @@ public class AudioDecisions20261013Tests
     {
         AssertTrack(_catalog.ambienteNoche, 1, "dark_choir_singing_loop");
         AssertTrack(_catalog.gameOverStinger, 1, "gameover_coro_breve");
+        AssertTrack(_catalog.golpesGravesMuerte, 1, "golpes_graves_muerte");
+        Assert.That(_catalog.golpesGravesMuerte.volumen, Is.EqualTo(1f));
+    }
+
+    [Test]
+    public void DeathPercussionRunsExactlyThreeSequentialPasses()
+    {
+        var clip = _catalog.golpesGravesMuerte.ClipValido(0);
+        Assert.That(AudioManager.DeathPercussionRepeats, Is.EqualTo(3));
+        Assert.That(AudioManager.DeathPercussionDurationSeconds(clip.length),
+                    Is.EqualTo(clip.length * 3d).Within(0.001d));
+    }
+
+    [Test]
+    public void DeathPresentationLatchBlocksDuplicatesUntilRetryOrExit()
+    {
+        var latch = new AudioManager.DeathPresentationLatch();
+        Assert.That(latch.TryBegin(), Is.True);
+        Assert.That(latch.TryBegin(), Is.False);
+        Assert.That(latch.Active, Is.True);
+        latch.Reset();
+        Assert.That(latch.TryBegin(), Is.True);
     }
 
     [Test]

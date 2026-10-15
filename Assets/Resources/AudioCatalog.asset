@@ -72,6 +72,16 @@ MonoBehaviour:
     distanciaMin: 1
     distanciaMax: 15
     apertura: 0
+  golpesGravesMuerte:
+    clips:
+    - {fileID: 8300000, guid: 70c10b5a627cca148b87bb913c78534f, type: 3}
+    volumen: 1
+    variacionTono: 0
+    variacionIntensidad: 0
+    espacial: 0
+    distanciaMin: 1
+    distanciaMax: 15
+    apertura: 0
   entradasPorTipo:
   - markerTypeId: Door
     pista:

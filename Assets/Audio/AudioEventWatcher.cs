@@ -75,6 +75,9 @@ public class AudioEventWatcher : MonoBehaviour
     // decide ActualizarMusicaPartida (depende de si arranco la noche), no esto.
     private void AplicarMusicaDeEscena()
     {
+        if (_escenaActual != SceneFlow.EscenaJuego)
+            AudioManager.CancelarPresentacionMuerte();
+
         if (_escenaActual == SceneFlow.EscenaMenu) AudioManager.Musica(c => c.musicaMenu);
         else if (_escenaActual == SceneFlow.EscenaEscaner) AudioManager.PararMusica();
     }

@@ -83,7 +83,8 @@ Mientras esos clips estén en el juego, **esta línea tiene que aparecer en los 
 Si se reemplazan todos por audio propio, la obligación desaparece.
 
 Clips históricos aún usados de este pack:
-`Musica/victoria_amanecer`,
+`Musica/victoria_amanecer`, `Musica/golpes_graves_muerte` (derivado filtrado de
+`Musica/derrota_muerte`),
 `Sorken/entrada_puerta_01`, `Sorken/entrada_ventana_01`, `Sorken/entrada_ventana_02`,
 `Sorken/entrada_generica_01`, `Sorken/entrada_generica_02`, `Sorken/hueso_01..04`,
 `Sorken/entra`, `Sorken/repelido`, `Sorken/apuntado`,
