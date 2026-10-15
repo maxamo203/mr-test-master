@@ -43,7 +43,7 @@ const endpoint = WEB3FORMS_ACCESS_KEY ? "https://api.web3forms.com/submit" : "";
     HCAPTCHA_SITEKEY && (
       <script
         is:inline
-        src="https://js.hcaptcha.com/1/api.js?hl=es"
+        src="https://js.hcaptcha.com/1/api.js?hl=es&recaptchacompat=off"
         async
         defer
       />
@@ -355,9 +355,16 @@ const endpoint = WEB3FORMS_ACCESS_KEY ? "https://api.web3forms.com/submit" : "";
         // JSON y no FormData: es lo que muestra el ejemplo AJAX oficial de
         // Web3Forms. El checkbox `botcheck` sin marcar ni viaja (FormData lo
         // omite), que es justo lo que Web3Forms espera de una persona.
+        //
+        // Sin `g-recaptcha-response`: hCaptcha lo agrega por compatibilidad con
+        // reCAPTCHA (duplicando su token), y Web3Forms lo interpreta como
+        // reCAPTCHA — que es Pro — y rechaza el envío con 400. El script ya se
+        // carga con recaptchacompat=off; esto es por si igual aparece.
+        const datos = Object.fromEntries(new FormData(form));
+        delete datos["g-recaptcha-response"];
         const res = await fetch(form.action, {
           method: "POST",
-          body: JSON.stringify(Object.fromEntries(new FormData(form))),
+          body: JSON.stringify(datos),
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
