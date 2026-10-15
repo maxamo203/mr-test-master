@@ -3,18 +3,20 @@
  * Registro a la prueba cerrada de Google Play.
  *
  * El sitio es 100% estático (no hay servidor), así que el formulario lo recibe
- * Formspree: guarda cada envío en su panel y lo reenvía por mail. Se envía por
- * fetch (AJAX) para no sacar al visitante del sitio hacia la página de gracias
- * genérica de Formspree.
+ * Web3Forms (plan gratis: 250 envíos/mes): reenvía cada alta por mail al
+ * correo dueño de la access key. Se envía por fetch (AJAX) para no sacar al
+ * visitante del sitio hacia la página de gracias genérica de Web3Forms.
  *
  * Capas contra el abuso (ninguna alcanza sola; juntas sí para este volumen):
- *  1. Honeypot `_gotcha`: campo invisible que una persona nunca llena. Si llega
- *     con algo, Formspree descarta el envío en silencio.
- *  2. hCaptcha (opcional, HCAPTCHA_SITEKEY): el único freno real contra un bot
- *     que pega directo al endpoint. El reCAPTCHA que Formspree trae por defecto
- *     NO aplica a envíos AJAX, por eso hay que poner una clave propia.
- *  3. Del lado de Formspree (se configura en su panel, no acá): "Restrict to
- *     domain" a www.mortuorium.com y el filtro automático de spam (Formshield).
+ *  1. Honeypot `botcheck`: checkbox invisible que una persona nunca marca. Si
+ *     llega marcado, Web3Forms descarta el envío.
+ *  2. hCaptcha: el único freno real contra un bot que pega directo a la API.
+ *     En el plan gratis Web3Forms NO acepta claves propias: se usa su site key
+ *     compartida (HCAPTCHA_SITEKEY) y el captcha se activa en el panel de
+ *     Web3Forms, en la configuración del formulario. Si el panel lo exige y la
+ *     página no lo muestra, todos los envíos fallan — van juntos.
+ *  3. El filtro de spam del lado del servidor que Web3Forms aplica siempre.
+ *     ("Restrict to domain" es Pro: en el plan gratis no hay.)
  *  4. Del lado del navegador: botón deshabilitado mientras envía y recuerdo
  *     local de "ya te anotaste", para que nadie dispare el mismo alta diez veces
  *     sin querer. Es comodidad, no seguridad: un bot no pasa por acá.
@@ -23,12 +25,12 @@ import Base from "../layouts/Base.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import { betaItems } from "../nav";
 
-/** ID del formulario en Formspree (lo que va después de /f/ en el endpoint). Es público por diseño. */
-const FORMSPREE_ID = "mzedkdae";
-/** Site key de hCaptcha. Vacía = sin captcha (quedan el honeypot y los filtros de Formspree). */
-const HCAPTCHA_SITEKEY = "cff452e2-ebdc-4730-8dca-e7c294962690";
+/** Access key de Web3Forms (web3forms.com → mail → llega la key). Es pública por diseño: sólo sirve para enviar a ese mail. */
+const WEB3FORMS_ACCESS_KEY = "8dd5115e-1a55-42d0-bd5d-b5e624fd458c";
+/** Site key de hCaptcha COMPARTIDA de Web3Forms (la única que acepta el plan gratis). Vacía = sin captcha. */
+const HCAPTCHA_SITEKEY = "50b2fe65-b00b-4b9e-ad62-3ba471098be2";
 
-const endpoint = FORMSPREE_ID ? `https://formspree.io/f/${FORMSPREE_ID}` : "";
+const endpoint = WEB3FORMS_ACCESS_KEY ? "https://api.web3forms.com/submit" : "";
 ---
 
 <Base
@@ -70,10 +72,16 @@ const endpoint = FORMSPREE_ID ? `https://formspree.io/f/${FORMSPREE_ID}` : "";
           novalidate
           data-beta-form
         >
+          <input type="hidden" name="access_key" value={WEB3FORMS_ACCESS_KEY} />
           <input
             type="hidden"
-            name="_subject"
+            name="subject"
             value="Mortuorium — nuevo tester de la prueba cerrada"
+          />
+          <input
+            type="hidden"
+            name="from_name"
+            value="Mortuorium — prueba cerrada"
           />
 
           <div class="field">
@@ -125,11 +133,11 @@ const endpoint = FORMSPREE_ID ? `https://formspree.io/f/${FORMSPREE_ID}` : "";
               detectan) y fuera del orden de tabulación. */
           }
           <div class="trap" aria-hidden="true">
-            <label for="beta-gotcha">No completar</label>
+            <label for="beta-botcheck">No marcar</label>
             <input
-              id="beta-gotcha"
-              type="text"
-              name="_gotcha"
+              id="beta-botcheck"
+              type="checkbox"
+              name="botcheck"
               tabindex="-1"
               autocomplete="off"
             />
@@ -233,7 +241,12 @@ const endpoint = FORMSPREE_ID ? `https://formspree.io/f/${FORMSPREE_ID}` : "";
 
     // hCaptcha sólo existe si se configuró HCAPTCHA_SITEKEY.
     const captcha = () =>
-      (window as unknown as { hcaptcha?: { reset(): void } }).hcaptcha;
+      (
+        window as unknown as {
+          hcaptcha?: { reset(): void; getResponse(): string };
+        }
+      ).hcaptcha;
+    const conCaptcha = !!form.querySelector(".h-captcha");
 
     // localStorage puede tirar (modo privado, datos bloqueados): nunca debe
     // romper el formulario, sólo pierde el recuerdo de "ya te anotaste".
@@ -327,37 +340,45 @@ const endpoint = FORMSPREE_ID ? `https://formspree.io/f/${FORMSPREE_ID}` : "";
         return;
       }
 
+      // Sin el token del captcha el envío va a rebotar igual: mejor avisar acá.
+      if (conCaptcha && !captcha()?.getResponse()) {
+        status.dataset.kind = "error";
+        status.textContent = "Completá la verificación antes de enviar.";
+        return;
+      }
+
       nombre.value = nombre.value.trim();
       email.value = email.value.trim();
       enviando(true);
 
       try {
+        // JSON y no FormData: es lo que muestra el ejemplo AJAX oficial de
+        // Web3Forms. El checkbox `botcheck` sin marcar ni viaja (FormData lo
+        // omite), que es justo lo que Web3Forms espera de una persona.
         const res = await fetch(form.action, {
           method: "POST",
-          body: new FormData(form),
-          headers: { Accept: "application/json" },
+          body: JSON.stringify(Object.fromEntries(new FormData(form))),
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
         });
 
-        if (res.ok) {
+        // Web3Forms responde { success: boolean, message: string }.
+        const data = await res.json().catch(() => null);
+
+        if (res.ok && data?.success) {
           guardar(email.value);
           mostrarListo(email.value);
           return;
         }
 
-        // Formspree responde { errors: [{ field?, message, code? }] }.
-        const data = await res.json().catch(() => null);
-        const errores: { field?: string; code?: string; message?: string }[] =
-          data?.errors ?? [];
-        const deCampo = errores.find(
-          (e) => e.field === "email" || e.field === "nombre",
-        );
+        const msg = String(data?.message ?? data?.body?.message ?? "");
         status.dataset.kind = "error";
-        if (deCampo?.field === "email")
-          setError(email, "Ese email no parece válido.");
-        else if (deCampo?.field === "nombre")
-          setError(nombre, "Revisá el nombre.");
-        else if (errores.some((e) => e.code?.includes("CAPTCHA")))
+        if (/captcha/i.test(msg))
           status.textContent = "Completá la verificación antes de enviar.";
+        else if (/email/i.test(msg))
+          setError(email, "Ese email no parece válido.");
         else if (res.status === 429)
           status.textContent =
             "Demasiados intentos. Probá de nuevo en unos minutos.";
