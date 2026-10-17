@@ -23,7 +23,7 @@ MonoBehaviour:
   entryAnimationSeconds: 3
   entryTriggerDistance: 3
   chaseRepelSeconds: 3.5
-  sorkenPostEntryPauseSeconds: 2.5
+  sorkenPostEntryPauseSeconds: 0
   sorkenChaseSpeed: 0.5
   sorkenIlluminatedSpeed: 0.1
   sorkenAimToleranceSeconds: 2

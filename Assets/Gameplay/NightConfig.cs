@@ -46,7 +46,7 @@ namespace Gameplay
         [Min(0.1f)] public float chaseRepelSeconds = 3.5f;
         [Tooltip("Pausa inmovil al terminar de entrar. Durante ella puede comenzar la defensa, " +
                  "pero nunca puede capturar al jugador.")]
-        [Min(0f)] public float sorkenPostEntryPauseSeconds = 2.5f;
+        [Min(0f)] public float sorkenPostEntryPauseSeconds = 0f;
         [Tooltip("Velocidad normal dentro del ambiente, pensada para espacios pequenos.")]
         [Min(0f)] public float sorkenChaseSpeed = 0.5f;
         [Tooltip("Velocidad muy lenta mientras recibe luz intensa valida.")]

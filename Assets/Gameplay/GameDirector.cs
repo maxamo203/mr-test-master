@@ -87,6 +87,15 @@ namespace Gameplay
         private uint         _sorkenNetId;
         private MarkerObject _marker;
 
+        // Variedad de ingresos. Cada marcador acumula prioridad mientras otros son
+        // elegidos; el ultimo queda excluido despues de dos usos consecutivos siempre
+        // que exista al menos una alternativa valida.
+        private readonly Dictionary<MarkerObject, int> _entryDrought = new();
+        private readonly List<MarkerObject> _entryCandidates = new();
+        private readonly List<int> _entryCandidateDroughts = new();
+        private MarkerObject _lastEntryMarker;
+        private int _sameEntryStreak;
+
         // Chase.
         private readonly List<Vector3> _path = new();
         private int   _pathIndex;
@@ -143,6 +152,9 @@ namespace Gameplay
             GameplayTelemetry.BeginSession(_night, CountAlivePlayers());
             _sorkenReserved = false;
             _coverStartPlayedThisAttempt = false;
+            _entryDrought.Clear();
+            _lastEntryMarker = null;
+            _sameEntryStreak = 0;
             _phase = Phase.Idle;
             _attemptTimer = _night.initialAttemptDelay;
 
@@ -271,7 +283,7 @@ namespace Gameplay
                 return;
             }
 
-            _marker = markers[UnityEngine.Random.Range(0, markers.Count)];
+            _marker = ChooseEntryMarker(markers);
             if (_marker == null) { _attemptTimer = 1f; return; }
 
             // Sin chequeo de cercanía: el punto sale al azar y Sorken entra esté quien
@@ -296,6 +308,7 @@ namespace Gameplay
                 _attemptTimer = 2f;
                 return;
             }
+            RegisterEntryUse(_marker);
             _sorkenTraceId = GameplayTelemetry.BeginThreat(
                 "sorken", 0, _sorken.Position,
                 $"marker={_marker.KindId};entry={_night.entryGraceSeconds:F2}");
@@ -321,6 +334,82 @@ namespace Gameplay
             _hasTarget = false;
             _phase = Phase.Entering;
             Debug.Log($"[GameDirector] Emerge netId={_sorkenNetId} en marcador {_marker.name}.");
+        }
+
+        private MarkerObject ChooseEntryMarker(IReadOnlyList<MarkerObject> markers)
+        {
+            _entryCandidates.Clear();
+            _entryCandidateDroughts.Clear();
+
+            int lastIndex = -1;
+            for (int i = 0; i < markers.Count; i++)
+            {
+                MarkerObject candidate = markers[i];
+                if (candidate == null) continue;
+
+                if (candidate == _lastEntryMarker) lastIndex = _entryCandidates.Count;
+                _entryCandidates.Add(candidate);
+                _entryCandidateDroughts.Add(
+                    _entryDrought.TryGetValue(candidate, out int drought) ? drought : 0);
+            }
+
+            int selectedIndex = SelectEntryIndex(
+                _entryCandidateDroughts, lastIndex, _sameEntryStreak,
+                UnityEngine.Random.value);
+            return selectedIndex >= 0 ? _entryCandidates[selectedIndex] : null;
+        }
+
+        private void RegisterEntryUse(MarkerObject selected)
+        {
+            for (int i = 0; i < _entryCandidates.Count; i++)
+            {
+                MarkerObject candidate = _entryCandidates[i];
+                if (candidate == selected)
+                    _entryDrought[candidate] = 0;
+                else
+                    _entryDrought[candidate] = Mathf.Min(
+                        12, (_entryDrought.TryGetValue(candidate, out int drought) ? drought : 0) + 1);
+            }
+
+            if (selected == _lastEntryMarker)
+                _sameEntryStreak++;
+            else
+            {
+                _lastEntryMarker = selected;
+                _sameEntryStreak = 1;
+            }
+        }
+
+        // Seleccion ponderada y determinista para poder verificar el balance sin depender
+        // del estado global de UnityEngine.Random. Un ingreso gana un punto de peso por
+        // cada intento exitoso en el que no fue usado (hasta 12).
+        public static int SelectEntryIndex(
+            IReadOnlyList<int> droughts, int lastIndex, int sameEntryStreak, float random01)
+        {
+            if (droughts == null || droughts.Count == 0) return -1;
+
+            bool excludeLast = droughts.Count > 1 &&
+                               lastIndex >= 0 && lastIndex < droughts.Count &&
+                               sameEntryStreak >= 2;
+            float totalWeight = 0f;
+            for (int i = 0; i < droughts.Count; i++)
+            {
+                if (excludeLast && i == lastIndex) continue;
+                totalWeight += 1f + Mathf.Clamp(droughts[i], 0, 12);
+            }
+
+            float choice = Mathf.Clamp01(random01) * totalWeight;
+            int fallback = -1;
+            float accumulated = 0f;
+            for (int i = 0; i < droughts.Count; i++)
+            {
+                if (excludeLast && i == lastIndex) continue;
+                fallback = i;
+                accumulated += 1f + Mathf.Clamp(droughts[i], 0, 12);
+                if (choice < accumulated) return i;
+            }
+
+            return fallback;
         }
 
         // --- Entering ---
@@ -456,7 +545,6 @@ namespace Gameplay
             // como origen de la persecucion y evita un salto junto a la pared.
             if (_phase != Phase.WindowLanding)
                 _sorken.SetPositionDirectly(position);
-            _sorken.SetState(SorkenState.Chasing);
             _repel = 0f;
             _lightLostSeconds = 0f;
             _path.Clear();
@@ -464,8 +552,21 @@ namespace Gameplay
             _repathTimer = 0f;
             _phaseTimer = 0f;
             _hasTarget = TryAcquireTarget(_sorken.Position, out _targetClientId, out _);
-            _phase = Phase.PostEntryPause;
-            Debug.Log("[GameDirector] El Sorken ENTRO: pausa de reaccion.");
+            float pauseSeconds = Mathf.Max(0f, _night.sorkenPostEntryPauseSeconds);
+            if (pauseSeconds <= 0f)
+            {
+                _sorken.SetState(SorkenState.Chasing);
+                _phase = Phase.Chasing;
+                Debug.Log("[GameDirector] El Sorken ENTRO: persecucion inmediata.");
+            }
+            else
+            {
+                // Si una configuracion futura recupera la pausa, debe conservar la pose
+                // quieta: la caminata solo empieza cuando tambien empieza la traslacion.
+                _sorken.SetState(SorkenState.Idle);
+                _phase = Phase.PostEntryPause;
+                Debug.Log("[GameDirector] El Sorken ENTRO: pausa sin locomocion.");
+            }
         }
 
         private void TickPostEntryPause(float dt)
@@ -483,8 +584,16 @@ namespace Gameplay
                 return;
             }
 
-            if (_phaseTimer >= Mathf.Max(0f, _night.sorkenPostEntryPauseSeconds))
+            float pauseSeconds = Mathf.Max(0f, _night.sorkenPostEntryPauseSeconds);
+            if (_phaseTimer >= pauseSeconds)
+            {
+                float chaseDelta = Mathf.Max(0f, _phaseTimer - pauseSeconds);
+                _sorken.SetState(SorkenState.Chasing);
                 _phase = Phase.Chasing;
+                // Consume en este mismo frame el tiempo que excedio la pausa. Asi el
+                // primer fotograma de caminata ya tiene desplazamiento asociado.
+                if (chaseDelta > 0f) TickChasing(chaseDelta);
+            }
         }
 
         // Baja de forma controlada: conserva un instante el apoyo de la ventana, desplaza

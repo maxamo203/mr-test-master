@@ -7,6 +7,42 @@ using UnityEngine;
 public class SorkenWindowEntryTests
 {
     [Test]
+    public void IngresoNoSeRepiteMasDeDosVecesSiHayAlternativas()
+    {
+        int[] droughts = { 0, 3, 1 };
+
+        for (int sample = 0; sample <= 100; sample++)
+        {
+            int selected = GameDirector.SelectEntryIndex(
+                droughts, 0, 2, sample / 100f);
+            Assert.That(selected, Is.Not.EqualTo(0));
+        }
+    }
+
+    [Test]
+    public void IngresoPostergadoAumentaSuProbabilidad()
+    {
+        int[] droughts = { 0, 0, 4 };
+        int[] selections = new int[droughts.Length];
+
+        for (int sample = 0; sample < 700; sample++)
+        {
+            int selected = GameDirector.SelectEntryIndex(
+                droughts, -1, 0, (sample + 0.5f) / 700f);
+            selections[selected]++;
+        }
+
+        Assert.That(selections[2], Is.GreaterThan(selections[0] * 4));
+        Assert.That(selections[2], Is.GreaterThan(selections[1] * 4));
+    }
+
+    [Test]
+    public void UnicoIngresoDisponiblePuedeRepetirse()
+    {
+        Assert.That(GameDirector.SelectEntryIndex(new[] { 8 }, 0, 2, 0.5f), Is.Zero);
+    }
+
+    [Test]
     public void DefensaConservaProgresoYPosicionHastaDosSegundos()
     {
         var atHalfSecond = GameDirector.StepDefense(
@@ -57,7 +93,7 @@ public class SorkenWindowEntryTests
         {
             NightConfig night = AssetDatabase.LoadAssetAtPath<NightConfig>(
                 AssetDatabase.GUIDToAssetPath(guid));
-            Assert.That(night.sorkenPostEntryPauseSeconds, Is.GreaterThanOrEqualTo(2.5f), night.name);
+            Assert.That(night.sorkenPostEntryPauseSeconds, Is.Zero, night.name);
             Assert.That(night.sorkenChaseSpeed, Is.InRange(0.4f, 0.6f), night.name);
             Assert.That(night.sorkenIlluminatedSpeed, Is.LessThanOrEqualTo(0.1f), night.name);
             Assert.That(night.sorkenAimToleranceSeconds, Is.EqualTo(2f).Within(0.001f), night.name);
@@ -152,6 +188,36 @@ public class SorkenWindowEntryTests
         Assert.That(corrected.x, Is.EqualTo(animatedBelowFloor.x));
         Assert.That(corrected.y, Is.EqualTo(reference.y));
         Assert.That(corrected.z, Is.EqualTo(animatedBelowFloor.z));
+    }
+
+    [Test]
+    public void DescensoHeredaLaProfundidadVisibleAlTerminarLaVentana()
+    {
+        Vector3 lastWindowPose = new(-3.54f, -94.44f, 101.73f);
+        Vector3 neutralPose = new(0f, 7.3f, 100f);
+
+        Vector3 reference = SorkenAnimator.ResolveLandingHipsReference(
+            lastWindowPose, neutralPose);
+
+        Assert.That(reference.y, Is.EqualTo(lastWindowPose.y));
+        Assert.That(reference.x, Is.EqualTo(neutralPose.x));
+        Assert.That(reference.z, Is.EqualTo(neutralPose.z));
+    }
+
+    [Test]
+    public void PersecucionHeredaLaProfundidadVisibleAlTerminarElDescenso()
+    {
+        const float visibleLandingDepth = -94.44f;
+        const float firstChaseDepth = 6.83f;
+        float offset = SorkenAnimator.ResolvePostWindowDepthOffset(
+            visibleLandingDepth, firstChaseDepth);
+
+        Vector3 chasePose = SorkenAnimator.ApplyPostWindowDepthOffset(
+            new Vector3(-1.64f, firstChaseDepth, 107.68f), offset);
+
+        Assert.That(chasePose.y, Is.EqualTo(visibleLandingDepth).Within(0.0001f));
+        Assert.That(chasePose.x, Is.EqualTo(-1.64f));
+        Assert.That(chasePose.z, Is.EqualTo(107.68f));
     }
 
     [Test]

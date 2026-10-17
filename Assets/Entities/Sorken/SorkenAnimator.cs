@@ -95,6 +95,10 @@ public class SorkenAnimator : MonoBehaviour
     private bool _landingHipsReferenceCaptured;
     private Vector3 _neutralHipsLocalPosition;
     private Vector3 _landingHipsReferencePosition;
+    private bool _postWindowDepthOffsetPending;
+    private bool _postWindowDepthOffsetActive;
+    private float _postWindowVisibleHipsDepth;
+    private float _postWindowHipsDepthOffset;
     private readonly SorkenFootstepClock _footstepClock = new();
     private Transform _leftFoot;
     private Transform _rightFoot;
@@ -225,9 +229,28 @@ public class SorkenAnimator : MonoBehaviour
     {
         int target = (int)state;
         if (target < 0 || target >= _inputCount) target = 0;
+        bool chasingFromWindow = state == SorkenState.Chasing &&
+                                  _lastState == (int)SorkenState.WindowLanding;
         _entryToChaseBlendActive = state == SorkenState.Chasing &&
-            (_lastState == (int)SorkenState.WindowLanding ||
-             _lastState == (int)SorkenState.EmergingDoor);
+            (chasingFromWindow || _lastState == (int)SorkenState.EmergingDoor);
+        bool continueGroundedOffset = _postWindowDepthOffsetActive &&
+                                      KeepsPostWindowDepthOffset(state);
+        if ((chasingFromWindow || continueGroundedOffset) && _hips != null)
+        {
+            // Esta es la profundidad realmente visible tras la correccion del descenso.
+            // El siguiente LateUpdate calculara el offset contra el primer frame ya
+            // evaluado de la caminata, sin introducir un fotograma intermedio.
+            _postWindowVisibleHipsDepth = _hips.localPosition.y;
+            _postWindowDepthOffsetPending = true;
+            _postWindowDepthOffsetActive = false;
+        }
+        else if (state == SorkenState.Idle ||
+                 state == SorkenState.EmergingDoor ||
+                 state == SorkenState.EmergingWindow)
+        {
+            _postWindowDepthOffsetPending = false;
+            _postWindowDepthOffsetActive = false;
+        }
         _lastState = target;
         _footstepClock.Reset(target, 0f);
         _pendingFootstep = false;
@@ -242,7 +265,9 @@ public class SorkenAnimator : MonoBehaviour
         if (state == SorkenState.WindowLanding)
         {
             _windowLandingElapsed = 0f;
-            _landingHipsReferencePosition = _neutralHipsLocalPosition;
+            _landingHipsReferencePosition = _hips != null
+                ? ResolveLandingHipsReference(_hips.localPosition, _neutralHipsLocalPosition)
+                : _neutralHipsLocalPosition;
             _landingHipsReferenceCaptured = _hips != null;
             AnimationClip clip = windowLandingClip != null ? windowLandingClip : idleClip;
             if (clip != null && clip.length > 0.001f)
@@ -537,8 +562,8 @@ public class SorkenAnimator : MonoBehaviour
 
     // La traslacion completa desde la ventana la controla GameDirector. El rig importado
     // esta rotado: su Y local es profundidad mundial, no altura. El clip de aterrizaje
-    // desplaza ese eje unos 0.61 m hacia atras. Lo anclamos a la pose neutra del rig y
-    // dejamos X/Z animados; asi el fundido a persecucion no produce el retroceso visible.
+    // comienza desde otra profundidad, por eso anclamos ese eje al ultimo fotograma que
+    // el jugador vio en la ventana. X/Z quedan animados para conservar el descenso.
     private void LateUpdate()
     {
         // El PlayableGraph se evalua despues de Update. Aplicar la pose de dolor aca
@@ -561,26 +586,37 @@ public class SorkenAnimator : MonoBehaviour
             ? Mathf.Clamp01(_weights[landingIndex] / totalWeight)
             : 0f;
 
-        // Durante el fundido a persecucion el input de aterrizaje sigue teniendo peso.
-        // Mantener la correccion hasta que llegue a cero evita que reaparezca desde abajo.
-        if (!_landingHipsReferenceCaptured || landingWeight <= 0.0001f)
+        bool landingCorrectionActive = _landingHipsReferenceCaptured &&
+                                       landingWeight > 0.0001f &&
+                                       _sorken.State == SorkenState.WindowLanding;
+        if (landingCorrectionActive)
         {
-            if (_sorken.State != SorkenState.WindowLanding)
-                _landingHipsReferenceCaptured = false;
-            return;
+            float t = Mathf.Clamp01(_windowLandingElapsed / WindowLandingDuration);
+            float impact = Mathf.Sin(Mathf.Clamp01(Mathf.InverseLerp(0.56f, 0.86f, t)) * Mathf.PI);
+            float parentScaleY = _hips.parent != null ? Mathf.Abs(_hips.parent.lossyScale.y) : 1f;
+            float localCompression = _landingCompression / Mathf.Max(0.0001f, parentScaleY);
+            _hips.localPosition = CorrectLandingHipsPosition(
+                _hips.localPosition, _landingHipsReferencePosition,
+                localCompression, impact, landingWeight);
+            _hips.localRotation *= Quaternion.Slerp(
+                Quaternion.identity,
+                Quaternion.Euler(_landingPitch * impact, 0f, -2.5f * impact),
+                landingWeight);
+        }
+        else if (_sorken.State != SorkenState.WindowLanding)
+            _landingHipsReferenceCaptured = false;
+
+        if (_postWindowDepthOffsetPending && KeepsPostWindowDepthOffset(_sorken.State))
+        {
+            _postWindowHipsDepthOffset = ResolvePostWindowDepthOffset(
+                _postWindowVisibleHipsDepth, _hips.localPosition.y);
+            _postWindowDepthOffsetPending = false;
+            _postWindowDepthOffsetActive = true;
         }
 
-        float t = Mathf.Clamp01(_windowLandingElapsed / WindowLandingDuration);
-        float impact = Mathf.Sin(Mathf.Clamp01(Mathf.InverseLerp(0.56f, 0.86f, t)) * Mathf.PI);
-        float parentScaleY = _hips.parent != null ? Mathf.Abs(_hips.parent.lossyScale.y) : 1f;
-        float localCompression = _landingCompression / Mathf.Max(0.0001f, parentScaleY);
-        _hips.localPosition = CorrectLandingHipsPosition(
-            _hips.localPosition, _landingHipsReferencePosition,
-            localCompression, impact, landingWeight);
-        _hips.localRotation *= Quaternion.Slerp(
-            Quaternion.identity,
-            Quaternion.Euler(_landingPitch * impact, 0f, -2.5f * impact),
-            landingWeight);
+        if (_postWindowDepthOffsetActive && KeepsPostWindowDepthOffset(_sorken.State))
+            _hips.localPosition = ApplyPostWindowDepthOffset(
+                _hips.localPosition, _postWindowHipsDepthOffset);
     }
 
     public static Vector3 CorrectLandingHipsPosition(
@@ -593,6 +629,32 @@ public class SorkenAnimator : MonoBehaviour
         corrected.y = Mathf.Lerp(animatedPosition.y, targetY, Mathf.Clamp01(landingWeight));
         return corrected;
     }
+
+    public static Vector3 ResolveLandingHipsReference(
+        Vector3 currentAnimatedPosition, Vector3 neutralPosition)
+    {
+        // Y local corresponde a la profundidad mundial por la rotacion del Armature.
+        // Mantener el valor actualmente visible evita el salto hacia atras al cambiar
+        // de clip; los otros ejes conservan la referencia estable del rig.
+        neutralPosition.y = currentAnimatedPosition.y;
+        return neutralPosition;
+    }
+
+    public static float ResolvePostWindowDepthOffset(
+        float visibleDepth, float firstChaseAnimatedDepth) =>
+        visibleDepth - firstChaseAnimatedDepth;
+
+    public static Vector3 ApplyPostWindowDepthOffset(Vector3 animatedPosition, float depthOffset)
+    {
+        animatedPosition.y += depthOffset;
+        return animatedPosition;
+    }
+
+    private static bool KeepsPostWindowDepthOffset(SorkenState state) =>
+        state == SorkenState.Chasing ||
+        state == SorkenState.CoverStarting ||
+        state == SorkenState.CoverWalking ||
+        state == SorkenState.Grabbing;
 
     private static Transform FindDescendant(Transform root, string wantedName)
     {
