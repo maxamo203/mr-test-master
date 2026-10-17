@@ -90,7 +90,7 @@ public class NetworkManager : MonoBehaviour
     public event Action<string, string> OnMapAnnounced; // client: (hash, nombre) del mapa que eligió el host
     public event Action<byte, float> OnBatteryCollected; // client: recogió pila (rarityIndex, charge)
     public event Action<int>    OnCollectibleTotal;   // todos: total de reliquias recogidas esta noche
-    public event Action<float, float> OnSanityUpdated;    // client: cordura autoritativa (valor, max)
+    public event Action<float, float, bool> OnSanityUpdated; // valor, max, agarre Arbmos
     public event Action<PlayerDeathMsg> OnPlayerDied;        // client: fui atrapado (secuencia + pantalla de muerte)
     public event Action<uint, byte[]> OnVoiceData;         // todos: frame de voz de (emisor, adpcm)
     public event Action               OnRosterChanged;     // todos: cambió quién está en la sala
@@ -178,10 +178,16 @@ public class NetworkManager : MonoBehaviour
     }
 
     // Server → cliente puntual: su cordura autoritativa (la calcula el SanitySystem).
-    public void ServerSendSanity(uint clientId, float sanity, float max)
+    public void ServerSendSanity(uint clientId, float sanity, float max,
+                                 bool arbmosNonLethalGrab = false)
     {
         if (_srv == null) return;
-        var body = new PlayerSanityMsg { Sanity = sanity, Max = max }.Serialize();
+        var body = new PlayerSanityMsg
+        {
+            Sanity = sanity,
+            Max = max,
+            ArbmosNonLethalGrab = arbmosNonLethalGrab,
+        }.Serialize();
         _srv.Send(clientId, MsgHelper.Frame(MessageType.PlayerSanity, body));
     }
 
@@ -1076,7 +1082,8 @@ public class NetworkManager : MonoBehaviour
             case MessageType.PlayerSanity:
             {
                 var m = PlayerSanityMsg.Deserialize(msg.Body);
-                OnSanityUpdated?.Invoke(m.Sanity, m.Max);
+                OnSanityUpdated?.Invoke(
+                    m.Sanity, m.Max, m.ArbmosNonLethalGrab);
                 break;
             }
             case MessageType.PlayerDied:

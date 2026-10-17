@@ -42,7 +42,7 @@ namespace Gameplay
         // Unico punto por el que entra la cordura en este dispositivo (host y cliente), asi
         // que es donde se detectan los cruces de umbral para avisarlos por audio. La cordura
         // solo baja, por eso alcanza con comparar contra el valor anterior.
-        public void Set(float value, float max)
+        public void Set(float value, float max, bool arbmosNonLethalGrab = false)
         {
             float antes = Value;
             float antes01 = Value01;
@@ -53,9 +53,8 @@ namespace Gameplay
             // El resultado autoritativo llega por este único punto en host y cliente.
             // Sólo el golpe normal que deja cordura reproduce el jadeo; llegar a cero
             // abre la persecución letal y no debe anticipar su grito de muerte.
-            var arbmos = ArbmosEntity.Active;
-            if (Value < antes && Value > 0f && arbmos != null && arbmos.Rendered &&
-                !arbmos.Lethal && arbmos.State == ArbmosState.Attacking)
+            if (ShouldPlayArbmosNonLethalGrab(
+                    arbmosNonLethalGrab, antes, Value))
                 AudioManager.Sonar(c => c.arbmosAgarreNoLetal);
 
             if (antes01 > 0f && ahora01 <= 0f)
@@ -63,6 +62,10 @@ namespace Gameplay
             else if (antes01 > UmbralCorduraBaja && ahora01 <= UmbralCorduraBaja)
                 AudioManager.Sonar(c => c.corduraBaja);
         }
+
+        public static bool ShouldPlayArbmosNonLethalGrab(
+            bool authoritativeGrab, float previousValue, float currentValue) =>
+            authoritativeGrab && currentValue < previousValue && currentValue > 0f;
 
         // Fraccion de cordura a la que se avisa "estas en rojo".
         private const float UmbralCorduraBaja = 0.3f;

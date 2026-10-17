@@ -93,9 +93,9 @@ namespace Gameplay
         [Tooltip("Segundos continuos con la linterna apagada para ocultar una aparicion normal.")]
         [Min(0.1f)] public float arbmosHideSeconds = 3f;
         [Tooltip("Segundos de luz directa sobre la cabeza necesarios para comprometer el ataque.")]
-        [Min(0.05f)] public float arbmosExposureSeconds = 1.2f;
+        [Min(0.05f)] public float arbmosExposureSeconds = 0.6f;
         [Tooltip("Gracia al aparecer durante la que la luz no acumula exposición.")]
-        [Min(0f)] public float arbmosExposureGraceSeconds = 1f;
+        [Min(0f)] public float arbmosExposureGraceSeconds = 0f;
         [Tooltip("Demora breve entre comprometer el ataque normal y aplicar el daño.")]
         [Min(0f)] public float arbmosAttackCommitSeconds = 0.5f;
         [Tooltip("Techo de velocidad (m/s). La velocidad real también respeta la distancia por paso del clip.")]
@@ -106,10 +106,13 @@ namespace Gameplay
         [Min(0.05f)] public float arbmosAttackGrabRange = 1f;
         [Tooltip("Cordura que quita un ataque normal. Nunca mata directamente.")]
         [Min(0f)] public float arbmosSanityDamage = 30f;
+        [Tooltip("Cordura por segundo que pierde el jugador si mantiene la linterna " +
+                 "encendida mientras su Arbmos normal esta presente.")]
+        [Min(0f)] public float arbmosLightSanityDrainPerSecond = 2f;
         [Tooltip("Altura de respaldo del punto de mirada si el prefab no tiene lookTarget.")]
         [Min(0f)] public float arbmosLookTargetHeight = 1.65f;
         [Tooltip("Radio tolerado alrededor de la cabeza para detectar el haz.")]
-        [Min(0f)] public float arbmosLookTargetRadius = 0.25f;
+        [Min(0f)] public float arbmosLookTargetRadius = 0.4f;
 
         [Header("Arbmos letal (cordura en cero)")]
         [Tooltip("Segundos inmovil (sin aura, distorsion en escalada) antes de embestir.")]

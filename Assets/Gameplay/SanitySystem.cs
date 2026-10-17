@@ -91,7 +91,24 @@ namespace Gameplay
 
         // Aplica un golpe autoritativo y publica el resultado inmediatamente. Devuelve
         // true unicamente cuando este golpe produjo el cruce de cordura positiva a cero.
-        public bool ServerApplyDamage(uint clientId, float amount)
+        public bool ServerApplyDamage(uint clientId, float amount,
+                                      bool arbmosNonLethalGrab = false)
+        {
+            return ServerApplyDamageInternal(clientId, amount, publishImmediately: true,
+                                             arbmosNonLethalGrab: arbmosNonLethalGrab);
+        }
+
+        // Variante para drenajes continuos. El valor se modifica cada frame en el server,
+        // pero se publica con el intervalo normal de red para no enviar un mensaje por frame.
+        public bool ServerApplyContinuousDamage(uint clientId, float amount)
+        {
+            return ServerApplyDamageInternal(clientId, amount, publishImmediately: false,
+                                             arbmosNonLethalGrab: false);
+        }
+
+        private bool ServerApplyDamageInternal(uint clientId, float amount,
+                                               bool publishImmediately,
+                                               bool arbmosNonLethalGrab)
         {
             var net = NetworkManager.Instance;
             if (net == null || !net.IsServer) return false;
@@ -99,7 +116,9 @@ namespace Gameplay
             EnsurePlayer(clientId, max);
             float before = _sanity[clientId];
             _sanity[clientId] = Mathf.Max(0f, before - Mathf.Max(0f, amount));
-            Publish(clientId, max);
+            if (publishImmediately)
+                Publish(clientId, max,
+                        arbmosNonLethalGrab && _sanity[clientId] > 0f);
             return before > 0f && _sanity[clientId] <= 0f;
         }
 
@@ -108,11 +127,15 @@ namespace Gameplay
             if (!_sanity.ContainsKey(clientId)) _sanity[clientId] = max;
         }
 
-        private void Publish(uint clientId, float max)
+        private void Publish(uint clientId, float max,
+                             bool arbmosNonLethalGrab = false)
         {
             float value = _sanity[clientId];
-            if (clientId == 0) LocalSanity.Ensure().Set(value, max);
-            else NetworkManager.Instance.ServerSendSanity(clientId, value, max);
+            if (clientId == 0)
+                LocalSanity.Ensure().Set(value, max, arbmosNonLethalGrab);
+            else
+                NetworkManager.Instance.ServerSendSanity(
+                    clientId, value, max, arbmosNonLethalGrab);
         }
     }
 }

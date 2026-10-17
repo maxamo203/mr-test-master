@@ -216,19 +216,25 @@ public class PlayerSanityMsg
 {
     public float Sanity;
     public float Max;
+    public bool ArbmosNonLethalGrab;
 
     public byte[] Serialize()
     {
-        using var ms = new MemoryStream(8);
+        using var ms = new MemoryStream(9);
         using var w  = new BinaryWriter(ms);
-        w.Write(Sanity); w.Write(Max);
+        w.Write(Sanity); w.Write(Max); w.Write(ArbmosNonLethalGrab);
         return ms.ToArray();
     }
 
     public static PlayerSanityMsg Deserialize(byte[] d)
     {
         using var r = new BinaryReader(new MemoryStream(d));
-        return new() { Sanity = r.ReadSingle(), Max = r.ReadSingle() };
+        return new()
+        {
+            Sanity = r.ReadSingle(),
+            Max = r.ReadSingle(),
+            ArbmosNonLethalGrab = r.ReadBoolean(),
+        };
     }
 }
 

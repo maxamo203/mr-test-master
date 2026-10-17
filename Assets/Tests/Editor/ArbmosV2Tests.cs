@@ -1,9 +1,97 @@
 using NUnit.Framework;
 using UnityEngine;
+using UnityEditor;
 using Bateries;
+using Gameplay;
 
 public class ArbmosV2Tests
 {
+    [Test]
+    public void TodasLasNochesUsanLaSensibilidadDeLuzAjustada()
+    {
+        foreach (string profile in new[] { "dev", "prod" })
+        {
+            for (int nightIndex = 1; nightIndex <= 6; nightIndex++)
+            {
+                var night = AssetDatabase.LoadAssetAtPath<NightConfig>(
+                    $"Assets/Gameplay/Nights/{profile}/Noche {nightIndex}.asset");
+
+                Assert.That(night, Is.Not.Null);
+                Assert.That(night.arbmosExposureGraceSeconds,
+                            Is.Zero);
+                Assert.That(night.arbmosExposureSeconds,
+                            Is.EqualTo(0.6f).Within(0.0001f));
+                Assert.That(night.arbmosLookTargetRadius,
+                            Is.EqualTo(0.4f).Within(0.0001f));
+            }
+        }
+    }
+
+    [Test]
+    public void ArbmosPresenteConLinternaDrenaDosPuntosDeCorduraPorSegundo()
+    {
+        float damage = ArbmosDirector.CalculateLightSanityDrain(
+            arbmosPresent: true, FlashlightMode.Dim,
+            deltaTime: 0.5f, drainPerSecond: 2f);
+
+        Assert.That(damage, Is.EqualTo(1f).Within(0.0001f));
+    }
+
+    [TestCase(false, FlashlightMode.Dim)]
+    [TestCase(true, FlashlightMode.Off)]
+    public void DrenajeGradualRequiereArbmosPresenteYLinternaEncendida(
+        bool arbmosPresent, FlashlightMode flashlightMode)
+    {
+        float damage = ArbmosDirector.CalculateLightSanityDrain(
+            arbmosPresent, flashlightMode, deltaTime: 1f, drainPerSecond: 2f);
+
+        Assert.That(damage, Is.Zero);
+    }
+
+    [Test]
+    public void DrenajeGradualNoDisparaAudioDeAgarre()
+    {
+        Assert.That(LocalSanity.ShouldPlayArbmosNonLethalGrab(
+            authoritativeGrab: false, previousValue: 80f, currentValue: 79.6f),
+            Is.False);
+    }
+
+    [Test]
+    public void AgarreNoLetalAutorizadoDisparaAudioUnaVez()
+    {
+        Assert.That(LocalSanity.ShouldPlayArbmosNonLethalGrab(
+            authoritativeGrab: true, previousValue: 80f, currentValue: 50f),
+            Is.True);
+        Assert.That(LocalSanity.ShouldPlayArbmosNonLethalGrab(
+            authoritativeGrab: false, previousValue: 50f, currentValue: 50f),
+            Is.False);
+    }
+
+    [Test]
+    public void GolpeQueLlegaACeroNoAnticipaAudioDeAgarreNoLetal()
+    {
+        Assert.That(LocalSanity.ShouldPlayArbmosNonLethalGrab(
+            authoritativeGrab: true, previousValue: 20f, currentValue: 0f),
+            Is.False);
+    }
+
+    [Test]
+    public void MensajeDeCorduraConservaMarcaAutoritativaDeAgarre()
+    {
+        var original = new PlayerSanityMsg
+        {
+            Sanity = 70f,
+            Max = 100f,
+            ArbmosNonLethalGrab = true,
+        };
+
+        var decoded = PlayerSanityMsg.Deserialize(original.Serialize());
+
+        Assert.That(decoded.Sanity, Is.EqualTo(70f));
+        Assert.That(decoded.Max, Is.EqualTo(100f));
+        Assert.That(decoded.ArbmosNonLethalGrab, Is.True);
+    }
+
     [Test]
     public void DesplazamientoDelArbmosFrenaEnApoyoYAceleraEntrePasos()
     {

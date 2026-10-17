@@ -160,6 +160,16 @@ private readonly List<uint> _scratchRemove = new();
             return;
         }
 
+        float lightDrain = CalculateLightSanityDrain(
+            IsNormalArbmosPresent(haunt), PlayerLights.ModeFor(clientId), dt,
+            _night.arbmosLightSanityDrainPerSecond);
+        if (lightDrain > 0f && SanitySystem.Instance != null &&
+            SanitySystem.Instance.ServerApplyContinuousDamage(clientId, lightDrain))
+        {
+            BeginLethal(clientId, haunt, playerPosition);
+            return;
+        }
+
         switch (haunt.phase)
         {
             case Phase.Dormant:
@@ -181,6 +191,21 @@ private readonly List<uint> _scratchRemove = new();
                 TickLethalChase(clientId, haunt, dt, playerPosition);
                 break;
         }
+    }
+
+    private static bool IsNormalArbmosPresent(Haunt haunt) =>
+        haunt != null && haunt.ent != null && !haunt.lethalTriggered &&
+        (haunt.phase == Phase.PresentStill ||
+         haunt.phase == Phase.NormalChase ||
+         haunt.phase == Phase.AttackCommitted);
+
+    public static float CalculateLightSanityDrain(bool arbmosPresent,
+                                                   FlashlightMode flashlightMode,
+                                                   float deltaTime,
+                                                   float drainPerSecond)
+    {
+        if (!arbmosPresent || flashlightMode == FlashlightMode.Off) return 0f;
+        return Mathf.Max(0f, deltaTime) * Mathf.Max(0f, drainPerSecond);
     }
 
     private void TickDormant(uint clientId, Haunt haunt, float dt, Vector3 playerPosition)
@@ -335,7 +360,8 @@ private readonly List<uint> _scratchRemove = new();
 
         bool reachedZero = SanitySystem.Instance != null &&
                            SanitySystem.Instance.ServerApplyDamage(
-                               clientId, _night.arbmosSanityDamage);
+                               clientId, _night.arbmosSanityDamage,
+                               arbmosNonLethalGrab: true);
         if (reachedZero || (SanitySystem.Instance != null &&
                             SanitySystem.Instance.IsAtZero(clientId)))
         {
