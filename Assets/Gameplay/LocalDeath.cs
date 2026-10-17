@@ -31,9 +31,24 @@ namespace Gameplay
         private readonly List<Renderer> _hiddenKillerRenderers = new();
         private uint _killerNetworkId;
 
+        // Retrato del asesino: copia SÓLO visual (mallas en la pose del momento de la
+        // muerte, sin scripts ni colliders) colgada de la cámara, para que el jugador vea
+        // en primera persona qué lo mató aunque mueva la cabeza. El asesino real sigue
+        // su simulación (el Sorken va por otro jugador, Veleth se va): sin la copia se
+        // escapaba del cuadro y a veces no se llegaba a ver qué había pasado.
+        // Por ahora queda quieto; cuando haya animaciones de muerte, van acá.
+        private GameObject _retrato;
+        private readonly List<Mesh> _mallasRetrato = new();
+        private Vector3 _retratoDesde, _retratoHasta;
+        private Quaternion _retratoRotDesde, _retratoRotHasta;
+
         private const float RevealSeconds = 1.45f;
         private const float ShakeDegrees = 0.7f;
         private const float FaceDistance = 0.38f;
+        // Con retrato: distancia de la cara a la cámara (cabeza y hombros en cuadro) y
+        // cuánto se lo deja ver, ya quieto, antes de la pantalla de muerte.
+        private const float RetratoDistancia = 0.55f;
+        private const float RetratoSostenSeconds = 2.5f;
 
         private void Awake()
         {
@@ -52,6 +67,23 @@ namespace Gameplay
 
         private void LateUpdate()
         {
+            if (_retrato != null)
+            {
+                // Coords locales a la cámara: el tracking AR la sigue moviendo y el
+                // retrato la acompaña. Se desliza desde donde estaba el asesino hasta
+                // quedar delante de la cara, con el mismo temblor que el zoom de siempre.
+                float p = Mathf.Clamp01((Time.unscaledTime - _sequenceStartedAt) / RevealSeconds);
+                p = p * p * (3f - 2f * p);
+                float tt = Time.unscaledTime;
+                var temblor = Quaternion.Euler(
+                    (Mathf.PerlinNoise(tt * 7.1f, 0.17f) - .5f) * 2f * ShakeDegrees,
+                    (Mathf.PerlinNoise(0.63f, tt * 6.4f) - .5f) * 2f * ShakeDegrees, 0f);
+                _retrato.transform.localPosition = Vector3.Lerp(_retratoDesde, _retratoHasta, p);
+                _retrato.transform.localRotation =
+                    temblor * Quaternion.Slerp(_retratoRotDesde, _retratoRotHasta, p);
+                return;
+            }
+
             if (!_lockCamera || _camera == null) return;
 
             float elapsed = Time.unscaledTime - _sequenceStartedAt;
@@ -74,6 +106,7 @@ namespace Gameplay
             if (_subscribed && NetworkManager.Instance != null)
                 NetworkManager.Instance.OnPlayerDied -= DieFromNetwork;
             if (IsDead) AudioManager.CancelarPresentacionMuerte();
+            DestruirRetrato();
             if (Instance == this) Instance = null;
         }
 
@@ -100,7 +133,9 @@ namespace Gameplay
             PresentationReady = false;
             _killerNetworkId = killerNetworkId;
             AudioManager.PresentarMuerte(ResolverTipoAsesino(killerNetworkId));
-            ZoomTowardsFace(killerFacePosition);
+            // Sin asesino que copiar (id desconocido, entidad ya destruida) queda el
+            // zoom de siempre con la cámara congelada.
+            if (!CrearRetrato(killerFacePosition)) ZoomTowardsFace(killerFacePosition);
 
             if (allPlayersDead) { TerminarNoche(); StopGameplayForAll(); }
             _sequence = StartCoroutine(ShowScreenAfterReveal());
@@ -114,6 +149,7 @@ namespace Gameplay
             if (!PuedeEspectar) return;
             Espectando = true;
             _lockCamera = false;
+            DestruirRetrato();
             MostrarAsesino();
         }
 
@@ -149,7 +185,10 @@ namespace Gameplay
 
         private IEnumerator ShowScreenAfterReveal()
         {
-            yield return new WaitForSecondsRealtime(RevealSeconds);
+            // Con retrato se lo deja ver un rato ya quieto delante de la cara; el zoom de
+            // siempre pasa a la pantalla apenas termina.
+            float espera = RevealSeconds + (_retrato != null ? RetratoSostenSeconds : 0f);
+            yield return new WaitForSecondsRealtime(espera);
             HideKiller();
             PresentationReady = true;
             _sequence = null;
@@ -157,6 +196,7 @@ namespace Gameplay
 
         private void HideKiller()
         {
+            if (_hiddenKillerRenderers.Count > 0) return;   // ya oculto (retrato)
             if (_killerNetworkId == 0 || EntityRegistry.Instance == null ||
                 !EntityRegistry.Instance.TryGet(_killerNetworkId, out var killer) || killer == null)
                 return;
@@ -167,6 +207,82 @@ namespace Gameplay
                 renderer.enabled = false;
                 _hiddenKillerRenderers.Add(renderer);
             }
+        }
+
+        // Arma el retrato del asesino colgado de la cámara y oculta al real (que sigue
+        // moviéndose y si no aparecería dos veces). false = no había nada que copiar.
+        private bool CrearRetrato(Vector3 facePosition)
+        {
+            var cam = Camera.main;
+            if (cam == null || _killerNetworkId == 0 || EntityRegistry.Instance == null ||
+                !EntityRegistry.Instance.TryGet(_killerNetworkId, out var killer) || killer == null)
+                return false;
+
+            var origen = killer.transform;
+            var raiz = new GameObject("RetratoAsesino");
+            raiz.transform.SetPositionAndRotation(origen.position, origen.rotation);
+
+            int copiados = 0;
+            foreach (var r in killer.GetComponentsInChildren<Renderer>())
+            {
+                if (!r.enabled || !r.gameObject.activeInHierarchy) continue;
+
+                Mesh malla;
+                bool horneada = false;
+                if (r is SkinnedMeshRenderer smr)
+                {
+                    if (smr.sharedMesh == null) continue;
+                    // Pose del frame de la muerte, con la escala ya aplicada.
+                    malla = new Mesh { name = smr.sharedMesh.name + " (retrato)" };
+                    smr.BakeMesh(malla, true);
+                    _mallasRetrato.Add(malla);
+                    horneada = true;
+                }
+                else if (r is MeshRenderer)
+                {
+                    var mf = r.GetComponent<MeshFilter>();
+                    if (mf == null || mf.sharedMesh == null) continue;
+                    malla = mf.sharedMesh;
+                }
+                else continue;   // partículas, líneas, etc.: no se congelan
+
+                var go = new GameObject(r.name);
+                go.layer = r.gameObject.layer;
+                go.transform.SetParent(raiz.transform, false);
+                go.transform.SetPositionAndRotation(r.transform.position, r.transform.rotation);
+                go.transform.localScale = horneada ? Vector3.one : r.transform.lossyScale;
+                go.AddComponent<MeshFilter>().sharedMesh = malla;
+                var mr = go.AddComponent<MeshRenderer>();
+                mr.sharedMaterials = r.sharedMaterials;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                mr.receiveShadows = false;
+                copiados++;
+            }
+
+            if (copiados == 0) { Destroy(raiz); return false; }
+
+            // Pose final, en coords de la cámara: mirándola de frente, con la cara a
+            // RetratoDistancia sobre el eje de la vista.
+            Vector3 caraLocal = raiz.transform.InverseTransformPoint(facePosition);
+            _retratoRotHasta = Quaternion.LookRotation(Vector3.back, Vector3.up);
+            _retratoHasta = Vector3.forward * RetratoDistancia - _retratoRotHasta * caraLocal;
+
+            raiz.transform.SetParent(cam.transform, true);
+            _retratoDesde = raiz.transform.localPosition;
+            _retratoRotDesde = raiz.transform.localRotation;
+            _retrato = raiz;
+            _sequenceStartedAt = Time.unscaledTime;
+
+            HideKiller();
+            return true;
+        }
+
+        private void DestruirRetrato()
+        {
+            if (_retrato != null) Destroy(_retrato);
+            _retrato = null;
+            foreach (var m in _mallasRetrato) if (m != null) Destroy(m);
+            _mallasRetrato.Clear();
         }
 
         private void MostrarAsesino()
@@ -180,6 +296,7 @@ namespace Gameplay
         {
             if (_sequence != null) StopCoroutine(_sequence);
             _sequence = null;
+            DestruirRetrato();
             MostrarAsesino();
             IsDead = false;
             PresentationReady = false;
