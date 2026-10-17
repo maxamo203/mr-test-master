@@ -41,7 +41,7 @@ namespace Collectibles
                 _aimed = FindAimedCollectible();
             }
 
-            if (_aimed != null) { label = "Recoger"; return true; }
+            if (_aimed != null) { label = "Recoger reliquia"; return true; }
             label = null;
             return false;
         }

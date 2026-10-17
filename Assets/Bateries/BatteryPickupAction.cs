@@ -44,7 +44,7 @@ namespace Bateries
                 _aimed = FindAimedBattery();
             }
 
-            if (_aimed != null) { label = "Recoger"; return true; }
+            if (_aimed != null) { label = "Recoger pila"; return true; }
             label = null;
             return false;
         }

@@ -355,13 +355,39 @@ public static class MortuoriumTheme
         return 2;
     }
 
-    // Atajo: dibuja la barra en su fila, una o dos veces según el modo.
+    // Atajo: dibuja la barra en su fila, una o dos veces según el modo. Las barras del
+    // HUD de la noche (linterna, cordura, amanecer) van con el estilo 2.0 (Barra2).
     public static void HudBarra(float vw, float vh, int fila, float pct01, Color fill,
                                 string etiqueta, string valor)
     {
         int n = HudBarRects(vw, vh, fila, out var a, out var b);
-        Barra(a, pct01, fill, etiqueta, valor);
-        if (n > 1) Barra(b, pct01, fill, etiqueta, valor);
+        Barra2(a, pct01, fill, etiqueta, valor);
+        if (n > 1) Barra2(b, pct01, fill, etiqueta, valor);
+    }
+
+    // Barra 2.0: píldora oscura con borde fino y el relleno redondeado adentro. Etiqueta
+    // en Bebas a la izquierda, valor en mono a la derecha.
+    public static void Barra2(Rect r, float pct01, Color fill, string etiqueta, string valor)
+    {
+        if (Event.current.type == EventType.Repaint)
+        {
+            float radio = r.height * 0.5f;
+            Tarjeta2(r, Hoja2, null, radio);
+            const float inner = 3f;
+            var track = new Rect(r.x + inner, r.y + inner, r.width - 2f * inner, r.height - 2f * inner);
+            float w = track.width * Mathf.Clamp01(pct01);
+            // Nunca más angosto que alto: con poca carga queda un punto redondo, no una astilla.
+            if (w > 0.5f)
+                FillR(new Rect(track.x, track.y, Mathf.Max(w, track.height), track.height),
+                      new Color(fill.r, fill.g, fill.b, 0.8f), track.height * 0.5f);
+        }
+
+        if (!string.IsNullOrEmpty(etiqueta))
+            GUI.Label(new Rect(r.x + 12f, r.y, r.width - 24f, r.height), etiqueta,
+                      Estilo(FBebas, 15, Cream, TextAnchor.MiddleLeft));
+        if (!string.IsNullOrEmpty(valor))
+            GUI.Label(new Rect(r.x + 12f, r.y, r.width - 24f, r.height), valor,
+                      Estilo(FMono, 12, Cream, TextAnchor.MiddleRight));
     }
 
     // Barra estilo Mortuorium: fondo + borde + relleno proporcional, con etiqueta a

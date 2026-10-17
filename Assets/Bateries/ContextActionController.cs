@@ -374,7 +374,7 @@ namespace Bateries
                 var c = i == 0 ? izq : der;
                 float w = 300f * s, h = 86f * s;
                 var r = new Rect(c.x - w * 0.5f, c.y + 120f * s, w, h);
-                MortuoriumTheme.Panel(r, new Color(0.02f, 0.016f, 0.012f, 0.82f), MortuoriumTheme.Tan);
+                MortuoriumTheme.Tarjeta2(r, MortuoriumTheme.Hoja2, MortuoriumTheme.Tan, 24f * s, 2f * s);
                 GUI.Label(new Rect(r.x, r.y + 6f * s, w, 44f * s), accion.ToUpperInvariant(), stTit);
                 GUI.Label(new Rect(r.x, r.y + 50f * s, w, 26f * s), como, stSub);
             }
@@ -452,18 +452,35 @@ namespace Bateries
             bool vrBox = pad && GamepadManager.Instance.UsesMouseInput;
 
             string holdTime = brightHoldSeconds.ToString("0.#");
-            string hint = vrBox
+            string como = vrBox
                 ? (Rediseno.Flag.Activo
-                    ? $"{_currentLabel} (palanca a la derecha) · arriba: intensa · abajo: apagada"
-                    : $"{_currentLabel} (B) · palanca arriba: intensa · abajo: apagada")
+                    ? "palanca a la derecha · arriba: intensa · abajo: apagada"
+                    : "botón B · palanca arriba: intensa · abajo: apagada")
                 : pad
-                ? $"{_currentLabel} (A) · mantener {holdTime} s: intensa"
-                : $"{_currentLabel}\nMantener {holdTime} s: luz intensa";
-            const float w = 360f, h = 82f;
+                ? $"botón A · mantener {holdTime} s: luz intensa"
+                : $"mantener {holdTime} s: luz intensa";
+
+            // Estilo 2.0: píldora con el degradé rojo del botón principal; mientras se
+            // mantiene apretado, borde dorado (el foco/acción del rediseño).
+            const float w = 340f, h = 84f;
             var btn = new Rect(vw * 0.5f - w * 0.5f, vh * 0.62f, w, h);
-            bool held = GUI.RepeatButton(btn, hint);
+            bool held = GUI.RepeatButton(btn, GUIContent.none, GUIStyle.none);
             if (Event.current.type == EventType.Repaint)
+            {
                 _screenPrimaryHeld = held;
+                float radio = h * 0.5f;
+                MortuoriumTheme.FillRojo(btn, radio);
+                if (held) MortuoriumTheme.FillR(btn, new Color(0f, 0f, 0f, 0.18f), radio);
+                MortuoriumTheme.BordeR(btn, held ? MortuoriumTheme.Tan : new Color(1f, 1f, 1f, 0.12f),
+                                       radio, held ? 3f : 1.5f);
+            }
+            GUI.Label(new Rect(btn.x, btn.y + 10f, w, 40f), _currentLabel.ToUpperInvariant(),
+                      MortuoriumTheme.Estilo(MortuoriumTheme.FBebas, 32, MortuoriumTheme.Cream, TextAnchor.MiddleCenter));
+            GUI.Label(new Rect(btn.x + 16f, btn.y + 48f, w - 32f, 24f), como,
+                      MortuoriumTheme.Estilo(MortuoriumTheme.FMono, 11,
+                                             new Color(MortuoriumTheme.Cream.r, MortuoriumTheme.Cream.g,
+                                                       MortuoriumTheme.Cream.b, 0.85f),
+                                             TextAnchor.MiddleCenter));
         }
     }
 }
