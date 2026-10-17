@@ -139,6 +139,14 @@ namespace Gameplay
         public void VolverPantalla()     => Volver();
         public void AbrirControl()       => PantallaActual = Pantalla.Control;
 
+        // Catálogo de noches dev/prod (sólo dev build). Al cambiarlo se suelta la noche
+        // elegida: su índice es del catálogo anterior.
+        public void UsarNochesProd(bool prod)
+        {
+            PlayDataProfile.UseProduction = prod;
+            _nocheSel = -1;
+        }
+
         // Flujo de juego para las pantallas nuevas (noches / escenario / sin escenario).
         public NightConfig[] Catalogo => Nights;
         public int NocheElegida => _nocheSel;
@@ -1031,8 +1039,7 @@ namespace Gameplay
                          PlayDataProfile.UseProduction ? "Usando Nights/prod (datos reales)"
                                                        : "Usando Nights/dev",
                          PlayDataProfile.UseProduction,
-                         () => { PlayDataProfile.UseProduction = !PlayDataProfile.UseProduction;
-                                 _nocheSel = -1; });
+                         () => UsarNochesProd(!PlayDataProfile.UseProduction));
             y += 64f;
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f),
                       $"Progreso: {NightProgress.Desbloqueadas} de {total} noches desbloqueadas",
