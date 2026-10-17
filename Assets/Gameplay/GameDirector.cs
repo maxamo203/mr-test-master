@@ -814,13 +814,23 @@ private void BeginCoverStart()
         private bool IsSorkenDirectlyLit()
         {
             if (_sorken == null || !PlayerLights.TryConoReal(out var angle, out var range)) return false;
-            // Centro del torso + radio del cuerpo: evita que el jugador deba apuntar
-            // exactamente a un punto infinitesimal y usa el cono real de la linterna.
-            return PlayerLights.AnyIlluminating(_sorken.Position + Vector3.up * 1f,
-                                                angle, range, 0.4f,
-                                                FlashlightMode.Bright,
-                                                requireLineOfSight: true);
+            // El cuerpo mide ~2 m: con un único punto en el torso, de cerca apuntarle a la
+            // cabeza o a las piernas dejaba ese punto fuera del haz. Se prueban piernas,
+            // torso y cabeza (cada uno con el radio del cuerpo) y alcanza con uno. Los
+            // colliders del propio Sorken no cuentan como oclusión (ignorar).
+            var raiz = _sorken.transform;
+            for (int i = 0; i < AlturasCuerpoSorken.Length; i++)
+                if (PlayerLights.AnyIlluminating(_sorken.Position + Vector3.up * AlturasCuerpoSorken[i],
+                                                 angle, range, 0.4f,
+                                                 FlashlightMode.Bright,
+                                                 requireLineOfSight: true, ignorar: raiz))
+                    return true;
+            return false;
         }
+
+        // Alturas (m sobre los pies) de los puntos del cuerpo que cuentan como alumbrados.
+        // El torso va primero: es el caso común y corta el loop.
+        private static readonly float[] AlturasCuerpoSorken = { 1.0f, 1.6f, 0.45f };
 
         private SorkenState EmergingStateForMarker()
         {
