@@ -24,10 +24,18 @@ namespace Rediseno.UI
 
         private static float _rumboRef;   // rumbo (grados, en el plano horizontal) de "al frente"
         private static bool _tieneRef;
-        private static float _lejosT;
+        // Mitad del campo visual de cada ojo en el visor (PantallaUI dibuja con 90° por ojo).
+        public const float MitadVista = 45f;
+
+        // ¿Algún menú lo está usando? (modo "quieto en el cuarto" con el visor). La cuenta
+        // regresiva de "poné el celular en el visor" va sólo al empezar a usarlo, no en cada
+        // pantalla nueva.
+        public static bool EnUso { get; private set; }
 
         public static void Habilitar(bool on)
         {
+            EnUso = on;
+            if (!on) CuentaRegresiva = 0f;
             var s = AttitudeSensor.current;
             if (s == null) return;
             if (on && !s.enabled) InputSystem.EnableDevice(s);
@@ -55,7 +63,8 @@ namespace Rediseno.UI
 #endif
         }
 
-        public static void Tick(float dt, float anguloPanel)
+        // limitePos / limiteNeg: hasta qué yaw la pantalla todavía se ve (ver ArrastrarAlBorde).
+        public static void Tick(float dt, float limitePos, float limiteNeg)
         {
             if (CuentaRegresiva > 0f)
             {
@@ -76,18 +85,24 @@ namespace Rediseno.UI
             Pitch = Mathf.Asin(Mathf.Clamp(v.z, -1f, 1f)) * Mathf.Rad2Deg;
             Yaw = Mathf.DeltaAngle(_rumboRef, Rumbo(v, _rumboRef + Yaw));
 
-            // Si te diste vuelta un rato (o el sensor derivó), la pantalla vuelve a ponerse
-            // delante, en el rumbo nuevo. Sólo por el costado: la altura ya es la de los ojos,
-            // y recentrar por mirar abajo (p. ej. el celular apoyado en la mesa) hacía que la
-            // pantalla apareciera un instante y se fuera cada 1,5 s. Mirando casi vertical el
-            // rumbo no está definido: no cuenta.
-            bool rumboDefinido = Mathf.Abs(v.z) <= 0.97f;
-            if (rumboDefinido && Mathf.Abs(Yaw) > anguloPanel * 0.5f + 35f)
-            {
-                _lejosT += dt;
-                if (_lejosT > 1.5f) { _lejosT = 0f; Recentrar(); }
-            }
-            else _lejosT = 0f;
+            // Mientras alguna parte de la pantalla esté a la vista, queda quieta en el cuarto. Si
+            // girás hasta dejarla entera afuera, no salta: se queda pegada al borde de afuera
+            // del campo visual y te acompaña, así al girar de vuelta aparece enseguida (antes
+            // se recentraba de golpe cada 1,5 s). Mirando casi vertical el rumbo no está
+            // definido: no se arrastra.
+            if (Mathf.Abs(v.z) <= 0.97f) Yaw = ArrastrarAlBorde(Yaw, limitePos, limiteNeg, ref _rumboRef);
+        }
+
+        // Pantalla "a la rastra": `yaw` es hacia dónde mirás respecto de la pantalla (+ = miraste
+        // a su derecha, la pantalla queda a tu izquierda). Pasado el límite de ese lado (la
+        // pantalla ya está entera fuera de la vista), se corre la referencia para dejarla justo
+        // ahí, pegada al borde de afuera. Devuelve el yaw corregido. También lo usa PantallaUI
+        // con la cámara AR; los límites los calcula PantallaUI.LimitesArrastre.
+        public static float ArrastrarAlBorde(float yaw, float limitePos, float limiteNeg, ref float referencia)
+        {
+            if (yaw > limitePos)  { referencia += yaw - limitePos; return limitePos; }
+            if (yaw < -limiteNeg) { referencia += yaw + limiteNeg; return -limiteNeg; }
+            return yaw;
         }
 
         // La orientación del sensor (Android: rotation vector; iOS: CoreMotion) lleva del marco

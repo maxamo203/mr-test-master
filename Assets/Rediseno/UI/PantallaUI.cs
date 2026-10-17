@@ -147,6 +147,10 @@ namespace Rediseno.UI
             if (v)
             {
                 _ultimoFoco = null; Nav.MostrarFoco = false; _tieneRefCamara = false;
+                // Quieta en el cuarto: cada pantalla nueva aparece delante de donde mirás
+                // (sin cuenta regresiva: ésa es sólo al empezar el modo).
+                if (EnVisor && EnElCuarto && !CabezaPorCamara && Cabeza.EnUso && !Cabeza.EnCuentaRegresiva)
+                    Cabeza.Recentrar();
                 // Al aparecer, ignorar un instante la palanca y los toques: el mismo empuje o
                 // toque que cerró la pantalla anterior caía sobre una opción de ésta (así se
                 // armaba el loop SINCRONIZACIÓN → UBICAR EL ENTORNO → SINCRONIZACIÓN).
@@ -305,7 +309,7 @@ namespace Rediseno.UI
         // ── Mirada (visor) ────────────────────────────────────────────────────
         // Ancho angular de la pantalla flotante y campo visual de cada ojo. Con 50° sobre
         // ~90° la pantalla entra entera mirando al frente y se recorre girando poco.
-        private const float FovOjo      = 90f;
+        private const float FovOjo      = Cabeza.MitadVista * 2f;
         private const float SegundosElegir = 1.1f;
         private float _dwell, _frio;
         private MenuNavegable.Opcion _dwellOpcion;
@@ -318,11 +322,32 @@ namespace Rediseno.UI
 
         private bool EnCuentaRegresiva => EnElCuarto && !CabezaPorCamara && Cabeza.EnCuentaRegresiva;
 
+        // Margen extra (grados) antes de que la pantalla empiece a seguirte: el borde de lo que
+        // se ve por las lentes no es exacto, y así nunca se la ve "arrastrarse".
+        private const float MargenArrastre = 8f;
+
+        // Hasta qué yaw la pantalla todavía se ve, para cada lado. Cada ojo se dibuja recortado
+        // a su mitad de pantalla, pero su centro (calibración, OjosVisor) no siempre cae en el
+        // medio de esa mitad: hacia un costado se ve más de 45°. Se toma lo más que se vea en
+        // cualquiera de los dos ojos, más media pantalla y el margen.
+        private void LimitesArrastre(out float limitePos, out float limiteNeg)
+        {
+            OjosVisor.Centros(out var izq, out var der);
+            float ojoW = Screen.width * 0.5f;
+            float ppd = ojoW / FovOjo;
+            float haciaIzq = Mathf.Max(izq.x, der.x - ojoW) / ppd;
+            float haciaDer = Mathf.Max(ojoW - izq.x, Screen.width - der.x) / ppd;
+            float medio = AnguloPanel * 0.5f + MargenArrastre;
+            limitePos = haciaIzq + medio;   // yaw > 0: la pantalla queda a la izquierda
+            limiteNeg = haciaDer + medio;
+        }
+
         private void LeerCabeza(float dt)
         {
+            LimitesArrastre(out float limPos, out float limNeg);
             if (!CabezaPorCamara)
             {
-                Cabeza.Tick(dt, AnguloPanel);
+                Cabeza.Tick(dt, limPos, limNeg);
                 _yaw = Cabeza.Yaw; _pitch = Cabeza.Pitch;
                 return;
             }
@@ -337,8 +362,9 @@ namespace Rediseno.UI
             if (!_tieneRefCamara) { _refYaw = yaw; _refPitch = 0f; _tieneRefCamara = true; }
             _yaw = Mathf.DeltaAngle(_refYaw, yaw);
             _pitch = pitch - _refPitch;
-            // Si te diste vuelta, la pantalla vuelve a ponerse delante.
-            if (Mathf.Abs(_yaw) > AnguloPanel * 0.5f + 45f) { _refYaw = yaw; _yaw = 0f; }
+            // Quieta mientras se ve; entera fuera de la vista, pegada al borde de afuera (antes
+            // saltaba de golpe adelante al darse vuelta). Ver Cabeza.ArrastrarAlBorde.
+            _yaw = Cabeza.ArrastrarAlBorde(_yaw, limPos, limNeg, ref _refYaw);
         }
 
         private void TickMirada(float dt, bool hayMando)
@@ -351,7 +377,10 @@ namespace Rediseno.UI
                 _tieneRefCamara = false;
                 if (!CabezaPorCamara)
                 {
-                    if (EnElCuarto) { Cabeza.Recentrar(conCuentaRegresiva: true); Cabeza.Habilitar(true); }
+                    // La cuenta regresiva va sólo al EMPEZAR el modo (prender el visor o la
+                    // opción), no cada vez que aparece una pantalla nueva que todavía no lo
+                    // había aplicado (pasaba al ir a OPCIONES).
+                    if (EnElCuarto) { if (!Cabeza.EnUso) { Cabeza.Recentrar(conCuentaRegresiva: true); Cabeza.Habilitar(true); } }
                     else Cabeza.Habilitar(false);
                 }
             }
@@ -477,12 +506,18 @@ namespace Rediseno.UI
             var punto = IconosMirada.Punto;
             if (EnCuentaRegresiva)
             {
-                // Mientras se acomoda el visor: aviso centrado, sin interacción.
-                var st = MortuoriumTheme.Estilo(MortuoriumTheme.FBebas, Mathf.RoundToInt(34 * s),
-                                                TemaUI.Cream, TextAnchor.MiddleCenter);
+                // Mientras se acomoda el visor: cartel centrado (tarjeta oscura, para que el
+                // texto no se pierda sobre lo que hay detrás), sin interacción.
                 GUI.color = Color.white;
-                GUI.Label(new Rect(c.x - 300 * s, c.y - 60 * s, 600 * s, 120 * s),
-                          $"PONÉ EL CELULAR EN EL VISOR\n{Mathf.CeilToInt(Cabeza.CuentaRegresiva)}", st);
+                var r = new Rect(c.x - 280 * s, c.y - 95 * s, 560 * s, 190 * s);
+                MortuoriumTheme.Tarjeta2(r, MortuoriumTheme.Hoja2, MortuoriumTheme.Tan, 28f * s, 2f * s);
+                var stTit = MortuoriumTheme.Estilo(MortuoriumTheme.FBebas, Mathf.RoundToInt(34 * s),
+                                                   TemaUI.Cream, TextAnchor.MiddleCenter);
+                var stNum = MortuoriumTheme.Estilo(MortuoriumTheme.FBebas, Mathf.RoundToInt(64 * s),
+                                                   TemaUI.Tan, TextAnchor.MiddleCenter);
+                GUI.Label(new Rect(r.x, r.y + 18 * s, r.width, 50 * s), "PONÉ EL CELULAR EN EL VISOR", stTit);
+                GUI.Label(new Rect(r.x, r.y + 76 * s, r.width, 90 * s),
+                          Mathf.CeilToInt(Cabeza.CuentaRegresiva).ToString(), stNum);
                 return;
             }
 
