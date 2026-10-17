@@ -62,7 +62,8 @@ namespace Gameplay
         [Tooltip("Multiplicador adicional de la animacion cubierta. La velocidad iluminada " +
                  "sigue teniendo como techo sorkenIlluminatedSpeed.")]
         [Range(0.1f, 1f)] public float sorkenCoverWalkSpeedMultiplier = 1f;
-        [Tooltip("Velocidad al retirarse tras ser repelido (sale corriendo).")]
+        [Tooltip("Dato legado conservado para compatibilidad con perfiles existentes. " +
+                 "La retirada actual es una reaccion localizada sin traslacion.")]
         public float sorkenRetreatSpeed = 2.8f;
         [Tooltip("Distancia (m) a la que el Sorken atrapa al jugador (grab).")]
         public float grabRange = 1.2f;
@@ -162,7 +163,7 @@ namespace Gameplay
         [Tooltip("Si nadie se acerca ni repele, el intento se cancela tras esto (s).")]
         public float emergeTimeoutSeconds = 15f;
         [Tooltip("Cuanto dura la retirada (s) antes de despawnear al Sorken.")]
-        public float retreatSeconds = 1.5f;
+        public float retreatSeconds = 2.5f;
         [Tooltip("Cuanto se queda el Sorken en 'grab' (s) tras atrapar, antes de irse.")]
         public float grabHoldSeconds = 1.5f;
 

@@ -36,6 +36,12 @@ public class SorkenAnimator : MonoBehaviour
              "sigue determinada por NightConfig.")]
     [Range(0.1f, 1f)] [SerializeField] private float _chasePlaybackSpeed = 0.75f;
 
+    [Header("Retirada dolorosa")]
+    [Tooltip("Duracion aproximada del gesto de dolor antes de ocultarse.")]
+    [Range(2.3f, 3f)] [SerializeField] private float _retreatPainDuration = 2.6f;
+    [Tooltip("Tiempo de entrada suave a la pose dolorosa.")]
+    [Range(0.05f, 0.4f)] [SerializeField] private float _retreatPainBlendIn = 0.18f;
+
     [Header("Desplazamiento sincronizado")]
     [Tooltip("Apoyos contenidos en el loop de marcha herida.")]
     [Min(1)] [SerializeField] private int _chaseStepsPerLoop = 12;
@@ -61,9 +67,6 @@ public class SorkenAnimator : MonoBehaviour
     {
         0.59f, 0.73f, 0.86f, 0.97f
     };
-    [Tooltip("Apoyos visibles durante la retirada.")]
-    [SerializeField] private float[] _retreatFootContacts = { 0.24f, 0.61f };
-
     [Header("Transicion ventana -> persecucion")]
     [Tooltip("Duracion usada si el clip nuevo de entrada todavia no esta asignado.")]
     [Min(0.2f)] [SerializeField] private float _windowEntryFallbackDuration = 5.93f;
@@ -98,6 +101,29 @@ public class SorkenAnimator : MonoBehaviour
     private bool _pendingFootstep;
     private Vector3 _pendingFootstepPosition;
     private float _pendingFootstepIntensity;
+    private float _retreatElapsed;
+    private Transform _spine;
+    private Transform _spine01;
+    private Transform _spine02;
+    private Transform _neck;
+    private Transform _head;
+    private Transform _leftShoulder;
+    private Transform _rightShoulder;
+    private Transform _leftArm;
+    private Transform _rightArm;
+    private Transform _leftForeArm;
+    private Transform _rightForeArm;
+    private Quaternion _spineBase;
+    private Quaternion _spine01Base;
+    private Quaternion _spine02Base;
+    private Quaternion _neckBase;
+    private Quaternion _headBase;
+    private Quaternion _leftShoulderBase;
+    private Quaternion _rightShoulderBase;
+    private Quaternion _leftArmBase;
+    private Quaternion _rightArmBase;
+    private Quaternion _leftForeArmBase;
+    private Quaternion _rightForeArmBase;
 
     public float WindowEntryDuration => emergeWindowClip != null && emergeWindowClip.length > 0.01f
         ? emergeWindowClip.length
@@ -106,6 +132,8 @@ public class SorkenAnimator : MonoBehaviour
     public float WindowLandingDuration => _activeWindowLandingDuration > 0f
         ? _activeWindowLandingDuration
         : Mathf.Max(0.2f, _windowLandingDuration);
+
+    public float RetreatPainDuration => Mathf.Clamp(_retreatPainDuration, 2.3f, 3f);
 
     // La accion de Blender usa dos apoyos: primero el pie derecho queda clavado al marco,
     // luego el peso pasa al izquierdo. Estos offsets son la compensacion del root medida
@@ -228,6 +256,14 @@ public class SorkenAnimator : MonoBehaviour
         {
             _clipPlayables[target].SetSpeed(1d);
         }
+
+        if (state == SorkenState.Retreating)
+        {
+            _retreatElapsed = 0f;
+            _clipPlayables[target].SetTime(0d);
+            _clipPlayables[target].SetSpeed(1d);
+            CaptureRetreatPose();
+        }
     }
 
     private void Awake()
@@ -240,6 +276,17 @@ public class SorkenAnimator : MonoBehaviour
         _hips ??= FindDescendant(transform, "Hips");
         _leftFoot ??= FindDescendant(transform, "LeftFoot");
         _rightFoot ??= FindDescendant(transform, "RightFoot");
+        _spine = FindDescendant(transform, "Spine");
+        _spine01 = FindDescendant(transform, "Spine01");
+        _spine02 = FindDescendant(transform, "Spine02");
+        _neck = FindDescendant(transform, "neck");
+        _head = FindDescendant(transform, "Head");
+        _leftShoulder = FindDescendant(transform, "LeftShoulder");
+        _rightShoulder = FindDescendant(transform, "RightShoulder");
+        _leftArm = FindDescendant(transform, "LeftArm");
+        _rightArm = FindDescendant(transform, "RightArm");
+        _leftForeArm = FindDescendant(transform, "LeftForeArm");
+        _rightForeArm = FindDescendant(transform, "RightForeArm");
         if (_hips != null) _neutralHipsLocalPosition = _hips.localPosition;
         _activeWindowLandingDuration = Mathf.Max(0.2f, _windowLandingDuration);
         animator.applyRootMotion = false; // el codigo controla pos/rot, no la animacion
@@ -251,7 +298,7 @@ public class SorkenAnimator : MonoBehaviour
             emergeClip != null ? emergeClip : idleClip,                 // EmergingDoor
             chaseClip  != null ? chaseClip  : idleClip,                 // Chasing
             grabClip   != null ? grabClip   : idleClip,                 // Grabbing
-            retreatClip != null ? retreatClip : (chaseClip ?? idleClip),// Retreating
+            idleClip,                                                   // Retreating: pose base + dolor procedural
             coverStartClip != null ? coverStartClip : idleClip,         // CoverStarting
             coverWalkClip  != null ? coverWalkClip  : (chaseClip ?? idleClip), // CoverWalking
             emergeWindowClip != null ? emergeWindowClip :
@@ -293,7 +340,11 @@ public class SorkenAnimator : MonoBehaviour
         // Los Playables avanzan aunque su peso sea cero. Al entrar a un estado
         // puntual reiniciamos su clip, para no mostrar un fotograma intermedio o final.
         if (target != _lastState)
+        {
+            if (_lastState == (int)SorkenState.Retreating)
+                RestoreRetreatPose();
             SynchronizeState((SorkenState)target);
+        }
 
         AnimationClip locomotionClip = null;
         if (target == (int)SorkenState.Chasing) locomotionClip = chaseClip;
@@ -305,6 +356,12 @@ public class SorkenAnimator : MonoBehaviour
             double time = _clipPlayables[target].GetTime();
             if (time >= locomotionClip.length)
                 _clipPlayables[target].SetTime(time % locomotionClip.length);
+        }
+
+        if (target == (int)SorkenState.Retreating)
+        {
+            UpdateRetreatAnimation(Time.deltaTime);
+            return;
         }
 
         // Rampa de pesos hacia el estado objetivo y normalizacion.
@@ -329,6 +386,107 @@ public class SorkenAnimator : MonoBehaviour
 
         if (_sorken.State == SorkenState.WindowLanding)
             _windowLandingElapsed += Time.deltaTime;
+    }
+
+    private void UpdateRetreatAnimation(float deltaTime)
+    {
+        _retreatElapsed += Mathf.Max(0f, deltaTime);
+        float step = _blendSpeed * Mathf.Max(0f, deltaTime);
+        float sum = 0f;
+        for (int i = 0; i < _inputCount; i++)
+        {
+            float desired = i == (int)SorkenState.Retreating ? 1f : 0f;
+            _weights[i] = Mathf.MoveTowards(_weights[i], desired, step);
+            sum += _weights[i];
+        }
+        if (sum <= 1e-4f)
+        {
+            _weights[(int)SorkenState.Retreating] = 1f;
+            sum = 1f;
+        }
+        for (int i = 0; i < _inputCount; i++)
+            _mixer.SetInputWeight(i, _weights[i] / sum);
+    }
+
+    private void CaptureRetreatPose()
+    {
+        _spineBase = _spine != null ? _spine.localRotation : Quaternion.identity;
+        _spine01Base = _spine01 != null ? _spine01.localRotation : Quaternion.identity;
+        _spine02Base = _spine02 != null ? _spine02.localRotation : Quaternion.identity;
+        _neckBase = _neck != null ? _neck.localRotation : Quaternion.identity;
+        _headBase = _head != null ? _head.localRotation : Quaternion.identity;
+        _leftShoulderBase = _leftShoulder != null ? _leftShoulder.localRotation : Quaternion.identity;
+        _rightShoulderBase = _rightShoulder != null ? _rightShoulder.localRotation : Quaternion.identity;
+        _leftArmBase = _leftArm != null ? _leftArm.localRotation : Quaternion.identity;
+        _rightArmBase = _rightArm != null ? _rightArm.localRotation : Quaternion.identity;
+        _leftForeArmBase = _leftForeArm != null ? _leftForeArm.localRotation : Quaternion.identity;
+        _rightForeArmBase = _rightForeArm != null ? _rightForeArm.localRotation : Quaternion.identity;
+    }
+
+    private void RestoreRetreatPose()
+    {
+        if (_spine != null) _spine.localRotation = _spineBase;
+        if (_spine01 != null) _spine01.localRotation = _spine01Base;
+        if (_spine02 != null) _spine02.localRotation = _spine02Base;
+        if (_neck != null) _neck.localRotation = _neckBase;
+        if (_head != null) _head.localRotation = _headBase;
+        if (_leftShoulder != null) _leftShoulder.localRotation = _leftShoulderBase;
+        if (_rightShoulder != null) _rightShoulder.localRotation = _rightShoulderBase;
+        if (_leftArm != null) _leftArm.localRotation = _leftArmBase;
+        if (_rightArm != null) _rightArm.localRotation = _rightArmBase;
+        if (_leftForeArm != null) _leftForeArm.localRotation = _leftForeArmBase;
+        if (_rightForeArm != null) _rightForeArm.localRotation = _rightForeArmBase;
+    }
+
+    private void ApplyRetreatPainPose()
+    {
+        float t = _retreatElapsed;
+        float blend = Mathf.SmoothStep(0f, 1f,
+            Mathf.InverseLerp(0f, Mathf.Max(0.05f, _retreatPainBlendIn), t));
+        float irregular = SpasmPulse(t, 0.62f, 0.1f) * 0.9f +
+                          SpasmPulse(t, 1.34f, 0.13f) * -0.75f +
+                          SpasmPulse(t, 2.12f, 0.09f) * 0.82f;
+        float shoulderTwitch = irregular * blend;
+        float hunch = (14f + 4f * Mathf.Sin(t * 3.4f + 0.3f)) * blend;
+        float recoil = (9f + 3f * Mathf.Sin(t * 4.7f + 1.2f)) * blend;
+        // Gesto defensivo: las manos se cierran hacia el pecho/cara de forma
+        // progresiva, con una asimetria leve para evitar una pose estatica o de T.
+        float cover = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.24f, 0.82f, t));
+        float coverPulse = 0.5f + 0.5f * Mathf.Sin(t * 3.1f + 0.7f);
+        float leftCover = cover * (0.86f + 0.1f * coverPulse);
+        float rightCover = cover * (0.94f - 0.08f * coverPulse);
+        if (_spine != null) _spine.localRotation =
+            _spineBase * Quaternion.Euler(hunch * 0.35f, 0f, shoulderTwitch * 1.2f);
+        if (_spine01 != null) _spine01.localRotation =
+            _spine01Base * Quaternion.Euler(hunch * 0.45f, 0f, shoulderTwitch * 1.8f);
+        if (_spine02 != null) _spine02.localRotation =
+            _spine02Base * Quaternion.Euler(hunch * 0.2f, 0f, -shoulderTwitch * 1.2f);
+        if (_neck != null) _neck.localRotation =
+            _neckBase * Quaternion.Euler(-recoil * 0.45f, shoulderTwitch * 0.8f, 0f);
+        if (_head != null) _head.localRotation =
+            _headBase * Quaternion.Euler(-recoil * 0.55f, -shoulderTwitch * 1.1f, 0f);
+        if (_leftShoulder != null) _leftShoulder.localRotation =
+            _leftShoulderBase * Quaternion.Euler(-shoulderTwitch * 4f, 0f, 8f + shoulderTwitch * 7f);
+        if (_rightShoulder != null) _rightShoulder.localRotation =
+            _rightShoulderBase * Quaternion.Euler(shoulderTwitch * 4f, 0f, -8f - shoulderTwitch * 7f);
+        if (_leftArm != null) _leftArm.localRotation =
+            _leftArmBase * Quaternion.Euler(-7f * leftCover, -18f * leftCover,
+                3f + shoulderTwitch * 3f + 5f * leftCover);
+        if (_rightArm != null) _rightArm.localRotation =
+            _rightArmBase * Quaternion.Euler(-8f * rightCover, 20f * rightCover,
+                -3f - shoulderTwitch * 3f - 5f * rightCover);
+        if (_leftForeArm != null) _leftForeArm.localRotation =
+            _leftForeArmBase * Quaternion.Euler(-16f * leftCover, -38f * leftCover,
+                5f + irregular * 4f + 8f * leftCover);
+        if (_rightForeArm != null) _rightForeArm.localRotation =
+            _rightForeArmBase * Quaternion.Euler(-18f * rightCover, 42f * rightCover,
+                -5f - irregular * 4f - 8f * rightCover);
+    }
+
+    private static float SpasmPulse(float time, float center, float width)
+    {
+        float normalized = (time - center) / Mathf.Max(0.01f, width);
+        return Mathf.Exp(-(normalized * normalized));
     }
 
     private void ActualizarContactos(int state, AnimationClip locomotionClip)
@@ -361,11 +519,6 @@ public class SorkenAnimator : MonoBehaviour
                 clip = emergeClip;
                 intensity = 0.9f;
                 break;
-            case SorkenState.Retreating:
-                contacts = _retreatFootContacts;
-                clip = retreatClip != null ? retreatClip : chaseClip;
-                intensity = 0.68f;
-                break;
             default:
                 _footstepClock.Clear();
                 return;
@@ -388,6 +541,14 @@ public class SorkenAnimator : MonoBehaviour
     // dejamos X/Z animados; asi el fundido a persecucion no produce el retroceso visible.
     private void LateUpdate()
     {
+        // El PlayableGraph se evalua despues de Update. Aplicar la pose de dolor aca
+        // garantiza que torso, cabeza y brazos no sean sobrescritos por el clip base.
+        if (_sorken != null && _sorken.State == SorkenState.Retreating)
+        {
+            ApplyRetreatPainPose();
+            return;
+        }
+
         if (_hips == null || _sorken == null || _weights == null)
             return;
 

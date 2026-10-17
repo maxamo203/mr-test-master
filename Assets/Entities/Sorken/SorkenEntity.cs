@@ -78,6 +78,9 @@ public class SorkenEntity : MonoBehaviour
     public void ConfigureWindowLanding(float dropHeight) =>
         _sorkenAnimator?.ConfigureWindowLanding(dropHeight);
 
+    public void BeginRetreatVisual(float durationSeconds) =>
+        SorkenRetreatDarknessCue.Ensure(gameObject, durationSeconds);
+
     private void Awake()
     {
         _sorkenAnimator = GetComponent<SorkenAnimator>();
@@ -90,6 +93,8 @@ public class SorkenEntity : MonoBehaviour
     {
         if (State == s) return;
         State = s;
+        if (s == SorkenState.Retreating)
+            SorkenRetreatDarknessCue.Ensure(gameObject, 2.5f);
         _sorkenAnimator?.SynchronizeState(s);
     }
 

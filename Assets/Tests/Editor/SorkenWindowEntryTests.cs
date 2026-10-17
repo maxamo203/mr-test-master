@@ -247,6 +247,7 @@ public class SorkenWindowEntryTests
         Assert.That(SorkenDarknessCue.KeepsMistBuilt(SorkenState.EmergingDoor), Is.True);
         Assert.That(SorkenDarknessCue.KeepsMistBuilt(SorkenState.EmergingWindow), Is.True);
         Assert.That(SorkenDarknessCue.KeepsMistBuilt(SorkenState.WindowLanding), Is.True);
+        Assert.That(SorkenDarknessCue.KeepsMistBuilt(SorkenState.Retreating), Is.True);
         Assert.That(SorkenDarknessCue.KeepsMistBuilt(SorkenState.Chasing), Is.False);
     }
 
@@ -362,6 +363,77 @@ public class SorkenWindowEntryTests
         AssertClipApuntaAlRigDelPrefab(animator.emergeClip);
         AssertClipApuntaAlRigDelPrefab(animator.emergeWindowClip);
         AssertClipApuntaAlRigDelPrefab(animator.windowLandingClip);
+    }
+
+    [Test]
+    public void RetiradaUsaUnaAnimacionDolorosaSinPasosNiTraslacion()
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/Entities/Prefabs/SorkenGameplay.prefab");
+        SorkenAnimator animator = prefab.GetComponent<SorkenAnimator>();
+
+        Assert.That(animator.retreatClip, Is.Not.Null);
+        Assert.That(animator.retreatClip.name, Is.EqualTo("Sorken_Disappear_RetargetedBaked"));
+        Assert.That(animator.RetreatPainDuration, Is.InRange(2.3f, 3f));
+    }
+
+    [Test]
+    public void RetiradaMantieneLaDuracionDentroDelRangoOrganico()
+    {
+        Assert.That(GameDirector.ResolveRetreatDuration(2.5f, 0f),
+            Is.EqualTo(2.5f).Within(0.001f));
+        Assert.That(GameDirector.ResolveRetreatDuration(2f, 0f),
+            Is.EqualTo(2.3f).Within(0.001f));
+        Assert.That(GameDirector.ResolveRetreatDuration(3.5f, 0f),
+            Is.EqualTo(3.5f).Within(0.001f));
+    }
+
+    [Test]
+    public void OscuridadVuelveImperceptibleLaSiluetaAlPrimerSegundo()
+    {
+        const float duration = 2.9f;
+        Assert.That(SorkenRetreatDarknessCue.Darkness01(duration * 0.03f, duration), Is.Zero);
+        Assert.That(SorkenRetreatDarknessCue.Darkness01(0.82f, duration), Is.EqualTo(1f));
+        Assert.That(SorkenRetreatDarknessCue.ShouldHideSilhouette(0.67f, duration), Is.False);
+        Assert.That(SorkenRetreatDarknessCue.ShouldHideSilhouette(0.68f, duration), Is.True);
+        Assert.That(SorkenRetreatDarknessCue.FullyHiddenAtSeconds(duration),
+            Is.LessThanOrEqualTo(1f));
+        Assert.That(SorkenRetreatDarknessCue.BuildStartSeconds(duration),
+            Is.LessThanOrEqualTo(duration * 0.25f));
+    }
+
+    [Test]
+    public void TodasLasNochesDanTiempoAlGestoCompleto()
+    {
+        string[] guids = AssetDatabase.FindAssets("t:NightConfig",
+            new[] { "Assets/Gameplay/Nights" });
+        Assert.That(guids.Length, Is.GreaterThanOrEqualTo(12));
+
+        foreach (string guid in guids)
+        {
+            NightConfig night = AssetDatabase.LoadAssetAtPath<NightConfig>(
+                AssetDatabase.GUIDToAssetPath(guid));
+            Assert.That(night.retreatSeconds, Is.EqualTo(2.5f).Within(0.001f), night.name);
+        }
+    }
+
+    [Test]
+    public void RetiradaConservaPosicionYOrientacionActuales()
+    {
+        var go = new GameObject("SorkenRetreatOrientationTest");
+        try
+        {
+            SorkenEntity entity = go.AddComponent<SorkenEntity>();
+            Quaternion facing = Quaternion.Euler(0f, 137f, 0f);
+            entity.SetRotationDirectly(facing);
+            entity.SetPositionDirectly(new Vector3(-0.3f, 0f, -0.4f));
+
+            Assert.That(Quaternion.Angle(go.transform.rotation, facing), Is.LessThan(0.001f));
+        }
+        finally
+        {
+            Object.DestroyImmediate(go);
+        }
     }
 
     private static void AssertClipApuntaAlRigDelPrefab(AnimationClip clip)

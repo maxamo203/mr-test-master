@@ -59,6 +59,10 @@ public sealed class SorkenDarknessCue : MonoBehaviour
             SorkenState.EmergingDoor => 0.96f,
             SorkenState.EmergingWindow => 1f,
             SorkenState.WindowLanding => 0.78f,
+            // Si lo repelen mientras aun cruza, la masa de esa misma abertura vuelve a
+            // cerrarse. En una retirada interior este componente ya se destruyo y el
+            // SorkenRetreatDarknessCue crea su propio efecto localizado.
+            SorkenState.Retreating => 1f,
             _ => 0f,
         };
     }

@@ -42,6 +42,8 @@ namespace Gameplay
                  "completo afuera y visible antes de comenzar a atravesar la pared.")]
         [Min(0f)] [SerializeField] private float _doorOutsideDepth = 1f;
 
+        // La retirada es una reaccion localizada: no cambia posicion ni orientacion.
+
         private enum Phase
         {
             Idle,
@@ -78,6 +80,7 @@ namespace Gameplay
         private float _grace;          // Entering: cuenta a la entrada
         private float _phaseTimer;     // Grabbed / Retreating
         private bool  _coverStartPlayedThisAttempt;
+        private bool  _retreatDespawnIssued;
 
         // Sorken actual (null entre intentos).
         private SorkenEntity _sorken;
@@ -100,8 +103,9 @@ namespace Gameplay
         private Vector3 _windowLandingEnd;
         private float _windowLandingDuration;
 
-        // Retirada: direccion (horizontal) hacia la que huye tras ser repelido.
-        private Vector3 _retreatDir;
+        // Retirada: el host fija una trayectoria corta al comenzar. La orientacion se
+        // conserva durante toda la presentacion; trasladarse hacia atras no implica girar.
+        private float _retreatDuration;
 
         // El estado de muerte de los jugadores vive en Gameplay.ServerDeaths (compartido
         // con el ArbmosDirector, para no perseguir a un jugador ya muerto).
@@ -800,14 +804,19 @@ private void BeginCoverStart()
         // --- Retreat ---
         private void Retreat()
         {
-            _retreatDir = Vector3.zero;
+            if (_phase == Phase.Retreating) return;
+
+            // La retirada es una reaccion localizada. Se conserva exactamente la pose
+            // espacial actual y se detienen persecucion, navegacion y ataques al cambiar
+            // de fase; el despawn ocurre una sola vez al terminar la oscuridad.
+            _retreatDuration = Mathf.Clamp(
+                Mathf.Max(2.9f, _night != null ? _night.retreatSeconds : 2.5f),
+                2.3f, 3f);
+            _retreatDespawnIssued = false;
             if (_sorken != null)
             {
+                _sorken.BeginRetreatVisual(_retreatDuration);
                 _sorken.SetState(SorkenState.Retreating);
-                // Huye hacia atras (contrario a su facing): en emerge = de vuelta por la
-                // pared; en chase = alejandose del jugador.
-                var f = _sorken.transform.forward; f.y = 0f;
-                if (f.sqrMagnitude > 1e-4f) _retreatDir = -f.normalized;
             }
             _phaseTimer = 0f;
             _phase = Phase.Retreating;
@@ -815,16 +824,30 @@ private void BeginCoverStart()
 
         private void TickRetreating(float dt)
         {
-            _phaseTimer += dt;
-            // Se da vuelta y sale corriendo en _retreatDir mientras dura la retirada.
-            if (_sorken != null && _retreatDir != Vector3.zero)
-                _sorken.MoveTo(_sorken.Position + _retreatDir, _night.sorkenRetreatSpeed * EntitySpeedSettings.Multiplier, dt);
-            if (_phaseTimer >= _night.retreatSeconds) EndAttempt();
+            _phaseTimer = Mathf.Min(_retreatDuration, _phaseTimer + Mathf.Max(0f, dt));
+            if (_phaseTimer >= _retreatDuration) EndAttempt();
+        }
+
+        public static float ResolveRetreatDuration(float configuredSeconds, float clipSeconds)
+        {
+            return ResolveRetreatDuration(configuredSeconds, clipSeconds, 0f);
+        }
+
+        public static float ResolveRetreatDuration(
+            float configuredSeconds, float clipSeconds, float requiredEndSeconds)
+        {
+            return Mathf.Max(2.3f,
+                Mathf.Max(configuredSeconds, Mathf.Max(clipSeconds + 0.2f, requiredEndSeconds)));
         }
 
         // Cierra el intento: despawnea el Sorken y agenda el proximo.
         private void EndAttempt()
         {
+            if (_phase == Phase.Retreating)
+            {
+                if (_retreatDespawnIssued) return;
+                _retreatDespawnIssued = true;
+            }
             string result = _phase == Phase.Retreating ? "repelled" :
                             _phase == Phase.Grabbed ? "capture" : "ended";
             GameplayTelemetry.End(_sorkenTraceId, "sorken", result, 0,

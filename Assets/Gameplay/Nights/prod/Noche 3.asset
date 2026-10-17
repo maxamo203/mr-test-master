@@ -71,7 +71,7 @@ MonoBehaviour:
   flashlightRange: 8
   initialAttemptDelay: 9
   emergeTimeoutSeconds: 16
-  retreatSeconds: 1.5
+  retreatSeconds: 2.5
   grabHoldSeconds: 1.6
   flickerAimAngle: 18
   flickerDistance: 6
