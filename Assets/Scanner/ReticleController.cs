@@ -346,8 +346,11 @@ namespace Scanner
             {
                 float bx = i * (ToolW + ToolGap) - _toolScroll;
                 if (bx + ToolW < 0f || bx > viewport.width) continue;   // fuera de vista
+                // Con una herramienta pedida por el tutorial, las demás quedan bloqueadas:
+                // sólo se puede tocar la que late en dorado.
+                bool habilitada = items[i].enabled && (pedida < 0 || i == pedida);
                 DrawTool(new Rect(bx, 0f, ToolW, h), items[i].label, items[i].icon,
-                         items[i].activo, items[i].enabled, items[i].onTap);
+                         items[i].activo, habilitada, items[i].onTap);
             }
             GUI.EndGroup();
 

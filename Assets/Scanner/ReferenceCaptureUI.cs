@@ -222,7 +222,7 @@ namespace Scanner
             if (_phase == Phase.Adjust)
             {
                 if (CaptureBtn().Contains(p))        StartCoroutine(CaptureRoutine());
-                else if (SinImagenBtn().Contains(p)) CalibrarSinImagen();
+                else if (OfreceSinImagen && SinImagenBtn().Contains(p)) CalibrarSinImagen();
             }
             else if (_phase == Phase.Confirm)
             {
@@ -354,6 +354,10 @@ namespace Scanner
         // lo acomoda con el gizmo. Ver ManualCalibration.
         private string _errorSinImagen;
 
+        // Sólo tiene sentido con un escaneo guardado que ubicar: en uno nuevo no hay
+        // mapa que centrar y justamente se está por capturar la imagen.
+        private static bool OfreceSinImagen => !string.IsNullOrEmpty(SaveLoadUI.NombreEdicion);
+
         private void CalibrarSinImagen()
         {
             var fsm = ScanStateMachine.Instance;
@@ -430,7 +434,7 @@ namespace Scanner
             {
                 UIBlocker.AddScreenRect(_sel);
                 UIBlocker.AddScreenRect(CaptureBtn());
-                UIBlocker.AddScreenRect(SinImagenBtn());
+                if (OfreceSinImagen) UIBlocker.AddScreenRect(SinImagenBtn());
                 return;
             }
             // Confirm: todo el panel inferior (slider, número y los dos botones).
@@ -487,9 +491,12 @@ namespace Scanner
 
                 // Retícula mínima al centro: el escape de abajo ancla el mapa donde
                 // apunta, así que hay que ver a dónde se está apuntando.
-                DrawMira();
-                DrawBtn(SinImagenBtn(), "NO TENGO LA IMAGEN", primario: false, CalibrarSinImagen);
-                if (!string.IsNullOrEmpty(_errorSinImagen))
+                if (OfreceSinImagen)
+                {
+                    DrawMira();
+                    DrawBtn(SinImagenBtn(), "NO TENGO LA IMAGEN", primario: false, CalibrarSinImagen);
+                }
+                if (OfreceSinImagen && !string.IsNullOrEmpty(_errorSinImagen))
                 {
                     var e = SinImagenBtn();
                     GUI.Label(new Rect(e.x, e.y - Screen.height * 0.035f, e.width, Screen.height * 0.03f),
