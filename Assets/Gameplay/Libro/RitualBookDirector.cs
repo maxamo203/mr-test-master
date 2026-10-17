@@ -32,6 +32,11 @@ namespace Gameplay
         private bool _bookReserved;
         private int _bookTraceId;
 
+        // Margen ante parpadeos de la detección de luz (ver Update).
+        private const float GraciaLuz = 0.35f;
+        private float _alumbradoHasta;
+        private int _ultimoAlumbrando;
+
         public static RitualBookDirector Ensure()
         {
             if (Instance == null)
@@ -68,6 +73,7 @@ namespace Gameplay
             _oscuridadRemota = 0f;
             _bookReserved = false;
             _bookTraceId = 0;
+            _alumbradoHasta = 0f;
 
             if (_night != null && _night.bookActive)
             {
@@ -106,6 +112,7 @@ namespace Gameplay
         {
             EndTelemetry("reset");
             ReleaseReservation();
+            _alumbradoHasta = 0f;
             Alumbrando = 0;
             TodosAlumbrando = false;
             _oscuridadRemota = 0f;
@@ -156,9 +163,22 @@ namespace Gameplay
                 if (!ThreatCoordinator.TryBeginBook()) return;
                 _bookReserved = true;
             }
-            Alumbrando = PlayerLights.CountIlluminating(
+            // La defensa exige segundos CONTINUOS de linterna, y la detección parpadea
+            // (borde del cono, línea de visión, tracking): un solo frame en falso reiniciaba
+            // la defensa desde la oscuridad restante. Como esa oscuridad baja en proporción
+            // a lo que queda, con cortes seguidos se achicaba sin llegar nunca a 0 — quedaba
+            // "un poquito" que al soltar volvía a crecer. Un corte más corto que GraciaLuz
+            // sigue contando como alumbrado; soltar la linterna de verdad lo supera de sobra.
+            int crudo = PlayerLights.CountIlluminating(
                 view.PuntoDeLuz, ang, range, view.RadioAproximado,
                 FlashlightMode.Bright, requireLineOfSight: true);
+            if (crudo > 0)
+            {
+                _ultimoAlumbrando = crudo;
+                _alumbradoHasta = Time.time + GraciaLuz;
+            }
+            Alumbrando = crudo > 0 ? crudo
+                       : Time.time < _alumbradoHasta ? _ultimoAlumbrando : 0;
             int jugadoresVivos = ContarJugadoresVivos(net);
             TodosAlumbrando = Alumbrando > 0;
 
