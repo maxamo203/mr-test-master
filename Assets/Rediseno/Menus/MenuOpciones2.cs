@@ -127,9 +127,18 @@ namespace Rediseno.Menus
             if (Debug.isDebugBuild)
             {
                 lista.Add(PiezasUI.Seccion("DESARROLLO"));
+                // Mismo interruptor que la pantalla vieja: cada catálogo tiene su propio
+                // progreso, así que el contador de abajo cambia con él.
+                lista.Add(PiezasUI.Interruptor(nav, "NOCHES DE PROD",
+                    "Prendido: Nights/prod (datos reales). Apagado: Nights/dev. Rige desde la próxima partida",
+                    () => PlayDataProfile.UseProduction,
+                    v => { if (NightMenuUI.Instance != null) NightMenuUI.Instance.UsarNochesProd(v);
+                           else PlayDataProfile.UseProduction = v;
+                           Refrescar(); }));
                 _progreso = PiezasUI.Info(lista, "");
-                int total = NightMenuUI.Instance != null ? NightMenuUI.Instance.TotalNoches : 6;
-                lista.Add(PiezasUI.Boton(nav, "DESBLOQUEAR TODAS", () => NightProgress.DesbloquearTodas(total)));
+                // El total se lee al tocar: cambia con el catálogo (NOCHES DE PROD).
+                lista.Add(PiezasUI.Boton(nav, "DESBLOQUEAR TODAS", () =>
+                    NightProgress.DesbloquearTodas(NightMenuUI.Instance != null ? NightMenuUI.Instance.TotalNoches : 6)));
                 lista.Add(PiezasUI.Boton(nav, "BORRAR PROGRESO", NightProgress.BorrarProgreso, peligro: true));
             }
 

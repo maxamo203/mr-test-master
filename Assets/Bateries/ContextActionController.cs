@@ -369,11 +369,21 @@ namespace Bateries
             var stSub = MortuoriumTheme.Estilo(MortuoriumTheme.FMono, Mathf.RoundToInt(20 * s),
                                                MortuoriumTheme.Tan, TextAnchor.MiddleCenter);
             Rediseno.UI.OjosVisor.Centros(out var izq, out var der);
+
+            // Las barras de la noche (linterna / cordura / amanecer) también van bajo cada
+            // ojo, justo en esa franja: el cartel se apoya encima de la fila más alta para
+            // no pisarlas. Su borde superior sale del mismo layout que las dibuja (coords
+            // virtuales de UIScale → px reales).
+            MortuoriumTheme.HudBarRects(Scanner.UIScale.VirtualWidth, Scanner.UIScale.VirtualHeight,
+                                        2, out var filaAlta, out _);
+            float topeBarras = filaAlta.y * Scanner.UIScale.Factor + Scanner.UIScale.SafeGui.y;
+
             for (int i = 0; i < 2; i++)
             {
                 var c = i == 0 ? izq : der;
                 float w = 300f * s, h = 86f * s;
-                var r = new Rect(c.x - w * 0.5f, c.y + 120f * s, w, h);
+                float y = Mathf.Min(c.y + 120f * s, topeBarras - 12f * s - h);
+                var r = new Rect(c.x - w * 0.5f, y, w, h);
                 MortuoriumTheme.Tarjeta2(r, MortuoriumTheme.Hoja2, MortuoriumTheme.Tan, 24f * s, 2f * s);
                 GUI.Label(new Rect(r.x, r.y + 6f * s, w, 44f * s), accion.ToUpperInvariant(), stTit);
                 GUI.Label(new Rect(r.x, r.y + 50f * s, w, 26f * s), como, stSub);
