@@ -157,8 +157,15 @@ namespace Rediseno.UI
                     // Con depth/stencil (24 = D24S8): UI Toolkit recorta con stencil el contenido de
                     // los elementos con overflow:hidden y esquinas redondeadas (tarjetas de noche).
                     // Sin stencil ese recorte fallaba en el visor y las tarjetas salían en blanco.
-                    _rt = new RenderTexture(AnchoRef, AltoVisor, 24, RenderTextureFormat.ARGB32)
-                    { name = GetType().Name + "_Visor", useMipMap = false, antiAliasing = 1 };
+                    // Formato sRGB EXPLÍCITO en espacio Linear (el del proyecto): con ARGB32 "por
+                    // defecto" en iOS/Metal el menú en el visor salía lavado, gris (conversión
+                    // de color doble al pegar la textura en cada ojo); en Android no pasaba.
+                    var formato = QualitySettings.activeColorSpace == ColorSpace.Linear
+                        ? UnityEngine.Experimental.Rendering.GraphicsFormat.R8G8B8A8_SRGB
+                        : UnityEngine.Experimental.Rendering.GraphicsFormat.R8G8B8A8_UNorm;
+                    var desc = new RenderTextureDescriptor(AnchoRef, AltoVisor, formato, 24)
+                    { useMipMap = false, msaaSamples = 1 };
+                    _rt = new RenderTexture(desc) { name = GetType().Name + "_Visor" };
                     _rt.Create();
                 }
                 _ps.clearColor = true;

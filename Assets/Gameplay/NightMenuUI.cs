@@ -192,7 +192,9 @@ namespace Gameplay
         public int TotalNoches => Mathf.Max(1, Nights != null ? Nights.Length : 0);
         public void AbrirJugar()         => ConfigurarPartida(GameSession.SessionMode.SinglePlayer);
         public void AbrirMultijugador()  { if (BuildVariant.Multijugador) PantallaActual = Pantalla.CrearUnirse; }
-        public void AbrirEscenarios()    => OnEscanear();
+        // El menú nuevo abre MIS ESCENARIOS aunque esté vacío (ahí ofrece NUEVO ESCANEO): el
+        // atajo viejo de ir directo al escáner sorprendía, y con el visor puesto lo sacaba.
+        public void AbrirEscenarios()    { RefrescarScans(); PantallaActual = Pantalla.Escaneos; }
         public void BorrarEscenario(string escena) { ScanSerializer.Delete(escena); RefrescarScans(); }
 
         // Avisos modales del menú, en el mismo orden de precedencia que OnGUI. Los dibuja

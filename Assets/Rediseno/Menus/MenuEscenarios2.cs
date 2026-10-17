@@ -45,6 +45,9 @@ namespace Rediseno.Menus
             }
 
             lista.Add(PiezasUI.Seccion("GUARDADOS"));
+            if (menu.Escenarios.Count == 0)
+                PiezasUI.Info(lista, "Todavía no escaneaste ningún escenario. El ritual necesita conocer " +
+                                     "tu espacio real: empezá con NUEVO ESCANEO.");
             foreach (var e in menu.Escenarios)
             {
                 string nombre = e;
