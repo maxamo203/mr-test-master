@@ -317,7 +317,10 @@ namespace Rediseno.UI
             Vector3 f = cam.transform.forward;
             float yaw = Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg;
             float pitch = Mathf.Asin(Mathf.Clamp(f.y, -1f, 1f)) * Mathf.Rad2Deg;
-            if (!_tieneRefCamara) { _refYaw = yaw; _refPitch = pitch; _tieneRefCamara = true; }
+            // Rumbo de cuando apareció; altura respecto del horizonte (la cámara AR tiene Y
+            // vertical): la pantalla queda a la altura de los ojos aunque al aparecer estuvieras
+            // mirando el piso.
+            if (!_tieneRefCamara) { _refYaw = yaw; _refPitch = 0f; _tieneRefCamara = true; }
             _yaw = Mathf.DeltaAngle(_refYaw, yaw);
             _pitch = pitch - _refPitch;
             // Si te diste vuelta, la pantalla vuelve a ponerse delante.
