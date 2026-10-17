@@ -40,7 +40,11 @@ namespace Rediseno.Menus
         // no aparece ni parpadea); recién ahí aparece el anillo, que se llena en SegundosCarga.
         private const float SegundosQuieto = 1.5f;
         private const float SegundosCarga = 1f;
-        private const float ToleranciaQuieto = 0.08f;   // metros que puede moverse el punto apuntado
+        // "Quieto" se mide por el ÁNGULO de la mirada (el temblor de la cabeza es angular: a 3 m,
+        // 1,5° ya eran los 8 cm de tolerancia que había antes y se cortaba solo). Además el punto
+        // apuntado no puede saltar de profundidad más que ToleranciaProfundidad.
+        private const float ToleranciaGrados = 3f;
+        private const float ToleranciaProfundidad = 0.25f;
 
         private ARLobbyManager _lobby;
         private VisualElement _tarjeta;
@@ -49,6 +53,7 @@ namespace Rediseno.Menus
         private float _quietoT;            // segundos apuntando quieto al mismo punto
         private float _carga;              // 0..1 del anillo (sólo después de SegundosQuieto)
         private Vector3 _puntoInicio;
+        private Vector3 _miradaInicio;
         private bool _hayInicio;
         private string _motivo;            // por qué no se puede poner acá (muy cerca, etc.)
         private bool _confirmando;
@@ -211,10 +216,16 @@ namespace Rediseno.Menus
             }
             var hit = mgr.UltimoHit;
             bool valido = mgr.ValidarPunto(hit, out var motivo);
-            if (!hit.Hit || (hit.Position - _puntoInicio).sqrMagnitude > ToleranciaQuieto * ToleranciaQuieto || !_hayInicio)
+            var cam = Camera.main;
+            Vector3 mirada = cam != null ? cam.transform.forward : Vector3.forward;
+            bool seMovio = !_hayInicio || !hit.Hit ||
+                           Vector3.Angle(mirada, _miradaInicio) > ToleranciaGrados ||
+                           (hit.Position - _puntoInicio).sqrMagnitude > ToleranciaProfundidad * ToleranciaProfundidad;
+            if (seMovio)
             {
                 // Se movió: todo arranca de nuevo desde acá, sin mostrar nada.
                 _puntoInicio = hit.Position;
+                _miradaInicio = mirada;
                 _hayInicio = hit.Hit;
                 _quietoT = 0f; _carga = 0f; _motivo = null;
                 return;
