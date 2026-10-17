@@ -170,11 +170,23 @@ namespace Gamepad
             {
                 _quiereBloqueo = partidaConVisor;
                 Cursor.lockState = partidaConVisor ? CursorLockMode.Locked : CursorLockMode.None;
+                // Al cambiar el bloqueo Unity pide/suelta la captura de Android por su cuenta: al
+                // desbloquear (p. ej. al morir con Cardboard) la soltaba y, como acá seguía
+                // "queriéndola", nunca se volvía a pedir — el cursor escondido llegaba al borde
+                // y aparecía. Se vuelve a pedir un instante después (Unity la suelta async).
+                if (captura) _repedirCapturaEn = Time.unscaledTime + 0.25f;
+            }
+            if (_repedirCapturaEn > 0f && Time.unscaledTime >= _repedirCapturaEn)
+            {
+                _repedirCapturaEn = 0f;
+                if (captura) PedirCapturaAndroid(true);
             }
             if (captura == _quiereCaptura) return;
             _quiereCaptura = captura;
             PedirCapturaAndroid(captura);
         }
+
+        private float _repedirCapturaEn;
 
         private void OnApplicationFocus(bool foco)
         {
