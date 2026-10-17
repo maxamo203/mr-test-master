@@ -3,8 +3,11 @@ using UnityEngine.InputSystem;
 
 namespace Rediseno.UI
 {
-    // Hacia dónde mira la cabeza en los menús con visor, en grados respecto de "al frente"
-    // (el momento del último recentrado). En los menús no hay sesión AR (gastaría batería
+    // Hacia dónde mira la cabeza en los menús con visor, en grados. Yaw: respecto del rumbo
+    // del último recentrado. Pitch: respecto del HORIZONTE (gravedad), no de cómo tenías la
+    // cabeza al recentrar: así la pantalla aparece siempre a la altura de los ojos aunque en
+    // ese momento estuvieras mirando el piso (antes quedaba anclada abajo y había que bajar
+    // la cabeza, forzando el cuello). En los menús no hay sesión AR (gastaría batería
     // para nada), así que sale del sensor de orientación del celular (3 grados de libertad
     // alcanzan para apuntar a una pantalla flotante).
     //
@@ -19,7 +22,7 @@ namespace Rediseno.UI
         public static bool  EnCuentaRegresiva => CuentaRegresiva > 0f;
         public static float CuentaRegresiva { get; private set; }
 
-        private static Quaternion _ref = Quaternion.identity;
+        private static float _rumboRef;   // rumbo (grados, en el plano horizontal) de "al frente"
         private static bool _tieneRef;
         private static float _lejosT;
 
@@ -36,8 +39,17 @@ namespace Rediseno.UI
         public static void Recentrar(bool conCuentaRegresiva = false)
         {
             if (conCuentaRegresiva) { CuentaRegresiva = 3f; return; }
-            _tieneRef = TryLeer(out _ref);
-            Yaw = Pitch = 0f;
+            _tieneRef = TryLeer(out var q);
+            Yaw = 0f;
+            Pitch = 0f;
+            if (_tieneRef)
+            {
+                // La altura no se recentra (es contra el horizonte): queda la real, así la
+                // pantalla no pasa un frame por el medio de la vista antes de ir a su lugar.
+                var v = Camara(q);
+                _rumboRef = Rumbo(v, _rumboRef);
+                Pitch = Mathf.Asin(Mathf.Clamp(v.z, -1f, 1f)) * Mathf.Rad2Deg;
+            }
 #if UNITY_EDITOR
             _yawEd = _pitchEd = 0f;
 #endif
@@ -56,33 +68,38 @@ namespace Rediseno.UI
 #if UNITY_EDITOR
             if (AttitudeSensor.current == null || !_tieneRef) { TickEditor(dt); return; }
 #endif
-            if (!_tieneRef) { _tieneRef = TryLeer(out _ref); return; }
+            if (!_tieneRef) { Recentrar(); return; }
             if (!TryLeer(out var q)) return;
 
-            // Dirección de la cámara (−Z del celular) en el marco de referencia.
-            Vector3 v = (Quaternion.Inverse(_ref) * q) * Vector3.back;
-            if (InputSystem.settings.compensateForScreenOrientation)
-            {
-                // Ya compensado a la pantalla apaisada: arriba = +Y, derecha = +X.
-                Yaw = Mathf.Atan2(v.x, -v.z) * Mathf.Rad2Deg;
-                Pitch = Mathf.Asin(Mathf.Clamp(v.y, -1f, 1f)) * Mathf.Rad2Deg;
-            }
-            else
-            {
-                // Ejes del celular en LandscapeLeft: arriba = +X, derecha = −Y.
-                Yaw = Mathf.Atan2(-v.y, -v.z) * Mathf.Rad2Deg;
-                Pitch = Mathf.Asin(Mathf.Clamp(v.x, -1f, 1f)) * Mathf.Rad2Deg;
-            }
+            // Dirección de la cámara en el marco del mundo del sensor (Z = arriba).
+            Vector3 v = Camara(q);
+            Pitch = Mathf.Asin(Mathf.Clamp(v.z, -1f, 1f)) * Mathf.Rad2Deg;
+            Yaw = Mathf.DeltaAngle(_rumboRef, Rumbo(v, _rumboRef + Yaw));
 
-            // Si mirás muy lejos de la pantalla un rato (te diste vuelta, el sensor derivó),
-            // la pantalla vuelve a ponerse delante.
-            if (Mathf.Abs(Yaw) > anguloPanel * 0.5f + 35f || Mathf.Abs(Pitch) > 55f)
+            // Si te diste vuelta un rato (o el sensor derivó), la pantalla vuelve a ponerse
+            // delante, en el rumbo nuevo. Sólo por el costado: la altura ya es la de los ojos,
+            // y recentrar por mirar abajo (p. ej. el celular apoyado en la mesa) hacía que la
+            // pantalla apareciera un instante y se fuera cada 1,5 s. Mirando casi vertical el
+            // rumbo no está definido: no cuenta.
+            bool rumboDefinido = Mathf.Abs(v.z) <= 0.97f;
+            if (rumboDefinido && Mathf.Abs(Yaw) > anguloPanel * 0.5f + 35f)
             {
                 _lejosT += dt;
                 if (_lejosT > 1.5f) { _lejosT = 0f; Recentrar(); }
             }
             else _lejosT = 0f;
         }
+
+        // La orientación del sensor (Android: rotation vector; iOS: CoreMotion) lleva del marco
+        // del celular al del mundo, con Z vertical hacia arriba en los dos. La cámara mira por
+        // −Z del celular. La compensación de pantalla apaisada del Input System gira alrededor
+        // de ese mismo eje (value * q), así que no cambia esta dirección.
+        private static Vector3 Camara(Quaternion q) => q * Vector3.back;
+
+        // Rumbo en el plano horizontal (+ hacia la derecha). Mirando casi derecho arriba o abajo
+        // no está definido: se mantiene el anterior.
+        private static float Rumbo(Vector3 v, float anterior) =>
+            Mathf.Abs(v.z) > 0.97f ? anterior : Mathf.Atan2(v.x, v.y) * Mathf.Rad2Deg;
 
         private static bool TryLeer(out Quaternion q)
         {

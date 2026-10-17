@@ -164,16 +164,56 @@ namespace Gamepad
             bool pantallaFinal = (muerte != null && muerte.PresentationReady) || Gameplay.NightResult.Sobrevivio;
             bool partidaConVisor = UsesMouseInput && !pantallaFinal && MRCardboardController.Activo &&
                                    NetworkManager.Instance != null && NetworkManager.Instance.GameStarted;
-            bool captura = partidaConVisor || (UsesMouseInput && Rediseno.Flag.Activo);
+            // Captura de Android SIEMPRE que el VR BOX esté detectado, en toda la app y con o sin
+            // el rediseño: sin ella, el cursor escondido llega al borde y la ruedita se traba
+            // (y aparece el cursor). No afecta los toques con el dedo.
+            bool captura = UsesMouseInput;
 
             if (partidaConVisor != _quiereBloqueo)
             {
                 _quiereBloqueo = partidaConVisor;
                 Cursor.lockState = partidaConVisor ? CursorLockMode.Locked : CursorLockMode.None;
+                // Al cambiar el bloqueo Unity pide/suelta la captura de Android por su cuenta: al
+                // desbloquear (p. ej. al morir con Cardboard) la soltaba y, como acá seguía
+                // "queriéndola", nunca se volvía a pedir — el cursor escondido llegaba al borde
+                // y aparecía. Se vuelve a pedir un instante después (Unity la suelta async).
+                if (captura) _repedirCapturaEn = Time.unscaledTime + 0.25f;
+            }
+            if (_repedirCapturaEn > 0f && Time.unscaledTime >= _repedirCapturaEn)
+            {
+                _repedirCapturaEn = 0f;
+                if (captura) PedirCapturaAndroid(true);
+            }
+            // Vigilante: Android suelta la captura por su cuenta (cambio de bloqueo, notificación,
+            // teclado de pantalla, otra vista con foco) sin avisar siempre. Cada medio segundo se
+            // fija si la sigue teniendo y, si no, la vuelve a pedir. Sólo con el VR BOX.
+            if (captura && _quiereCaptura && Time.unscaledTime >= _vigilarCapturaEn)
+            {
+                _vigilarCapturaEn = Time.unscaledTime + 0.5f;
+                AsegurarCapturaAndroid();
             }
             if (captura == _quiereCaptura) return;
             _quiereCaptura = captura;
             PedirCapturaAndroid(captura);
+        }
+
+        private float _repedirCapturaEn;
+        private float _vigilarCapturaEn;
+
+        // Pide la captura sólo si se perdió. No con el teclado de pantalla abierto (el foco es
+        // del campo de texto: la captura le quedaría a él) ni sin foco de la app (Android la
+        // ignora; se reintenta en el próximo chequeo).
+        private void AsegurarCapturaAndroid()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (!Application.isFocused || TouchScreenKeyboard.visible) return;
+            ConVistaEnfocada(v =>
+            {
+                bool tiene = v.Call<bool>("hasPointerCapture");
+                PunteroCapturado = tiene;
+                if (!tiene) v.Call("requestPointerCapture");
+            });
+#endif
         }
 
         private void OnApplicationFocus(bool foco)
@@ -201,24 +241,42 @@ namespace Gamepad
 #if UNITY_ANDROID && !UNITY_EDITOR
         // Corre en el hilo de UI de Android (las vistas sólo se tocan desde ahí). La captura
         // la tiene que pedir la vista con foco; si no hay, la decorView.
+        // La Activity se busca una vez (el vigilante llama esto dos veces por segundo).
+        private static AndroidJavaObject _actividad;
+        private static bool _avisoFalla;
+
         private static void ConVistaEnfocada(System.Action<AndroidJavaObject> accion)
         {
             try
             {
-                using var up = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-                var act = up.GetStatic<AndroidJavaObject>("currentActivity");
+                if (_actividad == null)
+                {
+                    using var up = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+                    _actividad = up.GetStatic<AndroidJavaObject>("currentActivity");
+                }
+                var act = _actividad;
                 act.Call("runOnUiThread", new AndroidJavaRunnable(() =>
                 {
                     try
                     {
-                        var v = act.Call<AndroidJavaObject>("getCurrentFocus")
-                             ?? act.Call<AndroidJavaObject>("getWindow").Call<AndroidJavaObject>("getDecorView");
-                        accion(v);
+                        var foco = act.Call<AndroidJavaObject>("getCurrentFocus");
+                        if (foco != null) { using (foco) accion(foco); return; }
+                        using var ventana = act.Call<AndroidJavaObject>("getWindow");
+                        using var decor = ventana.Call<AndroidJavaObject>("getDecorView");
+                        accion(decor);
                     }
-                    catch (System.Exception e) { Debug.LogWarning($"[GamepadManager] Captura de puntero: {e.Message}"); }
+                    catch (System.Exception e) { AvisarFalla(e); }
                 }));
             }
-            catch (System.Exception e) { Debug.LogWarning($"[GamepadManager] Captura de puntero: {e.Message}"); }
+            catch (System.Exception e) { AvisarFalla(e); }
+        }
+
+        // Una sola vez: con el vigilante, un error repetido llenaría el log dos veces por segundo.
+        private static void AvisarFalla(System.Exception e)
+        {
+            if (_avisoFalla) return;
+            _avisoFalla = true;
+            Debug.LogWarning($"[GamepadManager] Captura de puntero: {e.Message}");
         }
 #endif
 

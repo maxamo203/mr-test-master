@@ -66,6 +66,9 @@ public class VHSOverlayUI : MonoBehaviour
 
     private void OnGUI()
     {
+        // Encima de TODO, también de la pausa (depth -10): el orden de ejecución alto no basta,
+        // con el mismo depth Unity no garantiza el orden de OnGUI entre scripts.
+        GUI.depth = -100;
         // Sólo pintar: en los eventos de layout/input no hay nada que hacer.
         if (Event.current.type != EventType.Repaint) return;
 

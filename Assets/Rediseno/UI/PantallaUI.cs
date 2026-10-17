@@ -43,6 +43,20 @@ namespace Rediseno.UI
         private float _yaw, _pitch, _refYaw, _refPitch;
         private bool  _tieneRefCamara;
 
+        // Punto del panel (unidades de panel) bajo el centro de la vista, en el modo "quieto en
+        // el cuarto" con mirada. Lo usan las pantallas que además apuntan al mundo (anclas):
+        // mirando su tarjeta no se está apuntando a una pared.
+        private Vector2 _puntoMirada;
+        private bool _hayPuntoMirada;
+        protected bool PuntoMirada(out Vector2 p) { p = _puntoMirada; return _hayPuntoMirada; }
+
+        // Vuelve a poner la pantalla delante (rumbo actual) en el modo "quieto en el cuarto".
+        protected void RecentrarMirada()
+        {
+            _tieneRefCamara = false;
+            if (!CabezaPorCamara) Cabeza.Recentrar();
+        }
+
         // ¿Hay alguna pantalla nueva a la vista? Las pantallas viejas (IMGUI) no se dibujan
         // mientras tanto, y si se llega a una vieja estando en el visor se sale del visor
         // (todavía no saben dibujarse en estéreo). Ver NightMenuUI.OnGUI.
@@ -317,7 +331,10 @@ namespace Rediseno.UI
             Vector3 f = cam.transform.forward;
             float yaw = Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg;
             float pitch = Mathf.Asin(Mathf.Clamp(f.y, -1f, 1f)) * Mathf.Rad2Deg;
-            if (!_tieneRefCamara) { _refYaw = yaw; _refPitch = pitch; _tieneRefCamara = true; }
+            // Rumbo de cuando apareció; altura respecto del horizonte (la cámara AR tiene Y
+            // vertical): la pantalla queda a la altura de los ojos aunque al aparecer estuvieras
+            // mirando el piso.
+            if (!_tieneRefCamara) { _refYaw = yaw; _refPitch = 0f; _tieneRefCamara = true; }
             _yaw = Mathf.DeltaAngle(_refYaw, yaw);
             _pitch = pitch - _refPitch;
             // Si te diste vuelta, la pantalla vuelve a ponerse delante.
@@ -339,6 +356,7 @@ namespace Rediseno.UI
                 }
             }
 
+            _hayPuntoMirada = false;
             // Fija delante de cada ojo: sin cabeza ni anillo; se usa con el joystick.
             if (!EnElCuarto)
             {
@@ -362,6 +380,8 @@ namespace Rediseno.UI
             float ppd = w / AnguloPanel;  // unidades de panel por grado
             Vector2 off = PosicionVisor;
             Vector2 p = new(w * 0.5f + (_yaw - off.x) * ppd, h * 0.5f - (_pitch - off.y) * ppd);
+            _puntoMirada = p;
+            _hayPuntoMirada = true;
 
             // Mirar el borde de arriba/abajo de una lista larga la desplaza.
             if (Desplazable != null)

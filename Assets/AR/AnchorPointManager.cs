@@ -177,7 +177,12 @@ public class AnchorPointManager : MonoBehaviour
 
     // Coloca un ancla en el punto que está bajo la retícula. Devuelve false y un
     // motivo en español si no se puede.
-    public bool TryColocar(out string error)
+    public bool TryColocar(out string error) => TryColocar(null, null, out error);
+
+    // Rediseño 2.0 (visor sin joystick): coloca en un punto ya elegido — la vista previa que
+    // el jugador confirmó con SÍ — aunque la mira ya esté en otro lado (mirando el cartel).
+    // `rotFija` = rumbo de la cámara cuando se eligió el punto (ver RumboCamara).
+    public bool TryColocar(ResolvedHit? fijo, Quaternion? rotFija, out string error)
     {
         error = null;
 
@@ -194,33 +199,11 @@ public class AnchorPointManager : MonoBehaviour
 
         // Reusamos el hit que Update ya resolvió para la vista previa (es el mismo
         // frame y el mismo punto que el jugador está viendo bajo la mira).
-        var hit = UltimoHit.Hit ? UltimoHit : resolver.ResolveFromScreenCenter();
-        if (!hit.Hit) { error = "apuntá a una superficie"; return false; }
-
-#if !UNITY_EDITOR
-        // Sin superficie real el ancla queda en el aire, sin features cerca, y trackea
-        // mal. En editor NO hay subsistema AR, así que el raycast siempre cae al
-        // fallback: ahí lo aceptamos para poder ejercitar el flujo en play mode.
-        if (hit.Source == RaycastSource.Fallback)
-        {
-            error = "apuntá a una pared o mueble que AR reconozca";
-            return false;
-        }
-#endif
-
-        for (int i = 0; i < _anclas.Count; i++)
-        {
-            var otra = _anclas[i];
-            if (otra.Go == null) continue;
-            if ((otra.Go.transform.position - hit.Position).sqrMagnitude < MinSeparacion * MinSeparacion)
-            {
-                error = "muy cerca de otra ancla";
-                return false;
-            }
-        }
+        var hit = fijo ?? (UltimoHit.Hit ? UltimoHit : resolver.ResolveFromScreenCenter());
+        if (!ValidarPunto(hit, out error)) return false;
 
         var go = new GameObject($"AnchorPoint{_nextId}");
-        go.transform.SetPositionAndRotation(hit.Position, UprightDesde(camT));
+        go.transform.SetPositionAndRotation(hit.Position, rotFija ?? UprightDesde(camT));
 
         ARAnchor ar = null;
 #if !UNITY_EDITOR
@@ -625,6 +608,43 @@ public class AnchorPointManager : MonoBehaviour
     // Rotación upright: eje Y SIEMPRE el up del mundo, sólo rumbo horizontal — misma
     // convención que ARImageAnchor con la imagen. Así la cadena de parentado aporta
     // posición + yaw y nunca inclina el cuarto virtual.
+    // ¿Se puede poner un ancla en este punto? Mismas reglas que TryColocar (superficie real,
+    // separación con las otras). La usa la vista previa del visor sin joystick para no
+    // ofrecer un punto que después se rechazaría.
+    public bool ValidarPunto(ResolvedHit hit, out string error)
+    {
+        error = null;
+        if (!hit.Hit) { error = "apuntá a una superficie"; return false; }
+#if !UNITY_EDITOR
+        // Sin superficie real el ancla queda en el aire, sin features cerca, y trackea
+        // mal. En editor NO hay subsistema AR, así que el raycast siempre cae al
+        // fallback: ahí lo aceptamos para poder ejercitar el flujo en play mode.
+        if (hit.Source == RaycastSource.Fallback)
+        {
+            error = "apuntá a una pared o mueble que AR reconozca";
+            return false;
+        }
+#endif
+        for (int i = 0; i < _anclas.Count; i++)
+        {
+            var otra = _anclas[i];
+            if (otra.Go == null) continue;
+            if ((otra.Go.transform.position - hit.Position).sqrMagnitude < MinSeparacion * MinSeparacion)
+            {
+                error = "muy cerca de otra ancla";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Rumbo horizontal de la cámara ahora (el mismo con el que TryColocar orienta el ancla).
+    public Quaternion RumboCamara()
+    {
+        var camT = CamaraT();
+        return camT != null ? UprightDesde(camT) : Quaternion.identity;
+    }
+
     private static Quaternion UprightDesde(Transform camT)
     {
         var fwd = Vector3.ProjectOnPlane(camT.forward, Vector3.up);
