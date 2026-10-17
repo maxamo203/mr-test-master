@@ -40,8 +40,16 @@ namespace Rediseno.UI
         {
             if (conCuentaRegresiva) { CuentaRegresiva = 3f; return; }
             _tieneRef = TryLeer(out var q);
-            if (_tieneRef) _rumboRef = Rumbo(Camara(q), _rumboRef);
-            Yaw = Pitch = 0f;
+            Yaw = 0f;
+            Pitch = 0f;
+            if (_tieneRef)
+            {
+                // La altura no se recentra (es contra el horizonte): queda la real, así la
+                // pantalla no pasa un frame por el medio de la vista antes de ir a su lugar.
+                var v = Camara(q);
+                _rumboRef = Rumbo(v, _rumboRef);
+                Pitch = Mathf.Asin(Mathf.Clamp(v.z, -1f, 1f)) * Mathf.Rad2Deg;
+            }
 #if UNITY_EDITOR
             _yawEd = _pitchEd = 0f;
 #endif
@@ -68,9 +76,13 @@ namespace Rediseno.UI
             Pitch = Mathf.Asin(Mathf.Clamp(v.z, -1f, 1f)) * Mathf.Rad2Deg;
             Yaw = Mathf.DeltaAngle(_rumboRef, Rumbo(v, _rumboRef + Yaw));
 
-            // Si mirás muy lejos de la pantalla un rato (te diste vuelta, el sensor derivó),
-            // la pantalla vuelve a ponerse delante.
-            if (Mathf.Abs(Yaw) > anguloPanel * 0.5f + 35f || Mathf.Abs(Pitch) > 55f)
+            // Si te diste vuelta un rato (o el sensor derivó), la pantalla vuelve a ponerse
+            // delante, en el rumbo nuevo. Sólo por el costado: la altura ya es la de los ojos,
+            // y recentrar por mirar abajo (p. ej. el celular apoyado en la mesa) hacía que la
+            // pantalla apareciera un instante y se fuera cada 1,5 s. Mirando casi vertical el
+            // rumbo no está definido: no cuenta.
+            bool rumboDefinido = Mathf.Abs(v.z) <= 0.97f;
+            if (rumboDefinido && Mathf.Abs(Yaw) > anguloPanel * 0.5f + 35f)
             {
                 _lejosT += dt;
                 if (_lejosT > 1.5f) { _lejosT = 0f; Recentrar(); }
