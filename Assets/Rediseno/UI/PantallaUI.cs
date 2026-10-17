@@ -198,7 +198,23 @@ namespace Rediseno.UI
                 Cabeza.Habilitar(false);
             }
             _dwell = 0f; _dwellOpcion = null;
-            if (Raiz != null) AlCambiarVisor(visor);
+            if (Raiz != null) { MargenesSeguros(visor); AlCambiarVisor(visor); }
+        }
+
+        // Márgenes de arriba/abajo de las columnas de la pantalla (PiezasUI.Columna): aire base
+        // más lo que tape el celular (notch / barra de estado, barra de gestos), en unidades
+        // del panel (ancho de referencia AnchoRef). En el visor no hay nada que esquivar.
+        private void MargenesSeguros(bool visor)
+        {
+            float k = Screen.width > 0 ? AnchoRef / (float)Screen.width : 1f;
+            var seguro = Screen.safeArea;
+            float arriba = visor ? 0f : Mathf.Max(0f, Screen.height - seguro.yMax) * k;
+            float abajo  = visor ? 0f : Mathf.Max(0f, seguro.yMin) * k;
+            Raiz.Query(className: PiezasUI.ClaseColumna).ForEach(c =>
+            {
+                c.style.paddingTop = PiezasUI.Arriba(arriba);
+                c.style.paddingBottom = PiezasUI.AireAbajo + abajo;
+            });
         }
 
         // ── Loop ──────────────────────────────────────────────────────────────

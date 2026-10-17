@@ -41,14 +41,30 @@ namespace Rediseno.UI
             return f;
         }
 
-        // Columna principal con márgenes de pantalla.
+        // Columna principal con márgenes de pantalla. Los de arriba/abajo los fija PantallaUI
+        // (MargenesSeguros) según la zona segura del celular: notch / barra de estado arriba,
+        // barra de gestos abajo.
+        public const string ClaseColumna = "rediseno-columna";
+        public const float AireArriba = 56f, AireAbajo = 48f;
+        // Arriba: justo debajo de lo que tape el celular (notch / barra de estado) con este
+        // margen, pero nunca más arriba que AireArriba.
+        public const float MargenBajoBarra = 12f;
+        public static float Arriba(float tapadoArriba) => Mathf.Max(AireArriba, tapadoArriba + MargenBajoBarra);
+
         public static VisualElement Columna()
         {
             var c = Ignorar(new VisualElement());
             Llenar(c);
+            c.AddToClassList(ClaseColumna);
             c.style.flexDirection = FlexDirection.Column;
             c.style.paddingLeft = 48; c.style.paddingRight = 48;
-            c.style.paddingTop = 56; c.style.paddingBottom = 40;
+            // Ya nace con la zona segura (pantallas que rearman su columna después de aparecer,
+            // como las hojas del tutorial); PantallaUI la corrige al entrar o salir del visor.
+            bool visor = ModoVisor.Activo || MRCardboardController.Activo;
+            float k = Screen.width > 0 ? 1080f / Screen.width : 1f;
+            var seguro = Screen.safeArea;
+            c.style.paddingTop = Arriba(visor ? 0f : Mathf.Max(0f, Screen.height - seguro.yMax) * k);
+            c.style.paddingBottom = AireAbajo + (visor ? 0f : Mathf.Max(0f, seguro.yMin) * k);
             return c;
         }
 

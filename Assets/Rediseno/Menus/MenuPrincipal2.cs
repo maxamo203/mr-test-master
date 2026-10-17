@@ -95,9 +95,10 @@ namespace Rediseno.Menus
 
             var col = new VisualElement { pickingMode = PickingMode.Ignore };
             Llenar(col);
+            col.AddToClassList(PiezasUI.ClaseColumna);   // márgenes de la zona segura (PantallaUI)
             col.style.flexDirection = FlexDirection.Column;
             col.style.paddingLeft = 48; col.style.paddingRight = 48;
-            col.style.paddingTop = 56; col.style.paddingBottom = 40;
+            col.style.paddingTop = PiezasUI.AireArriba; col.style.paddingBottom = PiezasUI.AireAbajo;
             raiz.Add(col);
 
             // Barra de arriba: REC + visor + opciones.
@@ -303,8 +304,12 @@ namespace Rediseno.Menus
             b.Add(caja);
 
             var textos = new VisualElement { pickingMode = PickingMode.Ignore };
-            textos.style.flexShrink = 1;
-            textos.Add(TemaUI.Texto(titulo, TemaUI.Bebas, 48, TemaUI.Cream, 5f));
+            textos.style.flexGrow = 1; textos.style.flexShrink = 1;
+            // El título en UNA línea: "MIS ESCENARIOS" se partía en dos y la segunda línea se
+            // encimaba con el subtítulo ("Escanear o editar").
+            var tit = TemaUI.Texto(titulo, TemaUI.Bebas, 48, TemaUI.Cream, 5f);
+            tit.style.whiteSpace = WhiteSpace.NoWrap;
+            textos.Add(tit);
             var s = TemaUI.Texto(sub, TemaUI.Mono, 26, TemaUI.Muted);
             s.style.marginTop = 2;
             textos.Add(s);
