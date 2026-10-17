@@ -109,12 +109,20 @@ namespace Scanner
             }
         }
 
+        // Tamaño de pantalla con el que se armó el recuadro.
+        private Vector2Int _selPantalla;
+
         private void EnsureSelInit()
         {
-            if (_selInit) return;
+            // Se rearma (centrado) también si la pantalla cambió de tamaño mientras se encuadra:
+            // al entrar desde el visor la pantalla todavía está rotando de apaisada a vertical,
+            // y el recuadro armado con las medidas viejas quedaba corrido, fuera del centro.
+            var pantalla = new Vector2Int(Screen.width, Screen.height);
+            if (_selInit && (pantalla == _selPantalla || _phase != Phase.Adjust)) return;
             float w = Screen.width  * 0.5f;
             float h = Screen.height * 0.3f;
             _sel = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
+            _selPantalla = pantalla;
             _selInit = true;
         }
 
