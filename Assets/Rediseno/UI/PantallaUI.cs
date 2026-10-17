@@ -380,8 +380,12 @@ namespace Rediseno.UI
                     // La cuenta regresiva va sólo al EMPEZAR el modo (prender el visor o la
                     // opción), no cada vez que aparece una pantalla nueva que todavía no lo
                     // había aplicado (pasaba al ir a OPCIONES).
-                    if (EnElCuarto) { if (!Cabeza.EnUso) { Cabeza.Recentrar(conCuentaRegresiva: true); Cabeza.Habilitar(true); } }
-                    else Cabeza.Habilitar(false);
+                    if (EnElCuarto && !Cabeza.EnUso)
+                    {
+                        Cabeza.Recentrar(conCuentaRegresiva: !Cabeza.YaAcomodado);
+                        Cabeza.Habilitar(true);
+                    }
+                    else if (!EnElCuarto) Cabeza.Habilitar(false);
                 }
             }
 

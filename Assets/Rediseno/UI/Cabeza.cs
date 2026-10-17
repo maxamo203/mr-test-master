@@ -32,6 +32,12 @@ namespace Rediseno.UI
         // pantalla nueva.
         public static bool EnUso { get; private set; }
 
+        // ¿Ya se pasó por la cuenta regresiva con este visor puesto? Sobrevive a los cambios de
+        // escena (la partida apaga el sensor: ahí manda la cámara AR) y se olvida recién al
+        // sacarse el visor (ModoVisor). Así volver al menú después de morir no la repite.
+        public static bool YaAcomodado { get; private set; }
+        public static void OlvidarAcomodo() => YaAcomodado = false;
+
         public static void Habilitar(bool on)
         {
             EnUso = on;
@@ -46,7 +52,7 @@ namespace Rediseno.UI
         // segundos para que el jugador meta el celular en el visor antes de fijarla.
         public static void Recentrar(bool conCuentaRegresiva = false)
         {
-            if (conCuentaRegresiva) { CuentaRegresiva = 3f; return; }
+            if (conCuentaRegresiva) { CuentaRegresiva = 3f; YaAcomodado = true; return; }
             _tieneRef = TryLeer(out var q);
             Yaw = 0f;
             Pitch = 0f;

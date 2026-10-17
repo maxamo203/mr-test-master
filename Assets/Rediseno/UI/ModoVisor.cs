@@ -15,6 +15,7 @@ namespace Rediseno.UI
         {
             if (activo == Activo) return;
             Activo = activo;
+            if (!activo) Cabeza.OlvidarAcomodo();   // al volver a ponérselo, cuenta regresiva
 
             // El visor es apaisado; el menú normal, vertical.
             if (activo)
@@ -52,6 +53,7 @@ namespace Rediseno.UI
         {
             if (activo == Activo) return;
             Activo = activo;
+            if (!activo) Cabeza.OlvidarAcomodo();
             Cambio?.Invoke();
         }
 
