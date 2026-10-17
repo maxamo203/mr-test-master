@@ -44,7 +44,8 @@ namespace Gameplay
         public static int CountIlluminating(Vector3 target, float angleDeg, float range,
                                             float radioObjetivo = 0f,
                                             FlashlightMode minimumMode = FlashlightMode.Dim,
-                                            bool requireLineOfSight = false)
+                                            bool requireLineOfSight = false,
+                                            Transform ignorar = null)
         {
             var net = NetworkManager.Instance;
             if (net == null) return 0;
@@ -57,7 +58,7 @@ namespace Gameplay
                 Alcanza(Camera.main.transform.position, Camera.main.transform.forward,
                         target, angleDeg, range, radioObjetivo) &&
                 (!requireLineOfSight || HasLineOfSight(Camera.main.transform.position,
-                                                       target, radioObjetivo)))
+                                                       target, radioObjetivo, ignorar)))
                 n++;
 
             foreach (var cid in net.ConnectedClients)
@@ -70,7 +71,7 @@ namespace Gameplay
                 if (!net.TryGetClientWorldPosition(cid, out var pos)) continue;
                 if (!net.TryGetClientForward(cid, out var fwd)) continue;
                 if (Alcanza(pos, fwd, target, angleDeg, range, radioObjetivo) &&
-                    (!requireLineOfSight || HasLineOfSight(pos, target, radioObjetivo))) n++;
+                    (!requireLineOfSight || HasLineOfSight(pos, target, radioObjetivo, ignorar))) n++;
             }
             return n;
         }
@@ -79,9 +80,10 @@ namespace Gameplay
         public static bool AnyIlluminating(Vector3 target, float angleDeg, float range,
                                            float radioObjetivo = 0f,
                                            FlashlightMode minimumMode = FlashlightMode.Dim,
-                                           bool requireLineOfSight = false) =>
+                                           bool requireLineOfSight = false,
+                                           Transform ignorar = null) =>
             CountIlluminating(target, angleDeg, range, radioObjetivo,
-                              minimumMode, requireLineOfSight) > 0;
+                              minimumMode, requireLineOfSight, ignorar) > 0;
 
         // Consulta aislada para alucinaciones individuales. Nunca permite que la luz de
         // otro jugador provoque u oculte el Arbmos del propietario.
@@ -150,17 +152,39 @@ namespace Gameplay
         private static bool ModeAtLeast(FlashlightMode actual, FlashlightMode minimum) =>
             actual != FlashlightMode.Off && actual >= minimum;
 
-        public static bool HasLineOfSight(Vector3 origin, Vector3 target, float targetRadius)
+        // Buffer compartido del raycast con exclusión (server, un solo hilo).
+        private static readonly RaycastHit[] _hits = new RaycastHit[8];
+
+        // 'ignorar' = raíz del propio objetivo: sus colliders no lo tapan. Sin esto el
+        // Sorken se ocluía a sí mismo de cerca — el rayo al centro del torso entra a su
+        // cápsula mucho antes que 'targetRadius' cuando se lo mira inclinado.
+        public static bool HasLineOfSight(Vector3 origin, Vector3 target, float targetRadius,
+                                          Transform ignorar = null)
         {
             Vector3 delta = target - origin;
             float distance = delta.magnitude;
             if (distance <= 0.01f) return true;
-            if (!Physics.Raycast(origin, delta / distance, out var hit, distance,
-                                 Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-                return true;
 
-            // Un impacto en la superficie del propio objetivo no cuenta como oclusion.
-            return hit.distance >= distance - Mathf.Max(0.05f, targetRadius);
+            float limite = distance - Mathf.Max(0.05f, targetRadius);
+            if (ignorar == null)
+            {
+                if (!Physics.Raycast(origin, delta / distance, out var hit, distance,
+                                     Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                    return true;
+                // Un impacto en la superficie del propio objetivo no cuenta como oclusion.
+                return hit.distance >= limite;
+            }
+
+            int n = Physics.RaycastNonAlloc(origin, delta / distance, _hits, distance,
+                                            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
+            {
+                var h = _hits[i];
+                if (h.distance >= limite) continue;
+                if (h.collider.transform.IsChildOf(ignorar)) continue;
+                return false;
+            }
+            return true;
         }
     }
 }
