@@ -75,7 +75,10 @@ namespace Scanner
             ScanStateMachine.Instance != null &&
             ScanStateMachine.Instance.Current == ScannerMode.Calibrating &&
             !_imageAnchor.IsFound &&
-            !Tutorial.TapaEscaner;   // la hoja del tutorial tapa esta pantalla y se lleva los toques
+            !Tutorial.TapaEscaner &&   // la hoja del tutorial tapa esta pantalla y se lleva los toques
+            // Con la pausa abierta no se dibuja ni toma toques: el recuadro y los botones
+            // quedaban encima de la pausa (esta OnGUI corre después) y seguían respondiendo.
+            !Gamepad.PauseMenuController.IsOpen;
 
         // Para el tutorial de escaneo (qué sub-paso mostrar).
         public bool EnConfirmar => _phase == Phase.Confirm;
@@ -390,6 +393,14 @@ namespace Scanner
             // Franjas fuera del área segura en negro (cámara visible sólo adentro).
             T.FillOutsideSafeArea(T.Bg);
 
+            // Al cambiar de fase, el foco del mando va a la acción principal (CAPTURAR /
+            // CONFIRMAR / RECAPTURAR), que se marca justo antes de anotarse (DrawBtn).
+            if (_faseEnfocada != _phase)
+            {
+                _faseEnfocada = _phase;
+                Gamepad.ImguiGamepadMenu.EnfocarMarcado();
+            }
+
             DrawCaptureUI();
             RegistrarZonasUI();
 
@@ -446,7 +457,8 @@ namespace Scanner
                 string aviso = _imageAnchor != null ? _imageAnchor.AvisoImagen : null;
                 if (!string.IsNullOrEmpty(aviso))
                     DrawAviso(aviso, CaptureBtn().y - sh * 0.075f);
-                DrawBtn(CaptureBtn(), "RECAPTURAR", primario: !string.IsNullOrEmpty(aviso));
+                DrawBtn(CaptureBtn(), "RECAPTURAR", primario: !string.IsNullOrEmpty(aviso),
+                        RecapturarDesdeEspera, principal: true);
                 return;
             }
 
@@ -461,13 +473,14 @@ namespace Scanner
                 if (Event.current.type == EventType.Repaint) T.FillR(HandleRect(), T.Tan, Hsz() * 0.3f);
 
                 DrawTopLabel("Ajustá el recuadro sobre una zona con detalle y tocá CAPTURAR");
-                DrawBtn(CaptureBtn(), "CAPTURAR", primario: true);
+                DrawBtn(CaptureBtn(), "CAPTURAR", primario: true,
+                        () => StartCoroutine(CaptureRoutine()), principal: true);
                 Tutorial.Resaltar("capturar", CaptureBtn(), BtnH * 0.5f);
 
                 // Retícula mínima al centro: el escape de abajo ancla el mapa donde
                 // apunta, así que hay que ver a dónde se está apuntando.
                 DrawMira();
-                DrawBtn(SinImagenBtn(), "NO TENGO LA IMAGEN", primario: false);
+                DrawBtn(SinImagenBtn(), "NO TENGO LA IMAGEN", primario: false, CalibrarSinImagen);
                 if (!string.IsNullOrEmpty(_errorSinImagen))
                 {
                     var e = SinImagenBtn();
@@ -507,8 +520,9 @@ namespace Scanner
                 DrawSlider(row);
                 DrawNumBox(NumBox());
 
-                DrawBtn(RecaptureBtn(), "RECAPTURAR", primario: false);
-                DrawBtn(ConfirmBtn(),   "CONFIRMAR",  primario: true);
+                DrawBtn(RecaptureBtn(), "RECAPTURAR", primario: false, () => { CommitEdit(); BackToAdjust(); });
+                DrawBtn(ConfirmBtn(),   "CONFIRMAR",  primario: true,  () => { CommitEdit(); Confirm(); },
+                        principal: true);
                 Tutorial.Resaltar("confirmar", ConfirmBtn(), BtnH * 0.5f);
             }
         }
@@ -607,13 +621,27 @@ namespace Scanner
         // ── Dibujo helpers ────────────────────────────────────────────────────────
         // Botón temático (solo visual; el tap lo dispara HandleButtonTap por EnhancedTouch).
         // Estilo 2.0: píldora con degradé rojo (principal) o tarjeta (secundario).
-        private void DrawBtn(Rect r, string label, bool primario)
+        // Fase para la que ya se pidió el foco del mando (ver OnGUI).
+        private Phase? _faseEnfocada;
+
+        // Botón dibujado a mano (el toque lo resuelve HandleButtonTap en Update). Se anota en
+        // la navegación con mando (ruedita/cruceta + elegir) sin un GUI.Button, y con foco
+        // lleva el borde dorado como Boton2. 'principal' = destino del foco al entrar a la fase.
+        private void DrawBtn(Rect r, string label, bool primario, System.Action accion, bool principal = false)
         {
+            if (principal) Gamepad.ImguiGamepadMenu.Marcar();
+            bool foco = Gamepad.ImguiGamepadMenu.RegistrarSinBoton(r, () =>
+            {
+                if (!Active || _busy) return;
+                AudioManager.Sonar(c => c.uiConfirmar);
+                accion();
+            });
             if (Event.current.type == EventType.Repaint)
             {
                 float radio = r.height * 0.5f;
                 if (primario) { T.FillRojo(r, radio); T.BordeR(r, new Color(1f, 1f, 1f, 0.10f), radio); }
                 else T.Tarjeta2(r, T.Panel2, null, radio, Grosor);
+                if (foco) T.BordeR(r, T.Tan, radio, Mathf.Max(2.5f, Grosor * 2f));
             }
             GUI.Label(r, label, T.Estilo(T.FBebas, FsBtn, T.Cream, TextAnchor.MiddleCenter));
         }

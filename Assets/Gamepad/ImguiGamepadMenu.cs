@@ -179,6 +179,17 @@ namespace Gamepad
             _resueltoFrame = _repaintFrame;
         }
 
+        // Para controles dibujados a mano que leen su propio puntero (p. ej. ReferenceCaptureUI,
+        // que no usa GUI.Button): sólo los anota para la navegación con mando, sin un botón
+        // invisible encima (un toque contaría dos veces). Devuelve si tiene el foco, para que
+        // el control pinte su borde. Llamar en el mismo orden en todos los eventos.
+        public static bool RegistrarSinBoton(Rect rect, Action onClick)
+        {
+            bool foco = NextHasFocus;
+            Registrar(rect, onClick);
+            return foco;
+        }
+
         // Registra el botón recién dibujado. Sólo cuenta en Repaint: los pases de Layout / input
         // de cada script se intercalan y correrían el índice.
         private static void Registrar(Rect rect, Action onClick)
