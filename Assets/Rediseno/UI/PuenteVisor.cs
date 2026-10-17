@@ -7,7 +7,9 @@ namespace Rediseno.UI
     // ModoVisor; en la partida, MRCardboardController. Este puente:
     //   - al entrar a la partida con el visor puesto, prende Cardboard solo;
     //   - en la partida, refleja en ModoVisor si el jugador entra o sale de Cardboard;
-    //   - al volver al menú con el visor puesto, vuelve a poner la pantalla apaisada.
+    //   - al volver al menú con el visor puesto, vuelve a poner la pantalla apaisada;
+    //   - al entrar al escáner, saca del visor: se escanea con el celular en la mano y
+    //     tocando la pantalla, y no se dibuja en estéreo (quedaba apaisado y estirado).
     public class PuenteVisor : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -32,6 +34,7 @@ namespace Rediseno.UI
             if (s.name == SceneFlow.EscenaJuego && ModoVisor.Activo) _intentarHasta = Time.unscaledTime + 6f;
             else _intentarHasta = 0f;
             if (s.name == SceneFlow.EscenaMenu) ModoVisor.ReaplicarOrientacion();
+            if (s.name == SceneFlow.EscenaEscaner && ModoVisor.Activo) ModoVisor.Set(false);
         }
 
         private void Update()
