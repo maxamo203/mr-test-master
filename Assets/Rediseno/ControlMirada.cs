@@ -288,7 +288,8 @@ namespace Rediseno
             }
         }
 
-        // ── HUD: mira y anillo ───────────────────────────────────────────────
+        // ── HUD: anillo de la acción ─────────────────────────────────────────
+        // No hay mira fija: sólo aparece el anillo cuando hay una acción en curso.
         // Píxeles de pantalla (sin la matriz de UIScale). En Cardboard, una copia en el
         // centro de cada ojo (MRCardboardController los ubica en W*0.25 / W*0.75), con
         // disparidad 0 para que se fusionen en una sola.
@@ -324,14 +325,8 @@ namespace Rediseno
 
         private void DibujarMira(Vector2 c, float s)
         {
-            var punto = IconosMirada.Punto;
-
-            // Mira: un punto chico siempre visible, para saber hacia dónde apunta la mirada.
-            float rp = 4f * s;
-            GUI.color = new Color(1f, 1f, 1f, 0.75f);
-            GUI.DrawTexture(new Rect(c.x - rp, c.y - rp, rp * 2f, rp * 2f), punto);
-
             if (_gesto == Gesto.Ninguno || _progreso <= 0f) return;
+            var punto = IconosMirada.Punto;
 
             Color col; Texture2D icono;
             if (_gesto == Gesto.Recoger) { col = ColRecoger; icono = IconosMirada.Recoger; }

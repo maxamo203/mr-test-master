@@ -154,6 +154,14 @@ namespace Rediseno.UI
         private readonly RepeticionNav _rep = new();
         private readonly RepeticionNav _repAjuste = new();
 
+        // Último uso real del mando (palanca/ruedita o botón), compartido entre pantallas. La
+        // mirada se apaga sólo mientras el mando se está usando: estar conectado no alcanza,
+        // el VR BOX emparejado y quieto (o cualquier HID que Android registre como gamepad)
+        // dejaba la selección por mirada muerta hasta que el mando se dormía.
+        private const float SegundosMandoEnUso = 3f;
+        private static float _ultimoUsoMando = float.NegativeInfinity;
+        public static bool MandoEnUso => Time.unscaledTime - _ultimoUsoMando < SegundosMandoEnUso;
+
         public void TickMandos()
         {
             var gm = GamepadManager.Instance;
@@ -179,6 +187,8 @@ namespace Rediseno.UI
                 elegir = gp.buttonSouth.wasPressedThisFrame;
                 volver = gp.buttonEast.wasPressedThisFrame;
             }
+            if (Mathf.Abs(dx) > 0.3f || Mathf.Abs(dy) > 0.3f || elegir || volver)
+                _ultimoUsoMando = Time.unscaledTime;
 
             // ↑↓ con auto-repetición tipo teclado (RepeticionNav): un paso, pausa, ritmo fijo.
             int paso = _rep.Tick(Mathf.Abs(dy) >= Mathf.Abs(dx) ? dy : 0f, Time.unscaledDeltaTime);
