@@ -37,8 +37,9 @@ namespace Gameplay
         // su simulación (el Sorken va por otro jugador, Veleth se va): sin la copia se
         // escapaba del cuadro y a veces no se llegaba a ver qué había pasado.
         // Por ahora queda quieto; cuando haya animaciones de muerte, van acá.
-        private GameObject _retrato;
+        private GameObject _retrato, _luzRetrato;
         private readonly List<Mesh> _mallasRetrato = new();
+        private static MaterialPropertyBlock _bloque;
         private Vector3 _retratoDesde, _retratoHasta;
         private Quaternion _retratoRotDesde, _retratoRotHasta;
 
@@ -254,6 +255,14 @@ namespace Gameplay
                 go.AddComponent<MeshFilter>().sharedMesh = malla;
                 var mr = go.AddComponent<MeshRenderer>();
                 mr.sharedMaterials = r.sharedMaterials;
+                // Valores por renderer (el revelado de Veleth va por acá): sin copiarlos
+                // el material queda en su default, que puede ser invisible.
+                if (r.HasPropertyBlock())
+                {
+                    _bloque ??= new MaterialPropertyBlock();
+                    r.GetPropertyBlock(_bloque);
+                    mr.SetPropertyBlock(_bloque);
+                }
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 mr.receiveShadows = false;
                 copiados++;
@@ -261,9 +270,24 @@ namespace Gameplay
 
             if (copiados == 0) { Destroy(raiz); return false; }
 
+            // La cara se mide sobre las mallas COPIADAS, no con la que manda el server:
+            // ésa sale de los bounds de todos los renderers, humo incluido, y en el Sorken
+            // quedaba muy por encima de la cabeza — el cuerpo terminaba fuera de cuadro.
+            Vector3 caraLocal = CaraLocal(raiz.transform, facePosition);
+
+            // Luz propia: sin ella la copia queda a oscuras con la linterna apagada.
+            var luz = new GameObject("LuzRetrato").AddComponent<Light>();
+            luz.type = LightType.Point;
+            luz.range = 2.5f;
+            luz.intensity = 1.6f;
+            luz.color = new Color(1f, 0.92f, 0.85f);
+            luz.shadows = LightShadows.None;
+            luz.transform.SetParent(cam.transform, false);
+            luz.transform.localPosition = new Vector3(0f, 0.15f, 0.05f);
+            _luzRetrato = luz.gameObject;
+
             // Pose final, en coords de la cámara: mirándola de frente, con la cara a
             // RetratoDistancia sobre el eje de la vista.
-            Vector3 caraLocal = raiz.transform.InverseTransformPoint(facePosition);
             _retratoRotHasta = Quaternion.LookRotation(Vector3.back, Vector3.up);
             _retratoHasta = Vector3.forward * RetratoDistancia - _retratoRotHasta * caraLocal;
 
@@ -277,10 +301,34 @@ namespace Gameplay
             return true;
         }
 
+        // Cara en coords de la raíz del retrato: centro de las mallas copiadas en planta y
+        // un poco por debajo de su tope (mismo criterio que ServerDeaths.FacePosition, sin
+        // partículas). Sin mallas medibles, la cara que mandó el server.
+        private static Vector3 CaraLocal(Transform raiz, Vector3 caraServer)
+        {
+            bool hay = false;
+            Bounds b = default;
+            foreach (var mr in raiz.GetComponentsInChildren<MeshRenderer>())
+            {
+                if (!hay) { b = mr.bounds; hay = true; }
+                else b.Encapsulate(mr.bounds);
+            }
+            Vector3 cara = hay
+                ? new Vector3(b.center.x, b.max.y - b.extents.y * 0.18f, b.center.z)
+                : caraServer;
+            return raiz.InverseTransformPoint(cara);
+        }
+
+        // Retrato a la vista: DarknessOverlay no oscurece (si no, del asesino sólo se veía
+        // lo que caía en el cono de la linterna, un circulito en el centro).
+        public static bool MostrandoRetrato => Instance != null && Instance._retrato != null;
+
         private void DestruirRetrato()
         {
             if (_retrato != null) Destroy(_retrato);
             _retrato = null;
+            if (_luzRetrato != null) Destroy(_luzRetrato);
+            _luzRetrato = null;
             foreach (var m in _mallasRetrato) if (m != null) Destroy(m);
             _mallasRetrato.Clear();
         }
