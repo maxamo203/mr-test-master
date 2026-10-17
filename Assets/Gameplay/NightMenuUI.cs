@@ -132,7 +132,8 @@ namespace Gameplay
         // lugar de la vieja cuando coincide.
         public bool SinAvisos =>
             !_versionIncompatible && !HayAvisoSalida &&
-            !_mostrarAvisoVersionDesconocida && !_mostrarAvisoIos && _confirmarBorrar == null;
+            !_mostrarAvisoVersionDesconocida && !_mostrarAvisoIos && _confirmarBorrar == null &&
+            !_confirmarEscaner;
         public bool MostrandoPrincipal => SinAvisos && PantallaActual == Pantalla.Menu;
         public bool Mostrando(Pantalla p) => SinAvisos && PantallaActual == p;
         public void VolverPantalla()     => Volver();
@@ -176,8 +177,33 @@ namespace Gameplay
         public void SeleccionarEscenario(string escena) { if (EsJugable(escena)) _mapSel = escena; }
         public void ConfirmarPartida() => Confirmar();
         public void ElegirOtraNoche()  => PantallaActual = Pantalla.Noches;
-        public void EscanearNuevo()    => IrAlEscaner(null);
-        public void EditarEscenario(string escena) => IrAlEscaner(escena);
+        public void EscanearNuevo()    => PedirEscaner(null);
+        public void EditarEscenario(string escena) => PedirEscaner(escena);
+
+        // Rediseño 2.0: el escaneo es lo único que se hace SIN el visor (con el celular en la
+        // mano y tocando la pantalla). Con el visor puesto, ir al escáner primero lo avisa
+        // (AvisoMenu.EscanearSinVisor): aceptar saca del visor y sigue; volver deja todo como
+        // estaba. Guardar el escaneo vuelve al menú, donde el visor se prende de nuevo.
+        private bool _confirmarEscaner;
+        private string _escanerPendiente;
+
+        private void PedirEscaner(string nombre)
+        {
+            if (Rediseno.Flag.Activo && Rediseno.UI.ModoVisor.Activo)
+            {
+                _escanerPendiente = nombre;
+                _confirmarEscaner = true;
+                return;
+            }
+            IrAlEscaner(nombre);
+        }
+
+        public void EscanearSinVisor()
+        {
+            _confirmarEscaner = false;
+            Rediseno.UI.ModoVisor.Set(false);
+            IrAlEscaner(_escanerPendiente);
+        }
         public void CrearSala() => ConfigurarPartida(GameSession.SessionMode.MultiHost);
         public void Unirse()    => UnirseComoCliente();
 
@@ -199,12 +225,13 @@ namespace Gameplay
 
         // Avisos modales del menú, en el mismo orden de precedencia que OnGUI. Los dibuja
         // Rediseno.Menus.AvisoMenu2 con el flag prendido.
-        public enum AvisoMenu { Ninguno, VersionIncompatible, Salida, VersionDesconocida, Ios }
+        public enum AvisoMenu { Ninguno, VersionIncompatible, Salida, VersionDesconocida, Ios, EscanearSinVisor }
         public AvisoMenu AvisoActual =>
             _versionIncompatible            ? AvisoMenu.VersionIncompatible :
             HayAvisoSalida                  ? AvisoMenu.Salida :
             _mostrarAvisoVersionDesconocida ? AvisoMenu.VersionDesconocida :
-            _mostrarAvisoIos                ? AvisoMenu.Ios : AvisoMenu.Ninguno;
+            _mostrarAvisoIos                ? AvisoMenu.Ios :
+            _confirmarEscaner               ? AvisoMenu.EscanearSinVisor : AvisoMenu.Ninguno;
         public string TextoAvisoSalida => GameSession.Instance != null ? GameSession.Instance.AvisoSalida : null;
         // El bloqueo por versión no se cierra (Volver tampoco lo hace): sólo SALIR.
         public void CerrarAviso() => Volver();
@@ -248,6 +275,7 @@ namespace Gameplay
             if (_mostrarAvisoVersionDesconocida) { CerrarAvisoVersionDesconocida(); return; }
             if (_mostrarAvisoIos) { CerrarAvisoIos(); return; }
             if (_confirmarBorrar != null) { _confirmarBorrar = null; return; }
+            if (_confirmarEscaner) { _confirmarEscaner = false; return; }
 
             switch (PantallaActual)
             {

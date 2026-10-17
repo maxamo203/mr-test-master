@@ -69,8 +69,14 @@ namespace Rediseno.Menus
         {
             string titulo, texto;
             bool bloquea = aviso == NightMenuUI.AvisoMenu.VersionIncompatible;
+            bool escanear = aviso == NightMenuUI.AvisoMenu.EscanearSinVisor;
             switch (aviso)
             {
+                case NightMenuUI.AvisoMenu.EscanearSinVisor:
+                    titulo = "EL ESCANEO SE HACE SIN EL VISOR";
+                    texto = "Sacá el celular del visor: se escanea con el celular en la mano, tocando la " +
+                            "pantalla. Cuando guardes el escaneo volvés al menú y te ponés el visor de nuevo.";
+                    break;
                 case NightMenuUI.AvisoMenu.VersionIncompatible:
                     titulo = "VERSIÓN NO COMPATIBLE";
                     texto = "La versión de tu dispositivo no es compatible con el juego. " +
@@ -108,7 +114,17 @@ namespace Rediseno.Menus
             _cuerpo.Add(t);
 
             VisualElement boton;
-            if (bloquea)
+            if (escanear)
+            {
+                boton = PiezasUI.Boton(Nav, "ESCANEAR SIN EL VISOR", () => NightMenuUI.Instance?.EscanearSinVisor());
+                boton.style.backgroundImage = TemaUI.DegradeRojo;
+                boton.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
+                boton.style.marginTop = 8;
+                _cuerpo.Add(boton);
+                boton = PiezasUI.Boton(Nav, "VOLVER", () => NightMenuUI.Instance?.CerrarAviso());
+                Nav.Volver = () => NightMenuUI.Instance?.CerrarAviso();
+            }
+            else if (bloquea)
             {
                 boton = PiezasUI.Boton(Nav, "SALIR", NightMenuUI.Salir, peligro: true);
                 Nav.Volver = null;   // no se puede omitir

@@ -38,7 +38,7 @@ namespace Rediseno.Menus
             lista.Add(nuevo);
             if (EnVisor)
             {
-                var nota = TemaUI.Texto("Escanear se hace con el celular en la mano: al entrar se sale del visor.",
+                var nota = TemaUI.Texto("Escanear se hace con el celular en la mano, sin el visor.",
                                         TemaUI.Mono, 24, TemaUI.Dim);
                 nota.style.marginBottom = 8;
                 lista.Add(nota);
@@ -110,7 +110,7 @@ namespace Rediseno.Menus
         {
             var menu = NightMenuUI.Instance;
             if (menu == null) return;
-            ModoVisor.Set(false);
+            // Con el visor puesto, NightMenuUI avisa primero que el escaneo se hace sin él.
             if (nombre == null) menu.EscanearNuevo(); else menu.EditarEscenario(nombre);
         }
 
