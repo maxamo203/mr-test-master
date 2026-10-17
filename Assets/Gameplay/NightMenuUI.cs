@@ -155,11 +155,19 @@ namespace Gameplay
             if (PantallaActual != Pantalla.Noches) return;
             var n = Nights;
             if (n != null && noche >= 0 && noche < n.Length && n[noche] != null && NightProgress.Desbloqueada(noche))
+            {
                 SeleccionarNoche(noche);
+                _entornoDesdeContinuar = true;
+            }
         }
+
+        // ¿Se llegó a ¿DÓNDE JUGÁS? con CONTINUAR (salteando la grilla de noches)? Entonces
+        // "volver" regresa al menú principal, de donde se vino, y no a la grilla.
+        private bool _entornoDesdeContinuar;
 
         public void SeleccionarNoche(int i)
         {
+            _entornoDesdeContinuar = false;
             _nocheSel = i;
             PreseleccionarEscenario();
             PantallaActual = Pantalla.Entorno;
@@ -244,7 +252,10 @@ namespace Gameplay
                 case Pantalla.CrearUnirse: PantallaActual = Pantalla.Menu; break;
                 case Pantalla.SinEntorno:
                 case Pantalla.Noches:      VolverDeSubflujo(); break;
-                case Pantalla.Entorno:     PantallaActual = Pantalla.Noches; break;
+                case Pantalla.Entorno:
+                    PantallaActual = _entornoDesdeContinuar ? Pantalla.Menu : Pantalla.Noches;
+                    _entornoDesdeContinuar = false;
+                    break;
                 case Pantalla.Escaneos:    PantallaActual = Pantalla.Menu; break;
                 case Pantalla.Opciones:    PantallaActual = Pantalla.Menu; break;
                 case Pantalla.Control:     PantallaActual = Pantalla.Opciones; break;
