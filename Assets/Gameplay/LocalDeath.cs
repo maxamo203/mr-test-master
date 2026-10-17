@@ -63,7 +63,22 @@ namespace Gameplay
                 NetworkManager.Instance.OnPlayerDied += DieFromNetwork;
                 _subscribed = true;
             }
+
+            // Red de seguridad: muerto y sin pantalla de muerte bastante después de lo que
+            // tarda la presentación (algo de la secuencia falló en el dispositivo). Sin esto
+            // la noche quedaba "congelada": el jugador muerto para el juego (reloj parado,
+            // sin entidades) pero sin MORISTE ni forma de seguir.
+            if (IsDead && !PresentationReady &&
+                Time.unscaledTime - _muerteEn > RevealSeconds + RetratoSostenSeconds + 3f)
+            {
+                Debug.LogWarning("[LocalDeath] La pantalla de muerte no apareció a tiempo: se fuerza.");
+                if (_sequence != null) { StopCoroutine(_sequence); _sequence = null; }
+                try { HideKiller(); } catch (System.Exception e) { Debug.LogException(e); }
+                PresentationReady = true;
+            }
         }
+
+        private float _muerteEn;
 
         private void LateUpdate()
         {
@@ -131,11 +146,18 @@ namespace Gameplay
             CollectibleProgress.RegistrarIntento(GameSession.Instance != null ? GameSession.Instance.NightIndex : -1,
                                                   NightLoot.Total);
             PresentationReady = false;
+            _muerteEn = Time.unscaledTime;
             _killerNetworkId = killerNetworkId;
-            AudioManager.PresentarMuerte(ResolverTipoAsesino(killerNetworkId));
+            // La presentación (sonido, copia del asesino) no puede cortar Die: si algo de eso
+            // tira una excepción en el dispositivo, igual se termina la noche y sale MORISTE.
+            try { AudioManager.PresentarMuerte(ResolverTipoAsesino(killerNetworkId)); }
+            catch (System.Exception e) { Debug.LogException(e); }
             // Sin asesino que copiar (id desconocido, entidad ya destruida) queda el
             // zoom de siempre con la cámara congelada.
-            if (!CrearRetrato(killerFacePosition)) ZoomTowardsFace(killerFacePosition);
+            bool retrato = false;
+            try { retrato = CrearRetrato(killerFacePosition); }
+            catch (System.Exception e) { Debug.LogException(e); DestruirRetrato(); }
+            if (!retrato) ZoomTowardsFace(killerFacePosition);
 
             if (allPlayersDead) { TerminarNoche(); StopGameplayForAll(); }
             _sequence = StartCoroutine(ShowScreenAfterReveal());
@@ -189,7 +211,7 @@ namespace Gameplay
             // siempre pasa a la pantalla apenas termina.
             float espera = RevealSeconds + (_retrato != null ? RetratoSostenSeconds : 0f);
             yield return new WaitForSecondsRealtime(espera);
-            HideKiller();
+            try { HideKiller(); } catch (System.Exception e) { Debug.LogException(e); }
             PresentationReady = true;
             _sequence = null;
         }
@@ -221,6 +243,9 @@ namespace Gameplay
             var origen = killer.transform;
             var raiz = new GameObject("RetratoAsesino");
             raiz.transform.SetPositionAndRotation(origen.position, origen.rotation);
+            // Registrado desde ya: si algo de abajo tira una excepción, DestruirRetrato (en el
+            // catch de Die) también se lleva lo que quedó a medio armar.
+            _retrato = raiz;
 
             int copiados = 0;
             foreach (var r in killer.GetComponentsInChildren<Renderer>())
@@ -259,7 +284,7 @@ namespace Gameplay
                 copiados++;
             }
 
-            if (copiados == 0) { Destroy(raiz); return false; }
+            if (copiados == 0) { Destroy(raiz); _retrato = null; return false; }
 
             // Pose final, en coords de la cámara: mirándola de frente, con la cara a
             // RetratoDistancia sobre el eje de la vista.
