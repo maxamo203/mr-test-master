@@ -40,7 +40,13 @@ namespace Rediseno.Menus
         protected virtual Texture2D ArteFondo => TarjetasNoche.Arte(0);
 
         protected VisualElement Lista;
-        private VisualElement _fondo, _volver;
+        private VisualElement _fondo, _volver, _pie;
+
+        // Botones fijos debajo de la lista (ArmarPie). La lista toma el alto de su
+        // contenido y sólo se encoge —desplazándose— cuando no entra: el pie queda pegado
+        // a la lista y, como mucho, abajo de la pantalla. Sin pie, la lista ocupa todo.
+        protected virtual bool ConPie => false;
+        protected virtual void ArmarPie(VisualElement pie, MenuNavegable nav) { }
 
         protected override bool EsVisible()
         {
@@ -66,6 +72,15 @@ namespace Rediseno.Menus
             Desplazable = sv;
             col.Add(sv);
             Lista = sv;
+            if (ConPie)
+            {
+                sv.style.flexGrow = 0;
+                sv.style.flexShrink = 1;
+                _pie = PiezasUI.Ignorar(new VisualElement());
+                _pie.style.flexShrink = 0;
+                _pie.style.paddingTop = 10;
+                col.Add(_pie);
+            }
             nav.Volver = AlVolver;
             Rearmar();
         }
@@ -75,8 +90,10 @@ namespace Rediseno.Menus
         {
             if (Lista == null) return;
             Lista.Clear();
+            _pie?.Clear();
             Nav.Limpiar();
             Armar(Lista, Nav);
+            if (_pie != null) ArmarPie(_pie, Nav);
             // "Volver" al final del orden: el foco inicial cae en el contenido.
             Nav.Agregar(_volver, AlVolver);
         }
@@ -145,12 +162,6 @@ namespace Rediseno.Menus
         {
             var menu = NightMenuUI.Instance;
             if (menu == null) return;
-            int n = menu.NocheElegida;
-            var noches = menu.Catalogo;
-            string nombreNoche = noches != null && n >= 0 && n < noches.Length && noches[n] != null &&
-                                 !string.IsNullOrEmpty(noches[n].displayName)
-                ? noches[n].displayName.ToUpperInvariant() : "";
-
             string esc = menu.EscenarioElegido;
             lista.Add(PiezasUI.Seccion("ESCENARIO"));
             foreach (var nombre in menu.Escenarios)
@@ -183,6 +194,22 @@ namespace Rediseno.Menus
                     Rearmar();
                 }, habilitada: ok);
             }
+        }
+
+        // JUGAR y ELEGIR OTRA NOCHE van en el pie: con muchos escenarios se desplaza la lista
+        // y los botones quedan siempre a la vista, abajo.
+        protected override bool ConPie => true;
+
+        protected override void ArmarPie(VisualElement pie, MenuNavegable nav)
+        {
+            var menu = NightMenuUI.Instance;
+            if (menu == null) return;
+            int n = menu.NocheElegida;
+            var noches = menu.Catalogo;
+            string nombreNoche = noches != null && n >= 0 && n < noches.Length && noches[n] != null &&
+                                 !string.IsNullOrEmpty(noches[n].displayName)
+                ? noches[n].displayName.ToUpperInvariant() : "";
+            string esc = menu.EscenarioElegido;
 
             // JUGAR abajo de los escenarios (se elige dónde y después se juega), pero con el
             // foco puesto: con el escenario ya preseleccionado, basta una A para arrancar.
@@ -201,14 +228,16 @@ namespace Rediseno.Menus
             sub.style.marginTop = 6;
             jugar.Add(sub);
             if (string.IsNullOrEmpty(esc)) jugar.style.opacity = 0.5f;
-            lista.Add(jugar);
+            pie.Add(jugar);
             var opJugar = nav.Agregar(jugar, () => NightMenuUI.Instance?.ConfirmarPartida(), habilitada: !string.IsNullOrEmpty(esc));
             if (opJugar.Habilitada) nav.Enfocar(opJugar);
 
-            lista.Add(PiezasUI.Boton(nav, "ELEGIR OTRA NOCHE", () => NightMenuUI.Instance?.ElegirOtraNoche()));
+            var otra = PiezasUI.Boton(nav, "ELEGIR OTRA NOCHE", () => NightMenuUI.Instance?.ElegirOtraNoche());
+            otra.style.marginBottom = 0;
+            pie.Add(otra);
 
             if (menu.CreandoSala)
-                lista.Add(PiezasUI.Seccion($"SALA EN EL PUERTO {NetworkConfig.DefaultPort} (para cambiarlo, apagá el rediseño)"));
+                pie.Add(PiezasUI.Seccion($"SALA EN EL PUERTO {NetworkConfig.DefaultPort} (para cambiarlo, apagá el rediseño)"));
         }
     }
 

@@ -87,8 +87,8 @@ public class AnchorQuality : MonoBehaviour
 
         // Barrita: fondo tenue + relleno proporcional al score.
         var barra = new Rect(cx - 44f, cy + 68f, 88f, 4f);
-        MortuoriumTheme.Fill(barra, new Color(1f, 1f, 1f, 0.12f));
-        MortuoriumTheme.Fill(new Rect(barra.x, barra.y, barra.width * Mathf.Clamp01(_score), barra.height), col);
+        MortuoriumTheme.FillR(barra, new Color(1f, 1f, 1f, 0.12f), 2f);
+        MortuoriumTheme.FillR(new Rect(barra.x, barra.y, barra.width * Mathf.Clamp01(_score), barra.height), col, 2f);
 
         string consejo = Consejo;
         if (!string.IsNullOrEmpty(consejo))

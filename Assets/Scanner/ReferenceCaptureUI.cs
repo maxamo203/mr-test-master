@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.EnhancedTouch;
 using ETouch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 using T = MortuoriumTheme;
+using Tutorial = Rediseno.Escaner.TutorialEscaneo;
 
 namespace Scanner
 {
@@ -73,7 +74,12 @@ namespace Scanner
             _imageAnchor != null &&
             ScanStateMachine.Instance != null &&
             ScanStateMachine.Instance.Current == ScannerMode.Calibrating &&
-            !_imageAnchor.IsFound;
+            !_imageAnchor.IsFound &&
+            !Tutorial.TapaEscaner;   // la hoja del tutorial tapa esta pantalla y se lleva los toques
+
+        // Para el tutorial de escaneo (qué sub-paso mostrar).
+        public bool EnConfirmar => _phase == Phase.Confirm;
+        public bool Esperando   => _phase == Phase.Waiting;
 
         private void Awake()
         {
@@ -385,8 +391,32 @@ namespace Scanner
             T.FillOutsideSafeArea(T.Bg);
 
             DrawCaptureUI();
+            RegistrarZonasUI();
 
             GUI.matrix = prev;
+        }
+
+        // El input de esta pantalla se lee crudo en Update (no son GUI.Button), así que
+        // nadie más se entera de que el puntero cayó sobre un control: sin esto, arrastrar
+        // el recuadro o el slider en el editor también giraba la cámara
+        // (EditorPlayerControls). Px reales, igual que el dibujo.
+        private void RegistrarZonasUI()
+        {
+            if (_phase == Phase.Waiting)
+            {
+                UIBlocker.AddScreenRect(CaptureBtn());
+                return;
+            }
+            if (_phase == Phase.Adjust)
+            {
+                UIBlocker.AddScreenRect(_sel);
+                UIBlocker.AddScreenRect(CaptureBtn());
+                UIBlocker.AddScreenRect(SinImagenBtn());
+                return;
+            }
+            // Confirm: todo el panel inferior (slider, número y los dos botones).
+            float panelTop = SliderRow().y - Screen.height * 0.05f;
+            UIBlocker.AddScreenRect(new Rect(0f, panelTop, Screen.width, Screen.height - panelTop));
         }
 
         private int FsBtn   => Mathf.RoundToInt(Screen.height * 0.024f);
@@ -401,8 +431,9 @@ namespace Scanner
             {
                 DrawGhostOverlay();
 
-                var r = new Rect(0, sh * 0.45f, sw, sh * 0.1f);
-                T.Fill(r, new Color(0f, 0f, 0f, 0.6f));
+                var r = new Rect(sw * 0.06f, sh * 0.45f, sw * 0.88f, sh * 0.1f);
+                if (Event.current.type == EventType.Repaint) T.Tarjeta2(r, T.Hoja2, null, RadioCard, Grosor);
+                r = new Rect(r.x + r.width * 0.04f, r.y, r.width * 0.92f, r.height);
                 // Mientras junta muestras de la pose se avisa que ya la vio: así el
                 // jugador no mueve el celular justo cuando está afinando.
                 bool afinando = _imageAnchor != null && _imageAnchor.MuestrasActuales > 0;
@@ -427,10 +458,11 @@ namespace Scanner
             if (_phase == Phase.Adjust)
             {
                 // Esquina para redimensionar (tan) + guía de las 4 esquinas.
-                T.Fill(HandleRect(), T.Tan);
+                if (Event.current.type == EventType.Repaint) T.FillR(HandleRect(), T.Tan, Hsz() * 0.3f);
 
                 DrawTopLabel("Ajustá el recuadro sobre una zona con detalle y tocá CAPTURAR");
                 DrawBtn(CaptureBtn(), "CAPTURAR", primario: true);
+                Tutorial.Resaltar("capturar", CaptureBtn(), BtnH * 0.5f);
 
                 // Retícula mínima al centro: el escape de abajo ancla el mapa donde
                 // apunta, así que hay que ver a dónde se está apuntando.
@@ -450,7 +482,10 @@ namespace Scanner
 
                 // Panel inferior para leer los controles sobre la cámara/preview.
                 float panelTop = SliderRow().y - sh * 0.05f;
-                T.Fill(new Rect(0, panelTop, sw, sh - panelTop), new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.82f));
+                // Hoja redondeada arriba (las esquinas de abajo quedan fuera de pantalla).
+                if (Event.current.type == EventType.Repaint)
+                    T.Tarjeta2(new Rect(0, panelTop, sw, sh - panelTop + RadioCard * 3f), T.Hoja2, null,
+                               RadioCard * 2.5f, Grosor);
 
                 // Orientación estimada (el jugador la ve y, si no coincide, sabe que tiene
                 // que capturar mirando al piso o de frente a la pared) + aviso de calidad.
@@ -474,6 +509,7 @@ namespace Scanner
 
                 DrawBtn(RecaptureBtn(), "RECAPTURAR", primario: false);
                 DrawBtn(ConfirmBtn(),   "CONFIRMAR",  primario: true);
+                Tutorial.Resaltar("confirmar", ConfirmBtn(), BtnH * 0.5f);
             }
         }
 
@@ -482,19 +518,21 @@ namespace Scanner
         {
             // El thumb se clampea al final si el valor (por texto) supera el máx del slider.
             float t = Mathf.InverseLerp(MinCm, SliderMaxCm, _widthMeters * 100f);
-            var track = new Rect(row.x, row.y + row.height * 0.5f - 3f, row.width, 6f);
-            T.Fill(track, T.BorderDim);
-            T.Fill(new Rect(track.x, track.y, track.width * t, track.height), T.Red);
+            if (Event.current.type != EventType.Repaint) return;
+            float alto = Mathf.Max(6f, Screen.height * 0.005f);
+            var track = new Rect(row.x, row.y + row.height * 0.5f - alto * 0.5f, row.width, alto);
+            T.FillR(track, new Color(1f, 1f, 1f, 0.10f), alto * 0.5f);
+            if (t > 0f) T.FillR(new Rect(track.x, track.y, track.width * t, track.height), T.Tan, alto * 0.5f);
 
-            var thumb = new Rect(row.x + row.width * t - 9f, row.y + row.height * 0.5f - 16f, 18f, 32f);
-            T.Fill(thumb, T.Cream);
-            T.Borde(thumb, T.Red, 2f);
+            float d = Mathf.Max(22f, Screen.height * 0.02f);
+            var thumb = new Rect(row.x + row.width * t - d * 0.5f, row.y + row.height * 0.5f - d * 0.5f, d, d);
+            T.FillR(thumb, T.Cream, d * 0.5f);
         }
 
         private void DrawNumBox(Rect box)
         {
-            T.Fill(box, T.BgField);
-            T.Borde(box, _editing ? T.Tan : T.Border);
+            if (Event.current.type == EventType.Repaint)
+                T.Tarjeta2(box, T.BgField, _editing ? T.Tan : null, RadioCard, Grosor * (_editing ? 1.6f : 1f));
             var inner = new Rect(box.x + 10f, box.y, box.width - 20f, box.height);
             var st = T.Estilo(T.FMono, FsNum, T.Cream, TextAnchor.MiddleCenter);
 
@@ -568,21 +606,29 @@ namespace Scanner
 
         // ── Dibujo helpers ────────────────────────────────────────────────────────
         // Botón temático (solo visual; el tap lo dispara HandleButtonTap por EnhancedTouch).
+        // Estilo 2.0: píldora con degradé rojo (principal) o tarjeta (secundario).
         private void DrawBtn(Rect r, string label, bool primario)
         {
-            T.Fill(r, primario ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.20f)
-                               : new Color(0f, 0f, 0f, 0.5f));
-            T.Borde(r, primario ? T.Red : T.Border);
+            if (Event.current.type == EventType.Repaint)
+            {
+                float radio = r.height * 0.5f;
+                if (primario) { T.FillRojo(r, radio); T.BordeR(r, new Color(1f, 1f, 1f, 0.10f), radio); }
+                else T.Tarjeta2(r, T.Panel2, null, radio, Grosor);
+            }
             GUI.Label(r, label, T.Estilo(T.FBebas, FsBtn, T.Cream, TextAnchor.MiddleCenter));
         }
+
+        // Esta pantalla dibuja en px reales (sin la escala de UIScale): radio de las
+        // tarjetas y grosor del borde proporcionales a la pantalla.
+        private static float RadioCard => Screen.height * 0.012f;
+        private static float Grosor => Mathf.Max(1.5f, Screen.height * 0.0012f);
 
         // Aviso sobre la imagen (calidad del recorte / rechazo del sistema AR): franja
         // oscura con texto dorado, a 2 líneas, en px reales. `y` es el borde superior.
         private void DrawAviso(string texto, float y)
         {
             var r = new Rect(Screen.width * 0.06f, y, Screen.width * 0.88f, Screen.height * 0.07f);
-            T.Fill(r, new Color(0f, 0f, 0f, 0.7f));
-            T.Borde(r, T.Tan, 2f);
+            if (Event.current.type == EventType.Repaint) T.Tarjeta2(r, T.Hoja2, T.Tan, RadioCard, Grosor * 1.4f);
             GUI.Label(new Rect(r.x + 10f, r.y, r.width - 20f, r.height), texto,
                       T.Estilo(T.FMono, FsLabel, T.Tan, TextAnchor.MiddleCenter, wrap: true));
         }
@@ -602,6 +648,9 @@ namespace Scanner
 
         private void DrawTopLabel(string msg)
         {
+            // El banner del tutorial va en este mismo lugar y da la indicación del paso.
+            if (Tutorial.GuiaVisible) return;
+
             // Wrap a 2 líneas: sin esto, con MiddleCenter y una sola línea, mensajes
             // largos como "ajustá el recuadro..." se recortaban simétrico en los dos
             // extremos (ej. "Está el recuadro... CAPTURAR" -> "stá el recuadro...
@@ -612,8 +661,9 @@ namespace Scanner
             // coordenadas virtuales de UIScale — convertimos su borde inferior a
             // píxeles reales para no superponernos.
             float pauseBottomReal = Scanner.SafeArea.Top + (28f + 60f) * UIScale.Factor + 8f;
-            var r = new Rect(0, pauseBottomReal, Screen.width, Screen.height * 0.065f);
-            T.Fill(r, new Color(0f, 0f, 0f, 0.5f));
+            var r = new Rect(Screen.width * 0.04f, pauseBottomReal, Screen.width * 0.92f, Screen.height * 0.065f);
+            if (Event.current.type == EventType.Repaint) T.Tarjeta2(r, T.Hoja2, null, RadioCard, Grosor);
+            r = new Rect(r.x + r.width * 0.03f, r.y, r.width * 0.94f, r.height);
             // Blanco puro solo en Android: ahí T.CreamDim se ve apagado/gris (mismo
             // motivo que el resto de los ajustes de esta rama — ver MortuoriumTheme).
             var color = Application.platform == RuntimePlatform.Android ? Color.white : T.CreamDim;

@@ -1,5 +1,6 @@
 using UnityEngine;
 using T = MortuoriumTheme;
+using Tutorial = Rediseno.Escaner.TutorialEscaneo;
 
 namespace Scanner
 {
@@ -43,6 +44,7 @@ namespace Scanner
             if (_fsm.Current != ScannerMode.Selected) return;
             // Con overlay de guardado abierto no dibujamos.
             if (SaveLoadUI.EstaAbierto) return;
+            if (Tutorial.TapaEscaner) return;
 
             var sel = _fsm.CurrentSelection;
             UIScale.Begin();
@@ -168,10 +170,10 @@ namespace Scanner
             float bottom = ReticleController.ContextBottomY(vh);
             var panel = new Rect(Pad, bottom - panelH, vw - Pad * 2f, panelH);
             UIBlocker.AddVirtualRect(panel);
-            T.Fill(panel, new Color(0f, 0f, 0f, 0.82f));
-            T.Borde(panel, T.Border);
-            GUI.Label(new Rect(panel.x + PadIn, panel.y + 8f, panel.width - PadIn * 2f, 26f), titulo,
-                      T.Estilo(T.FBebas, 18, T.Cream));
+            // Tarjeta oscura redondeada (estilo 2.0), igual que el panel contextual.
+            if (Event.current.type == EventType.Repaint) T.Tarjeta2(panel, T.Hoja2, null, 18f);
+            GUI.Label(new Rect(panel.x + PadIn, panel.y + 6f, panel.width - PadIn * 2f, 28f), titulo,
+                      T.Estilo(T.FBebas, 22, T.Cream));
             x = panel.x + PadIn;
             iw = panel.width - PadIn * 2f;
             y = panel.y + TitleBlock;
@@ -185,12 +187,23 @@ namespace Scanner
             GUI.Label(new Rect(x, y, iw * 0.46f, 24f),
                       $"{label}: {string.Format(fmt, value)}",
                       T.Estilo(T.FMono, 11, T.CreamDim, TextAnchor.MiddleLeft));
-            float nv = T.Slider(new Rect(x + iw * 0.48f, y + 4f, iw * 0.52f, 22f), value, min, max);
+            float nv = T.Slider2(new Rect(x + iw * 0.48f, y + 4f, iw * 0.52f, 22f), value, min, max);
             y += G + SlH;
             return nv;
         }
 
-        private void Btn(Rect r, string label, bool primario, System.Action onClick, bool enabled = true) =>
-            T.Boton(null, r, label, primario, onClick, enabled, fontSize: 14);
+        private void Btn(Rect r, string label, bool primario, System.Action onClick, bool enabled = true)
+        {
+            T.Boton2(null, r, label, primario, onClick, enabled, fontSize: 14);
+            // Los botones que el tutorial de escaneo puede pedir.
+            string clave = label switch
+            {
+                "MOVER AL PISO" => "mover-al-piso",
+                "DESELECCIONAR" => "deseleccionar",
+                "LISTO"         => "listo-edicion",
+                _ => null,
+            };
+            if (clave != null && enabled) Tutorial.Resaltar(clave, r);
+        }
     }
 }

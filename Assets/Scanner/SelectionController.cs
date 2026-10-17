@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.EnhancedTouch;
-using UnityEngine.SceneManagement;
 using ETouch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 
 namespace Scanner
@@ -67,29 +66,29 @@ namespace Scanner
 
             // 2) Mouse (editor / PC)
             var ms = Mouse.current;
-            if (ms != null && ms.leftButton.wasReleasedThisFrame)
+            if (ms == null) return;
+            if (ms.leftButton.wasPressedThisFrame) _mouseDownPos = ms.position.ReadValue();
+            if (ms.leftButton.wasReleasedThisFrame)
             {
-                _diagState = "Mouse.Released";
                 _lastTapPos = ms.position.ReadValue();
-#if UNITY_EDITOR
-                // Con el cursor bloqueado, Mouse.position puede quedar oculto en una
-                // coordenada vieja. Para el testing en PC el clic selecciona exactamente
-                // lo que el jugador está mirando en el centro de la cámara.
-                if (ShouldUseEditorCenterClick(SceneManager.GetActiveScene().name,
-                                               Cursor.lockState == CursorLockMode.Locked))
-                    _lastTapPos = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
-#endif
                 _lastTapFrame = Time.frameCount;
+                // Este frame ya está resuelto: el fallback de OnGUI no debe pickear tampoco.
                 _lastPickFrame = Time.frameCount;
+                // Soltar después de arrastrar para mirar (EditorPlayerControls) no es un clic:
+                // si no, terminar de girar la cámara seleccionaba la pared que quedó abajo.
+                if ((_lastTapPos - _mouseDownPos).sqrMagnitude > MaxArrastreClicPx * MaxArrastreClicPx)
+                {
+                    _diagState = "Mouse.Released (arrastre, ignorado)";
+                    return;
+                }
+                _diagState = "Mouse.Released";
                 TryPick(_lastTapPos);
-                return;
             }
         }
 
-#if UNITY_EDITOR
-        public static bool ShouldUseEditorCenterClick(string sceneName, bool cursorLocked) =>
-            sceneName == "ScannerScene" && cursorLocked;
-#endif
+        // Más que esto entre apretar y soltar el mouse = arrastre, no clic.
+        private const float MaxArrastreClicPx = 8f;
+        private Vector2 _mouseDownPos;
 
         private void OnGUI()
         {
@@ -101,11 +100,6 @@ namespace Scanner
                 {
                     _diagState = "IMGUI.MouseUp";
                     _lastTapPos = new Vector2(e.mousePosition.x, Screen.height - e.mousePosition.y);
-#if UNITY_EDITOR
-                    if (ShouldUseEditorCenterClick(SceneManager.GetActiveScene().name,
-                                                   Cursor.lockState == CursorLockMode.Locked))
-                        _lastTapPos = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
-#endif
                     _lastTapFrame = Time.frameCount;
                     _lastPickFrame = Time.frameCount;
                     TryPick(_lastTapPos);
