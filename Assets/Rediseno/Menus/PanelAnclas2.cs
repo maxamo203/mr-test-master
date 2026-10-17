@@ -13,8 +13,9 @@ namespace Rediseno.Menus
     //
     // Visor SIN joystick (menús quietos en el cuarto, se elige mirando): no hay botón COLOCAR
     // ANCLA — para "apretarlo" había que mirarlo, y así se dejaba de apuntar adonde iba el
-    // ancla. En cambio: quedarse quieto apuntando a un punto ~1,5 s llena un anillo
-    // ("CONFIRMANDO ANCLA"); al llenarse aparece el ancla semitransparente en ese punto y el
+    // ancla. En cambio: quedarse quieto apuntando a un punto 1,5 s hace aparecer un anillo
+    // ("CONFIRMANDO ANCLA") que se llena en 1 s más; al llenarse aparece el ancla
+    // semitransparente en ese punto y el
     // cartel "¿CONFIRMAR EL ANCLA?" con SÍ / NO, que se eligen mirando.
     public class PanelAnclas2 : PantallaUI
     {
@@ -35,14 +36,18 @@ namespace Rediseno.Menus
             new GameObject("PanelAnclas2").AddComponent<PanelAnclas2>();
         }
 
-        private const float SegundosApuntar = 1.5f;
+        // Primero hay que quedarse quieto apuntando SegundosQuieto sin que se vea nada (caminando
+        // no aparece ni parpadea); recién ahí aparece el anillo, que se llena en SegundosCarga.
+        private const float SegundosQuieto = 1.5f;
+        private const float SegundosCarga = 1f;
         private const float ToleranciaQuieto = 0.08f;   // metros que puede moverse el punto apuntado
 
         private ARLobbyManager _lobby;
         private VisualElement _tarjeta;
 
         // Visor sin joystick: apuntar quieto → vista previa → confirmar.
-        private float _carga;              // 0..1 del anillo
+        private float _quietoT;            // segundos apuntando quieto al mismo punto
+        private float _carga;              // 0..1 del anillo (sólo después de SegundosQuieto)
         private Vector3 _puntoInicio;
         private bool _hayInicio;
         private string _motivo;            // por qué no se puede poner acá (muy cerca, etc.)
@@ -201,24 +206,30 @@ namespace Rediseno.Menus
             _frioApuntar -= dt;
             if (_confirmando || !mgr.PuedeColocar || _frioApuntar > 0f || MirandoLaTarjeta())
             {
-                _carga = 0f; _hayInicio = false; _motivo = null;
+                _carga = 0f; _quietoT = 0f; _hayInicio = false; _motivo = null;
                 return;
             }
             var hit = mgr.UltimoHit;
-            bool valido = mgr.ValidarPunto(hit, out _motivo);
-            if (!hit.Hit) _motivo = null;   // no apunta a nada: sin cartel
-            if (!valido || !_hayInicio || (hit.Position - _puntoInicio).sqrMagnitude > ToleranciaQuieto * ToleranciaQuieto)
+            bool valido = mgr.ValidarPunto(hit, out var motivo);
+            if (!hit.Hit || (hit.Position - _puntoInicio).sqrMagnitude > ToleranciaQuieto * ToleranciaQuieto || !_hayInicio)
             {
-                // Se movió (o el punto no sirve): el anillo arranca de nuevo desde acá.
+                // Se movió: todo arranca de nuevo desde acá, sin mostrar nada.
                 _puntoInicio = hit.Position;
-                _hayInicio = valido;
-                _carga = 0f;
+                _hayInicio = hit.Hit;
+                _quietoT = 0f; _carga = 0f; _motivo = null;
                 return;
             }
-            _carga += dt / SegundosApuntar;
+            _quietoT += dt;
+            if (_quietoT < SegundosQuieto) { _carga = 0f; _motivo = null; return; }
+            // Quieto el tiempo suficiente: recién ahora se muestra el anillo (o por qué ese
+            // punto no sirve, en vez del anillo).
+            if (!valido) { _motivo = motivo; _carga = 0f; return; }
+            _motivo = null;
+            _carga += dt / SegundosCarga;
             if (_carga < 1f) return;
 
             _carga = 0f;
+            _quietoT = 0f;
             _hayInicio = false;
             _hitFijo = hit;
             _rotFija = mgr.RumboCamara();
@@ -319,10 +330,11 @@ namespace Rediseno.Menus
         // quieto, o el motivo si ese punto no sirve.
         private void DibujarApuntar()
         {
+            bool cargando = _quietoT >= SegundosQuieto && string.IsNullOrEmpty(_motivo);
             string texto = !string.IsNullOrEmpty(_motivo) ? _motivo.ToUpperInvariant()
-                         : _carga > 0.02f ? "CONFIRMANDO ANCLA" : null;
+                         : cargando ? "CONFIRMANDO ANCLA" : null;
             if (texto == null) return;
-            if (_carga > 0.02f) Rediseno.AnilloHud.Dibujar(_carga, TemaUI.Tan, null);
+            if (cargando) Rediseno.AnilloHud.Dibujar(Mathf.Max(_carga, 0.001f), TemaUI.Tan, null);
             var prevM = GUI.matrix; var prevC = GUI.color;
             GUI.matrix = Matrix4x4.identity;
             float s = Screen.height / 1080f;
