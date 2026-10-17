@@ -1057,7 +1057,9 @@ namespace Gamepad
                 {
                     Toggle();
                 }
-                else if (_open)
+                // Rediseño 2.0: con el VR BOX la A llega como clic de mouse donde está el cursor
+                // escondido; no puede tocar el ítem que caiga debajo (la A elige el enfocado).
+                else if (_open && !(Rediseno.Flag.Activo && vrBoxMouse && tapDeMouse))
                 {
                     // Si estabas editando y el tap NO cae en ese campo, confirmar la edición.
                     if (_editingSlider != null)
@@ -1110,9 +1112,17 @@ namespace Gamepad
             {
                 if (_items.Count > 0)
                 {
-                    // Rediseño 2.0: la B (pulsos poco confiables) ya no vuelve; vuelve la ruedita ←.
+                    // B vuelve (con y sin el rediseño; en el diagnóstico no, es lo que se prueba).
                     if (!probandoB && VRBoxInput.CancelDown) { Back(); return; }
                     if (!Rediseno.Flag.Activo && VRBoxInput.ConfirmDown) Activate(_items[_focus].id);
+                    // Rediseño 2.0: la A elige (como en las pantallas nuevas). Consumida, para que
+                    // al soltarla no abra la pausa de nuevo si lo elegido la cerró.
+                    if (Rediseno.Flag.Activo && VRBoxInput.APressedThisFrame)
+                    {
+                        VRBoxInput.ConsumirA();
+                        Activate(_items[_focus].id);
+                        return;
+                    }
 
                     var delta = VRBoxInput.Delta;
                     float hx = Mathf.Abs(delta.x) > 3f ? Mathf.Clamp(delta.x / 12f, -1f, 1f) : 0f;
@@ -1121,7 +1131,6 @@ namespace Gamepad
                     {
                         // Eje suavizado (el crudo llega a pulsos) y repetición tipo teclado.
                         hx = VRBoxInput.SmoothedStick.x; hy = VRBoxInput.SmoothedStick.y;
-                        if (EjeHorizontal(hx, hy, probandoB)) return;
                         int paso = _rep.Tick(Mathf.Abs(hy) >= Mathf.Abs(hx) ? hy : 0f, Time.unscaledDeltaTime);
                         if (paso != 0)
                         {
@@ -1129,7 +1138,6 @@ namespace Gamepad
                             AudioManager.Sonar(c => c.uiNavegar);
                         }
                     }
-                    else if (EjeHorizontal(hx, hy, probandoB)) return;
 
                     _navCooldown -= Time.unscaledDeltaTime;
                     if (!Rediseno.Flag.Activo && Mathf.Abs(delta.y) > 3f)
@@ -1161,7 +1169,6 @@ namespace Gamepad
                 if (Mathf.Abs(dy) < 0.5f) dy = gp.leftStick.ReadValue().y;
                 float hxp = gp.dpad.ReadValue().x;
                 if (Mathf.Abs(hxp) < 0.5f) hxp = gp.leftStick.ReadValue().x;
-                if (EjeHorizontal(hxp, dy, probandoB)) return;
 
                 if (Rediseno.Flag.Activo)
                 {
@@ -1223,27 +1230,6 @@ namespace Gamepad
             _page = Page.Main;
             _confirmSalir = false;
             _focus = 0; _focusLast = true;
-        }
-
-        // Rediseño 2.0: en todos los menús → elige y ← vuelve (de a un golpe: hay que volver
-        // al centro para repetir). En los sliders ← → siguen ajustando el valor, y en el
-        // diagnóstico ← no saca de la página (es lo que se está probando). Devuelve true si
-        // consumió el movimiento.
-        private bool EjeHorizontal(float dx, float dy, bool probandoB)
-        {
-            if (!Rediseno.Flag.Activo || _items.Count == 0) return false;
-            bool libre = Rediseno.BloqueoNav.Libre(dx, dy);
-            if (IsSlider(_items[_focus].id)) return false;
-            if (Mathf.Abs(dx) > 0.6f && Mathf.Abs(dx) > Mathf.Abs(dy))
-            {
-                // Bloqueado (recién se eligió algo): se consume sin hacer nada hasta soltar.
-                if (!libre) return true;
-                Rediseno.BloqueoNav.TrasAccion();
-                if (dx > 0f) Activate(_items[_focus].id);
-                else if (!probandoB) Back();
-                return true;
-            }
-            return false;
         }
 
         // Un nivel hacia atrás: submenú → Opciones, Opciones → Main, Main → cerrar.

@@ -13,8 +13,8 @@ namespace Rediseno.UI
     // VR BOX (modo mouse): ruedita ↑↓ mueve, A elige, B vuelve (prueba: con la captura de
     // puntero la A llega como clic y la B como pulso, ver VRBoxInput).
     // Gamepad: cruceta/stick ↑↓ mueve, abajo (A/✕) elige, derecha (B/○) vuelve.
-    // ←/→: en una fila horizontal (Izquierda/Derecha) pasan al botón de al lado; si no hay
-    // vecino de ese lado, → elige y ← vuelve, como antes.
+    // ←/→: sólo pasan al botón de al lado en una fila horizontal (Izquierda/Derecha) y
+    // ajustan los deslizadores; nunca eligen ni vuelven.
     public sealed class MenuNavegable
     {
         public sealed class Opcion
@@ -211,7 +211,8 @@ namespace Rediseno.UI
                     AudioManager.Sonar(c => c.uiNavegar);
                     return;
                 }
-                if (dx > 0f) elegir = true; else volver = true;
+                // Sin vecino de ese lado no hace nada: elegir es A y volver es B (antes → elegía
+                // y ← volvía, y un ← de más en OPCIONES te sacaba al menú).
             }
             if (!libre) { elegir = false; volver = false; }
 
