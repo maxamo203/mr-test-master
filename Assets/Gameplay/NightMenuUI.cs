@@ -42,7 +42,7 @@ namespace Gameplay
                 ? _devNights
                 : _nights;
 
-        private enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control }
+        public enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control }
 
         private Pantalla _pantallaActual = Pantalla.Menu;
 
@@ -51,10 +51,10 @@ namespace Gameplay
         // con el índice viejo). En el menú raíz no hay flecha volver: el 0 es UN JUGADOR; en
         // el resto el 0 es la flecha y se arranca en el 1. Si se vuelve a una pantalla con
         // algo ya elegido, el foco va directo al "siguiente paso" (CONTINUAR / CONFIRMAR).
-        private Pantalla PantallaActual
+        public Pantalla PantallaActual
         {
             get => _pantallaActual;
-            set
+            private set
             {
                 if (_pantallaActual == value) return;
                 _pantallaActual = value;
@@ -98,8 +98,11 @@ namespace Gameplay
 
         private const float Pad = 28f;
 
+        public static NightMenuUI Instance { get; private set; }
+
         private void Awake()
         {
+            Instance = this;
             GameSession.Ensure();
 
             var compat = DeviceCompatibility.Check();
@@ -116,6 +119,125 @@ namespace Gameplay
             if (HayAvisoSalida) AudioManager.Sonar(c => c.uiAlerta);
         }
 
+        private void OnEnable()  => Gamepad.ImguiGamepadMenu.PedidoVolver += Volver;
+        private void OnDisable() => Gamepad.ImguiGamepadMenu.PedidoVolver -= Volver;
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
+        // ── Rediseño 2.0: lo usa el menú principal nuevo (Rediseno.Menus.MenuPrincipal2) ──
+        // ¿Qué pantalla se ve, sin ningún aviso encima? Las pantallas nuevas se muestran en
+        // lugar de la vieja cuando coincide.
+        public bool SinAvisos =>
+            !_versionIncompatible && !HayAvisoSalida &&
+            !_mostrarAvisoVersionDesconocida && !_mostrarAvisoIos && _confirmarBorrar == null &&
+            !_confirmarEscaner;
+        public bool MostrandoPrincipal => SinAvisos && PantallaActual == Pantalla.Menu;
+        public bool Mostrando(Pantalla p) => SinAvisos && PantallaActual == p;
+        public void VolverPantalla()     => Volver();
+        public void AbrirControl()       => PantallaActual = Pantalla.Control;
+
+        // Flujo de juego para las pantallas nuevas (noches / escenario / sin escenario).
+        public NightConfig[] Catalogo => Nights;
+        public int NocheElegida => _nocheSel;
+        public string EscenarioElegido => _mapSel;
+        public IReadOnlyList<string> Escenarios => _scans;
+        public bool EsJugable(string escena) => _hasImg.TryGetValue(escena, out var ok) && ok;
+        public int ElementosDe(string escena) => _itemCount.TryGetValue(escena, out var n) ? n : 0;
+        public bool CreandoSala => _pendingMode == GameSession.SessionMode.MultiHost;
+
+        // CONTINUAR · NOCHE N del menú nuevo: directo a elegir escenario con esa noche puesta
+        // (con el visor, cada paso de más cuesta). Sin escenario jugable cae en "falta".
+        public void AbrirContinuar(int noche)
+        {
+            ConfigurarPartida(GameSession.SessionMode.SinglePlayer);
+            if (PantallaActual != Pantalla.Noches) return;
+            var n = Nights;
+            if (n != null && noche >= 0 && noche < n.Length && n[noche] != null && NightProgress.Desbloqueada(noche))
+            {
+                SeleccionarNoche(noche);
+                _entornoDesdeContinuar = true;
+            }
+        }
+
+        // ¿Se llegó a ¿DÓNDE JUGÁS? con CONTINUAR (salteando la grilla de noches)? Entonces
+        // "volver" regresa al menú principal, de donde se vino, y no a la grilla.
+        private bool _entornoDesdeContinuar;
+
+        public void SeleccionarNoche(int i)
+        {
+            _entornoDesdeContinuar = false;
+            _nocheSel = i;
+            PreseleccionarEscenario();
+            PantallaActual = Pantalla.Entorno;
+        }
+
+        public void SeleccionarEscenario(string escena) { if (EsJugable(escena)) _mapSel = escena; }
+        public void ConfirmarPartida() => Confirmar();
+        public void ElegirOtraNoche()  => PantallaActual = Pantalla.Noches;
+        public void EscanearNuevo()    => PedirEscaner(null);
+        public void EditarEscenario(string escena) => PedirEscaner(escena);
+
+        // Rediseño 2.0: el escaneo es lo único que se hace SIN el visor (con el celular en la
+        // mano y tocando la pantalla). Con el visor puesto, ir al escáner primero lo avisa
+        // (AvisoMenu.EscanearSinVisor): aceptar saca del visor y sigue; volver deja todo como
+        // estaba. Guardar el escaneo vuelve al menú, donde el visor se prende de nuevo.
+        private bool _confirmarEscaner;
+        private string _escanerPendiente;
+
+        private void PedirEscaner(string nombre)
+        {
+            if (Rediseno.Flag.Activo && Rediseno.UI.ModoVisor.Activo)
+            {
+                _escanerPendiente = nombre;
+                _confirmarEscaner = true;
+                return;
+            }
+            IrAlEscaner(nombre);
+        }
+
+        public void EscanearSinVisor()
+        {
+            _confirmarEscaner = false;
+            Rediseno.UI.ModoVisor.Set(false);
+            IrAlEscaner(_escanerPendiente);
+        }
+        public void CrearSala() => ConfigurarPartida(GameSession.SessionMode.MultiHost);
+        public void Unirse()    => UnirseComoCliente();
+
+        // El último escenario jugado si sigue siendo jugable; si no, el primero que lo sea.
+        private void PreseleccionarEscenario()
+        {
+            if (!string.IsNullOrEmpty(_mapSel) && EsJugable(_mapSel)) return;
+            var ultimo = GameSession.Instance != null ? GameSession.Instance.SelectedMap : null;
+            if (!string.IsNullOrEmpty(ultimo) && EsJugable(ultimo)) { _mapSel = ultimo; return; }
+            foreach (var n in _scans) if (EsJugable(n)) { _mapSel = n; return; }
+        }
+        public int TotalNoches => Mathf.Max(1, Nights != null ? Nights.Length : 0);
+        public void AbrirJugar()         => ConfigurarPartida(GameSession.SessionMode.SinglePlayer);
+        public void AbrirMultijugador()  { if (BuildVariant.Multijugador) PantallaActual = Pantalla.CrearUnirse; }
+        // El menú nuevo abre MIS ESCENARIOS aunque esté vacío (ahí ofrece NUEVO ESCANEO): el
+        // atajo viejo de ir directo al escáner sorprendía, y con el visor puesto lo sacaba.
+        public void AbrirEscenarios()    { RefrescarScans(); PantallaActual = Pantalla.Escaneos; }
+        public void BorrarEscenario(string escena) { ScanSerializer.Delete(escena); RefrescarScans(); }
+
+        // Avisos modales del menú, en el mismo orden de precedencia que OnGUI. Los dibuja
+        // Rediseno.Menus.AvisoMenu2 con el flag prendido.
+        public enum AvisoMenu { Ninguno, VersionIncompatible, Salida, VersionDesconocida, Ios, EscanearSinVisor }
+        public AvisoMenu AvisoActual =>
+            _versionIncompatible            ? AvisoMenu.VersionIncompatible :
+            HayAvisoSalida                  ? AvisoMenu.Salida :
+            _mostrarAvisoVersionDesconocida ? AvisoMenu.VersionDesconocida :
+            _mostrarAvisoIos                ? AvisoMenu.Ios :
+            _confirmarEscaner               ? AvisoMenu.EscanearSinVisor : AvisoMenu.Ninguno;
+        public string TextoAvisoSalida => GameSession.Instance != null ? GameSession.Instance.AvisoSalida : null;
+        // El bloqueo por versión no se cierra (Volver tampoco lo hace): sólo SALIR.
+        public void CerrarAviso() => Volver();
+        public static void Salir() => SalirDelJuego();
+        public void AbrirOpciones()      => PantallaActual = Pantalla.Opciones;
+
         private void Update()
         {
             _nav.Update();
@@ -131,6 +253,20 @@ namespace Gameplay
             var kb = Keyboard.current;
             if (kb == null || !kb.escapeKey.wasPressedThisFrame) return;
 
+            // A veces la B del VR BOX llega como "atrás" (escape). En CONTROL eso te sacaba
+            // del diagnóstico justo mientras probabas la B; ahí se sale con el botón volver.
+            if (PantallaActual == Pantalla.Control && Gamepad.GamepadManager.Instance != null &&
+                Gamepad.GamepadManager.Instance.UsesMouseInput) return;
+
+            // Las pantallas nuevas manejan su propio "atrás".
+            if (Rediseno.UI.PantallaUI.AlgunaVisible) return;
+            Volver();
+        }
+
+        // Un paso atrás, con la misma precedencia que OnGUI (overlays primero). Lo usan el
+        // atrás de Android y el ← del mando (ImguiGamepadMenu.PedidoVolver).
+        private void Volver()
+        {
             // Mismo orden de precedencia que OnGUI (qué overlay tapa a qué otro).
             // Bloqueo por versión no compatible: a propósito no tiene botón de
             // volver (no se puede omitir), así que el back tampoco hace nada acá.
@@ -139,13 +275,17 @@ namespace Gameplay
             if (_mostrarAvisoVersionDesconocida) { CerrarAvisoVersionDesconocida(); return; }
             if (_mostrarAvisoIos) { CerrarAvisoIos(); return; }
             if (_confirmarBorrar != null) { _confirmarBorrar = null; return; }
+            if (_confirmarEscaner) { _confirmarEscaner = false; return; }
 
             switch (PantallaActual)
             {
                 case Pantalla.CrearUnirse: PantallaActual = Pantalla.Menu; break;
                 case Pantalla.SinEntorno:
                 case Pantalla.Noches:      VolverDeSubflujo(); break;
-                case Pantalla.Entorno:     PantallaActual = Pantalla.Noches; break;
+                case Pantalla.Entorno:
+                    PantallaActual = _entornoDesdeContinuar ? Pantalla.Menu : Pantalla.Noches;
+                    _entornoDesdeContinuar = false;
+                    break;
                 case Pantalla.Escaneos:    PantallaActual = Pantalla.Menu; break;
                 case Pantalla.Opciones:    PantallaActual = Pantalla.Menu; break;
                 case Pantalla.Control:     PantallaActual = Pantalla.Opciones; break;
@@ -204,6 +344,12 @@ namespace Gameplay
         // ------------------------------------------------------------ OnGUI
         private void OnGUI()
         {
+            // Rediseño 2.0: si una pantalla nueva (UI Toolkit) cubre la actual, la dibuja ella.
+            if (Rediseno.UI.PantallaUI.AlgunaVisible) return;
+            // Pantalla vieja con el visor puesto: todavía no sabe dibujarse en estéreo, así
+            // que se sale del visor en vez de dejar la vista partida.
+            if (Rediseno.UI.ModoVisor.Activo) Rediseno.UI.ModoVisor.Set(false);
+
             UIScale.Begin();
             _nav.Begin();
 
@@ -793,6 +939,14 @@ namespace Gameplay
 
             float y = 160f;
 
+            // Rediseño 2.0: apagado = la app como venía funcionando (ver Rediseno.Flag).
+            T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
+                         "REDISEÑO 2.0 (EXPERIMENTAL)",
+                         "Controles por mirada con el visor y lo nuevo. Apagalo para la versión de siempre",
+                         GameOptions.Rediseno2,
+                         () => GameOptions.Rediseno2 = !GameOptions.Rediseno2);
+            y += 68f;
+
             // Volumen maestro (persistente).
             int volPct = Mathf.RoundToInt(GameOptions.Volumen * 100f);
             GUI.Label(new Rect(Pad, y, vw - Pad * 2f - 70f, 22f), "VOLUMEN",
@@ -933,11 +1087,23 @@ namespace Gameplay
                 y += 30f;
             }
 
-            float gpH = (vw - Pad * 2f) * 0.62f;
-            var gpArea = new Rect(Pad, y, vw - Pad * 2f, gpH);
+            // Mando a la izquierda y diagnóstico a la derecha si entra (landscape); si no, uno
+            // debajo del otro achicando el mando para dejarle lugar al diagnóstico.
+            float ancho = vw - Pad * 2f;
+            bool lado = ancho >= 900f;
+            float gpW = lado ? Mathf.Min(ancho * 0.5f - 12f, (vh - y - 20f) / 0.62f)
+                             : Mathf.Min(ancho, Mathf.Max(200f, (vh - y - ControllerDiagAlto - 40f) / 0.62f));
+            float gpH = gpW * 0.62f;
+            var gpArea = new Rect(Pad, y, gpW, gpH);
             T.Fill(gpArea, new Color(0.06f, 0.06f, 0.07f, 1f));
             var st = gm != null ? gm.ReadState() : default;
             Gamepad.GamepadVisualizer.Draw(gpArea, gm != null ? gm.Brand : Gamepad.GamepadBrand.None, st);
+
+            var diag = lado ? new Rect(Pad + gpW + 24f, y, ancho - gpW - 24f, ControllerDiagAlto)
+                            : new Rect(Pad, y + gpH + 16f, ancho, ControllerDiagAlto);
+            Gamepad.ControllerDiagnostics.Draw(diag);
         }
+
+        private static float ControllerDiagAlto => Gamepad.ControllerDiagnostics.Alto;
     }
 }

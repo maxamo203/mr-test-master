@@ -1,13 +1,5 @@
 Shader "AR/DarknessOverlay"
 {
-    // Oscurece toda la pantalla menos el "agujero" de la linterna. El agujero NO es un
-    // circulo liso: su borde tiene puntas radiales (estilo "spiky vignette") y se le
-    // escapan rayos finos de luz hacia la oscuridad. Su tamaño lo decide la BATERIA
-    // (DarknessOverlay publica _OverlayConeTan): enorme con la pila llena y se va
-    // cerrando hasta un minimo — nunca negro total — a medida que se agota.
-    //
-    // Es puramente visual: el cono de GAMEPLAY (PlayerLights, Light.spotAngle) sigue
-    // saliendo de Flashlight.outerAngleDeg y no cambia con la bateria.
     Properties { }
     SubShader
     {
@@ -33,6 +25,21 @@ Shader "AR/DarknessOverlay"
             uniform float  _OverlaySoftness;   // ancho del degradé del borde (fraccion del radio)
             uniform float  _OverlaySpikes;     // largo de las puntas (fraccion del radio)
             uniform float  _OverlayRays;       // 0..1 cuanto aclaran los rayos sueltos
+
+            // Cono con halos (Arbmos V2): lo publica Flashlight.
+            uniform float _FlashlightCosOuter;
+            uniform float _FlashlightCosInner;
+            uniform float _FlashlightCosHalo;
+            uniform float _FlashlightHaloStrength;
+            uniform float _FlashlightCosMidHalo;
+            uniform float _FlashlightMidHaloStrength;
+            uniform float _FlashlightCosFarHalo;
+            uniform float _FlashlightFarHaloStrength;
+
+            // 1 = cono con halos (Rediseño 2.0 prendido), 0 = viñeta con puntas (como en
+            // main). Lo publica DarknessOverlay según Rediseno.Flag; es uniforme para todo
+            // el draw, así que la rama no divide warps.
+            uniform float _OverlayHalos;
 
             #define TWO_PI 6.28318530718
 
@@ -73,7 +80,8 @@ Shader "AR/DarknessOverlay"
                 return lerp(a, b, f);
             }
 
-            fixed4 frag (v2f i) : SV_Target
+            // Viñeta con puntas: agujero que se cierra con la batería (DarknessOverlay).
+            float AlphaVineta(v2f i)
             {
                 float alpha = _OverlayDarkness;
 
@@ -123,7 +131,38 @@ Shader "AR/DarknessOverlay"
                     // parcialmente el agujero, no solo su brillo sobre la malla.
                     alpha *= 1.0 - saturate(hole) * _FlashlightFlicker;
                 }
+                return alpha;
+            }
 
+            // Cono liso con tres capas de halo (Flashlight).
+            float AlphaHalos(v2f i)
+            {
+                float reveal = 0.0;
+                if (_FlashlightIntensity > 0.001)
+                {
+                    float3 viewRay = normalize(i.worldPos - _WorldSpaceCameraPos);
+                    float c = dot(viewRay, normalize(_FlashlightDir.xyz));
+                    float core = smoothstep(_FlashlightCosOuter, _FlashlightCosInner, c);
+                    float layer75 = pow(saturate(smoothstep(
+                        _FlashlightCosHalo, _FlashlightCosOuter, c)), 1.2) *
+                        saturate(_FlashlightHaloStrength);
+                    float layer50 = pow(saturate(smoothstep(
+                        _FlashlightCosMidHalo, _FlashlightCosHalo, c)), 1.3) *
+                        saturate(_FlashlightMidHaloStrength);
+                    float layer20 = pow(saturate(smoothstep(
+                        _FlashlightCosFarHalo, _FlashlightCosMidHalo, c)), 1.45) *
+                        saturate(_FlashlightFarHaloStrength);
+                    reveal = max(core, max(layer75, max(layer50, layer20))) *
+                             _FlashlightFlicker;
+                }
+
+                float alpha = _OverlayDarkness * (1.0 - saturate(reveal));
+                return alpha;
+            }
+
+            fixed4 frag (v2f i) : SV_Target
+            {
+                float alpha = _OverlayHalos > 0.5 ? AlphaHalos(i) : AlphaVineta(i);
                 return fixed4(0, 0, 0, alpha);
             }
             ENDCG

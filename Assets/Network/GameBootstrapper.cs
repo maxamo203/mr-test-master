@@ -42,7 +42,26 @@ public class GameBootstrapper : MonoBehaviour
 
     private const float Pad = 28f;
 
-    private void Awake() => _net = GetComponent<NetworkManager>();
+    public static GameBootstrapper Instance { get; private set; }
+
+    private void Awake()
+    {
+        Instance = this;
+        _net = GetComponent<NetworkManager>();
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
+    }
+
+    // ── Rediseño 2.0: lo usa Rediseno.Menus.PanelUnirse2 (UNIRSE en estéreo) ──
+    public bool EnUnirse => _pantalla == Pantalla.Unirse;
+    public IReadOnlyDictionary<string, LanDiscovery.DiscoveredHost> Salas => _lan != null ? _lan.Hosts : null;
+    public string HostManual { get => _host; set => _host = value; }
+    public void ConectarA(string ip, int port) => Conectar(ip, port);
+    public void ConectarManual() { ParseHostPort(_host, out var ip, out var pt); Conectar(ip, pt); }
+    public void SalirUnirse() => SalirDeUnirse();
 
     private void Start()
     {
@@ -80,10 +99,20 @@ public class GameBootstrapper : MonoBehaviour
 
     private void OnGUI()
     {
+        // Rediseño 2.0: debajo de la pausa no se dibuja lo viejo (UNIRSE, franja de sala).
+        if (Rediseno.Flag.Activo && Gamepad.PauseMenuController.IsOpen) return;
+
         UIScale.Begin();
         _nav.Begin();
 
         float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
+
+        // Rediseño 2.0: UNIRSE lo dibuja la pantalla nueva (estéreo con Cardboard).
+        if (_pantalla == Pantalla.Unirse && Rediseno.Menus.PanelUnirse2.Mostrando)
+        {
+            _nav.End();
+            return;
+        }
 
         // UNIRSE tapa la cámara (fondo opaco en toda la pantalla); en la SALA la
         // cámara queda visible dentro del área segura y sólo se ennegrecen las
@@ -101,7 +130,11 @@ public class GameBootstrapper : MonoBehaviour
         switch (_pantalla)
         {
             case Pantalla.Unirse: DrawUnirse(vw, vh); break;
-            case Pantalla.Sala:   DrawSala(vw, vh);   break;
+            // Rediseño 2.0: con el visor la franja de sala (MODO CARDBOARD, PAREDES…) quedaba
+            // partida entre los ojos y no se puede tocar; salir del visor está en la pausa.
+            case Pantalla.Sala:
+                if (!(Rediseno.Flag.Activo && MRCardboardController.Activo)) DrawSala(vw, vh);
+                break;
         }
 
         _nav.End();

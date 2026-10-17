@@ -79,7 +79,10 @@ public class VHSOverlayUI : MonoBehaviour
 
         if (menu)
         {
-            if (GameOptions.VhsActivo) DibujarCompuesto();
+            // La pausa nueva (Rediseño 2.0, UI Toolkit) se dibuja ANTES que la IMGUI: el filtro
+            // compuesto le quedaba encima como un velo gris y no se leía. La vieja es opaca y lo
+            // aguantaba; la nueva va sin filtro.
+            if (GameOptions.VhsActivo && !Rediseno.Menus.MenuPausa2.Mostrando) DibujarCompuesto();
         }
         else if (CameraFXOverlay.EnPartida && GameOptions.VhsActivo)
         {

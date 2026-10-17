@@ -100,6 +100,8 @@ namespace Bateries
             EnsureComponent<FlashlightToggleAction>();
             EnsureComponent<BatteryPickupAction>();
             EnsureComponent<Collectibles.CollectiblePickupAction>();
+            // Rediseño 2.0: control por mirada (sólo actúa con el flag; ver Rediseno.Flag).
+            EnsureComponent<Rediseno.ControlMirada>();
         }
 
         private void Start()
@@ -136,6 +138,10 @@ namespace Bateries
 
         public void Unregister(IContextAction a) => _actions.Remove(a);
 
+        // La acción disponible de mayor prioridad este frame (o null). La usa el control por
+        // mirada para saber qué hay apuntado.
+        public IContextAction AccionActual => _current;
+
         private void Update()
         {
             // Muerto (con la pantalla de muerte o espectando): el botón primario no hace
@@ -162,19 +168,78 @@ namespace Bateries
 
             ResolveCurrent();
             UpdatePrimaryGesture();
+            if (Debug.isDebugBuild) DiagnosticoInput();
         }
+
+        // TEMPORAL (diagnóstico VR BOX, sólo development build): loguea qué fuentes de
+        // input ve Unity cada vez que cambian, para saber por dónde llega la A del mando
+        // en partida. Sacar cuando quede resuelto.
+        private string _diagPrevio;
+        private void DiagnosticoInput()
+        {
+            var gm    = GamepadManager.Instance;
+            var mouse = Mouse.current;
+            var ts    = Touchscreen.current;
+            int toques = 0;
+            string posToques = "";
+            if (ts != null)
+                for (int i = 0; i < ts.touches.Count; i++)
+                    if (ts.touches[i].press.isPressed)
+                    {
+                        toques++;
+                        var tp = ts.touches[i].position.ReadValue();
+                        posToques += $"({tp.x:0},{tp.y:0} ui={Scanner.UIBlocker.IsPointerOver(tp)})";
+                    }
+            var g = gm?.Current;
+            string estado =
+                $"pad='{(g != null ? g.displayName + "/" + g.name : "-")}' usesMouse={gm != null && gm.UsesMouseInput} " +
+                $"south={(g != null && g.buttonSouth.isPressed)} east={(g != null && g.buttonEast.isPressed)} " +
+                $"mouse='{(mouse != null ? mouse.name : "-")}' L={(mouse != null && mouse.leftButton.isPressed)} " +
+                $"back={(mouse != null && mouse.backButton.isPressed)} toques={toques}{posToques} pantalla={Screen.width}x{Screen.height} " +
+                $"accion={(_current != null ? _current.GetType().Name : "-")} linterna={(_flashlight != null && _flashlight.isOn)} " +
+                $"esc={(Keyboard.current != null && Keyboard.current.escapeKey.isPressed)} " +
+                $"pausa={PauseMenuController.IsOpen} esperar={_esperarSoltar} held={PrimaryHeld()}";
+            if (estado == _diagPrevio) return;
+            _diagPrevio = estado;
+            string mice = "";
+            foreach (var d in InputSystem.devices) mice += $"[{d.GetType().Name}:{d.name}] ";
+            Debug.Log($"[DiagA] {estado} | devices: {mice}");
+        }
+
+        // Con la pausa abierta el botón primario es el "clic" del menú: no puede además
+        // prender/apagar la linterna. Y al cerrarla (p. ej. con REANUDAR, que se acciona
+        // con ese mismo botón) hay que esperar a que se suelte, o esa misma pulsación
+        // terminaba como un toque sobre la linterna.
+        private bool _esperarSoltar;
 
         private bool _esperarSoltarTrasPausa;
 
         private void UpdatePrimaryGesture()
         {
             EnsureFlashlight();
+
+            if (PauseMenuController.IsOpen)
+            {
+                if (_primaryGesture.IsPressed) CancelPrimaryGesture();
+                _esperarSoltar = true;
+                return;
+            }
+            if (_esperarSoltar)
+            {
+                if (PrimaryHeld()) return;
+                _esperarSoltar = false;
+            }
+            UpdatePalancaVRBox();
             bool wasPressed = _primaryGesture.IsPressed;
             PrimaryGestureEvent gesture = _primaryGesture.Tick(
                 PrimaryHeld(), Time.unscaledDeltaTime, brightHoldSeconds);
 
             if (!wasPressed && _primaryGesture.IsPressed)
                 _pressedAction = _current;
+
+            if (Debug.isDebugBuild && gesture != PrimaryGestureEvent.None)
+                Debug.Log($"[DiagA] GESTO {gesture} accion={(_pressedAction != null ? _pressedAction.GetType().Name : "null")} " +
+                          $"linternaAntes={(_flashlight != null && _flashlight.isOn)}");
 
             switch (gesture)
             {
@@ -192,8 +257,43 @@ namespace Bateries
             }
         }
 
+        // VR BOX en modo mouse: la B es un pulso (no informa cuándo se suelta, ver VRBoxInput),
+        // así que no puede haber "mantener para concentrar" con ella. La luz intensa va por la
+        // palanca, que sí se sostiene. Posiciones de la palanca:
+        //   arriba (mantenida) = intensa (prende si estaba apagada)
+        //   centro             = normal
+        //   abajo  (mantenida) = apagada; al volver al centro se vuelve a prender
+        // Abajo sólo vuelve a prender la luz que ELLA apagó: si ya estaba apagada (con la B),
+        // soltar la palanca no la prende.
+        private bool _palancaArriba, _palancaAbajo, _apagadaPorPalanca;
+
+        private void UpdatePalancaVRBox()
+        {
+            bool arriba = VRBoxInput.PalancaArriba;
+            bool abajo  = VRBoxInput.PalancaAbajo;
+            if (_flashlight != null)
+            {
+                if (arriba && !_palancaArriba) _flashlight.BeginBrightHold();
+                else if (!arriba && _palancaArriba) _flashlight.SetBrightHeld(false);
+
+                if (abajo && !_palancaAbajo && _flashlight.isOn)
+                {
+                    _flashlight.Toggle();
+                    _apagadaPorPalanca = true;
+                }
+                else if (!abajo && _palancaAbajo)
+                {
+                    if (_apagadaPorPalanca && !_flashlight.isOn) _flashlight.Toggle();
+                    _apagadaPorPalanca = false;
+                }
+            }
+            _palancaArriba = arriba;
+            _palancaAbajo  = abajo;
+        }
+
         private void CancelPrimaryGesture()
         {
+            _palancaArriba = _palancaAbajo = _apagadaPorPalanca = false;
             _primaryGesture.Reset();
             _screenPrimaryHeld = false;
             _pressedAction = null;
@@ -226,12 +326,12 @@ namespace Bateries
             bool held = g != null && (g.buttonSouth.isPressed || g.buttonEast.isPressed ||
                                       g.buttonNorth.isPressed || g.buttonWest.isPressed);
 
-            // VR Box Mouse: el botón A/trigger manda left click de mouse.
-            if (GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput)
-            {
-                var mouse = Mouse.current;
-                if (mouse != null) held |= mouse.leftButton.isPressed;
-            }
+            // VR Box en modo mouse: el botón de la linterna es la B (ver BotonBDelMando).
+            // Rediseño 2.0: del VR BOX sólo cuenta la ruedita. La acción del momento (recoger
+            // lo apuntado; si no, prender/apagar) es la ruedita → — mantenida concentra, igual
+            // que el botón de siempre. ↑ intensa, ↓ apagada y ← (mantener) pausa van aparte.
+            if (!Rediseno.Flag.Activo) held |= ClicMandoMouse() || BotonBDelMando();
+            else held |= PalancaDerecha();
 
             // Mobile sin mando: dos dedos apoyados = el mismo botón (es el gesto que en main
             // prendía/apagaba la linterna). Toque corto prende/apaga, mantener concentra.
@@ -242,6 +342,59 @@ namespace Bateries
 #endif
             return held || _screenPrimaryHeld;
         }
+
+        // Ruedita del VR BOX hacia la derecha = el botón primario. Respeta el bloqueo de los
+        // menús (Rediseno.BloqueoNav): la → que eligió REANUDAR en la pausa no tiene que
+        // terminar recogiendo o apagando la linterna al volver a la partida.
+        private static bool PalancaDerecha()
+        {
+            var gm = GamepadManager.Instance;
+            if (gm == null || !gm.UsesMouseInput) return false;
+            Vector2 st = VRBoxInput.SmoothedStick;
+            if (!Rediseno.BloqueoNav.Libre(st.x, st.y)) return false;
+            return st.x > 0.6f && st.x > Mathf.Abs(st.y);
+        }
+
+        // "RECOGER · palanca →" en cada ojo (píxeles de pantalla, centros calibrados del
+        // visor: ver Rediseno.UI.OjosVisor), un poco por debajo del centro de la vista.
+        private static void CartelEnOjos(string accion)
+        {
+            var prevM = GUI.matrix;
+            GUI.matrix = Matrix4x4.identity;
+            float s = Screen.height / 1080f;
+            bool vrBox = GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput;
+            string como = vrBox ? "palanca a la derecha" : "botón A";
+            var stTit = MortuoriumTheme.Estilo(MortuoriumTheme.FBebas, Mathf.RoundToInt(40 * s),
+                                               MortuoriumTheme.Cream, TextAnchor.MiddleCenter);
+            var stSub = MortuoriumTheme.Estilo(MortuoriumTheme.FMono, Mathf.RoundToInt(20 * s),
+                                               MortuoriumTheme.Tan, TextAnchor.MiddleCenter);
+            Rediseno.UI.OjosVisor.Centros(out var izq, out var der);
+            for (int i = 0; i < 2; i++)
+            {
+                var c = i == 0 ? izq : der;
+                float w = 300f * s, h = 86f * s;
+                var r = new Rect(c.x - w * 0.5f, c.y + 120f * s, w, h);
+                MortuoriumTheme.Tarjeta2(r, MortuoriumTheme.Hoja2, MortuoriumTheme.Tan, 24f * s, 2f * s);
+                GUI.Label(new Rect(r.x, r.y + 6f * s, w, 44f * s), accion.ToUpperInvariant(), stTit);
+                GUI.Label(new Rect(r.x, r.y + 50f * s, w, 26f * s), como, stSub);
+            }
+            GUI.matrix = prevM;
+        }
+
+        private static bool ClicMandoMouse()
+        {
+            var gm = GamepadManager.Instance;
+            var mouse = Mouse.current;
+            return gm != null && gm.UsesMouseInput && mouse != null && mouse.leftButton.isPressed;
+        }
+
+        // VR BOX en Android (verificado en el motorola edge 30 con getevent + log): la A sale
+        // como BTN_MOUSE pero Unity NO la ve como Mouse.leftButton — Android la convierte en
+        // un toque de un dedo donde está el cursor escondido, y ese toque ahora abre la pausa
+        // (PauseMenuController). La B (BTN_SIDE) llega como Mouse.backButton, así que ESA es
+        // la de la linterna: toque prende/apaga (o recoge). Es un pulso de un frame — el mando
+        // no informa cuándo se suelta —; la luz intensa va por la palanca (UpdatePalancaVRBox).
+        private static bool BotonBDelMando() => VRBoxInput.BHeld;
 
         private static bool DosDedosApoyados()
         {
@@ -276,23 +429,58 @@ namespace Bateries
             Scanner.UIScale.Begin();
             float vw = Scanner.UIScale.VirtualWidth, vh = Scanner.UIScale.VirtualHeight;
 
+            // Rediseño 2.0 con Cardboard: no se puede tocar nada, pero hay que saber que lo que
+            // apuntás se puede recoger. Cartel chico en cada ojo, debajo del centro de la vista.
+            if (Rediseno.Flag.Activo && MRCardboardController.Activo)
+            {
+                _screenPrimaryHeld = false;
+                if (_current != null && _current.ShowActionButton && !string.IsNullOrEmpty(_currentLabel) &&
+                    !Rediseno.ControlMirada.Activo && Event.current.type == EventType.Repaint)
+                    CartelEnOjos(_currentLabel);
+                return;
+            }
+
+            // Con el control por mirada el celular está en la cabeza: no hay nada que tocar.
             if (!showActionButton || _current == null || !_current.ShowActionButton ||
-                string.IsNullOrEmpty(_currentLabel))
+                string.IsNullOrEmpty(_currentLabel) || Rediseno.ControlMirada.Activo)
             {
                 _screenPrimaryHeld = false;
                 return;
             }
 
             bool pad = GamepadManager.Instance != null && GamepadManager.Instance.IsConnected;
+            bool vrBox = pad && GamepadManager.Instance.UsesMouseInput;
+
             string holdTime = brightHoldSeconds.ToString("0.#");
-            string hint = pad
-                ? $"{_currentLabel} (A) · mantener {holdTime} s: intensa"
-                : $"{_currentLabel}\nMantener {holdTime} s: luz intensa";
-            const float w = 360f, h = 82f;
+            string como = vrBox
+                ? (Rediseno.Flag.Activo
+                    ? "palanca a la derecha · arriba: intensa · abajo: apagada"
+                    : "botón B · palanca arriba: intensa · abajo: apagada")
+                : pad
+                ? $"botón A · mantener {holdTime} s: luz intensa"
+                : $"mantener {holdTime} s: luz intensa";
+
+            // Estilo 2.0: píldora con el degradé rojo del botón principal; mientras se
+            // mantiene apretado, borde dorado (el foco/acción del rediseño).
+            const float w = 340f, h = 84f;
             var btn = new Rect(vw * 0.5f - w * 0.5f, vh * 0.62f, w, h);
-            bool held = GUI.RepeatButton(btn, hint);
+            bool held = GUI.RepeatButton(btn, GUIContent.none, GUIStyle.none);
             if (Event.current.type == EventType.Repaint)
+            {
                 _screenPrimaryHeld = held;
+                float radio = h * 0.5f;
+                MortuoriumTheme.FillRojo(btn, radio);
+                if (held) MortuoriumTheme.FillR(btn, new Color(0f, 0f, 0f, 0.18f), radio);
+                MortuoriumTheme.BordeR(btn, held ? MortuoriumTheme.Tan : new Color(1f, 1f, 1f, 0.12f),
+                                       radio, held ? 3f : 1.5f);
+            }
+            GUI.Label(new Rect(btn.x, btn.y + 10f, w, 40f), _currentLabel.ToUpperInvariant(),
+                      MortuoriumTheme.Estilo(MortuoriumTheme.FBebas, 32, MortuoriumTheme.Cream, TextAnchor.MiddleCenter));
+            GUI.Label(new Rect(btn.x + 16f, btn.y + 48f, w - 32f, 24f), como,
+                      MortuoriumTheme.Estilo(MortuoriumTheme.FMono, 11,
+                                             new Color(MortuoriumTheme.Cream.r, MortuoriumTheme.Cream.g,
+                                                       MortuoriumTheme.Cream.b, 0.85f),
+                                             TextAnchor.MiddleCenter));
         }
     }
 }

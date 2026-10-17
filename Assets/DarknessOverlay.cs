@@ -49,6 +49,9 @@ public class DarknessOverlay : MonoBehaviour
     private float _cargaVel;
     private static readonly int ID_DARK      = Shader.PropertyToID("_OverlayDarkness");
     private static readonly int ID_CONE_TAN  = Shader.PropertyToID("_OverlayConeTan");
+    // Qué look de oscuridad dibuja el shader: 1 = cono con halos (Rediseño 2.0), 0 = viñeta
+    // con puntas (la de siempre). Ver Rediseno.Flag.
+    private static readonly int ID_HALOS     = Shader.PropertyToID("_OverlayHalos");
     private static readonly int ID_SOFTNESS  = Shader.PropertyToID("_OverlaySoftness");
     private static readonly int ID_SPIKES    = Shader.PropertyToID("_OverlaySpikes");
     private static readonly int ID_RAYS      = Shader.PropertyToID("_OverlayRays");
@@ -116,6 +119,7 @@ public class DarknessOverlay : MonoBehaviour
             effectiveDark = darkness;
 
         Shader.SetGlobalFloat(ID_DARK, effectiveDark);
+        Shader.SetGlobalFloat(ID_HALOS, Rediseno.Flag.Activo ? 1f : 0f);
         PublicarAgujero();
     }
 

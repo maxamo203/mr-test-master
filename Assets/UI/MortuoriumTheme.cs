@@ -339,20 +339,55 @@ public static class MortuoriumTheme
         float w  = HudBarWCardboard;
         float y  = (Screen.height * HudCardboardBaseY - sg.y) / s
                  - HudBarH - fila * (HudBarH + HudBarGap);
-        float cxL = (Screen.width * 0.25f - sg.x) / s;
-        float cxR = (Screen.width * 0.75f - sg.x) / s;
+        float pxL = Screen.width * 0.25f, pxR = Screen.width * 0.75f;
+        // Rediseño 2.0: el centro de cada ojo según la calibración del visor (zoom +
+        // distancia de cada ojo). Con el centro de cada mitad, las dos copias de la barra
+        // no caían en el mismo lugar y no se fusionaban.
+        if (Rediseno.Flag.Activo)
+        {
+            Rediseno.UI.OjosVisor.Centros(out var izq, out var der);
+            pxL = izq.x; pxR = der.x;
+        }
+        float cxL = (pxL - sg.x) / s;
+        float cxR = (pxR - sg.x) / s;
         a = new Rect(cxL - w * 0.5f, y, w, HudBarH);
         b = new Rect(cxR - w * 0.5f, y, w, HudBarH);
         return 2;
     }
 
-    // Atajo: dibuja la barra en su fila, una o dos veces según el modo.
+    // Atajo: dibuja la barra en su fila, una o dos veces según el modo. Las barras del
+    // HUD de la noche (linterna, cordura, amanecer) van con el estilo 2.0 (Barra2).
     public static void HudBarra(float vw, float vh, int fila, float pct01, Color fill,
                                 string etiqueta, string valor)
     {
         int n = HudBarRects(vw, vh, fila, out var a, out var b);
-        Barra(a, pct01, fill, etiqueta, valor);
-        if (n > 1) Barra(b, pct01, fill, etiqueta, valor);
+        Barra2(a, pct01, fill, etiqueta, valor);
+        if (n > 1) Barra2(b, pct01, fill, etiqueta, valor);
+    }
+
+    // Barra 2.0: píldora oscura con borde fino y el relleno redondeado adentro. Etiqueta
+    // en Bebas a la izquierda, valor en mono a la derecha.
+    public static void Barra2(Rect r, float pct01, Color fill, string etiqueta, string valor)
+    {
+        if (Event.current.type == EventType.Repaint)
+        {
+            float radio = r.height * 0.5f;
+            Tarjeta2(r, Hoja2, null, radio);
+            const float inner = 3f;
+            var track = new Rect(r.x + inner, r.y + inner, r.width - 2f * inner, r.height - 2f * inner);
+            float w = track.width * Mathf.Clamp01(pct01);
+            // Nunca más angosto que alto: con poca carga queda un punto redondo, no una astilla.
+            if (w > 0.5f)
+                FillR(new Rect(track.x, track.y, Mathf.Max(w, track.height), track.height),
+                      new Color(fill.r, fill.g, fill.b, 0.8f), track.height * 0.5f);
+        }
+
+        if (!string.IsNullOrEmpty(etiqueta))
+            GUI.Label(new Rect(r.x + 12f, r.y, r.width - 24f, r.height), etiqueta,
+                      Estilo(FBebas, 15, Cream, TextAnchor.MiddleLeft));
+        if (!string.IsNullOrEmpty(valor))
+            GUI.Label(new Rect(r.x + 12f, r.y, r.width - 24f, r.height), valor,
+                      Estilo(FMono, 12, Cream, TextAnchor.MiddleRight));
     }
 
     // Barra estilo Mortuorium: fondo + borde + relleno proporcional, con etiqueta a
@@ -515,6 +550,8 @@ public static class MortuoriumTheme
         var st = Estilo(FBebas, 26, foco ? Cream : Muted, TextAnchor.MiddleCenter);
         var invisible = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
         Action volver = () => { AudioManager.Sonar(c => c.uiVolver); onClick?.Invoke(); };
+        // Rediseño 2.0: la ← del mando hace lo mismo que este botón (ver ImguiGamepadMenu).
+        if (Event.current.type == EventType.Repaint) ImguiGamepadMenu.RegistrarVolver(volver);
         if (nav != null) nav.Button(r, "", invisible, volver);
         else if (GUI.Button(r, "", invisible)) volver();
         GUI.Label(r, "<", st);
@@ -612,5 +649,137 @@ public static class MortuoriumTheme
         var pill = new Rect(r.xMax - 74f, r.y + (r.height - 30f) * 0.5f, 58f, 30f);
         Borde(pill, valor ? Tan : Border);
         GUI.Label(pill, valor ? "ON" : "OFF", Estilo(FMono, 12, valor ? Tan : Dim, TextAnchor.MiddleCenter));
+    }
+
+    // ══ Estilo 2.0 en IMGUI ════════════════════════════════════════════════
+    // El lenguaje del Rediseño 2.0 (Rediseno.UI.TemaUI: tarjetas con esquinas redondeadas,
+    // borde fino claro, botón principal con degradé rojo, foco dorado) para las pantallas
+    // que siguen siendo IMGUI, como el escáner. Funciones aparte a propósito: Boton/Fill/
+    // Borde siguen dibujando el estilo viejo para los menús que todavía lo usan.
+    //
+    // Las esquinas las dibuja el propio IMGUI (GUI.DrawTexture con radio: un solo draw por
+    // rectángulo, con antialias). Si el build no trajera su shader interno, cae a esquinas
+    // rectas en vez de dibujar mal.
+    public const float Radio2 = 12f;                                      // tarjetas / botones
+    public static readonly Color Panel2 = new(0.086f, 0.071f, 0.063f, 0.78f);   // TemaUI.Panel
+    public static readonly Color Hoja2  = new(0.047f, 0.039f, 0.035f, 0.92f);   // paneles sobre la cámara
+    public static readonly Color Linea2 = new(0.914f, 0.890f, 0.839f, 0.16f);   // TemaUI.Linea
+    public static readonly Color Rojo2  = new(0.784f, 0.196f, 0.243f, 1f);      // TemaUI.Red
+
+    private static bool? _redondeoOk;
+    private static bool RedondeoOk =>
+        _redondeoOk ??= Application.isEditor || Shader.Find("Hidden/Internal-GUIRoundedRect") != null;
+
+    public static void FillR(Rect r, Color c, float radio = Radio2)
+    {
+        if (!RedondeoOk) { Fill(r, c); return; }
+        GUI.DrawTexture(r, White(), ScaleMode.StretchToFill, true, 0f, c * GUI.color, 0f, radio);
+    }
+
+    public static void BordeR(Rect r, Color c, float radio = Radio2, float ancho = 1.5f)
+    {
+        if (!RedondeoOk) { Borde(r, c, ancho); return; }
+        GUI.DrawTexture(r, White(), ScaleMode.StretchToFill, true, 0f, c * GUI.color, ancho, radio);
+    }
+
+    // Tarjeta: relleno oscuro translúcido + borde fino claro.
+    public static void Tarjeta2(Rect r, Color? relleno = null, Color? borde = null, float radio = Radio2,
+                                float ancho = 1.5f)
+    {
+        FillR(r, relleno ?? Panel2, radio);
+        BordeR(r, borde ?? Linea2, radio, ancho);
+    }
+
+    // Relleno con el degradé rojo del botón principal (rojo arriba → bordó abajo).
+    public static void FillRojo(Rect r, float radio = Radio2)
+    {
+        var tex = Rediseno.UI.TemaUI.DegradeRojo;
+        if (!RedondeoOk) { GUI.DrawTexture(r, tex, ScaleMode.StretchToFill); return; }
+        GUI.DrawTexture(r, tex, ScaleMode.StretchToFill, true, 0f, GUI.color, 0f, radio);
+    }
+
+    // Botón 2.0. primario = degradé rojo; secundario = tarjeta. Foco del mando (o
+    // 'resaltado') = borde dorado. Deshabilitado = todo apagado.
+    public static bool Boton2(ImguiGamepadMenu nav, Rect r, string label, bool primario,
+                              Action onClick, bool enabled = true, int fontSize = 17,
+                              Color? textColor = null, float radio = Radio2)
+    {
+        bool foco = nav != null && enabled && ImguiGamepadMenu.NextHasFocus;
+        if (Event.current.type == EventType.Repaint)
+        {
+            if (!enabled) Tarjeta2(r, new Color(0f, 0f, 0f, 0.45f), new Color(Linea2.r, Linea2.g, Linea2.b, 0.08f), radio);
+            else if (primario) { FillRojo(r, radio); BordeR(r, new Color(1f, 1f, 1f, 0.10f), radio); }
+            else Tarjeta2(r, null, null, radio);
+            if (foco) BordeR(r, Tan, radio, 2.5f);
+        }
+
+        var st = Estilo(FBebas, fontSize,
+                        !enabled ? Disabled : (textColor ?? Cream), TextAnchor.MiddleCenter);
+        var invisible = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
+        bool prevEnabled = GUI.enabled;
+        GUI.enabled = enabled;
+        bool clicked;
+        if (nav != null)
+            clicked = nav.Button(r, "", invisible,
+                                 () => { if (enabled) { AudioManager.Sonar(c => c.uiConfirmar); onClick?.Invoke(); } });
+        else
+        {
+            clicked = GUI.Button(r, "", invisible);
+            if (clicked && enabled) { AudioManager.Sonar(c => c.uiConfirmar); onClick?.Invoke(); }
+        }
+        GUI.enabled = prevEnabled;
+        GUI.Label(r, label, st);
+        return clicked;
+    }
+
+    // Botón "volver" redondo (como el encabezado de las pantallas 2.0).
+    public static void BotonVolver2(ImguiGamepadMenu nav, Action onClick, float x = 16f, float y = 14f)
+    {
+        var r = new Rect(x, y, 44f, 44f);
+        bool foco = nav != null && ImguiGamepadMenu.NextHasFocus;
+        if (Event.current.type == EventType.Repaint)
+        {
+            FillR(r, new Color(0.024f, 0.02f, 0.016f, 0.45f), 22f);
+            BordeR(r, foco ? Tan : new Color(1f, 1f, 1f, 0.25f), 22f, foco ? 2.5f : 1.5f);
+        }
+        var st = Estilo(FBebas, 24, Cream, TextAnchor.MiddleCenter);
+        var invisible = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
+        Action volver = () => { AudioManager.Sonar(c => c.uiVolver); onClick?.Invoke(); };
+        if (Event.current.type == EventType.Repaint) ImguiGamepadMenu.RegistrarVolver(volver);
+        if (nav != null) nav.Button(r, "", invisible, volver);
+        else if (GUI.Button(r, "", invisible)) volver();
+        GUI.Label(r, "<", st);
+    }
+
+    // Slider 2.0: pista redondeada, relleno dorado, perilla redonda crema.
+    public static float Slider2(Rect r, float valor, float min, float max)
+    {
+        float t = Mathf.InverseLerp(min, max, valor);
+        if (Event.current.type == EventType.Repaint)
+        {
+            var track = new Rect(r.x, r.y + r.height * 0.5f - 3f, r.width, 6f);
+            FillR(track, new Color(1f, 1f, 1f, 0.10f), 3f);
+            if (t > 0f) FillR(new Rect(track.x, track.y, track.width * t, track.height), Tan, 3f);
+            const float d = 18f;
+            var thumb = new Rect(track.x + track.width * t - d * 0.5f, r.y + r.height * 0.5f - d * 0.5f, d, d);
+            FillR(thumb, Cream, d * 0.5f);
+        }
+        _sliderBg  ??= new GUIStyle();
+        _sliderThumb2 ??= new GUIStyle { fixedWidth = 18f, fixedHeight = 26f };
+        return GUI.HorizontalSlider(r, valor, min, max, _sliderBg, _sliderThumb2);
+    }
+
+    private static GUIStyle _sliderThumb2;
+
+    // Campo de texto 2.0 (tarjeta redondeada).
+    public static string CampoTexto2(Rect r, string valor, string placeholder)
+    {
+        if (Event.current.type == EventType.Repaint) Tarjeta2(r, BgField);
+        var st = _fieldStyle ??= CrearFieldStyle();
+        string nuevo = GUI.TextField(new Rect(r.x + 14f, r.y, r.width - 28f, r.height), valor ?? "", st);
+        if (string.IsNullOrEmpty(nuevo) && !string.IsNullOrEmpty(placeholder))
+            GUI.Label(new Rect(r.x + 14f, r.y, r.width - 28f, r.height), placeholder,
+                      Estilo(FMono, 15, Dim));
+        return nuevo;
     }
 }

@@ -19,6 +19,8 @@ public static class GameOptions
     // Clave anterior: se conserva como fallback para no reactivar el efecto a quienes
     // ya lo habian apagado cuando la opcion solo mencionaba los menus.
     private const string KeyVhsMenusLegacy = "opt_vhs_menus";
+    private const string KeyRediseno2   = "opt_rediseno2";
+    private const string KeyMenusCuarto = "opt_menus_en_el_cuarto";
     private const string KeyAvisoVerDesc = "opt_aviso_version_desconocida_visto";
 
     // Volumen maestro 0..1 (AudioListener.volume). Persiste entre sesiones.
@@ -156,6 +158,34 @@ public static class GameOptions
         set
         {
             PlayerPrefs.SetInt(KeyAvisoIos, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    // Rediseño 2.0 (experimental): controles por mirada en Cardboard sin joystick, menús
+    // nuevos, etc. Apagado = la app exactamente como venía funcionando. Todo lo nuevo vive
+    // en Assets/Rediseno/ y se lee SOLO a través de Rediseno.Flag.Activo, para que mergear
+    // develop toque lo mínimo del código existente. Default: apagado.
+    public static bool Rediseno2
+    {
+        get => PlayerPrefs.GetInt(KeyRediseno2, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeyRediseno2, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    // Rediseño 2.0, con el visor: ¿los menús quedan QUIETOS EN EL CUARTO (se elige
+    // mirando, con el anillo; sirve sin joystick) o FIJOS DELANTE DE CADA OJO (siguen a la
+    // cabeza; se usan con el joystick)? Default: fijos delante de cada ojo — por ahora se
+    // asume visor + joystick; el modo con la mirada queda para más adelante.
+    public static bool MenusEnElCuarto
+    {
+        get => PlayerPrefs.GetInt(KeyMenusCuarto, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeyMenusCuarto, value ? 1 : 0);
             PlayerPrefs.Save();
         }
     }

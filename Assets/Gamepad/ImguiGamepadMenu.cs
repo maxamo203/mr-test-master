@@ -30,6 +30,11 @@ namespace Gamepad
     // invoca en Tick(). El foco se resalta solo si hay mando conectado. Ítems con GUI.enabled=false
     // se saltean al navegar y no se activan. Con el menú de pausa abierto (PauseMenuController
     // tiene su propia navegación) acá no se navega ni se activa nada.
+    //
+    // Rediseño 2.0 (sólo con Rediseno.Flag prendido; apagado, todo queda como arriba): ruedita
+    // del VR BOX suavizada con repetición tipo teclado, → elige y ← vuelve (con el bloqueo
+    // compartido entre pantallas, Rediseno.BloqueoNav), B/○ del gamepad vuelve, y el foco
+    // inicial de una pantalla nueva saltea el botón "volver".
     public class ImguiGamepadMenu
     {
         // ── API de instancia (los menús la usan; el estado real es estático/global) ──
@@ -55,6 +60,22 @@ namespace Gamepad
         private static int   _focus;
         private static int   _lastCount = -1;
         private static float _navCd;
+        private static readonly Rediseno.RepeticionNav _rep = new();
+
+        // Rediseño 2.0: "volver" pedido con el mando (← de la ruedita del VR BOX, ← o B/○ del
+        // gamepad). Cada pantalla vieja que tenga a dónde volver se suscribe. Sólo se dispara
+        // con Rediseno.Flag prendido.
+        public static event Action PedidoVolver;
+
+        // El botón "volver" (MortuoriumTheme.BotonVolver) que se dibujó en el Repaint de este
+        // frame. Si nadie está suscripto a PedidoVolver, la ← lo acciona: así toda pantalla
+        // vieja con botón de volver lo hereda sin tocarla.
+        private static Action _volverDelPase;
+        public static void RegistrarVolver(Action volver)
+        {
+            SyncPass();   // por si es lo primero que se dibuja en el Repaint de este frame
+            _volverDelPase = volver;
+        }
 
         // Dos botones con centros a menos de esto (px) en vertical son de la misma fila.
         private const float ToleranciaFila = 10f;
@@ -144,6 +165,7 @@ namespace Gamepad
             _repaintFrame = Time.frameCount;
             _frame.Clear();
             _drawIndex = 0;
+            _volverDelPase = null;   // lo vuelve a registrar el BotonVolver de este Repaint
         }
 
         private static void ResolverPedido()
@@ -155,6 +177,17 @@ namespace Gamepad
             _focus         = _drawIndex;
             _hayPedido     = false;
             _resueltoFrame = _repaintFrame;
+        }
+
+        // Para controles dibujados a mano que leen su propio puntero (p. ej. ReferenceCaptureUI,
+        // que no usa GUI.Button): sólo los anota para la navegación con mando, sin un botón
+        // invisible encima (un toque contaría dos veces). Devuelve si tiene el foco, para que
+        // el control pinte su borde. Llamar en el mismo orden en todos los eventos.
+        public static bool RegistrarSinBoton(Rect rect, Action onClick)
+        {
+            bool foco = NextHasFocus;
+            Registrar(rect, onClick);
+            return foco;
         }
 
         // Registra el botón recién dibujado. Sólo cuenta en Repaint: los pases de Layout / input
@@ -205,7 +238,7 @@ namespace Gamepad
             {
                 // Cambió el set de botones (otra pantalla): foco al primero, salvo que un
                 // pedido ya lo haya ubicado en ese mismo Repaint.
-                if (_resueltoFrame != _repaintFrame) _focus = 0;
+                if (_resueltoFrame != _repaintFrame) _focus = PrimerFoco();
                 _lastCount = _frame.Count;
             }
             // El Repaint ya pasó y el destino nunca se dibujó: se descarta el pedido.
@@ -224,7 +257,9 @@ namespace Gamepad
             if ((gp == null && !useMouse) || _frame.Count == 0) return;
 
             float dy;
+            float dx = 0f;
             bool confirm;
+            bool volver = false;
 
             if (useMouse)
             {
@@ -233,23 +268,75 @@ namespace Gamepad
                 float rawY = VRBoxInput.Delta.y;
                 dy      = Mathf.Abs(rawY) > 3f ? Mathf.Clamp(rawY / 12f, -1f, 1f) : 0f;
                 confirm = VRBoxInput.ConfirmDown;
+                if (Rediseno.Flag.Activo)
+                {
+                    // Eje suavizado: el crudo llega a pulsos y entre pulsos parece soltado, lo que
+                    // hacía que mantener la ruedita recorriera todo el menú.
+                    dy = VRBoxInput.SmoothedStick.y; dx = VRBoxInput.SmoothedStick.x;
+                    // La A llega como toque de pantalla en los menús viejos: elige la ruedita →.
+                    confirm = false;
+                }
             }
             else
             {
                 dy = gp.dpad.ReadValue().y;
                 if (Mathf.Abs(dy) < 0.5f) dy = gp.leftStick.ReadValue().y;
                 confirm = gp.buttonSouth.wasPressedThisFrame;
+                if (Rediseno.Flag.Activo)
+                {
+                    Vector2 h = gp.dpad.ReadValue();
+                    dx = Mathf.Abs(h.x) >= 0.5f ? h.x : gp.leftStick.ReadValue().x;
+                    volver = gp.buttonEast.wasPressedThisFrame;
+                }
             }
 
-            _navCd -= Time.unscaledDeltaTime;
-            if (Mathf.Abs(dy) > 0.5f)
+            if (Rediseno.Flag.Activo)
             {
-                if (_navCd <= 0f) { MoveFocus(dy < 0 ? 1 : -1); _navCd = 0.18f; }
+                // → elige y ← vuelve, de a un golpe. Después de cada acción hay que soltar la
+                // palanca y esperar un instante (BloqueoNav), así el empuje que eligió no se lee
+                // otra vez en la pantalla siguiente.
+                bool libre = Rediseno.BloqueoNav.Libre(dx, dy);
+                if (libre && Mathf.Abs(dx) > 0.6f && Mathf.Abs(dx) > Mathf.Abs(dy))
+                {
+                    if (dx > 0f) confirm = true; else volver = true;
+                }
+                if (!libre) { confirm = false; volver = false; }
+
+                if (volver)
+                {
+                    Rediseno.BloqueoNav.TrasAccion();
+                    if (PedidoVolver != null) { AudioManager.Sonar(c => c.uiVolver); PedidoVolver(); return; }
+                    if (_volverDelPase != null) { _volverDelPase(); return; }   // ya suena solo
+                }
+                if (confirm) Rediseno.BloqueoNav.TrasAccion();
+
+                // Repetición tipo teclado: un paso, pausa, ritmo fijo.
+                int paso = _rep.Tick(Mathf.Abs(dy) >= Mathf.Abs(dx) ? dy : 0f, Time.unscaledDeltaTime);
+                if (paso != 0) MoveFocus(paso > 0 ? -1 : 1);
             }
-            else _navCd = 0f;
+            else
+            {
+                _navCd -= Time.unscaledDeltaTime;
+                if (Mathf.Abs(dy) > 0.5f)
+                {
+                    if (_navCd <= 0f) { MoveFocus(dy < 0 ? 1 : -1); _navCd = 0.18f; }
+                }
+                else _navCd = 0f;
+            }
 
             if (confirm && _focus >= 0 && _focus < _frame.Count && _frame[_focus].enabled)
                 _frame[_focus].action?.Invoke();
+        }
+
+        // Foco inicial de una pantalla nueva. Sin el rediseño, el primer botón dibujado (como
+        // siempre). Con el rediseño, el primero en pantalla que NO sea "volver": está arriba a
+        // la izquierda y con el foco ahí un → de más te devolvía a la pantalla anterior.
+        private static int PrimerFoco()
+        {
+            if (!Rediseno.Flag.Activo) return 0;
+            foreach (int i in OrdenVisual())
+                if (_frame[i].enabled && _frame[i].action != _volverDelPase) return i;
+            return 0;
         }
 
         // Índices de _frame ordenados de arriba a abajo y, en la misma fila, de izq. a der.

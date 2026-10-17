@@ -57,7 +57,6 @@ namespace Scanner
         public void SetSelection(ISelectable sel)
         {
             if (CurrentSelection == sel) return;
-            bool selectionWasCleared = CurrentSelection != null && sel == null;
             CurrentSelection?.OnDeselect();
             CurrentSelection = sel;
             sel?.OnSelect();
@@ -67,11 +66,6 @@ namespace Scanner
                 SetMode(ScannerMode.Selected);
             else if (sel == null && Current == ScannerMode.Selected)
                 SetMode(ScannerMode.Idle);
-
-#if UNITY_EDITOR
-            if (selectionWasCleared)
-                EditorPlayerControls.RecaptureAfterScannerDeselect();
-#endif
         }
 
         public void ClearSelection() => SetSelection(null);

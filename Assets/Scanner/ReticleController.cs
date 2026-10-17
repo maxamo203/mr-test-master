@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using T = MortuoriumTheme;
 using UnityEngine.InputSystem;
+using Tutorial = Rediseno.Escaner.TutorialEscaneo;
 
 namespace Scanner
 {
@@ -10,7 +11,8 @@ namespace Scanner
     //   - Barra superior con gradiente: volver al menú + título + hint.
     //   - Retícula central (color según la fuente del raycast).
     //   - Panel inferior con gradiente: fila contextual del flujo activo,
-    //     herramientas (PARED / CUBO / AGUJERO PUERTA / IDENTIFICAR / PISO) y los
+    //     herramientas (PISO / PARED / IDENTIFICAR / AGUJERO PUERTA / CUBO, el orden
+    //     del tutorial) y los
     //     botones COLOCAR + GUARDAR ESCANEO.
     //
     // La cámara AR se ve detrás (acá solo se dibujan overlays IMGUI). Los datos de
@@ -34,6 +36,7 @@ namespace Scanner
 
         // Submenú de "Identificar" (tipos de marcador del catálogo) abierto.
         private bool _markerSubmenuOpen;
+        public bool SubmenuIdentificarAbierto => _markerSubmenuOpen;
 
         // Scroll horizontal de la botonera de herramientas (drag con touch/mouse).
         private float _toolScroll;
@@ -111,8 +114,13 @@ namespace Scanner
                 : RaycastResolver.Instance.ResolveFromScreenCenter();
 
             // Botón A del VR Box (click izquierdo) → Colocar, solo si el menú de pausa está cerrado.
+            // Sólo con el VR BOX en modo mouse: con un mouse de verdad (editor / PC) el clic es
+            // de los botones IMGUI o de arrastrar para mirar, y colocaba un vértice al empezar
+            // a girar la cámara, o dos con un solo clic en COLOCAR (este + el GUI.Button).
             var mouse = Mouse.current;
-            if (mouse != null && mouse.leftButton.wasPressedThisFrame && !Gamepad.PauseMenuController.IsOpen)
+            var gm = Gamepad.GamepadManager.Instance;
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame && !Gamepad.PauseMenuController.IsOpen &&
+                gm != null && gm.UsesMouseInput && !Tutorial.TapaEscaner)
                 OnPlace();
         }
 
@@ -131,6 +139,8 @@ namespace Scanner
             // overlay de guardado abierto, de SaveLoadUI.
             if (_fsm.Current == ScannerMode.Calibrating) return;
             if (SaveLoadUI.EstaAbierto) return;
+            // Hoja del tutorial abierta: tapa el HUD y se lleva los toques.
+            if (Tutorial.TapaEscaner) return;
 
             UIScale.Begin();
             float vw = UIScale.VirtualWidth;
@@ -172,11 +182,11 @@ namespace Scanner
             if (calidad != null) color = calidad.Color;
 
             const float r = 24f, tick = 14f, g = 2f;   // radio, largo del tick, grosor/2
-            T.Fill(new Rect(cx - g, cy - r - tick, g * 2f, tick), color);   // arriba
-            T.Fill(new Rect(cx - g, cy + r, g * 2f, tick), color);          // abajo
-            T.Fill(new Rect(cx - r - tick, cy - g, tick, g * 2f), color);   // izq
-            T.Fill(new Rect(cx + r, cy - g, tick, g * 2f), color);          // der
-            T.Fill(new Rect(cx - g, cy - g, g * 2f, g * 2f), color);        // centro
+            T.FillR(new Rect(cx - g, cy - r - tick, g * 2f, tick), color, g);   // arriba
+            T.FillR(new Rect(cx - g, cy + r, g * 2f, tick), color, g);          // abajo
+            T.FillR(new Rect(cx - r - tick, cy - g, tick, g * 2f), color, g);   // izq
+            T.FillR(new Rect(cx + r, cy - g, tick, g * 2f), color, g);          // der
+            T.FillR(new Rect(cx - g, cy - g, g * 2f, g * 2f), color, g);        // centro
 
             if (calidad != null) calidad.DibujarBajoLaMira(cx, cy);
         }
@@ -185,16 +195,24 @@ namespace Scanner
         {
             T.Gradiente(new Rect(0, 0, vw, 150f), 0.8f, haciaAbajo: true);
 
-            var back = new Rect(Pad, 14f, 56f, 44f);
+            var back = new Rect(Pad, 14f, 44f, 44f);
             UIBlocker.AddVirtualRect(back);
-            T.BotonVolver(null, VolverAlMenu, back.x, back.y);
+            T.BotonVolver2(null, VolverAlMenu, back.x, back.y);
 
             string titulo = !string.IsNullOrEmpty(SaveLoadUI.NombreEdicion)
                 ? "EDITANDO ESCANEO" : "ESCANEO DE ENTORNO";
-            GUI.Label(new Rect(84f, 18f, vw - 100f, 36f), titulo, T.Estilo(T.FBebas, 22, T.Cream));
-            GUI.Label(new Rect(84f, 56f, vw - 100f, 40f),
+            GUI.Label(new Rect(74f, 18f, vw - 90f, 36f), titulo, T.Estilo(T.FBebas, 26, T.Cream));
+
+            // Con el tutorial guiando, su banner ocupa este lugar y dice lo mismo, más preciso.
+            if (Tutorial.GuiaVisible) return;
+            GUI.Label(new Rect(74f, 56f, vw - 90f, 40f),
                       "Apuntá con el centro de la pantalla al punto real y tocá COLOCAR",
                       T.Estilo(T.FMono, 11, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
+
+            // "?" (debajo del botón de pausa): reabre el tutorial desde el paso que falta.
+            var ayuda = new Rect(vw - 76f, 98f, 44f, 44f);
+            UIBlocker.AddVirtualRect(ayuda);
+            T.Boton2(null, ayuda, "?", primario: false, Tutorial.Abrir, fontSize: 24, radio: 22f);
         }
 
         private void VolverAlMenu()
@@ -232,24 +250,17 @@ namespace Scanner
             bool puedeColocar = IsPlacingMode(modo);
             bool puedeGuardar = (modo == ScannerMode.Idle || modo == ScannerMode.Selected) && HayContenido();
 
+            // COLOCAR es la acción principal mientras se coloca (degradé rojo); GUARDAR va como
+            // tarjeta. Píldoras, como la barra de colocar del rediseño.
+            const float radioPildora = BotonesH * 0.5f;
             var rColocar = new Rect(Pad, yBotones, bw, botonesH);
-            bool focoColocar = puedeColocar;
-            T.Fill(rColocar, focoColocar ? new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.18f)
-                                         : new Color(0f, 0f, 0f, 0.4f));
-            T.Borde(rColocar, puedeColocar ? T.Tan : T.BorderDim);
-            if (GUI.Button(rColocar, "COLOCAR",
-                           T.Estilo(T.FBebas, 18, puedeColocar ? T.Cream : T.Disabled, TextAnchor.MiddleCenter))
-                && puedeColocar)
-                OnPlace();
+            T.Boton2(null, rColocar, "COLOCAR", primario: true, OnPlace,
+                     enabled: puedeColocar, fontSize: 22, radio: radioPildora);
+            Tutorial.Resaltar("colocar", rColocar, radioPildora);
 
             var rGuardar = new Rect(Pad + bw + 10f, yBotones, bw, botonesH);
-            T.Fill(rGuardar, puedeGuardar ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.20f)
-                                          : new Color(0f, 0f, 0f, 0.4f));
-            T.Borde(rGuardar, puedeGuardar ? T.Red : T.BorderDim);
-            if (GUI.Button(rGuardar, "GUARDAR ESCANEO",
-                           T.Estilo(T.FBebas, 16, puedeGuardar ? T.Cream : T.Disabled, TextAnchor.MiddleCenter))
-                && puedeGuardar)
-                SaveLoadUI.Abrir();
+            T.Boton2(null, rGuardar, "GUARDAR ESCANEO", primario: false, SaveLoadUI.Abrir,
+                     enabled: puedeGuardar, fontSize: 18, radio: radioPildora);
         }
 
         private bool HayContenido()
@@ -284,19 +295,19 @@ namespace Scanner
             // vino de la imagen o de la calibración manual.
             bool hayOrigen = WorldOrigin.Instance != null && WorldOrigin.Instance.IsReady;
 
-            // Entradas de la botonera (en orden). El item de índice 3 ("IDENTIFICAR")
-            // le cuelga el submenú de marcadores más abajo — si agregás items, hacelo
-            // DESPUÉS de RECALIBRAR para no correr ese índice fijo.
+            // Entradas de la botonera, en el orden del tutorial de escaneo (ScanTutorial):
+            // piso → paredes → identificadores → huecos de puerta → cubos. Después las
+            // herramientas de calibración, que no son pasos del escaneo.
             var items = new List<(string label, MortuoriumIcons.Icon icon, bool activo, bool enabled, Action onTap)>
             {
-                ("PARED",        MortuoriumIcons.Icon.Pared,  enPared,  idle, () => _wallBuilder?.StartPolyline()),
-                ("CUBO",         MortuoriumIcons.Icon.Cubo,   enCubo,   idle, () => _cubeBuilder?.StartCube()),
-                ("AGUJERO\nPUERTA", MortuoriumIcons.Icon.Puerta, enPuerta, idle, () => _doorBuilder?.StartDoor()),
-                ("IDENTIFICAR",  MortuoriumIcons.Icon.Marca,  enMarker || _markerSubmenuOpen, idle,
-                                 () => _markerSubmenuOpen = !_markerSubmenuOpen),
                 (FloorPoint.Instance != null ? "PISO\n(REUBICAR)" : "PISO", MortuoriumIcons.Icon.Piso, enPiso, idle,
                                  () => _fsm.SetMode(ScannerMode.Floor_Place)),
-                ("ANCLAS",       MortuoriumIcons.Icon.Ancla,  enAncla,  idle, AbrirColocacionAnclas),
+                ("PARED",        MortuoriumIcons.Icon.Pared,  enPared,  idle, () => _wallBuilder?.StartPolyline()),
+                ("IDENTIFICAR",  MortuoriumIcons.Icon.Marca,  enMarker || _markerSubmenuOpen, idle,
+                                 () => _markerSubmenuOpen = !_markerSubmenuOpen),
+                ("AGUJERO\nPUERTA", MortuoriumIcons.Icon.Puerta, enPuerta, idle, () => _doorBuilder?.StartDoor()),
+                ("CUBO",         MortuoriumIcons.Icon.Cubo,   enCubo,   idle, () => _cubeBuilder?.StartCube()),
+                ("ANCLAS",     MortuoriumIcons.Icon.Ancla,  enAncla,  idle, AbrirColocacionAnclas),
                 ("AJUSTAR\nORIGEN", MortuoriumIcons.Icon.Origen, enOrigen, idle && hayOrigen, AbrirAjusteOrigen),
                 ("RECALIBRAR\n(fijo)", MortuoriumIcons.Icon.RecalFijo, false, puedeRecal, () => Recalibrar(true)),
                 ("RECALIBRAR\n(+mover)", MortuoriumIcons.Icon.RecalMover, false, puedeRecal, () => Recalibrar(false)),
@@ -314,10 +325,19 @@ namespace Scanner
             float maxScroll = Mathf.Max(0f, contentW - viewport.width);
 
             HandleToolDrag(viewport, maxScroll);
+
+            // El tutorial pide una herramienta: la barra se corre sola hasta dejarla centrada.
+            int pedida = items.FindIndex(it => Tutorial.EsObjetivo(ClaveTutorial(it.icon)));
+            if (pedida >= 0 && !_toolDragging && Event.current.type == EventType.Repaint)
+            {
+                float destino = pedida * (ToolW + ToolGap) - (viewport.width - ToolW) * 0.5f;
+                _toolScroll = Mathf.MoveTowards(_toolScroll, Mathf.Clamp(destino, 0f, maxScroll),
+                                                900f * Time.unscaledDeltaTime);
+            }
             _toolScroll = Mathf.Clamp(_toolScroll, 0f, maxScroll);
 
-            // Índice de "Identificar" para colgar el submenú (4º item).
-            const int identIdx = 3;
+            // Índice de "Identificar" para colgarle el submenú.
+            int identIdx = items.FindIndex(it => it.icon == MortuoriumIcons.Icon.Marca);
             _identScreenX = viewport.x + identIdx * (ToolW + ToolGap) - _toolScroll;
             _identVisible = _identScreenX + ToolW > viewport.x && _identScreenX < viewport.xMax;
 
@@ -337,8 +357,8 @@ namespace Scanner
                 float t = viewport.width / contentW;
                 float sw = viewport.width * t;
                 float sx = viewport.x + (viewport.width - sw) * (_toolScroll / maxScroll);
-                T.Fill(new Rect(viewport.x, viewport.yMax - 3f, viewport.width, 2f), new Color(1f, 1f, 1f, 0.06f));
-                T.Fill(new Rect(sx, viewport.yMax - 3f, sw, 2f), new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.7f));
+                T.FillR(new Rect(viewport.x, viewport.yMax + 4f, viewport.width, 3f), new Color(1f, 1f, 1f, 0.08f), 1.5f);
+                T.FillR(new Rect(sx, viewport.yMax + 4f, sw, 3f), new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.8f), 1.5f);
             }
 
             if (_markerSubmenuOpen && idle && _identVisible && _markerBuilder != null)
@@ -378,23 +398,38 @@ namespace Scanner
         private void DrawTool(Rect r, string label, MortuoriumIcons.Icon icon,
                               bool activo, bool enabled, Action onTap)
         {
-            Color borde = activo ? T.Red : enabled ? T.Border : T.BorderDim;
-            T.Fill(r, activo ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.18f)
-                             : new Color(0f, 0f, 0f, 0.55f));
-            T.Borde(r, borde);
+            // Tarjeta redondeada (estilo 2.0); la herramienta activa, teñida y con borde rojo.
+            if (Event.current.type == EventType.Repaint)
+            {
+                if (activo) T.Tarjeta2(r, new Color(T.Rojo2.r, T.Rojo2.g, T.Rojo2.b, 0.22f), T.Rojo2, 14f);
+                else if (enabled) T.Tarjeta2(r, null, null, 14f);
+                else T.Tarjeta2(r, new Color(0f, 0f, 0f, 0.45f), new Color(1f, 1f, 1f, 0.06f), 14f);
+            }
 
             // Ícono arriba (cuadrado centrado), etiqueta abajo.
-            float ico = 42f;
-            MortuoriumIcons.Draw(new Rect(r.x + (r.width - ico) * 0.5f, r.y + 8f, ico, ico),
+            float ico = 40f;
+            MortuoriumIcons.Draw(new Rect(r.x + (r.width - ico) * 0.5f, r.y + 9f, ico, ico),
                                  icon, enabled ? 1f : 0.4f);
-            var st = T.Estilo(T.FMono, 10, activo ? T.Cream : enabled ? T.CreamDim : T.Disabled,
+            var st = T.Estilo(T.FBebas, 14, activo ? T.Cream : enabled ? T.CreamDim : T.Disabled,
                               TextAnchor.UpperCenter, wrap: true);
-            GUI.Label(new Rect(r.x + 2f, r.y + ico + 12f, r.width - 4f, r.height - ico - 14f), label, st);
+            GUI.Label(new Rect(r.x + 2f, r.y + ico + 13f, r.width - 4f, r.height - ico - 14f), label, st);
 
             // Tap (suprimido si venías arrastrando).
             if (GUI.Button(r, GUIContent.none, GUIStyle.none) && enabled && !_toolDragMoved)
                 onTap?.Invoke();
+            Tutorial.Resaltar(ClaveTutorial(icon), r, 14f);
         }
+
+        // Nombre con el que el tutorial de escaneo pide cada herramienta.
+        private static string ClaveTutorial(MortuoriumIcons.Icon icon) => icon switch
+        {
+            MortuoriumIcons.Icon.Piso   => "piso",
+            MortuoriumIcons.Icon.Pared  => "pared",
+            MortuoriumIcons.Icon.Marca  => "identificar",
+            MortuoriumIcons.Icon.Puerta => "puerta",
+            MortuoriumIcons.Icon.Cubo   => "cubo",
+            _ => null,
+        };
 
         // Herramienta ANCLAS: reabre la colocación (agregar más anclas después de haber
         // cerrado). Mientras esté abierta el loop de corrección queda en pausa, así el
@@ -435,14 +470,14 @@ namespace Scanner
             var types = catalog != null ? catalog.Types : null;
             int n = types != null ? types.Count : 0;
 
-            const float bw = 190f, bh = 46f, gap = 6f;
+            const float bw = 190f, bh = 46f, gap = 8f, pad = 8f;
             float totalH = n == 0 ? 48f : n * bh + (n - 1) * gap;
             float x = Mathf.Min(btnIdent.x, UIScale.VirtualWidth - bw - 8f);
-            float y = btnIdent.y - totalH - 14f;
+            float y = btnIdent.y - totalH - 18f;
 
-            var panel = new Rect(x - 5f, y - 5f, bw + 10f, totalH + 10f);
+            var panel = new Rect(x - pad, y - pad, bw + pad * 2f, totalH + pad * 2f);
             UIBlocker.AddVirtualRect(panel);
-            T.Panel(panel, T.BgPanel, T.Border);
+            if (Event.current.type == EventType.Repaint) T.Tarjeta2(panel, T.Hoja2, null, 18f);
 
             if (n == 0)
             {
@@ -451,17 +486,26 @@ namespace Scanner
                 return;
             }
 
+            // Una píldora por tipo, con el color de su marcador (puerta verde, ventana celeste).
             float cy = y;
             foreach (var t in types)
             {
                 if (t == null) { cy += bh + gap; continue; }
                 var r = new Rect(x, cy, bw, bh);
-                if (GUI.Button(r, t.DisplayName, T.Estilo(T.FMono, 13, T.Cream, TextAnchor.MiddleCenter)))
+                if (Event.current.type == EventType.Repaint)
                 {
+                    T.Tarjeta2(r, null, null, bh * 0.5f);
+                    T.FillR(new Rect(r.x + 18f, r.center.y - 6f, 12f, 12f), t.Color, 6f);
+                }
+                if (GUI.Button(r, GUIContent.none, GUIStyle.none))
+                {
+                    AudioManager.Sonar(c => c.uiConfirmar);
                     _markerBuilder.StartMarker(t);
                     _markerSubmenuOpen = false;
                 }
-                T.Borde(new Rect(r.x, r.yMax - 1f, r.width, 1f), T.BorderDim, 1f);
+                GUI.Label(new Rect(r.x + 40f, r.y, r.width - 50f, r.height), t.DisplayName.ToUpperInvariant(),
+                          T.Estilo(T.FBebas, 18, T.Cream, TextAnchor.MiddleLeft));
+                Tutorial.Resaltar("tipo-marcador", r, bh * 0.5f);
                 cy += bh + gap;
             }
         }
@@ -508,14 +552,13 @@ namespace Scanner
 
             var panel = new Rect(Pad, yBase - hPanel, vw - Pad * 2f, hPanel);
             UIBlocker.AddVirtualRect(panel);
-            T.Fill(panel, new Color(0f, 0f, 0f, 0.65f));
-            T.Borde(panel, T.BorderDim);
+            PanelContextual(panel);
 
             float x = panel.x + 12f, w = panel.width - 24f;
             float y = panel.y + 10f;
 
             GUI.Label(new Rect(x, y, w, 34f), hint,
-                      T.Estilo(T.FElite, 12, T.Tan, TextAnchor.UpperLeft, wrap: true));
+                      EstiloHint);
             y += 34f;
 
             if (enPared && _wallBuilder != null)
@@ -524,7 +567,7 @@ namespace Scanner
                 GUI.Label(new Rect(x, y, w * 0.55f, 20f),
                           $"Ancho pared: {_wallBuilder.CurrentPolylineWidth:F2} m",
                           T.Estilo(T.FMono, 11, T.CreamDim));
-                float nuevoW = T.Slider(new Rect(x + w * 0.58f, y - 4f, w * 0.42f, 26f),
+                float nuevoW = T.Slider2(new Rect(x + w * 0.58f, y - 4f, w * 0.42f, 26f),
                                         _wallBuilder.CurrentPolylineWidth, 0.05f, 0.5f);
                 if (Mathf.Abs(nuevoW - _wallBuilder.CurrentPolylineWidth) > 0.001f)
                     _wallBuilder.SetPolylineWidth(nuevoW);
@@ -532,30 +575,35 @@ namespace Scanner
 
                 // Check de cierre automatico (en memoria, se mantiene entre ediciones).
                 var rCerrar = new Rect(x, y, w, 26f);
-                var box = new Rect(x, y + 4f, 18f, 18f);
-                T.Borde(box, T.Border);
-                if (_closePolyline) T.Fill(new Rect(box.x + 4f, box.y + 4f, 10f, 10f), T.Tan);
+                var box = new Rect(x, y + 3f, 20f, 20f);
+                if (Event.current.type == EventType.Repaint)
+                {
+                    T.Tarjeta2(box, null, _closePolyline ? T.Tan : null, 6f);
+                    if (_closePolyline) T.FillR(new Rect(box.x + 5f, box.y + 5f, 10f, 10f), T.Tan, 3f);
+                }
                 if (GUI.Button(rCerrar, GUIContent.none, GUIStyle.none))
                     _closePolyline = !_closePolyline;
                 GUI.Label(new Rect(x + 26f, y, w - 26f, 26f), "Cerrar (unir al inicio)",
                           T.Estilo(T.FMono, 11, T.CreamDim));
                 y += 32f;
 
-                T.Boton(null, new Rect(x, y, w, 40f), "TERMINAR POLILÍNEA", primario: false,
+                T.Boton2(null, new Rect(x, y, w, 40f), "TERMINAR POLILÍNEA", primario: false,
                         () => _wallBuilder.EndPolyline(_closePolyline), fontSize: 15);
+                Tutorial.Resaltar("terminar", new Rect(x, y, w, 40f));
                 y += 48f;
             }
 
             if (modo == ScannerMode.Cube_V3)
             {
-                T.Boton(null, new Rect(x, y, w, 40f), "CONFIRMAR SIN ROTAR", primario: false,
+                T.Boton2(null, new Rect(x, y, w, 40f), "CONFIRMAR SIN ROTAR", primario: false,
                         () => _cubeBuilder?.ConfirmCubeAxisAligned(), fontSize: 15);
+                Tutorial.Resaltar("sin-rotar", new Rect(x, y, w, 40f));
                 y += 48f;
             }
 
             if (modo == ScannerMode.AutoWall_Confirm)
             {
-                T.Boton(null, new Rect(x, y, w, 40f), "CONFIRMAR PARED", primario: true,
+                T.Boton2(null, new Rect(x, y, w, 40f), "CONFIRMAR PARED", primario: true,
                         () => _autoWallBuilder?.ConfirmSelected(), fontSize: 15);
                 y += 48f;
             }
@@ -564,13 +612,13 @@ namespace Scanner
             // ARPlaneManager entero (AutoWall_Scanning); "descartar" solo suelta el
             // candidato tocado y vuelve a escanear (AutoWall_Confirm).
             if (modo == ScannerMode.AutoWall_Scanning)
-                T.Boton(null, new Rect(x, y, w, 40f), "TERMINAR", primario: false,
+                T.Boton2(null, new Rect(x, y, w, 40f), "TERMINAR", primario: false,
                         () => _autoWallBuilder?.EndAutoScan(), fontSize: 14, textColor: T.Muted);
             else if (modo == ScannerMode.AutoWall_Confirm)
-                T.Boton(null, new Rect(x, y, w, 40f), "DESCARTAR", primario: false,
+                T.Boton2(null, new Rect(x, y, w, 40f), "DESCARTAR", primario: false,
                         () => _autoWallBuilder?.DiscardSelected(), fontSize: 14, textColor: T.Muted);
             else
-                T.Boton(null, new Rect(x, y, w, 40f), "CANCELAR", primario: false,
+                T.Boton2(null, new Rect(x, y, w, 40f), "CANCELAR", primario: false,
                         () => _fsm.SetMode(ScannerMode.Idle), fontSize: 14,
                         textColor: T.Muted);
         }
@@ -587,8 +635,7 @@ namespace Scanner
             const float hPanel = 30f + 26f + 48f + 40f + 24f;
             var panel = new Rect(Pad, yBase - hPanel, vw - Pad * 2f, hPanel);
             UIBlocker.AddVirtualRect(panel);
-            T.Fill(panel, new Color(0f, 0f, 0f, 0.65f));
-            T.Borde(panel, T.BorderDim);
+            PanelContextual(panel);
 
             float x = panel.x + 12f, w = panel.width - 24f;
             float y = panel.y + 10f;
@@ -596,7 +643,7 @@ namespace Scanner
             GUI.Label(new Rect(x, y, w, 30f),
                       "Colocá anclas repartidas por el cuarto y tocá COLOCAR; " +
                       "sirven para que el escaneo no se corra al alejarte",
-                      T.Estilo(T.FElite, 12, T.Tan, TextAnchor.UpperLeft, wrap: true));
+                      EstiloHint);
             y += 32f;
 
             string estado = mgr.Count < AnchorPointManager.MinAnclas
@@ -610,14 +657,14 @@ namespace Scanner
             y += 26f;
 
             float bw = (w - 10f) * 0.5f;
-            T.Boton(null, new Rect(x, y, bw, 40f), "DESHACER", primario: false,
+            T.Boton2(null, new Rect(x, y, bw, 40f), "DESHACER", primario: false,
                     () => { mgr.DeshacerUltima(); _errorAnclas = null; },
                     enabled: mgr.Count > 0, fontSize: 14);
-            T.Boton(null, new Rect(x + bw + 10f, y, bw, 40f), "LISTO", primario: false,
+            T.Boton2(null, new Rect(x + bw + 10f, y, bw, 40f), "LISTO", primario: false,
                     () => CerrarAnclas(cerrar: true), enabled: mgr.PuedeCerrar, fontSize: 14);
             y += 48f;
 
-            T.Boton(null, new Rect(x, y, w, 32f), "OMITIR ANCLAS", primario: false,
+            T.Boton2(null, new Rect(x, y, w, 32f), "OMITIR ANCLAS", primario: false,
                     () => CerrarAnclas(cerrar: false), fontSize: 12, textColor: T.Muted);
         }
 
@@ -630,8 +677,7 @@ namespace Scanner
             const float hPanel = 44f + 26f + 48f + 48f + 20f;
             var panel = new Rect(Pad, yBase - hPanel, vw - Pad * 2f, hPanel);
             UIBlocker.AddVirtualRect(panel);
-            T.Fill(panel, new Color(0f, 0f, 0f, 0.65f));
-            T.Borde(panel, T.BorderDim);
+            PanelContextual(panel);
 
             float x = panel.x + 12f, w = panel.width - 24f;
             float y = panel.y + 10f;
@@ -639,7 +685,7 @@ namespace Scanner
             GUI.Label(new Rect(x, y, w, 44f),
                       "arrastrá las flechas para mover el mapa y el anillo para girarlo; " +
                       "con RECENTRAR lo llevás al punto que estés apuntando",
-                      T.Estilo(T.FElite, 12, T.Tan, TextAnchor.UpperLeft, wrap: true));
+                      EstiloHint);
             y += 46f;
 
             if (!string.IsNullOrEmpty(_errorOrigen))
@@ -651,17 +697,26 @@ namespace Scanner
                           T.Estilo(T.FMono, 11, T.CreamDim));
             y += 26f;
 
-            T.Boton(null, new Rect(x, y, w, 40f), "RECENTRAR ACÁ", primario: false,
+            T.Boton2(null, new Rect(x, y, w, 40f), "RECENTRAR ACÁ", primario: false,
                     () => _errorOrigen = ManualCalibration.Ensure().CentrarBajoLaMira(out var err) ? null : err,
                     fontSize: 15);
             y += 48f;
 
             float bw = (w - 10f) * 0.5f;
-            T.Boton(null, new Rect(x, y, bw, 40f), "CANCELAR", primario: false,
+            T.Boton2(null, new Rect(x, y, bw, 40f), "CANCELAR", primario: false,
                     () => CerrarAjusteOrigen(conservar: false), fontSize: 14, textColor: T.Muted);
-            T.Boton(null, new Rect(x + bw + 10f, y, bw, 40f), "LISTO", primario: true,
+            T.Boton2(null, new Rect(x + bw + 10f, y, bw, 40f), "LISTO", primario: true,
                     () => CerrarAjusteOrigen(conservar: true), fontSize: 14);
         }
+
+        // Panel contextual (sobre la botonera) con el estilo 2.0: tarjeta oscura redondeada.
+        private static void PanelContextual(Rect panel)
+        {
+            if (Event.current.type == EventType.Repaint) T.Tarjeta2(panel, T.Hoja2, null, 18f);
+        }
+
+        // Texto de ayuda de los paneles: mono claro, como las ayudas de las pantallas 2.0.
+        private static GUIStyle EstiloHint => T.Estilo(T.FMono, 12, T.CreamDim, TextAnchor.UpperLeft, wrap: true);
 
         private void CerrarAjusteOrigen(bool conservar)
         {

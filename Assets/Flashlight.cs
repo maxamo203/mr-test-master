@@ -348,6 +348,8 @@ static readonly int ID_COS_INNER = Shader.PropertyToID("_FlashlightCosInner");
         {
             if (currentCharge > 0f)
             {
+                // CurrentDrainPerSecond ya distingue tenue/intensa; el multiplicador es el
+                // slider dev "Drenaje batería" de la pausa.
                 currentCharge = Mathf.Max(0f,
                     currentCharge - CurrentDrainPerSecond * MultiplicadorDrenaje * Time.deltaTime);
             }

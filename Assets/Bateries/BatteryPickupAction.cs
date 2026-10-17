@@ -7,7 +7,7 @@ namespace Bateries
     //
     // El pickup es autoritativo del server: el host lo resuelve local; el cliente manda
     // BatteryPickup y el server valida cercanía.
-    public class BatteryPickupAction : MonoBehaviour, IContextAction
+    public class BatteryPickupAction : MonoBehaviour, IContextAction, Rediseno.IObjetivoMirada
     {
         [Header("Prioridad")]
         [SerializeField] private int priority = 100;
@@ -26,6 +26,7 @@ namespace Bateries
 
         public int  Priority         => priority;
         public bool ShowActionButton => showActionButton;
+        public Transform ObjetivoApuntado => _aimed != null ? _aimed.transform : null;
 
         private Camera        _cam;
         private BatteryEntity _aimed;
@@ -43,7 +44,7 @@ namespace Bateries
                 _aimed = FindAimedBattery();
             }
 
-            if (_aimed != null) { label = "Recoger"; return true; }
+            if (_aimed != null) { label = "Recoger pila"; return true; }
             label = null;
             return false;
         }

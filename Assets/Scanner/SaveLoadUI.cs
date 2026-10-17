@@ -74,7 +74,7 @@ namespace Scanner
             T.FillScreen(T.Bg);
             UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
 
-            T.BotonVolver(_nav, () => _abierto = false);
+            T.BotonVolver2(_nav, () => _abierto = false);
 
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "GUARDAR ESCANEO",
                       T.Estilo(T.FBebas, 28, T.Cream));
@@ -82,7 +82,7 @@ namespace Scanner
                       "Nombrá este entorno para encontrarlo luego",
                       T.Estilo(T.FElite, 12, T.Dim));
 
-            _nombre = T.CampoTexto(new Rect(Pad, 170f, vw - Pad * 2f, 52f),
+            _nombre = T.CampoTexto2(new Rect(Pad, 170f, vw - Pad * 2f, 52f),
                                    _nombre, "Ej: living de casa");
 
             // Aviso si el escaneo no tiene imagen de referencia asociada (sin ella
@@ -92,16 +92,16 @@ namespace Scanner
             if (!hayImagen)
                 GUI.Label(new Rect(Pad, 234f, vw - Pad * 2f, 44f),
                           "Ojo: este escaneo no tiene imagen de referencia; sin ella no " +
-                          "se puede usar en multijugador.",
+                          "se va a poder jugar (ni solo ni en multijugador). Capturala antes de guardar.",
                           T.Estilo(T.FMono, 11, T.Tan, TextAnchor.UpperLeft, wrap: true));
 
             float y = 292f;
-            T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f), "GUARDAR", primario: true, Guardar);
+            T.Boton2(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f), "GUARDAR", primario: true, Guardar);
             y += 68f;
 
             // Compartir (.mscn) solo si ya existe en disco.
             if (!string.IsNullOrEmpty(NombreEdicion))
-                T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 50f), "COMPARTIR (.MSCN)",
+                T.Boton2(_nav, new Rect(Pad, y, vw - Pad * 2f, 50f), "COMPARTIR (.MSCN)",
                         primario: false, Compartir, fontSize: 16);
 
             _nav.End();

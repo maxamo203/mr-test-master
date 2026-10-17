@@ -6,7 +6,7 @@ namespace Collectibles
     // Acción contextual: recoger la reliquia que el jugador está apuntando con la
     // cámara. Igual mecanismo que BatteryPickupAction (apuntado + botón, autoritativo
     // del server), variante para el coleccionable de noche.
-    public class CollectiblePickupAction : MonoBehaviour, IContextAction
+    public class CollectiblePickupAction : MonoBehaviour, IContextAction, Rediseno.IObjetivoMirada
     {
         [Header("Prioridad")]
         [SerializeField] private int priority = 100;
@@ -24,6 +24,7 @@ namespace Collectibles
 
         public int  Priority         => priority;
         public bool ShowActionButton => showActionButton;
+        public Transform ObjetivoApuntado => _aimed != null ? _aimed.transform : null;
 
         private Camera            _cam;
         private CollectibleEntity _aimed;
@@ -40,7 +41,7 @@ namespace Collectibles
                 _aimed = FindAimedCollectible();
             }
 
-            if (_aimed != null) { label = "Recoger"; return true; }
+            if (_aimed != null) { label = "Recoger reliquia"; return true; }
             label = null;
             return false;
         }
