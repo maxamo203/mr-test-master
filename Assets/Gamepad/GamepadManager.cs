@@ -36,12 +36,21 @@ namespace Gamepad
     {
         public static GamepadManager Instance { get; private set; }
 
-        // El gamepad activo (null si no hay ninguno).
+        // El gamepad activo (null si no hay ninguno, o si el VR BOX se detectó sólo por
+        // Android: ver _vrBoxAndroid).
         public UnityEngine.InputSystem.Gamepad Current { get; private set; }
-        public bool IsConnected => Current != null && Current.added;
+        public bool IsConnected => (Current != null && Current.added) || _vrBoxAndroid;
         // True cuando el control conectado reporta "Mouse" en el nombre (ej: VR BOX Mouse).
         // En ese modo el stick manda delta de mouse en vez de eje analógico.
-        public bool UsesMouseInput => IsConnected && EsVRBoxMouse(Current);
+        public bool UsesMouseInput => (Current != null && Current.added && EsVRBoxMouse(Current)) || _vrBoxAndroid;
+
+        // VR BOX en modo mouse que Android tiene conectado pero Unity no registró como
+        // Gamepad (conectado con la app abierta; ver AndroidVRBox). En modo mouse el input
+        // llega igual por el Mouse de Unity, así que alcanza con saber que está. Se sondea
+        // cada SegundosSondeo y sólo mientras Unity no vea ningún gamepad.
+        private bool _vrBoxAndroid;
+        private float _proximoSondeo;
+        private const float SegundosSondeo = 1f;
         // Veces que cambió el gamepad activo desde que arrancó la app (diagnóstico: si sube
         // solo, el mando activo está saltando entre dispositivos).
         public int CambiosDeMando { get; private set; }
@@ -320,39 +329,62 @@ namespace Gamepad
             if (pick == null)
             {
                 if (Current != null) Disconnect();
+                SondearVRBoxAndroid();
                 return;
             }
 
             if (pick != Current) Adopt(pick);
         }
 
+        // Unity no ve ningún gamepad: ¿Android tiene un VR BOX en modo mouse? Barato (unas
+        // pocas llamadas JNI por segundo) y sólo corre en ese caso.
+        private void SondearVRBoxAndroid()
+        {
+            if (Time.unscaledTime < _proximoSondeo) return;
+            _proximoSondeo = Time.unscaledTime + SegundosSondeo;
+
+            bool hay = AndroidVRBox.TryFind(out string nombre);
+            if (hay == _vrBoxAndroid) return;
+            if (!hay) { Disconnect(); return; }
+
+            _vrBoxAndroid = true;
+            CambiosDeMando++;
+            Brand = GamepadBrand.Generic;
+            DisplayName = nombre;
+            AlConectar("Android");
+        }
+
         private void Adopt(UnityEngine.InputSystem.Gamepad g)
         {
             bool wasConnected = IsConnected;
+            _vrBoxAndroid = false;   // Unity ya lo ve: manda su Gamepad
             Current = g;
             CambiosDeMando++;
             Brand = ClassifyBrand(g);
             DisplayName = string.IsNullOrEmpty(g.displayName) ? g.name : g.displayName;
-            if (!wasConnected)
+            if (!wasConnected) AlConectar("Input System");
+        }
+
+        private void AlConectar(string via)
+        {
+            Debug.Log($"[GamepadManager] Conectado: {DisplayName} ({Brand}, vía {via})");
+            RefreshBattery();
+            // En modo mouse el pendorcho mueve un cursor en Android; lo ocultamos y
+            // lo centramos para que tarde más en llegar al borde de pantalla.
+            if (UsesMouseInput)
             {
-                Debug.Log($"[GamepadManager] Conectado: {DisplayName} ({Brand})");
-                RefreshBattery();
-                // En modo mouse el pendorcho mueve un cursor en Android; lo ocultamos y
-                // lo centramos para que tarde más en llegar al borde de pantalla.
-                if (UsesMouseInput)
-                {
-                    Cursor.visible = false;
-                    var m = Mouse.current;
-                    if (m != null) m.WarpCursorPosition(new Vector2(Screen.width * 0.5f, Screen.height * 0.5f));
-                }
-                OnConnected?.Invoke();
+                Cursor.visible = false;
+                var m = Mouse.current;
+                if (m != null) m.WarpCursorPosition(new Vector2(Screen.width * 0.5f, Screen.height * 0.5f));
             }
+            OnConnected?.Invoke();
         }
 
         private void Disconnect()
         {
             string prev = DisplayName;
             Current = null;
+            _vrBoxAndroid = false;
             Brand = GamepadBrand.None;
             DisplayName = "";
             _batteryPresent = false;
@@ -378,7 +410,7 @@ namespace Gamepad
             _batteryLevel = 0f;
             if (!IsConnected) return;
 
-            var bat = Current.TryGetChildControl<UnityEngine.InputSystem.Controls.AxisControl>("batteryLevel");
+            var bat = Current?.TryGetChildControl<UnityEngine.InputSystem.Controls.AxisControl>("batteryLevel");
             if (bat != null)
             {
                 _batteryLevel = Mathf.Clamp01(bat.ReadValue());
@@ -417,9 +449,6 @@ namespace Gamepad
         public GamepadState ReadState()
         {
             var s = new GamepadState();
-            var g = Current;
-            if (g == null || !g.added) return s;
-
             if (UsesMouseInput)
             {
                 s.leftStick = VRBoxInput.SmoothedStick;
@@ -427,6 +456,9 @@ namespace Gamepad
                 // A = back de Android, C = vol+, D = vol- → interceptados por el SO, siempre false
                 return s;
             }
+
+            var g = Current;
+            if (g == null || !g.added) return s;
 
             s.leftStick  = g.leftStick.ReadValue();
             s.rightStick = g.rightStick.ReadValue();

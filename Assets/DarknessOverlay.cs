@@ -113,6 +113,8 @@ public class DarknessOverlay : MonoBehaviour
         if (flashlight != null && !flashlight.Operational)
             effectiveDark = 0f;   // fuera de partida (menú/lobby) no oscurecer: el overlay
                                   // de la linterna solo aparece cuando arranca la partida
+        else if (Gameplay.LocalDeath.MostrandoRetrato)
+            effectiveDark = 0f;   // muerte: el asesino fijo delante de la cara tiene que verse entero
         else if (flashlight != null && !flashlight.isOn)
             effectiveDark = darkWhenFlashlightOff ? darknessWhenOff : 0f;
         else

@@ -16,8 +16,8 @@ namespace Rediseno.UI
     //   Visor (ModoVisor.Activo): el panel se dibuja en una textura y se compone una vez por
     //   ojo, como una pantalla flotando delante tuyo, quieta en el espacio: al girar la
     //   cabeza (giroscopio) la pantalla se queda en su lugar y el punto de mira del centro
-    //   recorre las opciones. Mirar una opción ~1 s la elige (anillo). La ruedita del
-    //   VR BOX sigue funcionando.
+    //   recorre las opciones. Mirar una opción la elige (~2 s en los menús, ~1 s en
+    //   partida; anillo). La ruedita del VR BOX sigue funcionando.
     //
     // Las subclases construyen el árbol en Construir() y deciden en EsVisible() cuándo se
     // muestran. Fondo animado: si la subclase lo dibuja dentro del árbol, en el visor lo
@@ -227,7 +227,7 @@ namespace Rediseno.UI
 
             Nav.TickMandos();
 
-            if (EnVisor) { TickMirada(dt, hayMando); TickToquesVisor(); }
+            if (EnVisor) { TickMirada(dt, MenuNavegable.MandoEnUso); TickToquesVisor(); }
             else TickToques();
 
             // Llevar a la vista la opción enfocada (sólo cuando el foco cambia). Hay que esperar
@@ -310,7 +310,11 @@ namespace Rediseno.UI
         // Ancho angular de la pantalla flotante y campo visual de cada ojo. Con 50° sobre
         // ~90° la pantalla entra entera mirando al frente y se recorre girando poco.
         private const float FovOjo      = Cabeza.MitadVista * 2f;
-        private const float SegundosElegir = 1.1f;
+        // Cuánto hay que mirar una opción para elegirla. Menús (sensor del celular) más lento,
+        // para no elegir de pasada; en partida (cámara AR) más ágil.
+        private const float SegundosElegirMenu    = 2.0f;
+        private const float SegundosElegirPartida = 1.1f;
+        private float SegundosElegir => CabezaPorCamara ? SegundosElegirPartida : SegundosElegirMenu;
         private float _dwell, _frio;
         private MenuNavegable.Opcion _dwellOpcion;
 
@@ -367,7 +371,7 @@ namespace Rediseno.UI
             _yaw = Cabeza.ArrastrarAlBorde(_yaw, limPos, limNeg, ref _refYaw);
         }
 
-        private void TickMirada(float dt, bool hayMando)
+        private void TickMirada(float dt, bool mandoEnUso)
         {
             // Cambio de modo (al entrar al visor o si se tocó la opción): preparar o soltar
             // el sensor de orientación de los menús.
@@ -400,9 +404,10 @@ namespace Rediseno.UI
 
             LeerCabeza(dt);
             _frio -= dt;
-            // Con un mando conectado elige el mando: la mirada no llena el anillo (si no, al
+            // Mientras se usa el mando elige el mando: la mirada no llena el anillo (si no, al
             // apuntar con la cabeza mientras navegás con la palanca se elegían cosas solas).
-            if (EnCuentaRegresiva || hayMando) { _dwell = 0f; _dwellOpcion = null; return; }
+            // Sólo si se usó hace poco (MenuNavegable.MandoEnUso), no por estar conectado.
+            if (EnCuentaRegresiva || mandoEnUso) { _dwell = 0f; _dwellOpcion = null; return; }
 
             var panel = Raiz.panel;
             if (panel == null) return;
