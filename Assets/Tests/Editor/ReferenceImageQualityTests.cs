@@ -130,4 +130,34 @@ public class ReferenceImageQualityTests
         Assert.That(r.Aceptable, Is.False);
         Assert.That(ReferenceImageQuality.Analizar((Texture2D)null).Aceptable, Is.False);
     }
+
+    [Test]
+    public void AvisoCaptura_RecorteChico_AvisaTamanio()
+    {
+        Assert.That(ReferenceImageQuality.AvisoCaptura(200, 600, 10f, null), Does.Contain("chico"));
+    }
+
+    [Test]
+    public void AvisoCaptura_TomaEnAngulo_AvisaAngulo()
+    {
+        Assert.That(ReferenceImageQuality.AvisoCaptura(600, 600, 45f, null), Does.Contain("ángulo"));
+    }
+
+    [Test]
+    public void AvisoCaptura_TamanioPrimaSobreAngulo()
+    {
+        Assert.That(ReferenceImageQuality.AvisoCaptura(200, 600, 45f, "X"), Does.Contain("chico"));
+    }
+
+    [Test]
+    public void AvisoCaptura_TomaBuena_DevuelveAvisoDeContenido()
+    {
+        Assert.That(ReferenceImageQuality.AvisoCaptura(600, 600, 10f, "X"), Is.EqualTo("X"));
+    }
+
+    [Test]
+    public void AvisoCaptura_AnguloSinMedir_NoAvisa()
+    {
+        Assert.That(ReferenceImageQuality.AvisoCaptura(600, 600, -1f, null), Is.Null);
+    }
 }

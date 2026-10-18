@@ -65,6 +65,10 @@ namespace Scanner
         // bloquear (el jugador decide si recaptura).
         private string _avisoCalidad;
 
+        // El ancho se estimó con una distancia real (LiDAR / plano / depth). Si no, la
+        // UI pide medirlo con una regla: un ancho mal cargado hace que ARCore no la siga.
+        private bool _anchoMedido;
+
         // Edición numérica del ancho (teclado nativo en device / TextField en editor).
         private bool  _editing;
         private string _editText = "";
@@ -312,9 +316,19 @@ namespace Scanner
             _fragment.Apply(updateMipmaps: false);
 
             // Punto central del rectángulo en px con origen abajo-izq (para raycast).
+            // Un solo raycast: lo usan la estimación del ancho y la del ángulo de toma.
             var centerBL = new Vector2(_sel.x + _sel.width * 0.5f,
                                        Screen.height - (_sel.y + _sel.height * 0.5f));
-            _widthMeters = EstimateWidthMeters(centerBL, w);
+            var hit = RaycastResolver.Instance != null
+                ? RaycastResolver.Instance.ResolveFromScreenPoint(centerBL)
+                : ResolvedHit.Miss;
+            _widthMeters = EstimateWidthMeters(hit, w);
+            // Sólo LiDAR / plano / depth miden una distancia real: con feature point o
+            // el fallback (lo normal en Android, sin planos en Calibrating) el ancho es
+            // un supuesto y hay que pedirle al jugador que lo mida.
+            _anchoMedido = hit.Hit && (hit.Source == RaycastSource.LidarMesh ||
+                                       hit.Source == RaycastSource.ArPlane   ||
+                                       hit.Source == RaycastSource.ArDepth);
 
             // Orientación: mirando al piso/mesa (o al techo) la imagen es horizontal;
             // mirando de frente, es una pared. Es sólo la estimación inicial.
@@ -322,23 +336,20 @@ namespace Scanner
                 ? ImageAnchorPose.DesdeCamara(_arCamera.transform.forward)
                 : ImageAnchorPose.Orientacion.Desconocida;
 
-            // Calidad del recorte: una pasada sobre una versión reducida a gris.
-            _avisoCalidad = ReferenceImageQuality.Analizar(_fragment.GetPixels32(), w, h).Aviso;
+            // Calidad del recorte: tamaño, ángulo de la toma y una pasada de contenido
+            // sobre una versión reducida a gris. El primer motivo que aplica gana.
+            _avisoCalidad = ReferenceImageQuality.AvisoCaptura(w, h, AnguloToma(hit),
+                ReferenceImageQuality.Analizar(_fragment.GetPixels32(), w, h).Aviso);
 
             _phase = Phase.Confirm;
             _busy = false;
         }
 
-        private float EstimateWidthMeters(Vector2 centerScreenBL, int rectWidthPx)
+        private float EstimateWidthMeters(ResolvedHit hit, int rectWidthPx)
         {
             float dist = _fallbackDistance;
-
-            var rr = RaycastResolver.Instance;
-            if (rr != null && _arCamera != null)
-            {
-                var hit = rr.ResolveFromScreenPoint(centerScreenBL);
-                if (hit.Hit) dist = Vector3.Distance(_arCamera.transform.position, hit.Position);
-            }
+            if (_arCamera != null && hit.Hit && hit.Source != RaycastSource.Fallback)
+                dist = Vector3.Distance(_arCamera.transform.position, hit.Position);
 
             float vFov = (_arCamera != null ? _arCamera.fieldOfView : 60f) * Mathf.Deg2Rad;
             float aspect = _arCamera != null ? _arCamera.aspect : (float)Screen.width / Screen.height;
@@ -346,6 +357,21 @@ namespace Scanner
             float fullWidthAtDist = 2f * dist * Mathf.Tan(hFov * 0.5f);
             float meters = fullWidthAtDist * (rectWidthPx / (float)Screen.width);
             return Mathf.Clamp(meters, MinCm / 100f, MaxCm / 100f);
+        }
+
+        // Ángulo (grados) entre la normal de la superficie y la dirección a la cámara:
+        // 0 = de frente. Con LiDAR / plano la normal es real; si no, se estima por la
+        // inclinación de la cámara según la orientación supuesta. -1 = no se pudo medir.
+        private float AnguloToma(ResolvedHit hit)
+        {
+            if (_arCamera == null) return -1f;
+            var cam = _arCamera.transform;
+            if (hit.Hit && (hit.Source == RaycastSource.LidarMesh || hit.Source == RaycastSource.ArPlane) &&
+                hit.Normal.sqrMagnitude > 0.5f)
+                return Vector3.Angle(hit.Normal.normalized, (cam.position - hit.Position).normalized);
+            return _orientacion == ImageAnchorPose.Orientacion.Vertical
+                ? Mathf.Abs(90f - Vector3.Angle(cam.forward, Vector3.up))
+                : Vector3.Angle(cam.forward, Vector3.down);
         }
 
         // ── Escape: calibrar sin la imagen ───────────────────────────────────────
@@ -465,11 +491,14 @@ namespace Scanner
                           T.Estilo(T.FElite, FsBtn, T.Cream, TextAnchor.MiddleCenter));
 
                 // El sistema AR rechazó el recorte (poco detalle): avisar y ofrecer
-                // recapturar en vez de dejar al jugador buscando para siempre.
-                string aviso = _imageAnchor != null ? _imageAnchor.AvisoImagen : null;
+                // recapturar en vez de dejar al jugador buscando para siempre. Sin
+                // rechazo, la pista de búsqueda (la ve a medias / no la reconoce).
+                string rechazo = _imageAnchor != null ? _imageAnchor.AvisoImagen : null;
+                string aviso = !string.IsNullOrEmpty(rechazo) ? rechazo
+                             : _imageAnchor != null ? _imageAnchor.PistaBusqueda : null;
                 if (!string.IsNullOrEmpty(aviso))
                     DrawAviso(aviso, CaptureBtn().y - sh * 0.075f);
-                DrawBtn(CaptureBtn(), "RECAPTURAR", primario: !string.IsNullOrEmpty(aviso),
+                DrawBtn(CaptureBtn(), "RECAPTURAR", primario: !string.IsNullOrEmpty(rechazo),
                         RecapturarDesdeEspera, principal: true);
                 return;
             }
@@ -484,7 +513,7 @@ namespace Scanner
                 // Esquina para redimensionar (tan) + guía de las 4 esquinas.
                 if (Event.current.type == EventType.Repaint) T.FillR(HandleRect(), T.Tan, Hsz() * 0.3f);
 
-                DrawTopLabel("Ajustá el recuadro sobre una zona con detalle y tocá CAPTURAR");
+                DrawTopLabel("Encuadrá SÓLO la imagen (sin marco ni pared), bien de frente, y tocá CAPTURAR");
                 DrawBtn(CaptureBtn(), "CAPTURAR", primario: true,
                         () => StartCoroutine(CaptureRoutine()), principal: true);
                 Tutorial.Resaltar("capturar", CaptureBtn(), BtnH * 0.5f);
@@ -506,7 +535,7 @@ namespace Scanner
             }
             else // Confirm
             {
-                DrawTopLabel("Ajustá el ancho real de la imagen y confirmá");
+                DrawTopLabel("Medí con una regla el ancho real de la imagen, cargalo y confirmá");
 
                 // Panel inferior para leer los controles sobre la cámara/preview.
                 float panelTop = SliderRow().y - sh * 0.05f;
@@ -529,8 +558,9 @@ namespace Scanner
                 // Etiqueta + slider + input numérico (sin botones +/−).
                 var row = SliderRow();
                 GUI.Label(new Rect(row.x, row.y - sh * 0.032f, sw - row.x * 2f, sh * 0.03f),
-                          "ANCHO REAL DE LA IMAGEN",
-                          T.Estilo(T.FMono, FsLabel, T.Muted, TextAnchor.LowerLeft));
+                          _anchoMedido ? "ANCHO REAL DE LA IMAGEN (estimado)"
+                                       : "ANCHO REAL DE LA IMAGEN — medilo con una regla",
+                          T.Estilo(T.FMono, FsLabel, _anchoMedido ? T.Muted : T.Tan, TextAnchor.LowerLeft));
 
                 DrawSlider(row);
                 DrawNumBox(NumBox());

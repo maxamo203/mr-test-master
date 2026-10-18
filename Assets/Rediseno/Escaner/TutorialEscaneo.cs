@@ -353,7 +353,8 @@ namespace Rediseno.Escaner
                         if (_ancla == null) _ancla = FindFirstObjectByType<ARImageAnchor>();
                         Guia(_ancla != null && _ancla.MuestrasActuales > 0
                             ? "Imagen encontrada, afinando… no muevas el celular."
-                            : "Apuntá a la imagen, bien de frente. Ya la está buscando.");
+                            : (_ancla != null ? _ancla.PistaBusqueda : null)
+                              ?? "Apuntá a la imagen, bien de frente. Ya la está buscando.");
                     }
                     else
                         Guia("Encuadrá la imagen de frente, bien adentro del recuadro, y tocá CAPTURAR.", "capturar");

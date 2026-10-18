@@ -79,6 +79,26 @@ public class ARImageAnchor : MonoBehaviour
     [SerializeField] private float _reacquireDelay = 1.0f;
     private float _searchSince;
 
+    // ── Estado de la búsqueda (para la UI / debug) ────────────────────────────
+    // Qué está viendo ARCore/ARKit mientras se busca: nada, la imagen a medias
+    // (Limited: la vio pero no la puede seguir) o siguiéndola (Tracking). Sólo con
+    // Tracking se ancla; Limited sirve para decirle al jugador qué corregir.
+    public enum EstadoBusqueda { Inactiva, NoLaVe, LaVeAMedias, Siguiendo }
+    public EstadoBusqueda Estado { get; private set; } = EstadoBusqueda.Inactiva;
+    public float SegundosBuscando => Estado == EstadoBusqueda.Inactiva ? 0f : Time.time - _searchSince;
+    public const float SegundosAntesDePista = 8f;
+
+    // Pista para el jugador según el estado. Única fuente del texto: la leen todas
+    // las pantallas de búsqueda (escáner, lobby viejo y nuevo, tutorial de escaneo).
+    public string PistaBusqueda => Estado switch
+    {
+        EstadoBusqueda.LaVeAMedias =>
+            "La cámara la ve pero no la puede seguir: acercate hasta que ocupe al menos un cuarto de la pantalla, mirala de frente y no muevas rápido el celular.",
+        EstadoBusqueda.NoLaVe when SegundosBuscando >= SegundosAntesDePista =>
+            "Todavía no la reconoce. Acercate (que ocupe al menos un cuarto de la pantalla), mirala de frente, con buena luz y sin reflejos. Si sigue sin aparecer, recapturala.",
+        _ => null,
+    };
+
     // ── Muestreo de la pose ───────────────────────────────────────────────────
     // Al detectar la imagen, ARKit/ARCore siguen refinando su pose durante los primeros
     // frames de tracking: las muestras más viejas son las peores. Por eso NO se
@@ -216,7 +236,17 @@ public class ARImageAnchor : MonoBehaviour
 #if UNITY_EDITOR
         return;
 #endif
-        if (!_imageManager.enabled || IsFound) return;
+        if (!_imageManager.enabled || IsFound) { CambiarEstado(EstadoBusqueda.Inactiva); return; }
+
+        // Estado visible de la búsqueda. La librería tiene una sola imagen, así que
+        // no hace falta filtrar por EsImagenActual.
+        var estado = EstadoBusqueda.NoLaVe;
+        foreach (var img in _imageManager.trackables)
+        {
+            if (img.trackingState == TrackingState.Tracking) { estado = EstadoBusqueda.Siguiendo; break; }
+            if (img.trackingState == TrackingState.Limited) estado = EstadoBusqueda.LaVeAMedias;
+        }
+        CambiarEstado(estado);
 
         // Esperamos la ventana de re-adquisición: así el modo se queda en
         // Calibrating y ARKit/ARCore actualiza la pose de la imagen antes de anclar.
@@ -315,6 +345,38 @@ public class ARImageAnchor : MonoBehaviour
         var referencia = img.referenceImage;
         if (_imagenActual != Guid.Empty) return referencia.guid == _imagenActual;
         return !string.IsNullOrEmpty(_nombreActual) && referencia.name == _nombreActual;
+    }
+
+    private void CambiarEstado(EstadoBusqueda nuevo)
+    {
+        if (Estado == nuevo) return;
+        if (Debug.isDebugBuild)
+            Debug.Log($"[ARImageAnchor] Búsqueda: {Estado} → {nuevo} ({SegundosBuscando:0.0}s, trackables={_imageManager.trackables.count}).");
+        Estado = nuevo;
+    }
+
+    // Snapshot de sólo lectura para el panel "Imagen" del Debug HUD (dev build).
+    public string DebugSnapshot()
+    {
+        var sb = new System.Text.StringBuilder(256);
+        sb.Append("IMAGEN ").Append(Estado)
+          .Append("  ").Append(SegundosBuscando.ToString("F1")).Append('s')
+          .Append("  muestras=").Append(MuestrasActuales)
+          .Append("  found=").Append(IsFound);
+        sb.Append("\naviso: ").Append(AvisoImagen ?? "-");
+        if (_imageManager != null)
+            foreach (var img in _imageManager.trackables)
+                sb.Append("\n  ").Append(img.referenceImage.name)
+                  .Append("  ").Append(img.trackingState)
+                  .Append(EsImagenActual(img) ? "  [actual]" : "  [otra]");
+        var tex = Scanner.CapturedReference.Texture;
+        sb.Append("\nref: ").Append(tex != null ? $"{tex.width}×{tex.height} px" : "sin textura")
+          .Append("  ancho=").Append((Scanner.CapturedReference.WidthMeters * 100f).ToString("0")).Append(" cm")
+          .Append("  ").Append(Scanner.CapturedReference.Orientacion);
+#if UNITY_EDITOR
+        sb.Append("\neditor: stub, sin ARCore");
+#endif
+        return sb.ToString();
     }
 
     private void PlaceAnchorAndSpawn(Vector3 position, Quaternion rotation)
@@ -437,7 +499,13 @@ public class ARImageAnchor : MonoBehaviour
             tex.format,
             refImage);
 
-        while (jobState.status == AddReferenceImageJobStatus.Pending) yield return null;
+        // Esperar al JOB, no al status: en ARCore el validador arranca en None mientras
+        // el job está encolado (recién pasa a Pending al correr), así que esperar sólo
+        // "mientras Pending" salía en el mismo frame con None y daba por fallida una
+        // imagen que se registraba bien un instante después. Con el job completo el
+        // status ya es definitivo (Success o un error real).
+        while (!jobState.jobHandle.IsCompleted) yield return null;
+        jobState.jobHandle.Complete();
 
         // El job ya copió la imagen a la librería nativa: la copia RGBA32 no se usa más.
         // (Si la corrutina se corta antes —StopCoroutine en un alta nueva— la copia

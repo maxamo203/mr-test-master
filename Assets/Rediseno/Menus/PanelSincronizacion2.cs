@@ -226,6 +226,7 @@ namespace Rediseno.Menus
                     _estado.style.color = TemaUI.Tan;
                     string a = _anchor != null ? _anchor.AvisoImagen : null;
                     if (!string.IsNullOrEmpty(a)) aviso = a + " Podés ubicar el escenario a mano o re-escanearlo.";
+                    else aviso = _anchor != null ? _anchor.PistaBusqueda : null;
                     break;
                 }
                 case ARLobbyManager.LobbyState.WaitingForClients:

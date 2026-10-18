@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // Representa el origen del mundo compartido entre todos los jugadores.
@@ -7,7 +8,43 @@ public class WorldOrigin : MonoBehaviour
 {
     public static WorldOrigin Instance { get; private set; }
 
-    public bool IsReady { get; private set; }
+    public bool IsReady
+    {
+        get => _isReady;
+        private set
+        {
+            if (value && !_isReady) MostrarMapa();
+            _isReady = value;
+        }
+    }
+    private bool _isReady;
+
+    // ── Mapa oculto hasta la primera calibración ──────────────────────────────
+    // Antes de anclar, WorldOrigin está en el origen de la sesión AR (donde arrancó
+    // el celular), así que el mapa cargado (paredes, cubos, piso) aparece en una pose
+    // arbitraria, cruzado con el cuarto real: confunde justo cuando el jugador está
+    // buscando la imagen. Se oculta todo lo que cuelga del origen hasta que hay
+    // calibración (imagen o manual), y aparece de golpe ya alineado con las paredes
+    // reales. forceRenderingOff y no enabled: no pisa a quien prende/apaga renderers
+    // por su cuenta. El barrido corre sólo mientras !IsReady (lobby / búsqueda).
+    private readonly List<Renderer> _ocultos = new();
+    private static readonly List<Renderer> _buffer = new();
+
+    private void LateUpdate()
+    {
+        if (_isReady) return;
+        GetComponentsInChildren(true, _buffer);
+        foreach (var r in _buffer)
+            if (!r.forceRenderingOff) { r.forceRenderingOff = true; _ocultos.Add(r); }
+        _buffer.Clear();
+    }
+
+    private void MostrarMapa()
+    {
+        foreach (var r in _ocultos)
+            if (r != null) r.forceRenderingOff = false;
+        _ocultos.Clear();
+    }
 
     // Anchor del que colgamos ahora mismo (el de la imagen o uno de los anchor
     // points extra). Null si algo nos desparentó (ver ARImageAnchor.RestartTracking).

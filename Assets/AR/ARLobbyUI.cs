@@ -197,11 +197,16 @@ public class ARLobbyUI : MonoBehaviour
                           T.Estilo(T.FMono, 13, T.Tan));
 
                 // El sistema AR rechazó la imagen guardada con el escaneo (poco detalle):
-                // el jugador tiene que saberlo, porque así nunca la va a encontrar.
+                // el jugador tiene que saberlo, porque así nunca la va a encontrar. Sin
+                // rechazo, la pista de búsqueda (la ve a medias / no la reconoce).
                 string aviso = _imageAnchor != null ? _imageAnchor.AvisoImagen : null;
+                string pista = _imageAnchor != null ? _imageAnchor.PistaBusqueda : null;
                 if (!string.IsNullOrEmpty(aviso))
                     GUI.Label(new Rect(Pad, y + 26f, vw - Pad * 2f, 40f),
                               aviso + " Podés ubicar el entorno a mano o re-escanearlo.",
+                              T.Estilo(T.FMono, 11, T.Tan, TextAnchor.UpperLeft, wrap: true));
+                else if (!string.IsNullOrEmpty(pista))
+                    GUI.Label(new Rect(Pad, y + 26f, vw - Pad * 2f, 40f), pista,
                               T.Estilo(T.FMono, 11, T.Tan, TextAnchor.UpperLeft, wrap: true));
 
                 // Escape: la imagen física se perdió / quedó en otro lado. El entorno

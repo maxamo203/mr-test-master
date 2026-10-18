@@ -25,6 +25,7 @@ using UnityEngine;
 //   Lidar             (DebugLidarUI)      chunks/verts/tris de la malla LiDAR
 //   BenchmarkTracking (DebugBenchmarkUI)  reporte del ARTrackingBenchmark
 //   Anclas            (DebugAnclasUI)     anchor points extra + correcciones de deriva
+//   Imagen            (DebugImagenUI)     estado de la búsqueda de la imagen de referencia
 //   Energia           (PowerProbe +
 //                      DebugEnergiaUI)    batería, térmico, CPU vs GPU, subsistemas AR
 public class DebugHud : MonoBehaviour
@@ -70,6 +71,7 @@ public class DebugHud : MonoBehaviour
         Crear<DebugLidarUI>(root, "Lidar");
         Crear<DebugBenchmarkUI>(root, "BenchmarkTracking");
         Crear<DebugAnclasUI>(root, "Anclas");
+        Crear<DebugImagenUI>(root, "Imagen");
         // Energía lleva DOS componentes en el mismo GO: la sonda que mide y la UI
         // que dibuja (DebugEnergiaUI busca su PowerProbe con GetComponent).
         Crear<PowerProbe, DebugEnergiaUI>(root, "Energia");

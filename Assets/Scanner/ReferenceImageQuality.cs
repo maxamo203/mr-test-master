@@ -26,6 +26,23 @@ namespace Scanner
         public const float MaxSimetria  = 0.75f;
         private const float UmbralGradiente = 0.10f;   // en escala 0..1 de luminancia
 
+        // Defectos de la TOMA (no del contenido) que hacen fallar a ARCore: recorte
+        // con poca resolución y foto sacada en ángulo (la referencia queda deformada
+        // por la perspectiva).
+        public const int   MinLadoPx       = 300;   // ARCore recomienda ≥300 px por lado
+        public const float MaxAnguloGrados = 30f;
+
+        // Primer motivo que aplica, en este orden: tamaño, ángulo, contenido.
+        // anguloGrados < 0 = no se pudo medir.
+        public static string AvisoCaptura(int anchoPx, int altoPx, float anguloGrados, string avisoContenido)
+        {
+            if (Mathf.Min(anchoPx, altoPx) < MinLadoPx)
+                return $"El recorte es chico ({anchoPx}×{altoPx} px): acercate o agrandá el recuadro para que tenga más detalle.";
+            if (anguloGrados > MaxAnguloGrados)
+                return $"La sacaste en ángulo ({anguloGrados:0}°). Recapturala bien de frente: así la reconoce mucho mejor.";
+            return avisoContenido;
+        }
+
         public readonly struct Resultado
         {
             public readonly float Detalle;     // 0..1, fracción de píxeles con borde
