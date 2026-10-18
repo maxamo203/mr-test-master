@@ -175,6 +175,12 @@ namespace Collectibles
             _status = "detenido entre noches.";
         }
 
+        // Práctica PILAS Y RELIQUIAS: las reliquias no aparecen hasta terminar la parte de
+        // las pilas (Gameplay.TutorialPilasReliquias). Mientras tanto el timer no corre, así
+        // que al soltarlas todavía falta la demora inicial. Estático para poder fijarlo antes
+        // de que arranque la noche; quien lo prende lo apaga al morir con la escena.
+        public static bool Retenidas;
+
         // Chequea que haya al menos una variante registrada en el PrefabRegistry bajo
         // CollectibleReliquia + i (i = 0..31) y que tenga CollectibleEntity. Tolera
         // huecos (por si se borra una variante mas adelante).
@@ -342,6 +348,7 @@ namespace Collectibles
                 return;
             }
             if (_hasActive) return; // esperando pickup: el timer solo corre DESPUES
+            if (Retenidas) return;
             if (_night.collectibleMaxPerNight > 0 && _spawnedCount >= _night.collectibleMaxPerNight) return;
 
             _timer -= Time.deltaTime;

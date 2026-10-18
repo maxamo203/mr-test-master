@@ -104,6 +104,31 @@ namespace Rediseno.Menus
             espacio.style.height = 200;
             _cuerpo.Add(espacio);
 
+            // Práctica terminada: sin noches ni récords; repetirla o volver a la lista
+            // (NightMenuUI abre TUTORIALES al volver de una práctica).
+            var sesion = GameSession.Instance;
+            if (sobrevivio && sesion != null && sesion.EnTutorial)
+            {
+                _cuerpo.Add(TemaUI.Texto("PRÁCTICA COMPLETA", TemaUI.Bebas, 130, TemaUI.Green, 10f, TextAnchor.MiddleCenter));
+                var bien = TemaUI.Texto(sesion.Tutorial switch
+                                        {
+                                            TutorialTipo.Sorken => "Ya sabés echar al Sorken: en la puerta y cuando ya entró.",
+                                            TutorialTipo.Arbmos => "Ya sabés ocultarte del Arbmos: a oscuras se va, con luz se enoja.",
+                                            TutorialTipo.Libro  => "Ya sabés salvar el libro: luz intensa apenas se empieza a apagar.",
+                                            TutorialTipo.Veleth => "Ya conocés a Veleth: la luz no la frena. Que el libro no se apague.",
+                                            _                   => "Ya sabés recargar la linterna y juntar reliquias.",
+                                        },
+                                        TemaUI.Elite, 38, TemaUI.Muted, 0f, TextAnchor.MiddleCenter);
+                bien.style.marginTop = 8; bien.style.marginBottom = 30;
+                _cuerpo.Add(bien);
+                var repetir = PiezasUI.Boton(Nav, "REPETIR PRÁCTICA", NightTransition.Reintentar);
+                repetir.style.backgroundImage = TemaUI.DegradeRojo;
+                repetir.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
+                _cuerpo.Add(repetir);
+                _cuerpo.Add(PiezasUI.Boton(Nav, "VOLVER A TUTORIALES", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
+                return;
+            }
+
             var tit = TemaUI.Texto(sobrevivio ? "SOBREVIVISTE" : "MORISTE", TemaUI.Bebas, 150,
                                    sobrevivio ? TemaUI.Green : TemaUI.Red, 10f, TextAnchor.MiddleCenter);
             _cuerpo.Add(tit);

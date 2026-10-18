@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
+  m_Name: Veleth
+  m_EditorClassIdentifier:
+  displayName: 'Práctica: Veleth'
+  briefing: Si el libro se apaga, sale Veleth. La luz no la frena.
+  nightDurationSeconds: 0
+  sorkenActive: 0
+  flashlightMaxCharge: 200
+  flashlightDrainPerSecond: 0.5
+  flashlightBrightDrainPerSecond: 1.5
+  sanityMax: 100
+  arbmosActive: 0
+  bookActive: 1
+  bookEventDelayMin: 3
+  bookEventDelayMax: 5
+  bookConsumeSeconds: 6
+  bookDefenseSeconds: 3
+  velethChaseSpeed: 0.8
+  velethGrabRange: 1
+  velethRepathSeconds: 0.3
+  velethGrabHoldSeconds: 1.2
+  flashlightConeAngleDeg: 32
+  flashlightRange: 9
+  batterySpawnRateMultiplier: 1
+  batteryChanceMods: []
+  collectiblesActive: 0

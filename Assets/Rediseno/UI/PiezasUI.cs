@@ -253,6 +253,46 @@ namespace Rediseno.UI
             return b;
         }
 
+        // Tarjeta-opción: caja con ícono (o retrato de la entidad, recortado arriba) a la
+        // izquierda, título y subtítulo a la derecha.
+        public static VisualElement Opcion(MenuNavegable nav, Texture2D imagen, string titulo, string sub,
+                                           Action accion, bool habilitada = true, bool retrato = false)
+        {
+            var b = Tarjeta();
+            b.style.flexDirection = FlexDirection.Row;
+            b.style.alignItems = Align.Center;
+            b.style.paddingTop = 34; b.style.paddingBottom = 34;
+            if (!habilitada) b.style.opacity = 0.45f;
+            var caja = Ignorar(new VisualElement());
+            caja.style.width = 96; caja.style.height = 96;
+            TemaUI.Radio(caja, 26);
+            caja.style.marginRight = 30;
+            if (retrato)
+            {
+                caja.style.overflow = Overflow.Hidden;
+                caja.style.backgroundImage = imagen;
+                caja.style.backgroundSize = new BackgroundSize(BackgroundSizeType.Cover);
+                caja.style.backgroundPositionY = new BackgroundPosition(BackgroundPositionKeyword.Top);
+                caja.style.unityBackgroundImageTintColor = new Color(0.6f, 0.57f, 0.55f, 1f);
+            }
+            else
+            {
+                caja.style.backgroundColor = new Color(TemaUI.Tan.r, TemaUI.Tan.g, TemaUI.Tan.b, 0.14f);
+                caja.style.alignItems = Align.Center; caja.style.justifyContent = Justify.Center;
+                caja.Add(TemaUI.Icono(imagen, 54, TemaUI.Tan));
+            }
+            b.Add(caja);
+            var textos = Ignorar(new VisualElement());
+            textos.style.flexShrink = 1;
+            textos.Add(TemaUI.Texto(titulo, TemaUI.Bebas, 56, TemaUI.Cream, 5f));
+            var s = TemaUI.Texto(sub, TemaUI.Mono, 26, TemaUI.Muted);
+            s.style.marginTop = 4;
+            textos.Add(s);
+            b.Add(textos);
+            nav.Agregar(b, accion, habilitada);
+            return b;
+        }
+
         public static Label Info(VisualElement padre, string texto)
         {
             var t = Ignorar(Tarjeta());

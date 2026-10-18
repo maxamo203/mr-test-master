@@ -15,6 +15,13 @@ public class VelethDirector : MonoBehaviour
     public uint CurrentTarget { get; private set; }
     public event Action<uint> OnPlayerCaught;
 
+    // Para quien quiera seguir la caza (la práctica VELETH, Gameplay.TutorialVeleth).
+    // Server-only, como todo el director.
+    //   EmpiezaCaza: terminó de salir del libro y empieza a perseguir.
+    //   Atrapo:      alcanzó a un jugador.
+    public enum ResultadoVeleth { EmpiezaCaza, Atrapo }
+    public static event Action<ResultadoVeleth> IntentoResuelto;
+
     private NightConfig _night;
     private VelethEntity _veleth;
     private uint _netId;
@@ -130,6 +137,7 @@ public class VelethDirector : MonoBehaviour
         CurrentTarget = 0;
         _running = true;
         Debug.Log("[Veleth] Emergencia finalizada: comienza la persecucion reptando.");
+        IntentoResuelto?.Invoke(ResultadoVeleth.EmpiezaCaza);
     }
     private void Update()
     {
@@ -204,6 +212,17 @@ public class VelethDirector : MonoBehaviour
                                 _veleth.Position);
         _veleth.SetState(VelethState.Grabbing);
         _grabTimer = Mathf.Max(0f, _night.velethGrabHoldSeconds);
+        IntentoResuelto?.Invoke(ResultadoVeleth.Atrapo);
+
+        // Práctica de TUTORIALES: el agarre se ve pero no mata. Veleth se retira al
+        // terminarlo y el libro vuelve (ver RitualBookDirector.ReanudarTrasVeleth).
+        if (GameSession.Instance != null && GameSession.Instance.EnTutorial)
+        {
+            _running = false;
+            StartCoroutine(RetirarTrasAgarre(_grabTimer));
+            return;
+        }
+
         if (ServerDeaths.Kill(clientId, _veleth.transform))
         {
             OnPlayerCaught?.Invoke(clientId);
@@ -211,6 +230,22 @@ public class VelethDirector : MonoBehaviour
         }
 
         if (!AnyAlivePlayer()) EndNightByVeleth();
+    }
+
+    private System.Collections.IEnumerator RetirarTrasAgarre(float segundos)
+    {
+        yield return new WaitForSeconds(segundos);
+        RitualBookDirector.Instance?.ReanudarTrasVeleth();
+        Retirar();
+    }
+
+    // Saca a Veleth de la partida y frena la caza (StopRun sólo la frena: en una noche se
+    // queda donde está hasta que se cierra la noche). Lo usan las prácticas.
+    public void Retirar()
+    {
+        var net = NetworkManager.Instance;
+        if (_netId != 0 && net != null && net.IsServer) net.ServerDespawn(_netId);
+        StopRun();
     }
 
     private void EndNightByVeleth()

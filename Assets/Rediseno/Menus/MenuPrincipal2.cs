@@ -174,11 +174,9 @@ namespace Rediseno.Menus
             col.Add(bEsc);
             nav.Agregar(bEsc, () => Abrir(m => m.AbrirEscenarios()));
 
-            var bTuto = Secundario(IconosMenu.Libro, "TUTORIAL", "Próximamente");
-            bTuto.style.opacity = 0.5f;
+            var bTuto = Secundario(IconosMenu.Libro, "TUTORIALES", "Practicá cada amenaza");
             col.Add(bTuto);
-            nav.Agregar(bTuto, null, habilitada: false);
-
+            nav.Agregar(bTuto, () => Abrir(m => m.AbrirTutoriales()));
 
             var pie = TemaUI.Texto(BuildVariant.EsDemo ? "DEMO · equipo 112" : "Build interna · equipo 112",
                                    TemaUI.Mono, 24, TemaUI.Dim, 2f, TextAnchor.MiddleCenter);

@@ -159,8 +159,9 @@ namespace Rediseno.Menus
             }
             else if (s == ARLobbyManager.LobbyState.WaitingForClients)
             {
-                var iniciar = PiezasUI.Boton(Nav, "INICIAR NOCHE", () => _lobby.ServerStartGame(),
-                                             habilitado: _puedeArmado);
+                bool practica = Gameplay.GameSession.Instance != null && Gameplay.GameSession.Instance.EnTutorial;
+                var iniciar = PiezasUI.Boton(Nav, practica ? "EMPEZAR PRÁCTICA" : "INICIAR NOCHE",
+                                             () => _lobby.ServerStartGame(), habilitado: _puedeArmado);
                 iniciar.style.backgroundImage = TemaUI.DegradeRojo;
                 iniciar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
                 _botones.Add(iniciar);

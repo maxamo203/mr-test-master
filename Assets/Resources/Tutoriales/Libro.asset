@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
+  m_Name: Libro
+  m_EditorClassIdentifier:
+  displayName: 'Práctica: libro ritual'
+  briefing: El libro ritual se apaga cada tanto. Alumbralo con la luz intensa para
+    que vuelva a brillar.
+  nightDurationSeconds: 0
+  sorkenActive: 0
+  flashlightMaxCharge: 200
+  flashlightDrainPerSecond: 0.5
+  flashlightBrightDrainPerSecond: 1.5
+  sanityMax: 100
+  arbmosActive: 0
+  bookActive: 1
+  bookEventDelayMin: 6
+  bookEventDelayMax: 10
+  bookConsumeSeconds: 14
+  bookDefenseSeconds: 3
+  velethChaseSpeed: 2.2
+  velethGrabRange: 1.1
+  velethRepathSeconds: 0.3
+  velethGrabHoldSeconds: 0.8
+  flashlightConeAngleDeg: 32
+  flashlightRange: 9
+  batterySpawnRateMultiplier: 1
+  batteryChanceMods: []
+  collectiblesActive: 0

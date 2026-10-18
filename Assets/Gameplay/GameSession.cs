@@ -71,6 +71,12 @@ namespace Gameplay
         // porque GameSession sobrevive a SceneFlow.GoTo. NightMenuUI lo limpia al cerrarlo.
         public string AvisoSalida { get; set; }
 
+        // Práctica del menú TUTORIALES: se juega sobre un escenario escaneado (SelectedMap),
+        // con NightIndex = -1 para no mover ni progresión ni récords. NightMenuUI lo suelta
+        // al volver al menú (y abre TUTORIALES).
+        public TutorialTipo Tutorial { get; set; } = TutorialTipo.Ninguno;
+        public bool EnTutorial => Tutorial != TutorialTipo.Ninguno;
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -88,4 +94,6 @@ namespace Gameplay
             return Instance;
         }
     }
+
+    public enum TutorialTipo { Ninguno, PilasReliquias, Sorken, Arbmos, Libro, Veleth }
 }

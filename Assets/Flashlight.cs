@@ -195,6 +195,8 @@ public float VisualInnerAngleDeg
         _brightHeld       = false;
         _avisoBateriaBaja = false;
         _flickerTimer     = 0f;
+        DrenajePausado    = false;
+        _cargaAnimada     = 0f;
     }
 
     // Suma carga (al recoger una pila). Vuelve a permitir encender si estaba agotada.
@@ -204,10 +206,42 @@ public float VisualInnerAngleDeg
     // que el sonido de "pila recogida" va aca y no se duplica.
     public void AddCharge(float amount)
     {
+        // Práctica de pilas: la primera carga se retiene hasta que el jugador lee el aviso
+        // (Gameplay.TutorialPilasReliquias); después llega por CargarAnimado.
+        if (RetenerCarga != null && RetenerCarga(amount))
+        {
+            AudioManager.Sonar(c => c.pilaRecogida);
+            PilaRecogida?.Invoke();
+            return;
+        }
         float antes = currentCharge;
         currentCharge = Mathf.Clamp(currentCharge + amount, 0f, maxCharge);
         if (currentCharge > antes) AudioManager.Sonar(c => c.pilaRecogida);
+        PilaRecogida?.Invoke();
     }
+
+    // Se recogió una pila en ESTE dispositivo (aunque la linterna ya estuviera llena).
+    // Lo escucha la práctica de pilas (Gameplay.TutorialPilasReliquias).
+    public static event System.Action PilaRecogida;
+
+    // Devuelve true para quedarse con esa carga en vez de aplicarla ya (la práctica de
+    // pilas la muestra primero en un aviso). Null fuera de esa práctica.
+    public static System.Func<float, bool> RetenerCarga;
+
+    // Congela el drenaje (el aviso de la primera pila de la práctica). ResetNoche lo suelta.
+    [System.NonSerialized] public bool DrenajePausado;
+
+    // Suma `amount` de a poco, en `segundos`, para que la barra se vea llenar.
+    public void CargarAnimado(float amount, float segundos)
+    {
+        _cargaAnimada   += Mathf.Max(0f, amount);
+        _velCargaAnimada = _cargaAnimada / Mathf.Max(0.05f, segundos);
+        if (isOn || !IsEmpty) return;
+        isOn = true;   // se había agotado: vuelve a prender con la carga nueva
+        AudioManager.Sonar(c => c.linternaOn);
+    }
+    private float _cargaAnimada, _velCargaAnimada;
+    public bool CargandoAnimado => _cargaAnimada > 0f;
 
     // Prende/apaga la linterna. No enciende si no hay carga. Punto único de toggle
     // (lo usa la pulsación corta del botón único en ContextActionController).
@@ -343,8 +377,17 @@ static readonly int ID_COS_INNER = Shader.PropertyToID("_FlashlightCosInner");
             return;
         }
 
+        // Carga animada (ver CargarAnimado): antes del drenaje, para que una linterna que
+        // estaba agotada no se vuelva a apagar en el mismo frame en que se prende.
+        if (_cargaAnimada > 0f)
+        {
+            float paso = Mathf.Min(_cargaAnimada, _velCargaAnimada * Time.deltaTime);
+            _cargaAnimada -= paso;
+            currentCharge = Mathf.Min(maxCharge, currentCharge + paso);
+        }
+
         // Drenar la batería mientras está encendida; apagar al agotarse.
-        if (Mode != FlashlightMode.Off && !LocalMuerto)
+        if (Mode != FlashlightMode.Off && !LocalMuerto && !DrenajePausado)
         {
             if (currentCharge > 0f)
             {

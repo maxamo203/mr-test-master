@@ -24,6 +24,15 @@ public class ArbmosDirector : MonoBehaviour
         Done,
     }
 
+    // Cómo terminó (o escaló) una aparición, para quien quiera contarlo (la práctica del
+    // Arbmos, Gameplay.TutorialArbmos). Server-only, como todo el director.
+    //   SeFueAOscuras: el jugador apagó la luz el tiempo suficiente (retirada pacífica).
+    //   Provocado:     le alumbró la cabeza y arrancó el ataque.
+    //   Golpe:         el ataque llegó y le sacó cordura (no letal).
+    //   AtrapoLetal:   con cordura en cero lo alcanzó la versión letal.
+    public enum ResultadoArbmos { SeFueAOscuras, Provocado, Golpe, AtrapoLetal }
+    public static event System.Action<ResultadoArbmos> IntentoResuelto;
+
     private sealed class Haunt
     {
         public uint owner;
@@ -262,7 +271,10 @@ private readonly List<uint> _scratchRemove = new();
             haunt.exposureTimer = 0f;
             haunt.hideTimer += dt;
             if (haunt.hideTimer >= ArbmosDebug.HideSeconds(_night))
+            {
+                IntentoResuelto?.Invoke(ResultadoArbmos.SeFueAOscuras);
                 EndNormalHaunt(haunt);
+            }
             return;
         }
 
@@ -292,6 +304,7 @@ private readonly List<uint> _scratchRemove = new();
         haunt.repathTimer = 0f;
         haunt.chaseTimer = 0f;
         haunt.phase = Phase.NormalChase;
+        IntentoResuelto?.Invoke(ResultadoArbmos.Provocado);
     }
 
     private void TickNormalChase(uint clientId, Haunt haunt, float dt,
@@ -362,6 +375,7 @@ private readonly List<uint> _scratchRemove = new();
                            SanitySystem.Instance.ServerApplyDamage(
                                clientId, _night.arbmosSanityDamage,
                                arbmosNonLethalGrab: true);
+        IntentoResuelto?.Invoke(ResultadoArbmos.Golpe);
         if (reachedZero || (SanitySystem.Instance != null &&
                             SanitySystem.Instance.IsAtZero(clientId)))
         {
@@ -498,6 +512,21 @@ private readonly List<uint> _scratchRemove = new();
         GameplayTelemetry.End(haunt.traceId, "arbmos_lethal", "capture",
                               clientId, haunt.ent != null ? haunt.ent.Position : Vector3.zero);
         haunt.traceId = 0;
+
+        // Práctica de TUTORIALES: la captura se ve pero no mata. La cordura vuelve al
+        // máximo (si no, el próximo tick escalaría de nuevo al letal) y la aparición se va
+        // como cualquier otra, con su cooldown.
+        if (GameSession.Instance != null && GameSession.Instance.EnTutorial)
+        {
+            IntentoResuelto?.Invoke(ResultadoArbmos.AtrapoLetal);
+            SanitySystem.Instance?.ServerRestaurar(clientId);
+            DespawnHaunt(haunt);
+            haunt.lethalTriggered = false;
+            haunt.cooldown = RandomCooldown();
+            haunt.phase = Phase.Dormant;
+            return;
+        }
+
         ServerDeaths.Kill(clientId, haunt.ent != null ? haunt.ent.transform : null);
         StartCoroutine(DespawnAfterDeathReveal(haunt));
         haunt.phase = Phase.Done;

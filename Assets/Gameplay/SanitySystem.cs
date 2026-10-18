@@ -122,6 +122,17 @@ namespace Gameplay
             return before > 0f && _sanity[clientId] <= 0f;
         }
 
+        // Devuelve la cordura de ese jugador al máximo y lo publica. Sólo lo usa la práctica
+        // del Arbmos tras la captura letal (en un tutorial no se muere).
+        public void ServerRestaurar(uint clientId)
+        {
+            var net = NetworkManager.Instance;
+            if (net == null || !net.IsServer) return;
+            float max = Night != null ? Night.sanityMax : 100f;
+            _sanity[clientId] = max;
+            Publish(clientId, max);
+        }
+
         private void EnsurePlayer(uint clientId, float max)
         {
             if (!_sanity.ContainsKey(clientId)) _sanity[clientId] = max;

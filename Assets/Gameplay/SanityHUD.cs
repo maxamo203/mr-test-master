@@ -38,9 +38,13 @@ namespace Gameplay
             else                          Shader.SetGlobalFloat(ID_DISTORT, 0f);
 
             // ── Barra (fila 1: encima de la batería) ──────────────────────────
+            // En las prácticas donde nada baja la cordura (todas menos ARBMOS) esa fila la usa
+            // el objetivo de la práctica (TutorialPilasReliquias / Sorken / Libro / Veleth).
             UIScale.Begin();
             float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
-            if (!espectando)
+            var tutorial = GameSession.Instance != null ? GameSession.Instance.Tutorial : TutorialTipo.Ninguno;
+            bool practica = tutorial != TutorialTipo.Ninguno && tutorial != TutorialTipo.Arbmos;
+            if (!espectando && !practica)
             {
                 Color fill = Color.Lerp(T.Red, T.Blue, pct);
                 T.HudBarra(vw, vh, 1, pct, fill, "CORDURA", $"{Mathf.RoundToInt(pct * 100f)}%");
