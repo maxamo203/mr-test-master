@@ -68,6 +68,11 @@ namespace Scanner
         // Usado para propagar cambios de altura del panel a toda la polilinea.
         public string PolylineId { get; set; }
 
+        // Pared de referencia del armado rápido de las prácticas: un tramo suelto que sólo
+        // sostiene la entrada del Sorken. La navegación la ignora: con ella el grid de
+        // SorkerNav quedaba del tamaño del tramo y el Sorken no encontraba camino al jugador.
+        public bool SoloReferencia { get; set; }
+
         // Si el shader del material configurado fue stripeado en el build (tipico
         // en iOS) o si el material no tiene shader, lo detectamos y avisamos.
         // En ese caso devolvemos al fallback runtime para evitar render blanco/magenta.

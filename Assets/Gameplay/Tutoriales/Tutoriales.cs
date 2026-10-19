@@ -2,8 +2,9 @@ using UnityEngine;
 
 namespace Gameplay
 {
-    // Prácticas del menú TUTORIALES: qué NightConfig usa cada una. Se juegan sobre un
-    // escenario escaneado del jugador (como una noche): sin escaneo no hay práctica.
+    // Prácticas del menú TUTORIALES: qué NightConfig usa cada una. SORKEN, LIBRO y VELETH
+    // se arman en el momento, sin escaneo (ArmadoRapido); PILAS y ARBMOS se juegan sobre
+    // un escenario escaneado del jugador (como una noche).
     public static class Tutoriales
     {
         // Las configs viven en Resources/Tutoriales (no en el catálogo de noches: no
@@ -43,8 +44,6 @@ namespace Gameplay
         public static string MotivoNoSirve(TutorialTipo tipo, Scanner.ScanData data)
         {
             if (data == null) return "No se pudo leer el escaneo";
-            if (tipo == TutorialTipo.Sorken && (data.markers == null || data.markers.Count == 0))
-                return "Sin puertas ni ventanas marcadas: el Sorken no tiene por dónde entrar";
             return null;
         }
     }

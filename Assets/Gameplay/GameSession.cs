@@ -77,6 +77,10 @@ namespace Gameplay
         public TutorialTipo Tutorial { get; set; } = TutorialTipo.Ninguno;
         public bool EnTutorial => Tutorial != TutorialTipo.Ninguno;
 
+        // Práctica que se arma en el momento (sin escaneo): SelectedMap queda null y el lobby
+        // abre el armado rápido en vez de buscar la imagen (ARLobbyManager.BeginHostFlow).
+        public bool ArmadoRapido => EnTutorial && Gameplay.ArmadoRapido.Usa(Tutorial);
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }

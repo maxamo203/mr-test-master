@@ -5,9 +5,9 @@ using T = MortuoriumTheme;
 
 namespace Gameplay
 {
-    // Práctica SORKEN: se juega en un escenario con puertas o ventanas marcadas (el menú no
-    // deja elegir uno sin, ver Tutoriales.MotivoNoSirve) y el Sorken entra por ahí. Hay que
-    // echarlo de las dos formas que tiene el juego:
+    // Práctica SORKEN: el Sorken entra por las puertas o ventanas que el jugador marcó en
+    // el armado rápido (ArmadoRapido, sin escaneo). Hay que echarlo de las dos formas que
+    // tiene el juego:
     //  · EN LA PUERTA: alumbrar la puerta con la luz intensa mientras intenta entrar.
     //  · ADENTRO: si entró, alumbrarlo a él con la luz intensa hasta que se vaya.
     // Las dos cuentan en cualquier orden (la pista pide primero la de la puerta). Que te
@@ -130,7 +130,7 @@ namespace Gameplay
             if (Completa) return "¡Práctica completa!";
             string luz = PistaTutorial.ComoLuzIntensa();
             if (!_enPuerta)
-                return $"El Sorken va a intentar entrar por una puerta o ventana de tu escenario. Alumbrala con la luz intensa ({luz}) hasta que se vaya.";
+                return $"El Sorken va a intentar entrar por la puerta o ventana que marcaste. Alumbrala con la luz intensa ({luz}) hasta que se vaya.";
             return $"Ahora dejalo entrar. Cuando se acerque, alumbralo a él con la luz intensa ({luz}) hasta que se vaya.";
         }
     }

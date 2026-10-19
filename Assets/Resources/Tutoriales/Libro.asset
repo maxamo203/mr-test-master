@@ -18,8 +18,8 @@ MonoBehaviour:
   nightDurationSeconds: 0
   sorkenActive: 0
   flashlightMaxCharge: 200
-  flashlightDrainPerSecond: 0.5
-  flashlightBrightDrainPerSecond: 1.5
+  flashlightDrainPerSecond: 0
+  flashlightBrightDrainPerSecond: 0
   sanityMax: 100
   arbmosActive: 0
   bookActive: 1

@@ -35,8 +35,8 @@ MonoBehaviour:
   sorkenRetreatSpeed: 2.8
   grabRange: 1
   flashlightMaxCharge: 200
-  flashlightDrainPerSecond: 0.5
-  flashlightBrightDrainPerSecond: 1.5
+  flashlightDrainPerSecond: 0
+  flashlightBrightDrainPerSecond: 0
   sanityMax: 100
   arbmosActive: 0
   bookActive: 0

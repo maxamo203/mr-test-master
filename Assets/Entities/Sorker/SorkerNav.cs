@@ -86,7 +86,7 @@ public class SorkerNav : MonoBehaviour
 
         foreach (var w in reg.Walls)
         {
-            if (w == null) continue;
+            if (w == null || w.SoloReferencia) continue;
             any = true;
             foreach (var p in WallFootprintXZ(w))
             {
@@ -196,7 +196,7 @@ public bool HasClearLine(Vector3 startWorld, Vector3 endWorld)
     private bool IsSolid(SceneRegistry reg, float x, float z)
     {
         foreach (var w in reg.Walls)
-            if (w != null && PointInWall(w, x, z)) return true;
+            if (w != null && !w.SoloReferencia && PointInWall(w, x, z)) return true;
         foreach (var c in reg.Cubes)
             if (c != null && PointInCube(c, x, z)) return true;
         return false;

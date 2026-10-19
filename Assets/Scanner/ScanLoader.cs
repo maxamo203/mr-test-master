@@ -23,6 +23,16 @@ namespace Scanner
             finally { DisplayOnly = false; }
         }
 
+        // Arma objetos sueltos (paredes/marcadores) en modo "sólo mostrar", igual que un mapa
+        // cargado para jugar: sin handles de edición y con marcadores invisibles sin MarkerType.
+        // Lo usa el armado rápido de las prácticas (Gameplay.ArmadoRapido).
+        public static void ComoVisual(System.Action armar)
+        {
+            DisplayOnly = true;
+            try { armar(); }
+            finally { DisplayOnly = false; }
+        }
+
         public static bool Load(string name, ARImageAnchor imageAnchor = null)
         {
             var data = ScanSerializer.Load(name);

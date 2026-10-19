@@ -267,8 +267,10 @@ namespace Gameplay
         public void AbrirTutoriales()    { _tutorialPendiente = TutorialTipo.Ninguno; PantallaActual = Pantalla.Tutoriales; }
 
         // Arranca una práctica: un jugador, fuera del catálogo (NightIndex = -1: no
-        // desbloquea noches ni toca récords) y sobre un escenario escaneado, que se elige
-        // en ¿DÓNDE JUGÁS? igual que para una noche. Sin escenario jugable cae en "falta".
+        // desbloquea noches ni toca récords). SORKEN, LIBRO y VELETH se arman en el momento
+        // dentro de SampleScene (ArmadoRapido): van directo, sin escenario. PILAS y ARBMOS
+        // necesitan un escenario escaneado, que se elige en ¿DÓNDE JUGÁS? igual que para
+        // una noche; sin escenario jugable caen en "falta".
         public void IniciarTutorial(TutorialTipo tipo)
         {
             if (Tutoriales.Config(tipo) == null)
@@ -276,6 +278,7 @@ namespace Gameplay
                 Debug.LogError($"[NightMenu] Falta la NightConfig del tutorial {tipo} en Resources/Tutoriales.");
                 return;
             }
+            if (ArmadoRapido.Usa(tipo)) { ArrancarTutorial(tipo, null); return; }
             _pendingMode = GameSession.SessionMode.SinglePlayer;
             _tutorialPendiente = tipo;
             _nocheSel = -1;
@@ -777,14 +780,7 @@ namespace Gameplay
             var s = GameSession.Ensure();
             if (_tutorialPendiente != TutorialTipo.Ninguno)
             {
-                s.Mode          = GameSession.SessionMode.SinglePlayer;
-                s.Tutorial      = _tutorialPendiente;
-                s.SelectedNight = Tutoriales.Config(_tutorialPendiente);
-                s.SelectedMap   = _mapSel;
-                s.Nights        = null;
-                s.NightIndex    = -1;
-                s.HostPort      = NetworkConfig.DefaultPort;
-                SceneFlow.GoTo(_lobbyScene);
+                ArrancarTutorial(_tutorialPendiente, _mapSel);
                 return;
             }
             s.Mode          = _pendingMode;
@@ -796,6 +792,20 @@ namespace Gameplay
             s.NightIndex    = _nocheSel;
             s.HostPort      = _pendingMode == GameSession.SessionMode.MultiHost
                 ? PuertoElegido() : NetworkConfig.DefaultPort;
+            SceneFlow.GoTo(_lobbyScene);
+        }
+
+        // Carga SampleScene con esa práctica. mapa null = armado rápido (sin escaneo).
+        private void ArrancarTutorial(TutorialTipo tipo, string mapa)
+        {
+            var s = GameSession.Ensure();
+            s.Mode          = GameSession.SessionMode.SinglePlayer;
+            s.Tutorial      = tipo;
+            s.SelectedNight = Tutoriales.Config(tipo);
+            s.SelectedMap   = mapa;
+            s.Nights        = null;
+            s.NightIndex    = -1;
+            s.HostPort      = NetworkConfig.DefaultPort;
             SceneFlow.GoTo(_lobbyScene);
         }
 

@@ -5,8 +5,9 @@ using UnityEngine.UIElements;
 namespace Rediseno.Menus
 {
     // TUTORIALES: una práctica por cada amenaza, más pilas y reliquias y el libro ritual.
-    // Cada una se juega en un escenario escaneado: al elegirla se pasa a ¿DÓNDE JUGÁS?
-    // (NightMenuUI.IniciarTutorial), o a FALTA UN ESCENARIO si no hay ninguno que le sirva.
+    // SORKEN, LIBRO y VELETH van directo a SampleScene y se arman en el momento
+    // (Gameplay.ArmadoRapido); PILAS y ARBMOS se juegan en un escenario escaneado: pasan a
+    // ¿DÓNDE JUGÁS? (NightMenuUI.IniciarTutorial), o a FALTA UN ESCENARIO si no hay ninguno.
     public class MenuTutoriales2 : PantallaMenu2
     {
         protected override NightMenuUI.Pantalla Cual => NightMenuUI.Pantalla.Tutoriales;
@@ -14,8 +15,9 @@ namespace Rediseno.Menus
 
         protected override void Armar(VisualElement lista, MenuNavegable nav)
         {
-            PiezasUI.Info(lista, "Practicá cada amenaza sin riesgo en uno de tus escenarios: " +
-                                 "no cuenta como noche y la repetís las veces que quieras.");
+            PiezasUI.Info(lista, "Practicá cada amenaza sin riesgo: no cuenta como noche y la repetís " +
+                                 "las veces que quieras. Sorken, el libro y Veleth se arman en el momento; " +
+                                 "pilas y Arbmos se juegan en uno de tus escenarios.");
             lista.Add(PiezasUI.Opcion(nav, IconosMenu.Libro, "PILAS Y RELIQUIAS",
                 "Recargá la linterna y juntá reliquias",
                 () => NightMenuUI.Instance?.IniciarTutorial(TutorialTipo.PilasReliquias)));
