@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9ad2fc919df694e3b93086f813248b80, type: 3}
+  m_Name: RetratoAsesinoConfig
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.RetratoAsesinoConfig
+  encuadreAlto: 0.158
+  margen: 1.61
+  corrimientoVertical: -0.08
+  corrimientoHorizontal: 0.076
+  distanciaMin: 0.35
+  distanciaMax: 3.44
+  margenCorte: 0.108
+  revelar: 0.64
+  sostener: 1.71
+  temblorGrados: 5
+  luzIntensidad: 0.96

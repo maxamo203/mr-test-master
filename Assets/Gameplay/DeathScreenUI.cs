@@ -21,13 +21,14 @@ namespace Gameplay
 
         // Modal para elegir cualquier noche del catálogo (no sólo la siguiente).
         private bool _selectorAbierto;
+        private int _logCopiado = -1;   // PROVISORIO: líneas del último COPIAR LOG (DEV)
 
         private void OnGUI()
         {
             var ld = LocalDeath.Instance;
             bool muerto     = ld != null && ld.PresentationReady;
             bool sobrevivio = NightResult.Sobrevivio;
-            if (!muerto && !sobrevivio) { _selectorAbierto = false; return; }
+            if (!muerto && !sobrevivio) { _selectorAbierto = false; _logCopiado = -1; return; }
 
             // Rediseño 2.0: la dibuja la pantalla nueva (UI Toolkit, estéreo con Cardboard).
             if (Rediseno.Menus.FinDeNoche2.Mostrando || Rediseno.Menus.Espectando2.Mostrando) return;
@@ -99,6 +100,19 @@ namespace Gameplay
 
             T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 58f),
                     "VOLVER AL MENÚ", primario: !host && !espectable, ReturnToMenu);
+
+            // PROVISORIO (dev build): copiar el log del retrato del asesino, sin consola
+            // de Xcode. Arriba a la derecha para no correr la botonera. Ver LogMuerteDev.
+            if (LogMuerteDev.Disponible && !sobrevivio)
+            {
+                var rLog = new Rect(vw - Pad - 220f, Pad + 70f, 220f, 46f);
+                T.Boton(_nav, rLog, "COPIAR LOG (DEV)", primario: false,
+                        () => _logCopiado = LogMuerteDev.Copiar(), fontSize: 14);
+                if (_logCopiado >= 0)
+                    GUI.Label(new Rect(rLog.x - 80f, rLog.yMax + 4f, rLog.width + 80f, 20f),
+                              $"copiado ({_logCopiado} líneas)",
+                              T.Estilo(T.FMono, 11, T.CreamDim, TextAnchor.MiddleRight));
+            }
 
             if (espectable)
             {
