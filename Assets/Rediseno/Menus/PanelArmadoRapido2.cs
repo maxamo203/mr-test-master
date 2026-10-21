@@ -7,7 +7,7 @@ using UnityEngine.UIElements;
 
 namespace Rediseno.Menus
 {
-    // ARMÁ LA PRÁCTICA: armado rápido de SORKEN, LIBRO RITUAL y VELETH (Gameplay.ArmadoRapido),
+    // ARMÁ LA PRÁCTICA: armado rápido de SORKEN y LIBRO RITUAL Y VELETH (Gameplay.ArmadoRapido),
     // sin escaneo ni imagen. El jugador apunta la mira al piso y ubica el libro (el 0,0); en
     // la del Sorken, además marca una o más puertas/ventanas reales. LISTO sigue el mismo
     // camino que tras calibrar (ARLobbyManager.ArmadoRapidoListo).

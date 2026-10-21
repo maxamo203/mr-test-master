@@ -12,9 +12,9 @@ namespace Gameplay
     // la luz, se fue sin que te enteres: eso no enseña nada y no cuenta).
     //
     // La cordura sí importa acá, así que su barra queda en la fila 1 y el objetivo va en la
-    // 2. Que la versión letal te atrape (cordura en cero) no mata en una práctica: el
-    // director devuelve la cordura y sigue (ArbmosDirector.CompleteLethal). Al completar,
-    // la noche se gana (ServerNightSurvived) y FinDeNoche2 la muestra como PRÁCTICA COMPLETA.
+    // 2. Si con la cordura en cero te atrapa la versión letal, te morís como en una noche:
+    // pantalla de muerte con REINTENTAR PRÁCTICA. Al completar, la noche se gana
+    // (ServerNightSurvived) y FinDeNoche2 la muestra como PRÁCTICA COMPLETA.
     public class TutorialArbmos : MonoBehaviour
     {
         public const int MetaOcultarse = 2;
@@ -89,9 +89,6 @@ namespace Gameplay
                 case ArbmosDirector.ResultadoArbmos.Golpe:
                     Avisar("Te alcanzó y te sacó cordura. Con la cordura en cero, el Arbmos mata.");
                     break;
-                case ArbmosDirector.ResultadoArbmos.AtrapoLetal:
-                    Avisar("Con la cordura en cero te atrapó. En una noche de verdad ahí perdías: acá te la devolvemos.");
-                    break;
             }
         }
 
@@ -136,6 +133,7 @@ namespace Gameplay
         private void OnGUI()
         {
             if (!_enPartida || Gamepad.PauseMenuController.IsOpen) return;
+            if (LocalDeath.Instance != null && LocalDeath.Instance.IsDead) return;
 
             UIScale.Begin();
             float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;

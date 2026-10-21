@@ -57,6 +57,18 @@ namespace Scanner
             if (placedLayer >= 0) gameObject.layer = placedLayer;
 
             _mr = GetComponent<MeshRenderer>();
+
+            // En partida (ScanLoader.DisplayOnly) el piso es sólo un dato: su Y. Ni se ve
+            // (la esfera azul quedaba en medio del cuarto, y en el armado rápido justo
+            // debajo del libro) ni tiene collider (es la layer Placed: tapaba la línea de
+            // visión de la linterna y los linecasts de oclusión de las pilas).
+            if (ScanLoader.DisplayOnly)
+            {
+                Destroy(GetComponent<Collider>());
+                _mr.enabled = false;
+                return;
+            }
+
             EnsureMaterials();
             _mr.sharedMaterial = _matNormal;
         }

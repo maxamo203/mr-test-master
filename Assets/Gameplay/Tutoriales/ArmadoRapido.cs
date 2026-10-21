@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Gameplay
 {
-    // Armado rápido de las prácticas SORKEN, LIBRO RITUAL y VELETH: en vez de un escaneo
+    // Armado rápido de las prácticas SORKEN y LIBRO RITUAL Y VELETH: en vez de un escaneo
     // guardado con imagen de referencia, el jugador arma en el momento lo mínimo que la
     // práctica necesita, dentro de SampleScene:
     //   - el LIBRO (el 0,0 del mapa), apuntando al piso — ManualCalibration lo ancla ahí;
@@ -19,7 +19,7 @@ namespace Gameplay
         // ¿Esa práctica se arma en el momento (sin escaneo)? Pilas y Arbmos necesitan un
         // ambiente cerrado de paredes, así que siguen jugándose sobre un escaneo real.
         public static bool Usa(TutorialTipo t) =>
-            t == TutorialTipo.Sorken || t == TutorialTipo.Libro || t == TutorialTipo.Veleth;
+            t == TutorialTipo.Sorken || t == TutorialTipo.Libro;
 
         public static bool LibroUbicado => ManualCalibration.Calibrado;
         public static int  Entradas => SceneRegistry.Instance != null ? SceneRegistry.Instance.Markers.Count : 0;
@@ -52,7 +52,9 @@ namespace Gameplay
             // de las puertas reales. ClearAll también borra el FloorPoint.
             SceneRegistry.Instance?.ClearAll();
             // El 0,0 está sobre el piso real: da la Y de piso a Sorken, Veleth y SorkerNav.
-            FloorPoint.Create(Vector3.zero);
+            // Como en un mapa cargado para jugar: invisible y sin collider (si no, la esfera
+            // azul quedaba a la vista debajo del libro).
+            ScanLoader.ComoVisual(() => FloorPoint.Create(Vector3.zero));
             return null;
         }
 

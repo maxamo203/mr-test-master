@@ -99,5 +99,5 @@ namespace Gameplay
         }
     }
 
-    public enum TutorialTipo { Ninguno, PilasReliquias, Sorken, Arbmos, Libro, Veleth }
+    public enum TutorialTipo { Ninguno, PilasReliquias, Sorken, Arbmos, Libro }
 }

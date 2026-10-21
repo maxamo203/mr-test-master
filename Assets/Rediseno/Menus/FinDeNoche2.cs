@@ -114,8 +114,7 @@ namespace Rediseno.Menus
                                         {
                                             TutorialTipo.Sorken => "Ya sabés echar al Sorken: en la puerta y cuando ya entró.",
                                             TutorialTipo.Arbmos => "Ya sabés ocultarte del Arbmos: a oscuras se va, con luz se enoja.",
-                                            TutorialTipo.Libro  => "Ya sabés salvar el libro: luz intensa apenas se empieza a apagar.",
-                                            TutorialTipo.Veleth => "Ya conocés a Veleth: la luz no la frena. Que el libro no se apague.",
+                                            TutorialTipo.Libro  => "Ya sabés salvar el libro y conocés a Veleth: la luz no la frena, que el libro no se apague.",
                                             _                   => "Ya sabés recargar la linterna y juntar reliquias.",
                                         },
                                         TemaUI.Elite, 38, TemaUI.Muted, 0f, TextAnchor.MiddleCenter);
@@ -125,6 +124,29 @@ namespace Rediseno.Menus
                 repetir.style.backgroundImage = TemaUI.DegradeRojo;
                 repetir.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
                 _cuerpo.Add(repetir);
+                _cuerpo.Add(PiezasUI.Boton(Nav, "VOLVER A TUTORIALES", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
+                return;
+            }
+
+            // Práctica perdida: te atraparon. Se muere igual que en una noche (retrato del
+            // asesino y todo), pero acá sólo se ofrece reintentarla o volver a la lista.
+            if (!sobrevivio && sesion != null && sesion.EnTutorial)
+            {
+                _cuerpo.Add(TemaUI.Texto("MORISTE", TemaUI.Bebas, 150, TemaUI.Red, 10f, TextAnchor.MiddleCenter));
+                var mal = TemaUI.Texto(sesion.Tutorial switch
+                                       {
+                                           TutorialTipo.Sorken => "El Sorken te atrapó. Alumbralo con la luz intensa antes de que llegue.",
+                                           TutorialTipo.Arbmos => "Con la cordura en cero, el Arbmos mata. Apagá la luz para que se vaya.",
+                                           TutorialTipo.Libro  => "Veleth te alcanzó. La luz no la frena: poné paredes o muebles entre ustedes.",
+                                           _                   => "El ritual te reclamó… por ahora.",
+                                       },
+                                       TemaUI.Elite, 38, TemaUI.Muted, 0f, TextAnchor.MiddleCenter);
+                mal.style.marginTop = 8; mal.style.marginBottom = 30;
+                _cuerpo.Add(mal);
+                var reintentar = PiezasUI.Boton(Nav, "REINTENTAR PRÁCTICA", NightTransition.Reintentar);
+                reintentar.style.backgroundImage = TemaUI.DegradeRojo;
+                reintentar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
+                _cuerpo.Add(reintentar);
                 _cuerpo.Add(PiezasUI.Boton(Nav, "VOLVER A TUTORIALES", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
                 return;
             }

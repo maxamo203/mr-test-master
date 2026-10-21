@@ -10,8 +10,8 @@ namespace Gameplay
     // tiene el juego:
     //  · EN LA PUERTA: alumbrar la puerta con la luz intensa mientras intenta entrar.
     //  · ADENTRO: si entró, alumbrarlo a él con la luz intensa hasta que se vaya.
-    // Las dos cuentan en cualquier orden (la pista pide primero la de la puerta). Que te
-    // atrape no mata en una práctica (GameDirector.KillPlayer): sólo se avisa y se sigue.
+    // Las dos cuentan en cualquier orden (la pista pide primero la de la puerta). Si te
+    // atrapa, te morís como en una noche: pantalla de muerte con REINTENTAR PRÁCTICA.
     // Al completar las dos, la noche se gana (ServerNightSurvived) y FinDeNoche2 la muestra
     // como PRÁCTICA COMPLETA. Se crea sola en SampleScene sólo en esta práctica.
     public class TutorialSorken : MonoBehaviour
@@ -73,9 +73,6 @@ namespace Gameplay
                     Avisar("¡Bien! Lo echaste cuando ya había entrado.");
                     _adentro = true;
                     break;
-                case GameDirector.ResultadoSorken.Atrapo:
-                    Avisar("Te atrapó. En una noche de verdad ahí perdías: en la práctica, seguí intentando.");
-                    break;
             }
         }
 
@@ -113,6 +110,7 @@ namespace Gameplay
         private void OnGUI()
         {
             if (!_enPartida || Gamepad.PauseMenuController.IsOpen) return;
+            if (LocalDeath.Instance != null && LocalDeath.Instance.IsDead) return;
 
             UIScale.Begin();
             float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;

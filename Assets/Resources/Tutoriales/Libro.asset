@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
   m_Name: Libro
   m_EditorClassIdentifier:
-  displayName: 'Práctica: libro ritual'
+  displayName: 'Práctica: libro ritual y Veleth'
   briefing: El libro ritual se apaga cada tanto. Alumbralo con la luz intensa para
-    que vuelva a brillar.
+    que vuelva a brillar. Después, dejalo apagarse y escapale a Veleth.
   nightDurationSeconds: 0
   sorkenActive: 0
   flashlightMaxCharge: 200
@@ -27,10 +27,10 @@ MonoBehaviour:
   bookEventDelayMax: 10
   bookConsumeSeconds: 14
   bookDefenseSeconds: 3
-  velethChaseSpeed: 2.2
-  velethGrabRange: 1.1
+  velethChaseSpeed: 0.8
+  velethGrabRange: 1
   velethRepathSeconds: 0.3
-  velethGrabHoldSeconds: 0.8
+  velethGrabHoldSeconds: 1.2
   flashlightConeAngleDeg: 32
   flashlightRange: 9
   batterySpawnRateMultiplier: 1

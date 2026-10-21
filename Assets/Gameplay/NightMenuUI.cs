@@ -267,7 +267,7 @@ namespace Gameplay
         public void AbrirTutoriales()    { _tutorialPendiente = TutorialTipo.Ninguno; PantallaActual = Pantalla.Tutoriales; }
 
         // Arranca una práctica: un jugador, fuera del catálogo (NightIndex = -1: no
-        // desbloquea noches ni toca récords). SORKEN, LIBRO y VELETH se arman en el momento
+        // desbloquea noches ni toca récords). SORKEN y LIBRO (con Veleth) se arman en el momento
         // dentro de SampleScene (ArmadoRapido): van directo, sin escenario. PILAS y ARBMOS
         // necesitan un escenario escaneado, que se elige en ¿DÓNDE JUGÁS? igual que para
         // una noche; sin escenario jugable caen en "falta".

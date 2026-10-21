@@ -2,9 +2,9 @@ using UnityEngine;
 
 namespace Gameplay
 {
-    // Prácticas del menú TUTORIALES: qué NightConfig usa cada una. SORKEN, LIBRO y VELETH
-    // se arman en el momento, sin escaneo (ArmadoRapido); PILAS y ARBMOS se juegan sobre
-    // un escenario escaneado del jugador (como una noche).
+    // Prácticas del menú TUTORIALES: qué NightConfig usa cada una. SORKEN y LIBRO RITUAL Y
+    // VELETH se arman en el momento, sin escaneo (ArmadoRapido); PILAS y ARBMOS se juegan
+    // sobre un escenario escaneado del jugador (como una noche).
     public static class Tutoriales
     {
         // Las configs viven en Resources/Tutoriales (no en el catálogo de noches: no
@@ -15,7 +15,6 @@ namespace Gameplay
             TutorialTipo.Sorken         => Resources.Load<NightConfig>("Tutoriales/Sorken"),
             TutorialTipo.Arbmos         => Resources.Load<NightConfig>("Tutoriales/Arbmos"),
             TutorialTipo.Libro          => Resources.Load<NightConfig>("Tutoriales/Libro"),
-            TutorialTipo.Veleth         => Resources.Load<NightConfig>("Tutoriales/Veleth"),
             _                           => null,
         };
 
@@ -24,8 +23,7 @@ namespace Gameplay
             TutorialTipo.PilasReliquias => "PILAS Y RELIQUIAS",
             TutorialTipo.Sorken         => "SORKEN",
             TutorialTipo.Arbmos         => "ARBMOS",
-            TutorialTipo.Libro          => "LIBRO RITUAL",
-            TutorialTipo.Veleth         => "VELETH",
+            TutorialTipo.Libro          => "LIBRO RITUAL Y VELETH",
             _                           => "",
         };
 
@@ -35,7 +33,6 @@ namespace Gameplay
             {
                 TutorialTipo.Arbmos => 3,
                 TutorialTipo.Libro  => 5,
-                TutorialTipo.Veleth => 5,
                 _                   => 0,
             });
 

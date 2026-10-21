@@ -870,7 +870,6 @@ private void BeginCoverStart()
             _phaseTimer = 0f;
             _phase = Phase.Grabbed;
             Debug.Log($"[GameDirector] GRAB: jugador {_targetClientId} atrapado.");
-            IntentoResuelto?.Invoke(ResultadoSorken.Atrapo);
             KillPlayer(_targetClientId);
         }
 
@@ -924,8 +923,9 @@ private void BeginCoverStart()
         // --- Retreat ---
         // Cómo terminó un intento del Sorken, para quien quiera contarlo (la práctica del
         // Sorken, Gameplay.TutorialSorken). Server-only, como todo el director. Las
-        // retiradas por perder al objetivo no se informan: nadie lo echó.
-        public enum ResultadoSorken { EchadoEnLaEntrada, EchadoAdentro, Atrapo }
+        // retiradas por perder al objetivo no se informan: nadie lo echó. Si atrapa, se
+        // muere como en cualquier noche (también en la práctica).
+        public enum ResultadoSorken { EchadoEnLaEntrada, EchadoAdentro }
         public static event System.Action<ResultadoSorken> IntentoResuelto;
 
         private void Retreat(ResultadoSorken? motivo = null)
@@ -1006,9 +1006,9 @@ private void BeginCoverStart()
         // --- Muerte ---
         private void KillPlayer(uint clientId)
         {
-            // Práctica (_practiceMode) o tutorial: el agarre se ve pero no mata.
-            bool sinMuerte = _practiceMode || (GameSession.Instance != null && GameSession.Instance.EnTutorial);
-            if (sinMuerte) { Debug.Log($"[GameDirector] (practica) grab {clientId}, no muere."); return; }
+            // Práctica de dev (_practiceMode, sólo en las NightConfig de Nights/dev): el
+            // agarre se ve pero no mata. Las prácticas de TUTORIALES sí matan.
+            if (_practiceMode) { Debug.Log($"[GameDirector] (practica) grab {clientId}, no muere."); return; }
             ServerDeaths.Kill(clientId, _sorken != null ? _sorken.transform : null);   // marca + avisa una sola vez
         }
 

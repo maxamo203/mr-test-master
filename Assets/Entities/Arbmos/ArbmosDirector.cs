@@ -29,8 +29,8 @@ public class ArbmosDirector : MonoBehaviour
     //   SeFueAOscuras: el jugador apagó la luz el tiempo suficiente (retirada pacífica).
     //   Provocado:     le alumbró la cabeza y arrancó el ataque.
     //   Golpe:         el ataque llegó y le sacó cordura (no letal).
-    //   AtrapoLetal:   con cordura en cero lo alcanzó la versión letal.
-    public enum ResultadoArbmos { SeFueAOscuras, Provocado, Golpe, AtrapoLetal }
+    // La versión letal mata como en cualquier noche (también en la práctica).
+    public enum ResultadoArbmos { SeFueAOscuras, Provocado, Golpe }
     public static event System.Action<ResultadoArbmos> IntentoResuelto;
 
     private sealed class Haunt
@@ -512,20 +512,6 @@ private readonly List<uint> _scratchRemove = new();
         GameplayTelemetry.End(haunt.traceId, "arbmos_lethal", "capture",
                               clientId, haunt.ent != null ? haunt.ent.Position : Vector3.zero);
         haunt.traceId = 0;
-
-        // Práctica de TUTORIALES: la captura se ve pero no mata. La cordura vuelve al
-        // máximo (si no, el próximo tick escalaría de nuevo al letal) y la aparición se va
-        // como cualquier otra, con su cooldown.
-        if (GameSession.Instance != null && GameSession.Instance.EnTutorial)
-        {
-            IntentoResuelto?.Invoke(ResultadoArbmos.AtrapoLetal);
-            SanitySystem.Instance?.ServerRestaurar(clientId);
-            DespawnHaunt(haunt);
-            haunt.lethalTriggered = false;
-            haunt.cooldown = RandomCooldown();
-            haunt.phase = Phase.Dormant;
-            return;
-        }
 
         ServerDeaths.Kill(clientId, haunt.ent != null ? haunt.ent.transform : null);
         StartCoroutine(DespawnAfterDeathReveal(haunt));
