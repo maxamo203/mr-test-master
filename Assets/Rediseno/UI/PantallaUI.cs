@@ -357,6 +357,28 @@ namespace Rediseno.UI
         // Ancho angular de la pantalla flotante y campo visual de cada ojo. Con 50° sobre
         // ~90° la pantalla entra entera mirando al frente y se recorre girando poco.
         private const float FovOjo      = Cabeza.MitadVista * 2f;
+
+        // Dos escalas (píxeles de pantalla por grado):
+        //  - Base: la de siempre (90° por ojo). Define el TAMAÑO de la pantalla flotante y su
+        //    corrimiento fijo (PosicionVisor), así se ven igual que antes.
+        //  - Mundo: cuánto se corre el cuarto en pantalla al girar la cabeza un grado. En la
+        //    partida con Cardboard es la de la imagen de cámara (bastante menos que 90° por ojo,
+        //    según la cámara y el zoom de calibración): con la base la pantalla se movía la
+        //    mitad que el cuarto y parecía que te acompañaba un poco, y eso mareaba. En los
+        //    menús no hay cámara: el fondo lo dibujamos nosotros y las dos coinciden.
+        private static float PpdBase => Screen.width * 0.5f / FovOjo;
+        private MRCardboardController _mr;
+
+        private float PpdMundo()
+        {
+            if (CabezaPorCamara && MRCardboardController.Activo)
+            {
+                if (_mr == null) _mr = FindAnyObjectByType<MRCardboardController>();
+                float p = _mr != null ? _mr.PixelesPorGrado() : 0f;
+                if (p > 0f) return p;
+            }
+            return PpdBase;
+        }
         // Cuánto hay que mirar una opción para elegirla. Menús (sensor del celular) más lento,
         // para no elegir de pasada; en partida (cámara AR) más ágil.
         private const float SegundosElegirMenu    = 2.0f;
@@ -385,10 +407,11 @@ namespace Rediseno.UI
         {
             OjosVisor.Centros(out var izq, out var der);
             float ojoW = Screen.width * 0.5f;
-            float ppd = ojoW / FovOjo;
+            float ppd = PpdMundo();
             float haciaIzq = Mathf.Max(izq.x, der.x - ojoW) / ppd;
             float haciaDer = Mathf.Max(ojoW - izq.x, Screen.width - der.x) / ppd;
-            float medio = AnguloPanel * 0.5f + MargenArrastre;
+            // Media pantalla en grados del mundo (su tamaño en pantalla va en la escala base).
+            float medio = AnguloPanel * PpdBase / ppd * 0.5f + MargenArrastre;
             limitePos = haciaIzq + medio;   // yaw > 0: la pantalla queda a la izquierda
             limiteNeg = haciaDer + medio;
         }
@@ -462,9 +485,14 @@ namespace Rediseno.UI
             // Punto del panel bajo el centro de la vista.
             float w = Raiz.layout.width, h = Raiz.layout.height;
             if (w <= 0f || h <= 0f) return;
-            float ppd = w / AnguloPanel;  // unidades de panel por grado
+            // Centro de la vista → panel, con las mismas escalas que el dibujo (OnGUI): el giro
+            // en la escala del mundo y el corrimiento fijo en la base; unidades de panel por
+            // píxel de pantalla = w / ancho dibujado.
+            float ppdM = PpdMundo(), ppdB = PpdBase;
+            float uPorPx = w / (AnguloPanel * ppdB);
             Vector2 off = PosicionVisor;
-            Vector2 p = new(w * 0.5f + (_yaw - off.x) * ppd, h * 0.5f - (_pitch - off.y) * ppd);
+            Vector2 p = new(w * 0.5f + (_yaw * ppdM - off.x * ppdB) * uPorPx,
+                            h * 0.5f - (_pitch * ppdM - off.y * ppdB) * uPorPx);
             _puntoMirada = p;
             _hayPuntoMirada = true;
 
@@ -516,7 +544,8 @@ namespace Rediseno.UI
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
 
             float ojoW = Screen.width * 0.5f, ojoH = Screen.height;
-            float ppd = ojoW / FovOjo;   // píxeles de pantalla por grado
+            float ppd = PpdMundo();      // píxeles de pantalla por grado de giro (ver PpdBase)
+            float ppdB = PpdBase;
             // Centro de cada ojo según la calibración del visor (ver OjosVisor): con el
             // centro de cada mitad las dos imágenes no se fusionaban.
             OjosVisor.Centros(out var centroIzq, out var centroDer);
@@ -538,10 +567,10 @@ namespace Rediseno.UI
                 DibujarEnOjo(c, ppd);
 
                 // Pantalla flotante. La convergencia ya va en los centros de OjosVisor.
-                float pw = AnguloPanel * ppd, ph = pw * _rt.height / _rt.width;
+                float pw = AnguloPanel * ppdB, ph = pw * _rt.height / _rt.width;
                 const float disp = 0f;
                 Vector2 off = PosicionVisor;
-                var pc = c + new Vector2(-(_yaw - off.x) * ppd + disp, (_pitch - off.y) * ppd);
+                var pc = c + new Vector2(-_yaw * ppd + off.x * ppdB + disp, _pitch * ppd - off.y * ppdB);
                 GUI.color = Color.white;
                 var rp = new Rect(pc.x - pw * 0.5f, pc.y - ph * 0.5f, pw, ph);
                 GUI.DrawTexture(rp, _rt, ScaleMode.StretchToFill, true);

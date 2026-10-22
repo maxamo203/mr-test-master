@@ -342,6 +342,21 @@ public class MRCardboardController : MonoBehaviour
         return true;
     }
 
+    // Píxeles de pantalla por grado de giro de la cabeza en la imagen de cámara que ve cada
+    // ojo, cerca del centro. La vista de un ojo es un recorte (zoom de calibración) del campo
+    // de la cámara AR, que es bastante menos que 90°: lo usan las pantallas flotantes para
+    // moverse al girar igual que el cuarto (Rediseno.UI.PantallaUI). u = 0,5 + 0,5·P00·tan(θ)
+    // → d(px)/dθ en 0 = 0,5·P00·(ancho mostrado / ancho del recorte). 0 si no se puede saber.
+    public float PixelesPorGrado()
+    {
+        if (!CardboardActive || _leftImg == null || arCamera == null) return 0f;
+        float p00 = Mathf.Abs(arCamera.projectionMatrix.m00);
+        var r = _leftImg.uvRect;
+        float ancho = _leftImg.rectTransform.sizeDelta.x;
+        if (p00 < 1e-4f || r.width <= 1e-4f || ancho <= 0f) return 0f;
+        return 0.5f * p00 * ancho / r.width * Mathf.Deg2Rad;
+    }
+
     private static Vector2 UvAPantalla(RawImage img, Vector2 uv)
     {
         var r    = img.uvRect;
