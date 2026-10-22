@@ -100,7 +100,9 @@ namespace Rediseno.UI
             sv.style.flexGrow = 1;
             sv.verticalScrollerVisibility = ScrollerVisibility.Hidden;
             sv.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
-            sv.touchScrollBehavior = ScrollView.TouchScrollBehavior.Elastic;
+            // Clamped: no se pasa del principio ni del final. Con Elastic se podía seguir
+            // arrastrando más allá del borde y, en el visor, la lista quedaba corrida.
+            sv.touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped;
             // Lo que normalmente pone el tema por defecto (acá no hay tema): el visor de la
             // lista ocupa el lugar y recorta, y el contenido no se aplasta.
             sv.contentViewport.style.flexGrow = 1;

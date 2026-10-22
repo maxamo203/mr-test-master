@@ -292,19 +292,28 @@ namespace Rediseno.UI
         // panel se dibuja en una textura pegada en cada ojo: sin esto UI Toolkit tomaba el dedo
         // tal cual sobre la textura y el arrastre andaba sólo sobre el ojo izquierdo, de
         // casualidad. Se traduce desde el rect donde quedó dibujado en cualquiera de los dos
-        // ojos; fuera de ambos, posición inválida (sin evento). Origen arriba, como OnGUI.
+        // ojos; fuera de ambos, desde el punto más cercano del rect más cercano (si se
+        // descartara, soltar el dedo afuera no le llegaba a la lista y quedaba "arrastrando",
+        // corrida). Origen arriba, como OnGUI.
         private Vector2 PantallaAPanel(Vector2 p)
         {
             var rt = _ps != null ? _ps.targetTexture : null;
             if (rt == null) return p;
-            if (_hayRectOjo)
-                for (int i = 0; i < 2; i++)
-                {
-                    var r = _rectOjo[i];
-                    if (r.width <= 0f || r.height <= 0f || !r.Contains(p)) continue;
-                    return new Vector2((p.x - r.x) / r.width * rt.width, (p.y - r.y) / r.height * rt.height);
-                }
-            return new Vector2(float.NaN, float.NaN);
+            if (!_hayRectOjo) return new Vector2(float.NaN, float.NaN);
+            int mejor = -1;
+            float mejorD = float.MaxValue;
+            for (int i = 0; i < 2; i++)
+            {
+                var r = _rectOjo[i];
+                if (r.width <= 0f || r.height <= 0f) continue;
+                var q = new Vector2(Mathf.Clamp(p.x, r.xMin, r.xMax), Mathf.Clamp(p.y, r.yMin, r.yMax));
+                float d = (q - p).sqrMagnitude;
+                if (d < mejorD) { mejorD = d; mejor = i; }
+            }
+            if (mejor < 0) return new Vector2(float.NaN, float.NaN);
+            var e = _rectOjo[mejor];
+            float x = Mathf.Clamp(p.x, e.xMin, e.xMax), y = Mathf.Clamp(p.y, e.yMin, e.yMax);
+            return new Vector2((x - e.x) / e.width * rt.width, (y - e.y) / e.height * rt.height);
         }
 
         private void TickToquesVisor()
