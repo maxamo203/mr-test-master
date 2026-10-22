@@ -79,7 +79,10 @@ namespace Gameplay
 
         // Práctica que se arma en el momento (sin escaneo): SelectedMap queda null y el lobby
         // abre el armado rápido en vez de buscar la imagen (ARLobbyManager.BeginHostFlow).
-        public bool ArmadoRapido => EnTutorial && Gameplay.ArmadoRapido.Usa(Tutorial);
+        // SORKEN y VELETH también se pueden jugar sobre un escenario escaneado: ahí hay mapa
+        // y el lobby es el de siempre.
+        public bool ArmadoRapido => EnTutorial && Gameplay.ArmadoRapido.Usa(Tutorial) &&
+                                    string.IsNullOrEmpty(SelectedMap);
 
         private void Awake()
         {

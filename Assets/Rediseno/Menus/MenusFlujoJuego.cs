@@ -205,6 +205,17 @@ namespace Rediseno.Menus
                     Rearmar();
                 }, habilitada: ok);
             }
+
+            // Práctica: escanear otro escenario sin volver al menú principal. Al guardar (o
+            // salir) del escáner se vuelve acá con la misma práctica (NightMenuUI.Awake).
+            if (menu.TutorialPendiente != TutorialTipo.Ninguno)
+                lista.Add(PiezasUI.Boton(nav, "ESCANEAR UN ESCENARIO NUEVO", () => NightMenuUI.Instance?.EscanearNuevo()));
+            // SORKEN / VELETH sin escaneo: sólo development build (NightMenuUI.PuedeArmarEnElMomento),
+            // para testear el armado rápido (p.ej. en un iPhone con LiDAR).
+            if (menu.PuedeArmarEnElMomento)
+                lista.Add(PiezasUI.Opcion(nav, IconosMenu.Libro, "ARMAR EN EL MOMENTO (DEV)",
+                    "Sin escaneo: ubicás el libro y la entrada ahí mismo. Oclusión sólo por profundidad",
+                    () => NightMenuUI.Instance?.ArmarEnElMomento()));
         }
 
         // JUGAR y ELEGIR OTRA NOCHE van en el pie: con muchos escenarios se desplaza la lista
@@ -293,6 +304,7 @@ namespace Rediseno.Menus
                     lista.Add(PiezasUI.Boton(nav, $"EDITAR \"{nombre}\"",
                                              () => NightMenuUI.Instance?.EditarEscenario(nombre)));
                 }
+                lista.Add(PiezasUI.Boton(nav, "ESCANEAR UNO NUEVO", () => NightMenuUI.Instance?.EscanearNuevo()));
                 return;
             }
 

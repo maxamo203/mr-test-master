@@ -130,6 +130,19 @@ namespace Gameplay
                 sesion.Tutorial = TutorialTipo.Ninguno;
                 PantallaActual  = Pantalla.Tutoriales;
             }
+
+            // Volvemos del escáner abierto desde una práctica (¿DÓNDE JUGÁS? / FALTA UN
+            // ESCENARIO): se retoma esa práctica en vez de caer en el menú principal, con el
+            // escenario recién guardado/editado ya elegido si le sirve.
+            var tutorial = _tutorialTrasEscaner;
+            _tutorialTrasEscaner = TutorialTipo.Ninguno;
+            if (tutorial != TutorialTipo.Ninguno)
+            {
+                IniciarTutorial(tutorial);
+                var escaneado = SaveLoadUI.NombreEdicion;
+                if (PantallaActual == Pantalla.Entorno && !string.IsNullOrEmpty(escaneado) && EsJugable(escaneado))
+                    _mapSel = escaneado;
+            }
         }
 
         private void OnEnable()  => Gamepad.ImguiGamepadMenu.PedidoVolver += Volver;
@@ -267,10 +280,10 @@ namespace Gameplay
         public void AbrirTutoriales()    { _tutorialPendiente = TutorialTipo.Ninguno; PantallaActual = Pantalla.Tutoriales; }
 
         // Arranca una práctica: un jugador, fuera del catálogo (NightIndex = -1: no
-        // desbloquea noches ni toca récords). SORKEN y LIBRO (con Veleth) se arman en el momento
-        // dentro de SampleScene (ArmadoRapido): van directo, sin escenario. PILAS y ARBMOS
-        // necesitan un escenario escaneado, que se elige en ¿DÓNDE JUGÁS? igual que para
-        // una noche; sin escenario jugable caen en "falta".
+        // desbloquea noches ni toca récords). Todas se juegan en un escenario escaneado, que
+        // se elige en ¿DÓNDE JUGÁS?; sin escenario jugable caen en "falta". Sólo en
+        // development build SORKEN y VELETH ofrecen además ARMAR EN EL MOMENTO (sin escaneo,
+        // ArmadoRapido): entonces van a ¿DÓNDE JUGÁS? aunque no haya escenario.
         public void IniciarTutorial(TutorialTipo tipo)
         {
             if (Tutoriales.Config(tipo) == null)
@@ -278,12 +291,11 @@ namespace Gameplay
                 Debug.LogError($"[NightMenu] Falta la NightConfig del tutorial {tipo} en Resources/Tutoriales.");
                 return;
             }
-            if (ArmadoRapido.Usa(tipo)) { ArrancarTutorial(tipo, null); return; }
             _pendingMode = GameSession.SessionMode.SinglePlayer;
             _tutorialPendiente = tipo;
             _nocheSel = -1;
             RefrescarScans();
-            if (!HayEntornoJugable())
+            if (!PuedeArmarEnElMomento && !HayEntornoJugable())
             {
                 AudioManager.Sonar(c => c.uiAlerta);
                 PantallaActual = Pantalla.SinEntorno;
@@ -292,6 +304,16 @@ namespace Gameplay
             if (!string.IsNullOrEmpty(_mapSel) && !EsJugable(_mapSel)) _mapSel = null;
             PreseleccionarEscenario();
             PantallaActual = Pantalla.Entorno;
+        }
+
+        // ARMAR EN EL MOMENTO de ¿DÓNDE JUGÁS? (SORKEN / VELETH): la práctica sin escaneo.
+        // Herramienta de testeo, sólo en development build: sin escaneo la oclusión depende
+        // de la profundidad del celular (bien con LiDAR, floja en Android). En release las
+        // prácticas se juegan siempre en un escenario escaneado.
+        public bool PuedeArmarEnElMomento => Debug.isDebugBuild && ArmadoRapido.Usa(_tutorialPendiente);
+        public void ArmarEnElMomento()
+        {
+            if (PuedeArmarEnElMomento) ArrancarTutorial(_tutorialPendiente, null);
         }
 
         private void Update()
@@ -383,9 +405,14 @@ namespace Gameplay
             return false;
         }
 
+        // Práctica desde la que se fue al escáner (Ninguno si no). Estático: sobrevive al
+        // viaje ida y vuelta de escenas; lo consume Awake.
+        private static TutorialTipo _tutorialTrasEscaner;
+
         private void IrAlEscaner(string nombreEdicion)
         {
             ScannerLaunchParams.EditScanName = nombreEdicion;
+            _tutorialTrasEscaner = _tutorialPendiente;
             SceneFlow.GoTo(SceneFlow.EscenaEscaner);
         }
 

@@ -7,9 +7,10 @@ using UnityEngine.UIElements;
 
 namespace Rediseno.Menus
 {
-    // ARMÁ LA PRÁCTICA: armado rápido de SORKEN y LIBRO RITUAL Y VELETH (Gameplay.ArmadoRapido),
+    // ARMÁ LA PRÁCTICA: armado rápido de SORKEN y VELETH (Gameplay.ArmadoRapido),
     // sin escaneo ni imagen. El jugador apunta la mira al piso y ubica el libro (el 0,0); en
-    // la del Sorken, además marca una o más puertas/ventanas reales. LISTO sigue el mismo
+    // la del Sorken, además marca la puerta y/o la ventana real por donde entra (una de cada
+    // tipo: marcar otra del mismo tipo reemplaza la anterior). LISTO sigue el mismo
     // camino que tras calibrar (ARLobbyManager.ArmadoRapidoListo).
     //
     // A diferencia de las otras pantallas del Rediseño NO depende de Flag.Activo: TUTORIALES
@@ -140,12 +141,17 @@ namespace Rediseno.Menus
 
             bool pide = ArmadoRapido.PideEntradas(tipo);
             _paso.text = !libro
-                ? "Apuntá la mira al PISO donde querés el libro ritual y tocá UBICAR LIBRO."
+                ? "Jugá dentro de una sola habitación. Apuntá la mira al PISO, en el medio del cuarto, " +
+                  "donde querés el libro ritual y tocá UBICAR LIBRO."
                 : pide
-                    ? "Parate frente a una puerta o ventana real, apuntá la mira a su centro y marcala. " +
-                      "El Sorken va a entrar por ahí. Podés marcar varias."
+                    ? "Parate a 1-2 m frente a una puerta o ventana de ESTA habitación, con pared a los dos " +
+                      "costados, apuntá la mira a su centro y marcala. El Sorken va a entrar por ahí. " +
+                      "Si marcás otra puerta (o ventana), reemplaza a la anterior del mismo tipo."
                     : "Listo. Si querés el libro en otro lado, apuntá ahí y tocá MOVER LIBRO.";
-            _estado.text = pide ? $"Entradas marcadas: {entradas}" : "";
+            _estado.text = pide
+                ? $"Puerta: {(ArmadoRapido.HayEntrada(false) ? "marcada" : "—")}  ·  " +
+                  $"Ventana: {(ArmadoRapido.HayEntrada(true) ? "marcada" : "—")}"
+                : "";
             _estado.style.display = pide ? DisplayStyle.Flex : DisplayStyle.None;
 
             bool hay = !string.IsNullOrEmpty(_textoError);

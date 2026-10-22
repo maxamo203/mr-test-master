@@ -2,8 +2,8 @@ using UnityEngine;
 
 namespace Gameplay
 {
-    // Prácticas del menú TUTORIALES: qué NightConfig usa cada una. SORKEN y LIBRO RITUAL Y
-    // VELETH se arman en el momento, sin escaneo (ArmadoRapido); PILAS y ARBMOS se juegan
+    // Prácticas del menú TUTORIALES: qué NightConfig usa cada una. SORKEN y VELETH (que
+    // incluye salvar el libro ritual) se arman en el momento, sin escaneo (ArmadoRapido); PILAS y ARBMOS se juegan
     // sobre un escenario escaneado del jugador (como una noche).
     public static class Tutoriales
     {
@@ -23,7 +23,7 @@ namespace Gameplay
             TutorialTipo.PilasReliquias => "PILAS Y RELIQUIAS",
             TutorialTipo.Sorken         => "SORKEN",
             TutorialTipo.Arbmos         => "ARBMOS",
-            TutorialTipo.Libro          => "LIBRO RITUAL Y VELETH",
+            TutorialTipo.Libro          => "VELETH",
             _                           => "",
         };
 
@@ -41,6 +41,9 @@ namespace Gameplay
         public static string MotivoNoSirve(TutorialTipo tipo, Scanner.ScanData data)
         {
             if (data == null) return "No se pudo leer el escaneo";
+            // El Sorken entra por puertas y ventanas marcadas: sin ninguna no aparece.
+            if (tipo == TutorialTipo.Sorken && (data.markers == null || data.markers.Count == 0))
+                return "Sin puertas ni ventanas marcadas";
             return null;
         }
     }

@@ -4,10 +4,10 @@ using UnityEngine.UIElements;
 
 namespace Rediseno.Menus
 {
-    // TUTORIALES: una práctica por cada amenaza, más pilas y reliquias y el libro ritual.
-    // SORKEN y LIBRO RITUAL Y VELETH van directo a SampleScene y se arman en el momento
-    // (Gameplay.ArmadoRapido); PILAS y ARBMOS se juegan en un escenario escaneado: pasan a
-    // ¿DÓNDE JUGÁS? (NightMenuUI.IniciarTutorial), o a FALTA UN ESCENARIO si no hay ninguno.
+    // TUTORIALES: una práctica por cada amenaza, más pilas y reliquias. Sólo los accesos,
+    // sin texto introductorio. Todas se juegan en un escenario escaneado elegido en ¿DÓNDE
+    // JUGÁS? (NightMenuUI.IniciarTutorial), o caen en FALTA UN ESCENARIO. Sólo en development
+    // build SORKEN y VELETH ofrecen además ARMAR EN EL MOMENTO (Gameplay.ArmadoRapido).
     public class MenuTutoriales2 : PantallaMenu2
     {
         protected override NightMenuUI.Pantalla Cual => NightMenuUI.Pantalla.Tutoriales;
@@ -15,9 +15,6 @@ namespace Rediseno.Menus
 
         protected override void Armar(VisualElement lista, MenuNavegable nav)
         {
-            PiezasUI.Info(lista, "Practicá cada amenaza sin riesgo: no cuenta como noche y la repetís " +
-                                 "las veces que quieras. Sorken y el libro se arman en el momento; " +
-                                 "pilas y Arbmos se juegan en uno de tus escenarios.");
             lista.Add(PiezasUI.Opcion(nav, IconosMenu.Libro, "PILAS Y RELIQUIAS",
                 "Recargá la linterna y juntá reliquias",
                 () => NightMenuUI.Instance?.IniciarTutorial(TutorialTipo.PilasReliquias)));
@@ -26,7 +23,7 @@ namespace Rediseno.Menus
             Practica(lista, nav, TutorialTipo.Arbmos,
                 "Te observa a oscuras. Apagá la luz para que se vaya; iluminarlo lo provoca");
             Practica(lista, nav, TutorialTipo.Libro,
-                "Alumbralo con la luz intensa para salvarlo. Después dejalo apagarse y escapale a Veleth");
+                "Nace cuando el ritual se apaga y te caza. Aguantá su persecución hasta que se retire");
         }
 
         private static void Practica(VisualElement lista, MenuNavegable nav, TutorialTipo tipo, string desc) =>

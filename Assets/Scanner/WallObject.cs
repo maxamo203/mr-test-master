@@ -68,10 +68,26 @@ namespace Scanner
         // Usado para propagar cambios de altura del panel a toda la polilinea.
         public string PolylineId { get; set; }
 
-        // Pared de referencia del armado rápido de las prácticas: un tramo suelto que sólo
-        // sostiene la entrada del Sorken. La navegación la ignora: con ella el grid de
-        // SorkerNav quedaba del tamaño del tramo y el Sorken no encontraba camino al jugador.
-        public bool SoloReferencia { get; set; }
+        // Pared de referencia del armado rápido de las prácticas: un tramo suelto, del largo
+        // de la pared real medida y con el hueco de la abertura recortado, que sostiene la
+        // entrada del Sorken. Por eso:
+        //  - la navegación la ignora: con ella el grid de SorkerNav quedaba del tamaño del
+        //    tramo y el Sorken no encontraba camino al jugador;
+        //  - arranca sin dibujarse (antes se veía una pared virtual sin límites durante el
+        //    armado); en partida Gameplay.MarcoEntrada la prende con el material oclusor
+        //    invisible de SceneOccluderMode, para que tape al Sorken alrededor del marco;
+        //  - no tiene collider: en la layer Placed cortaba la línea de visión de la linterna.
+        private bool _soloReferencia;
+        public bool SoloReferencia
+        {
+            get => _soloReferencia;
+            set
+            {
+                _soloReferencia = value;
+                if (_mr != null) _mr.enabled = !value;   // MarcoEntrada la prende en partida
+                if (_mc != null) _mc.enabled = !value;
+            }
+        }
 
         // Si el shader del material configurado fue stripeado en el build (tipico
         // en iOS) o si el material no tiene shader, lo detectamos y avisamos.
@@ -327,7 +343,8 @@ namespace Scanner
 
         private void SpawnDoorHandles(DoorData door)
         {
-            if (door == null) return;
+            // Sin handles de edición en display-only, igual que los de vértice (Create).
+            if (door == null || ScanLoader.DisplayOnly) return;
             _doorHandles.Add(DoorHandle.Create(this, door.id, DoorHandle.Corner.Floor));
             _doorHandles.Add(DoorHandle.Create(this, door.id, DoorHandle.Corner.Free));
         }

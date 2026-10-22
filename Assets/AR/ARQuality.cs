@@ -54,14 +54,21 @@ public static class ARQuality
         _                 => 1.00f,
     };
 
-    // Profundidad por píxel. Con malla real de LiDAR es en buena medida redundante:
-    // la oclusión ya la da la geometría. Por eso en Rendimiento se apaga entera.
-    public static EnvironmentDepthMode DepthMode => Actual switch
-    {
-        Nivel.Rendimiento => EnvironmentDepthMode.Disabled,
-        Nivel.Equilibrado => EnvironmentDepthMode.Fastest,
-        _                 => EnvironmentDepthMode.Best,
-    };
+    // Profundidad por píxel. Con malla real de LiDAR o con las paredes del escaneo (que en
+    // partida son oclusores, SceneOccluderMode) es en buena medida redundante: la oclusión
+    // ya la da la geometría. Por eso en Rendimiento se apaga entera.
+    // Excepción: las prácticas de armado rápido (SORKEN, VELETH) no tienen escaneo, así que
+    // la profundidad es la ÚNICA forma de que una pared real tape a una entidad: ahí va
+    // siempre en Best, sea cual sea el nivel. Son partidas cortas.
+    public static EnvironmentDepthMode DepthMode =>
+        Gameplay.GameSession.Instance != null && Gameplay.GameSession.Instance.ArmadoRapido
+            ? EnvironmentDepthMode.Best
+            : Actual switch
+            {
+                Nivel.Rendimiento => EnvironmentDepthMode.Disabled,
+                Nivel.Equilibrado => EnvironmentDepthMode.Fastest,
+                _                 => EnvironmentDepthMode.Best,
+            };
 
     // Escala de la RenderTexture del Cardboard. Cada ojo muestra la MITAD del ancho,
     // así que rendear a resolución nativa completa es fill rate que nunca se ve.
@@ -153,6 +160,9 @@ public static class ARQuality
 
             var modo = DepthMode;
             occ.requestedEnvironmentDepthMode = modo;
+            // Suavizado temporal: sin él los bordes de la oclusión (marco de una puerta)
+            // titilan cuadro a cuadro sobre la entidad.
+            occ.environmentDepthTemporalSmoothingRequested = true;
             occ.enabled = modo != EnvironmentDepthMode.Disabled;
         }
 
