@@ -155,11 +155,12 @@ namespace Gameplay
             const float Cero = 1e-5f;
             const float Todo = 1f - 1e-5f;
 
-            // US-7: el libro se perdió. Es el sonido de alerta que invoca a Veleth.
+            // El libro se perdio: detenemos la defensa, pero no reproducimos el antiguo
+            // stinger "perdido.mp3" (la risa). La aparicion conserva exclusivamente su
+            // audio organico propio, disparado por AudioEventWatcher al emerger Veleth.
             if (antes < Todo && ahora >= Todo)
             {
                 AudioManager.PararBucle(BucleDefensa);
-                AudioManager.Sonar(c => c.libroPerdido);
                 return;
             }
 

@@ -46,10 +46,7 @@ namespace Gameplay
         private const float RevealSeconds = 1.45f;
         private const float ShakeDegrees = 0.7f;
         private const float FaceDistance = 0.38f;
-        // Con retrato: distancia de la cara a la cámara (cabeza y hombros en cuadro) y
-        // cuánto se lo deja ver, ya quieto, antes de la pantalla de muerte.
-        private const float RetratoDistancia = 0.55f;
-        private const float RetratoSostenSeconds = 2.5f;
+        // Los tiempos, el encuadre y el look del retrato están en RetratoAsesinoConfig (Cfg).
 
         private void Awake()
         {
@@ -70,7 +67,7 @@ namespace Gameplay
             // la noche quedaba "congelada": el jugador muerto para el juego (reloj parado,
             // sin entidades) pero sin MORISTE ni forma de seguir.
             if (IsDead && !PresentationReady &&
-                Time.unscaledTime - _muerteEn > RevealSeconds + RetratoSostenSeconds + 3f)
+                Time.unscaledTime - _muerteEn > Mathf.Max(RevealSeconds, Cfg.revelar) + Cfg.sostener + 3f)
             {
                 Debug.LogWarning("[LocalDeath] La pantalla de muerte no apareció a tiempo: se fuerza.");
                 if (_sequence != null) { StopCoroutine(_sequence); _sequence = null; }
@@ -88,12 +85,18 @@ namespace Gameplay
                 // Coords locales a la cámara: el tracking AR la sigue moviendo y el
                 // retrato la acompaña. Se desliza desde donde estaba el asesino hasta
                 // quedar delante de la cara, con el mismo temblor que el zoom de siempre.
-                float p = Mathf.Clamp01((Time.unscaledTime - _sequenceStartedAt) / RevealSeconds);
+#if UNITY_EDITOR
+                // Tuning en vivo (sólo editor): el encuadre se recalcula cada frame con la
+                // config, así se ve al instante lo que se mueve en el Inspector.
+                ReencuadrarEnVivo();
+#endif
+                var cfg = Cfg;
+                float p = Mathf.Clamp01((Time.unscaledTime - _sequenceStartedAt) / Mathf.Max(0.01f, cfg.revelar));
                 p = p * p * (3f - 2f * p);
                 float tt = Time.unscaledTime;
                 var temblor = Quaternion.Euler(
-                    (Mathf.PerlinNoise(tt * 7.1f, 0.17f) - .5f) * 2f * ShakeDegrees,
-                    (Mathf.PerlinNoise(0.63f, tt * 6.4f) - .5f) * 2f * ShakeDegrees, 0f);
+                    (Mathf.PerlinNoise(tt * 7.1f, 0.17f) - .5f) * 2f * cfg.temblorGrados,
+                    (Mathf.PerlinNoise(0.63f, tt * 6.4f) - .5f) * 2f * cfg.temblorGrados, 0f);
                 _retrato.transform.localPosition = Vector3.Lerp(_retratoDesde, _retratoHasta, p);
                 _retrato.transform.localRotation =
                     temblor * Quaternion.Slerp(_retratoRotDesde, _retratoRotHasta, p);
@@ -139,6 +142,9 @@ namespace Gameplay
             }
 
             IsDead = true;
+            if (Debug.isDebugBuild)
+                Debug.Log($"[LocalDeath] Die: asesino id {killerNetworkId}, cara {killerFacePosition}, " +
+                          $"todos muertos {allPlayersDead}, Cardboard {MRCardboardController.Activo}.");
             // Momento en el que se "cierra" el resultado de ESTE dispositivo (igual
             // que NocheSuperada en el otro desenlace): si los compañeros siguen
             // juntando reliquias después, no se refleja acá — mismo criterio
@@ -210,7 +216,7 @@ namespace Gameplay
         {
             // Con retrato se lo deja ver un rato ya quieto delante de la cara; el zoom de
             // siempre pasa a la pantalla apenas termina.
-            float espera = RevealSeconds + (_retrato != null ? RetratoSostenSeconds : 0f);
+            float espera = _retrato != null ? Cfg.revelar + Cfg.sostener : RevealSeconds;
             yield return new WaitForSecondsRealtime(espera);
             try { HideKiller(); } catch (System.Exception e) { Debug.LogException(e); }
             PresentationReady = true;
@@ -239,9 +245,26 @@ namespace Gameplay
             var cam = Camera.main;
             if (cam == null || _killerNetworkId == 0 || EntityRegistry.Instance == null ||
                 !EntityRegistry.Instance.TryGet(_killerNetworkId, out var killer) || killer == null)
+            {
+                if (Debug.isDebugBuild)
+                    Debug.LogWarning($"[LocalDeath] Sin retrato: no se encontró al asesino " +
+                                     $"(id {_killerNetworkId}, cámara {(cam != null)}). Queda el zoom.");
                 return false;
+            }
 
-            var origen = killer.transform;
+            if (!ArmarRetrato(killer.transform, cam)) return false;
+            HideKiller();
+            return true;
+        }
+
+        // Arma la copia visual de 'origen' colgada de 'cam' (la usan la muerte y la prueba
+        // del editor). false = no había mallas visibles que copiar.
+        private bool ArmarRetrato(Transform origen, Camera cam)
+        {
+            DestruirRetrato();   // uno solo a la vez (p. ej. una prueba del editor abierta)
+#if UNITY_EDITOR
+            EnPrueba = false;
+#endif
             var raiz = new GameObject("RetratoAsesino");
             raiz.transform.SetPositionAndRotation(origen.position, origen.rotation);
             // Registrado desde ya: si algo de abajo tira una excepción, DestruirRetrato (en el
@@ -249,7 +272,7 @@ namespace Gameplay
             _retrato = raiz;
 
             int copiados = 0;
-            foreach (var r in killer.GetComponentsInChildren<Renderer>())
+            foreach (var r in origen.GetComponentsInChildren<Renderer>())
             {
                 if (!r.enabled || !r.gameObject.activeInHierarchy) continue;
 
@@ -261,6 +284,7 @@ namespace Gameplay
                     // Pose del frame de la muerte, con la escala ya aplicada.
                     malla = new Mesh { name = smr.sharedMesh.name + " (retrato)" };
                     smr.BakeMesh(malla, true);
+                    malla.RecalculateBounds();   // el encuadre mide sobre estos bounds
                     _mallasRetrato.Add(malla);
                     horneada = true;
                 }
@@ -279,69 +303,264 @@ namespace Gameplay
                 go.transform.localScale = horneada ? Vector3.one : r.transform.lossyScale;
                 go.AddComponent<MeshFilter>().sharedMesh = malla;
                 var mr = go.AddComponent<MeshRenderer>();
-                mr.sharedMaterials = r.sharedMaterials;
+                mr.sharedMaterials = MaterialesRetrato(r.sharedMaterials);
                 // Valores por renderer (el revelado de Veleth va por acá): sin copiarlos
-                // el material queda en su default, que puede ser invisible.
+                // el material queda en su default, que puede ser invisible. El recorte
+                // por altura de la emergencia se apaga: es en coords de mundo y la copia
+                // ya no está donde emergía.
                 if (r.HasPropertyBlock())
                 {
                     _bloque ??= new MaterialPropertyBlock();
                     r.GetPropertyBlock(_bloque);
+                    _bloque.SetFloat("_RevealActive", 0f);
                     mr.SetPropertyBlock(_bloque);
                 }
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 mr.receiveShadows = false;
+
+                // La malla horneada puede salir sin la escala de la jerarquía del modelo
+                // (el Sorken salía ~90 veces más grande: FBX en cm con 0.01 en un padre).
+                // Se corrige midiendo: la copia tiene que ocupar lo mismo que el original
+                // en el mundo (sus bounds, que Unity calcula con el skinning aplicado).
+                if (horneada)
+                {
+                    float original = r.bounds.size.magnitude, copia = mr.bounds.size.magnitude;
+                    if (original > 1e-4f && copia > 1e-4f)
+                    {
+                        float k = original / copia;
+                        if (k < 0.8f || k > 1.25f)
+                        {
+                            // Escalar y después recentrar sobre el original (escalar desde
+                            // el pivote corre la malla).
+                            go.transform.localScale *= k;
+                            go.transform.position += r.bounds.center - mr.bounds.center;
+                        }
+                    }
+                }
                 copiados++;
             }
 
-            if (copiados == 0) { Destroy(raiz); _retrato = null; return false; }
+            if (copiados == 0)
+            {
+                if (Debug.isDebugBuild)
+                    Debug.LogWarning($"[LocalDeath] Sin retrato: '{origen.name}' no tenía mallas visibles. Queda el zoom.");
+                Destroy(raiz);
+                _retrato = null;
+                return false;
+            }
 
-            // La cara se mide sobre las mallas COPIADAS, no con la que manda el server:
-            // ésa sale de los bounds de todos los renderers, humo incluido, y en el Sorken
-            // quedaba muy por encima de la cabeza — el cuerpo terminaba fuera de cuadro.
-            Vector3 caraLocal = CaraLocal(raiz.transform, facePosition);
+            // Encuadre medido sobre las mallas COPIADAS (no con la cara que manda el server,
+            // que incluye el humo): de la cabeza a las rodillas, a la distancia en que eso
+            // entra en la vista de la cámara. Con una distancia fija a la cara quedaba
+            // demasiado encima (o con la cara mal estimada, fuera de cuadro).
+            Encuadrar(raiz.transform, cam, out var centroLocal, out float distancia);
 
             // Luz propia: sin ella la copia queda a oscuras con la linterna apagada.
             var luz = new GameObject("LuzRetrato").AddComponent<Light>();
             luz.type = LightType.Point;
-            luz.range = 2.5f;
-            luz.intensity = 1.6f;
+            luz.range = distancia + 3f;
+            luz.intensity = Cfg.luzIntensidad;
             luz.color = new Color(1f, 0.92f, 0.85f);
             luz.shadows = LightShadows.None;
+            // La cámara puede venir escalada (el XR Origin está a escala 10): sus coords
+            // locales no son metros. Todo se calcula en metros y se divide por su escala
+            // al pasarlo a local; sin esto la copia quedaba 10 veces más lejos y fuera de la
+            // vista. (Escala uniforme, como la del origin.)
+            float escalaCam = Mathf.Max(1e-4f, cam.transform.lossyScale.x);
+
             luz.transform.SetParent(cam.transform, false);
-            luz.transform.localPosition = new Vector3(0f, 0.15f, 0.05f);
+            luz.transform.localPosition = new Vector3(0f, 0.2f, 0.1f) / escalaCam;
             _luzRetrato = luz.gameObject;
 
-            // Pose final, en coords de la cámara: mirándola de frente, con la cara a
-            // RetratoDistancia sobre el eje de la vista.
+            // Pose final, en coords de la cámara: mirándola de frente, con el centro del
+            // encuadre sobre el eje de la vista. centroLocal está en metros (la raíz no
+            // tiene escala en el mundo), igual que la distancia.
             _retratoRotHasta = Quaternion.LookRotation(Vector3.back, Vector3.up);
-            _retratoHasta = Vector3.forward * RetratoDistancia - _retratoRotHasta * caraLocal;
+            _retratoHasta = PoseFinal(cam, centroLocal, distancia, escalaCam);
 
+            // worldPositionStays: la raíz queda con escala local 1/escalaCam, o sea 1 en el mundo.
             raiz.transform.SetParent(cam.transform, true);
             _retratoDesde = raiz.transform.localPosition;
             _retratoRotDesde = raiz.transform.localRotation;
             _retrato = raiz;
             _sequenceStartedAt = Time.unscaledTime;
 
-            HideKiller();
+            if (Debug.isDebugBuild)
+            {
+                Debug.Log($"[LocalDeath] Retrato de '{origen.name}': {copiados} mallas, " +
+                          $"a {distancia:0.00} m, centro local {centroLocal}, " +
+                          $"shader encima de todo: {(_shaderRetrato != null && _shaderRetrato.isSupported)}.");
+                Debug.Log($"[LocalDeath] Cámara '{cam.name}' activa={cam.isActiveAndEnabled} " +
+                          $"rt={(cam.targetTexture != null ? cam.targetTexture.name : "pantalla")} " +
+                          $"capa {LayerMask.LayerToName(raiz.transform.GetChild(0).gameObject.layer)} " +
+                          $"en máscara={(cam.cullingMask & (1 << raiz.transform.GetChild(0).gameObject.layer)) != 0} " +
+                          $"near={cam.nearClipPlane:0.00} cámaras={Camera.allCamerasCount} " +
+                          $"escala={cam.transform.lossyScale}.");
+                StartCoroutine(DiagnosticarRetrato());
+            }
             return true;
         }
 
-        // Cara en coords de la raíz del retrato: centro de las mallas copiadas en planta y
-        // un poco por debajo de su tope (mismo criterio que ServerDeaths.FacePosition, sin
-        // partículas). Sin mallas medibles, la cara que mandó el server.
-        private static Vector3 CaraLocal(Transform raiz, Vector3 caraServer)
+        // Posición final de la raíz en coords locales de la cámara: el centro del encuadre
+        // sobre el rayo que pasa por el CENTRO DE LA PANTALLA (más el corrimiento horizontal
+        // de la config), a 'distancia' m. No sobre el eje de la cámara: en el dispositivo
+        // AR Foundation usa las intrínsecas reales, cuyo centro óptico no cae en el medio de
+        // la pantalla, y el retrato quedaba corrido (centrado en el editor, a la izquierda
+        // en el iPhone). centroLocal en metros (la raíz no tiene escala en el mundo); se
+        // divide por la escala de la cámara al pasar a su local.
+        private Vector3 PoseFinal(Camera cam, Vector3 centroLocal, float distancia, float escalaCam)
+        {
+            var rayo = cam.ViewportPointToRay(new Vector3(0.5f + Cfg.corrimientoHorizontal, 0.5f, 0f));
+            Vector3 dir = cam.transform.InverseTransformDirection(rayo.direction);
+            if (dir.z < 1e-3f) dir = Vector3.forward;
+            // Escalado para que su profundidad (z de la cámara) sea 'distancia'.
+            dir /= dir.z;
+            return (dir * distancia - _retratoRotHasta * centroLocal) / escalaCam;
+        }
+
+        private static RetratoAsesinoConfig Cfg => RetratoAsesinoConfig.Actual;
+
+#if UNITY_EDITOR
+        // ── Prueba en el editor (menú Mortuorium > Retrato del asesino) ─────────────
+        // Arma el retrato de un prefab sin morir y lo deja delante de la cámara hasta
+        // CerrarPrueba, para tunear RetratoAsesinoConfig con el Play corriendo.
+        public bool EnPrueba { get; private set; }
+
+        public bool ProbarRetrato(GameObject prefab)
+        {
+            var cam = Camera.main;
+            if (prefab == null || cam == null || IsDead) return false;
+            CerrarPrueba();
+
+            // Instancia descartable de donde copiar las mallas: unos metros delante, de
+            // frente, para que el deslizamiento se vea como en la muerte de verdad.
+            var adelante = Vector3.ProjectOnPlane(cam.transform.forward, Vector3.up);
+            if (adelante.sqrMagnitude < 1e-4f) adelante = Vector3.forward;
+            adelante.Normalize();
+            var inst = Instantiate(prefab, cam.transform.position + adelante * 3f - Vector3.up * 1.5f,
+                                   Quaternion.LookRotation(-adelante, Vector3.up));
+            bool ok = ArmarRetrato(inst.transform, cam);
+            Destroy(inst);
+            EnPrueba = ok;
+            return ok;
+        }
+
+        public void CerrarPrueba()
+        {
+            if (!EnPrueba) return;
+            EnPrueba = false;
+            DestruirRetrato();
+        }
+
+        private void ReencuadrarEnVivo()
+        {
+            var cam = _retrato.transform.parent != null ? _retrato.transform.parent.GetComponent<Camera>() : null;
+            if (cam == null) return;
+            Encuadrar(_retrato.transform, cam, out var centro, out float distancia);
+            _retratoHasta = PoseFinal(cam, centro, distancia, Mathf.Max(1e-4f, cam.transform.lossyScale.x));
+            if (_luzRetrato != null && _luzRetrato.TryGetComponent<Light>(out var luz))
+            {
+                luz.intensity = Cfg.luzIntensidad;
+                luz.range = distancia + 3f;
+            }
+        }
+#endif
+
+        // PROVISORIO (dev build): ¿alguna cámara llegó a dibujar el retrato? isVisible es
+        // true si algún render del frame lo incluyó (frustum + culling), así distingue
+        // "no se dibuja" de "se dibuja pero algo lo tapa / queda fuera de la vista".
+        private IEnumerator DiagnosticarRetrato()
+        {
+            yield return new WaitForSecondsRealtime(1.0f);
+            for (int vez = 0; vez < 2; vez++)
+            {
+                if (_retrato == null) { Debug.Log("[LocalDeath] Diagnóstico: el retrato ya no existe."); yield break; }
+                var cam = Camera.main;
+                int visibles = 0, total = 0;
+                foreach (var mr in _retrato.GetComponentsInChildren<MeshRenderer>(true))
+                {
+                    total++;
+                    if (mr.isVisible) visibles++;
+                }
+                var b = _retrato.GetComponentInChildren<MeshRenderer>(true);
+                Vector3 enCam = cam != null && b != null ? cam.transform.InverseTransformPoint(b.bounds.center) : Vector3.zero;
+                Vector3 vp = cam != null && b != null ? cam.WorldToViewportPoint(b.bounds.center) : Vector3.zero;
+                Debug.Log($"[LocalDeath] Diagnóstico t+{1f + vez * 1.5f:0.0}s: visibles {visibles}/{total}, " +
+                          $"activo={_retrato.activeInHierarchy}, padre={(_retrato.transform.parent != null ? _retrato.transform.parent.name : "ninguno")}, " +
+                          $"centro en cámara {enCam}, viewport {vp}, tamaño {(b != null ? b.bounds.size : Vector3.zero)}, " +
+                          $"camMain='{(cam != null ? cam.name : "null")}', timeScale={Time.timeScale}.");
+                yield return new WaitForSecondsRealtime(1.5f);
+            }
+        }
+
+        // Encuadre del retrato. Caja de las mallas copiadas en coords de la raíz (= del
+        // asesino, así "alto" es su alto aunque la cámara esté inclinada); se encuadra sólo
+        // la parte de arriba (Cfg.encuadreAlto del alto; 0.2 ≈ la cabeza), con margen, contra
+        // el campo visual REAL — el de la matriz de proyección, que AR Foundation pisa con
+        // las intrínsecas de la cámara. Sólo cuenta el alto: el ancho del cuerpo (alas,
+        // brazos) no es de la cabeza y la alejaba. Valores en RetratoAsesinoConfig.
+        private static void Encuadrar(Transform raiz, Camera cam, out Vector3 centro, out float distancia)
         {
             bool hay = false;
             Bounds b = default;
-            foreach (var mr in raiz.GetComponentsInChildren<MeshRenderer>())
+            foreach (var mf in raiz.GetComponentsInChildren<MeshFilter>())
             {
-                if (!hay) { b = mr.bounds; hay = true; }
-                else b.Encapsulate(mr.bounds);
+                var m = mf.sharedMesh;
+                if (m == null) continue;
+                var mb = m.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var esquina = mb.center + Vector3.Scale(mb.extents, new Vector3(
+                        (i & 1) == 0 ? -1f : 1f, (i & 2) == 0 ? -1f : 1f, (i & 4) == 0 ? -1f : 1f));
+                    var p = raiz.InverseTransformPoint(mf.transform.TransformPoint(esquina));
+                    if (!hay) { b = new Bounds(p, Vector3.zero); hay = true; }
+                    else b.Encapsulate(p);
+                }
             }
-            Vector3 cara = hay
-                ? new Vector3(b.center.x, b.max.y - b.extents.y * 0.18f, b.center.z)
-                : caraServer;
-            return raiz.InverseTransformPoint(cara);
+            if (!hay) b = new Bounds(Vector3.up, new Vector3(0.6f, 2f, 0.6f));
+
+            var cfg = Cfg;
+            float alto = b.size.y * cfg.encuadreAlto;
+            centro = new Vector3(b.center.x, b.max.y - alto * (0.5f - cfg.corrimientoVertical), b.center.z);
+
+            var proj = cam.projectionMatrix;
+            float tanV = proj.m11 > 1e-4f ? 1f / proj.m11 : Mathf.Tan(30f * Mathf.Deg2Rad);
+
+            float dCabeza = alto * 0.5f * cfg.margen / tanV;
+
+            // Nada del cuerpo puede quedar más cerca que el plano de recorte cercano: lo que
+            // sobresale hacia la cámara (alas, brazos; el Sorken tiene más de 1 m de fondo)
+            // se cortaba en polígonos con la cabeza a 30 cm. Se toma el mayor fondo desde el
+            // centro hacia cualquiera de los dos lados (no depende de hacia dónde mire el modelo).
+            float fondo = Mathf.Max(b.max.z - centro.z, centro.z - b.min.z);
+            float dSinCorte = fondo + cam.nearClipPlane + cfg.margenCorte;
+
+            distancia = Mathf.Clamp(Mathf.Max(dCabeza, dSinCorte), cfg.distanciaMin,
+                                    Mathf.Max(cfg.distanciaMin, cfg.distanciaMax));
+        }
+
+        // Materiales del retrato: los originales pasados al shader que dibuja por encima de
+        // todo (Resources/RetratoAsesino.shader) — sin eso la profundidad real de ARKit, las
+        // paredes escaneadas o un plano AR más cerca que la copia la tapaban. Si el shader
+        // no está, quedan los originales.
+        private static Shader _shaderRetrato;
+        private readonly List<Material> _materialesRetrato = new();
+
+        private Material[] MaterialesRetrato(Material[] originales)
+        {
+            if (_shaderRetrato == null) _shaderRetrato = Resources.Load<Shader>("RetratoAsesino");
+            if (_shaderRetrato == null || !_shaderRetrato.isSupported) return originales;
+
+            var copia = new Material[originales.Length];
+            for (int i = 0; i < originales.Length; i++)
+            {
+                var m = new Material(_shaderRetrato);
+                if (originales[i] != null) m.CopyPropertiesFromMaterial(originales[i]);
+                m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Overlay;
+                _materialesRetrato.Add(m);
+                copia[i] = m;
+            }
+            return copia;
         }
 
         // Retrato a la vista: DarknessOverlay no oscurece (si no, del asesino sólo se veía
@@ -356,6 +575,8 @@ namespace Gameplay
             _luzRetrato = null;
             foreach (var m in _mallasRetrato) if (m != null) Destroy(m);
             _mallasRetrato.Clear();
+            foreach (var m in _materialesRetrato) if (m != null) Destroy(m);
+            _materialesRetrato.Clear();
         }
 
         private void MostrarAsesino()
@@ -370,6 +591,9 @@ namespace Gameplay
             if (_sequence != null) StopCoroutine(_sequence);
             _sequence = null;
             DestruirRetrato();
+#if UNITY_EDITOR
+            EnPrueba = false;
+#endif
             MostrarAsesino();
             IsDead = false;
             PresentationReady = false;

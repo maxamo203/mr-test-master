@@ -54,7 +54,7 @@ namespace Rediseno.Menus
             var ld = LocalDeath.Instance;
             bool muerto = ld != null && ld.PresentationReady;
             bool sobrevivio = NightResult.Sobrevivio;
-            if (!muerto && !sobrevivio) { _selector = false; return false; }
+            if (!muerto && !sobrevivio) { _selector = false; _logCopiado = -1; return false; }
             if (!sobrevivio && ld != null && ld.Espectando) return false;   // barra vieja
             return true;
         }
@@ -90,7 +90,7 @@ namespace Rediseno.Menus
             var ld = LocalDeath.Instance;
             bool sobrevivio = NightResult.Sobrevivio;
             string firma = $"{_selector}|{sobrevivio}|{NightTransition.PuedeReiniciar}|" +
-                           $"{(ld != null && ld.PuedeEspectar)}|{EnVisor}|{NightResult.NocheDesbloqueada}";
+                           $"{(ld != null && ld.PuedeEspectar)}|{EnVisor}|{NightResult.NocheDesbloqueada}|{_logCopiado}";
             if (firma == _firma) return;
             _firma = firma;
             _cuerpo.Clear();
@@ -145,7 +145,18 @@ namespace Rediseno.Menus
                 _cuerpo.Add(PiezasUI.Boton(Nav, "ESPECTAR PARTIDA", ld.Espectar));
 
             _cuerpo.Add(PiezasUI.Boton(Nav, "VOLVER AL MENÚ", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
+
+            // PROVISORIO (dev build): copiar el log del retrato del asesino para pegarlo
+            // afuera, sin consola de Xcode. Ver LogMuerteDev.
+            if (LogMuerteDev.Disponible && !sobrevivio)
+            {
+                if (_logCopiado >= 0) PiezasUI.Info(_cuerpo, $"Log copiado al portapapeles ({_logCopiado} líneas)");
+                _cuerpo.Add(PiezasUI.Boton(Nav, "COPIAR LOG (DEV)",
+                    () => { _logCopiado = LogMuerteDev.Copiar(); _firma = null; }));
+            }
         }
+
+        private int _logCopiado = -1;
 
         private void ArmarSelector()
         {
