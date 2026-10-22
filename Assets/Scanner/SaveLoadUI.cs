@@ -54,11 +54,13 @@ namespace Scanner
         }
 
         // ── Campo del nombre en el celular ─────────────────────────────────────
-        // Con GUI.TextField el teclado le pasaba las teclas al IMGUI de a una: no se veía el
-        // cursor y mantener BORRAR no repetía. Acá se abre el teclado nativo a mano, con su
-        // propia caja de texto visible (cursor, borrado continuo, selección), y en el campo se
-        // dibuja el texto con un cursor que parpadea mientras se edita. En el editor no hay
-        // teclado nativo: sigue el TextField de siempre.
+        // Con GUI.TextField el teclado le pasaba las teclas al IMGUI de a una y no se veía el
+        // cursor. Acá se abre el teclado nativo a mano (con su caja de texto visible) y en el
+        // campo se dibuja el texto con un cursor que parpadea mientras se edita. Mantener
+        // BORRAR sigue sin repetir en Android (limitación del teclado con GameActivity), así
+        // que el nombre propuesto se abre SELECCIONADO (escribir lo reemplaza, un BORRAR lo
+        // vacía) y hay una × que vacía el campo de un toque. En el editor no hay teclado
+        // nativo: sigue el TextField de siempre.
         private TouchScreenKeyboard _kb;
         private static bool TecladoNativo => TouchScreenKeyboard.isSupported && !Application.isEditor;
         private const string Ejemplo = "Ej: living de casa";
@@ -79,9 +81,31 @@ namespace Scanner
                     T.FillR(new Rect(x + 1f, r.y + r.height * 0.25f, 2f, r.height * 0.5f), T.Cream, 1f);
                 }
             }
-            var dentro = new Rect(r.x + 14f, r.y, r.width - 28f, r.height);
+            var dentro = new Rect(r.x + 14f, r.y, r.width - 28f - (texto.Length > 0 ? r.height : 0f), r.height);
+            // Texto seleccionado entero (recién abierto): resaltado, se reemplaza al escribir.
+            if (editando && texto.Length > 0 && _kb.selection.length >= texto.Length &&
+                Event.current.type == EventType.Repaint)
+            {
+                float w = Mathf.Min(st.CalcSize(new GUIContent(texto)).x, dentro.width);
+                T.FillR(new Rect(dentro.x - 2f, r.y + r.height * 0.22f, w + 4f, r.height * 0.56f),
+                        new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.35f), 3f);
+            }
             if (texto.Length > 0) GUI.Label(dentro, texto, st);
             else GUI.Label(dentro, Ejemplo, T.Estilo(T.FMono, 15, T.Dim));
+
+            // ×: vaciar el campo de un toque.
+            if (texto.Length > 0)
+            {
+                var x = new Rect(r.xMax - r.height, r.y, r.height, r.height);
+                GUI.Label(x, "×", T.Estilo(T.FMono, 22, T.Muted, TextAnchor.MiddleCenter));
+                if (GUI.Button(x, GUIContent.none, GUIStyle.none))
+                {
+                    _nombre = "";
+                    if (_kb != null) { _kb.text = ""; _kb.selection = new RangeInt(0, 0); }
+                    else AbrirTeclado();
+                    return;
+                }
+            }
 
             if (GUI.Button(r, GUIContent.none, GUIStyle.none) && !editando) AbrirTeclado();
         }
@@ -93,7 +117,8 @@ namespace Scanner
             _kb = TouchScreenKeyboard.Open(texto, TouchScreenKeyboardType.Default,
                                            autocorrection: false, multiline: false, secure: false,
                                            alert: false, textPlaceholder: Ejemplo);
-            if (_kb != null) _kb.selection = new RangeInt(texto.Length, 0);   // cursor al final
+            // Todo seleccionado: escribir reemplaza el nombre propuesto y un BORRAR lo vacía.
+            if (_kb != null) _kb.selection = new RangeInt(0, texto.Length);
         }
 
         private void CerrarTeclado()
@@ -110,6 +135,8 @@ namespace Scanner
             _inst._nombre = !string.IsNullOrEmpty(NombreEdicion)
                 ? NombreEdicion
                 : $"Escaneo {ScanSerializer.ListSaved().Count + 1}";
+            // En el celular el teclado se abre solo, con el nombre propuesto seleccionado.
+            if (TecladoNativo) _inst.AbrirTeclado();
         }
 
         public static bool EstaAbierto => _inst != null && _inst._abierto;
