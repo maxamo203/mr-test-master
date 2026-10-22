@@ -163,7 +163,8 @@ namespace Gamepad
 
         private void OnGUI()
         {
-            if (_enMenuPrincipal || PantallaFinal()) return;
+            // GUARDAR ESCANEO tapa todo el escáner: ahí la pausa no tiene sentido.
+            if (_enMenuPrincipal || PantallaFinal() || SaveLoadUI.EstaAbierto) return;
             // Encima del HUD: con el mismo depth el orden entre scripts no está garantizado, y la
             // franja oscura de arriba (GameBootstrapper.DrawSala) tapaba el botón de pausa,
             // que seguía andando al tocarlo. El filtro VHS va todavía más arriba (-100).
@@ -973,7 +974,7 @@ namespace Gamepad
         // ---------------------------------------------------------------- Update
         private void Update()
         {
-            if (PantallaFinal())
+            if (PantallaFinal() || SaveLoadUI.EstaAbierto)
             {
                 if (_open) { CommitEdit(); _open = false; _page = Page.Main; _confirmSalir = false; }
                 _mantenerPausa = 0f;

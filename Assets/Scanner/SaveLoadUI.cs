@@ -41,7 +41,65 @@ namespace Scanner
             if (_inst == this) _inst = null;
         }
 
-        private void Update() => _nav.Update();
+        private void Update()
+        {
+            _nav.Update();
+            // Teclado nativo abierto: el nombre es lo que tenga su caja de texto (que maneja el
+            // cursor y el borrado mantenido). Al cerrarlo (listo, cancelar, tocar afuera) se suelta.
+            if (_kb != null)
+            {
+                if (_kb.text != null) _nombre = _kb.text;
+                if (_kb.status != TouchScreenKeyboard.Status.Visible) _kb = null;
+            }
+        }
+
+        // ── Campo del nombre en el celular ─────────────────────────────────────
+        // Con GUI.TextField el teclado le pasaba las teclas al IMGUI de a una: no se veía el
+        // cursor y mantener BORRAR no repetía. Acá se abre el teclado nativo a mano, con su
+        // propia caja de texto visible (cursor, borrado continuo, selección), y en el campo se
+        // dibuja el texto con un cursor que parpadea mientras se edita. En el editor no hay
+        // teclado nativo: sigue el TextField de siempre.
+        private TouchScreenKeyboard _kb;
+        private static bool TecladoNativo => TouchScreenKeyboard.isSupported && !Application.isEditor;
+        private const string Ejemplo = "Ej: living de casa";
+
+        private void CampoNombre(Rect r)
+        {
+            if (!TecladoNativo) { _nombre = T.CampoTexto2(r, _nombre, Ejemplo); return; }
+
+            bool editando = _kb != null && _kb.status == TouchScreenKeyboard.Status.Visible;
+            var texto = _nombre ?? "";
+            var st = T.Estilo(T.FMono, 15, T.Cream);
+            if (Event.current.type == EventType.Repaint)
+            {
+                T.Tarjeta2(r, T.BgField, editando ? T.Tan : null);
+                if (editando && Mathf.Repeat(Time.unscaledTime, 1f) < 0.55f)
+                {
+                    float x = r.x + 14f + Mathf.Min(st.CalcSize(new GUIContent(texto)).x, r.width - 30f);
+                    T.FillR(new Rect(x + 1f, r.y + r.height * 0.25f, 2f, r.height * 0.5f), T.Cream, 1f);
+                }
+            }
+            var dentro = new Rect(r.x + 14f, r.y, r.width - 28f, r.height);
+            if (texto.Length > 0) GUI.Label(dentro, texto, st);
+            else GUI.Label(dentro, Ejemplo, T.Estilo(T.FMono, 15, T.Dim));
+
+            if (GUI.Button(r, GUIContent.none, GUIStyle.none) && !editando) AbrirTeclado();
+        }
+
+        private void AbrirTeclado()
+        {
+            TouchScreenKeyboard.hideInput = false;   // la caja nativa trae cursor y borrado continuo
+            var texto = _nombre ?? "";
+            _kb = TouchScreenKeyboard.Open(texto, TouchScreenKeyboardType.Default,
+                                           autocorrection: false, multiline: false, secure: false,
+                                           alert: false, textPlaceholder: Ejemplo);
+            if (_kb != null) _kb.selection = new RangeInt(texto.Length, 0);   // cursor al final
+        }
+
+        private void CerrarTeclado()
+        {
+            if (_kb != null) { _kb.active = false; _kb = null; }
+        }
 
         // Abre el overlay con el nombre por defecto (el del escaneo en edición, o
         // "Escaneo N" si es nuevo).
@@ -74,7 +132,7 @@ namespace Scanner
             T.FillScreen(T.Bg);
             UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
 
-            T.BotonVolver2(_nav, () => _abierto = false);
+            T.BotonVolver2(_nav, () => { CerrarTeclado(); _abierto = false; });
 
             GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "GUARDAR ESCANEO",
                       T.Estilo(T.FBebas, 28, T.Cream));
@@ -82,8 +140,7 @@ namespace Scanner
                       "Nombrá este entorno para encontrarlo luego",
                       T.Estilo(T.FElite, 12, T.Dim));
 
-            _nombre = T.CampoTexto2(new Rect(Pad, 170f, vw - Pad * 2f, 52f),
-                                   _nombre, "Ej: living de casa");
+            CampoNombre(new Rect(Pad, 170f, vw - Pad * 2f, 52f));
 
             // Aviso si el escaneo no tiene imagen de referencia asociada (sin ella
             // no se puede sincronizar en multijugador).
@@ -109,6 +166,8 @@ namespace Scanner
 
         private void Guardar()
         {
+            if (_kb != null && _kb.text != null) _nombre = _kb.text;
+            CerrarTeclado();
             var nombre = (_nombre ?? "").Trim();
             if (string.IsNullOrEmpty(nombre)) { Flash("Poné un nombre"); return; }
             if (SceneRegistry.Instance == null) { Flash("No hay nada que guardar"); return; }
