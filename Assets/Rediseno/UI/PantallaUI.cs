@@ -115,6 +115,8 @@ namespace Rediseno.UI
             _ps.clearColor = false;
             _ps.colorClearValue = Color.clear;
 
+            _ps.SetScreenToPanelSpaceFunction(PantallaAPanel);
+
             Doc = gameObject.AddComponent<UIDocument>();
             Doc.panelSettings = _ps;
         }
@@ -284,6 +286,26 @@ namespace Rediseno.UI
         // panel con el rect donde la pantalla flotante quedó dibujada en ese ojo (OnGUI).
         private readonly Rect[] _rectOjo = new Rect[2];
         private bool _hayRectOjo;
+
+        // Pantalla → panel para los eventos propios de UI Toolkit (p. ej. arrastrar una lista).
+        // Fuera del visor, identidad (el panel es la pantalla, como por defecto). En el visor el
+        // panel se dibuja en una textura pegada en cada ojo: sin esto UI Toolkit tomaba el dedo
+        // tal cual sobre la textura y el arrastre andaba sólo sobre el ojo izquierdo, de
+        // casualidad. Se traduce desde el rect donde quedó dibujado en cualquiera de los dos
+        // ojos; fuera de ambos, posición inválida (sin evento). Origen arriba, como OnGUI.
+        private Vector2 PantallaAPanel(Vector2 p)
+        {
+            var rt = _ps != null ? _ps.targetTexture : null;
+            if (rt == null) return p;
+            if (_hayRectOjo)
+                for (int i = 0; i < 2; i++)
+                {
+                    var r = _rectOjo[i];
+                    if (r.width <= 0f || r.height <= 0f || !r.Contains(p)) continue;
+                    return new Vector2((p.x - r.x) / r.width * rt.width, (p.y - r.y) / r.height * rt.height);
+                }
+            return new Vector2(float.NaN, float.NaN);
+        }
 
         private void TickToquesVisor()
         {
