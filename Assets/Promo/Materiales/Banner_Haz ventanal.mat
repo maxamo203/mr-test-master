@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Banner_Haz ventanal
+  m_Shader: {fileID: 4800000, guid: ec4bb88e98480f34789e12f0f91aef51, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords:
+  - _ADITIVO_ON
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _MainTex:
+        m_Texture: {fileID: 2800000, guid: 1b2d01e97c00b49489abfcddb7df2e86, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _Aditivo: 1
+    - _CercaInicio: 0.4
+    - _CercaRango: 1.2
+    - _DstBlend: 1
+    - _SrcBlend: 5
+    - _Suavidad: 0.8
+    m_Colors:
+    - _TintColor: {r: 0.16, g: 0.2, b: 0.3, a: 0.5}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1
