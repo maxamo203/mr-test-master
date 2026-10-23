@@ -28,7 +28,7 @@ namespace Gamepad
         // subcategorías: Control (mando), Cardboard (calibración estéreo), Voz (chat de
         // voz, sólo en sesiones multijugador) y — SOLO en development build — Linterna
         // (tuning) y el toggle del Debug HUD.
-        private enum Page { Main, Options, Control, ControlDiag, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, VHS, Arbmos, Entities, Audio }
+        private enum Page { Main, Options, Control, ControlDiag, Cardboard, Flashlight, Voice, DebugPanels, ARCalidad, VHS, Arbmos, Entities, Audio, Franja }
 
         public static PauseMenuController Instance { get; private set; }
 
@@ -275,6 +275,7 @@ namespace Gamepad
                     AddButton("vhs",      new Rect(x, y, w, 64f), "VHS (DEV)");      y += 76f;
                     AddButton("linterna", new Rect(x, y, w, 64f), "LINTERNA (DEV)"); y += 76f;
                     AddButton("arbmos",   new Rect(x, y, w, 64f), "ARBMOS (DEV)");   y += 76f;
+                    AddButton("franja",   new Rect(x, y, w, 64f), "FRANJA LINTERNA (DEV)"); y += 76f;
                     AddButton("entidades", new Rect(x, y, w, 64f), "VELOCIDAD ENTIDADES (DEV)"); y += 76f;
                     AddToggle("debughud", new Rect(x, y, w, 52f), "Debug HUD (dev)",
                               DebugHud.Visible); y += 64f;
@@ -517,6 +518,27 @@ namespace Gamepad
                 y += 6f;
                 AddButton("volver", new Rect(x, y, w, 60f), "Volver");
             }
+            else if (_page == Page.Franja)
+            {
+                // Franja de la linterna (prender/apagar en Cardboard sin joystick, ver
+                // Rediseno.ControlMirada). SOLO development build.
+                if (!Debug.isDebugBuild) { _page = Page.Options; return; }
+
+                Etiqueta(new Rect(x, y, w, 50f), "FRANJA LINTERNA (DEV)", _title); y += 58f;
+                Etiqueta(new Rect(x + 14f, y, w - 28f, 56f),
+                          "Levantar la vista hasta cruzar la franja prende/apaga la linterna.", _status);
+                y += 62f;
+
+                AddToggle("franjadebug", new Rect(x, y, w, 52f), "Mostrar altura de la vista en la mira",
+                          Rediseno.FranjaLinternaAjustes.MostrarDebug); y += 66f;
+                AddSlider("fra_altura", new Rect(x, y, w, 60f), "Altura de la franja",
+                          Rediseno.FranjaLinternaAjustes.Altura, 20f, 70f, "{0:0}°"); y += 68f;
+                AddSlider("fra_espera", new Rect(x, y, w, 60f), "Espera entre cambios",
+                          Rediseno.FranjaLinternaAjustes.Espera, 0.1f, 2f, "{0:0.0} s"); y += 68f;
+
+                y += 6f;
+                AddButton("volver", new Rect(x, y, w, 60f), "Volver");
+            }
             else if (_page == Page.Entities)
             {
                 if (!Debug.isDebugBuild) { _page = Page.Options; return; }
@@ -743,7 +765,7 @@ namespace Gamepad
                 // +64 por el toggle "Filtro VHS" (prod), +76 por "VHS (DEV)" y
                 // +76 por "ARBMOS (DEV)". El volumen dejó de ser un slider acá: ahora es el
                 // botón AUDIO (mismo alto que el slider que reemplazó, +4).
-                case Page.Options:    return (Debug.isDebugBuild ? 1132f : 688f) + (hayVoz ? 76f : 0f);
+                case Page.Options:    return (Debug.isDebugBuild ? 1208f : 688f) + (hayVoz ? 76f : 0f);
                 // 3 sliders + la nota sobre el chat de voz.
                 case Page.Audio:      return 420f;
                 case Page.ARCalidad:  return 490f;
@@ -751,6 +773,7 @@ namespace Gamepad
                 case Page.VHS:        return 760f;
                 // 2 toggles + 3 sliders + la ayuda de arriba.
                 case Page.Arbmos:     return 620f;
+                case Page.Franja:     return 552f;
                 case Page.Entities:   return 320f;
                 case Page.Voice:
                 {
@@ -801,7 +824,8 @@ namespace Gamepad
         private static bool IsSlider(string id) =>
             id != null && (id.StartsWith("fl_") || id.StartsWith("cb_") ||
                            id.StartsWith("opt_") || id.StartsWith("voz_") ||
-                           id.StartsWith("vhs_") || id.StartsWith("arb_") || id.StartsWith("ent_"));
+                           id.StartsWith("vhs_") || id.StartsWith("arb_") || id.StartsWith("ent_") ||
+                           id.StartsWith("fra_"));
 
         // "voz_p3" → el slider de volumen del cliente 3. Los ids se arman en la página
         // de voz a partir del roster, así que son dinámicos.
@@ -829,6 +853,8 @@ namespace Gamepad
                 case "cb_ipd":       step = 1f;     break;   // milímetros
                 case "cb_conv":      step = 0.25f;  break;   // metros
                 case "arb_hide":     step = 0.1f;   break;
+                case "fra_altura":   step = 1f;     break;
+                case "fra_espera":   step = 0.1f;   break;
                 case "arb_exposure": step = 0.05f;  break;
                 case "arb_commit":   step = 0.05f;  break;
                 case "ent_velocidad": step = 0.05f; break;
@@ -857,6 +883,8 @@ namespace Gamepad
                 case "fl_inner":     { var fl = GetFlashlight(); return fl != null ? fl.innerAngleDeg : 0f; }
                 case "fl_intensity": { var fl = GetFlashlight(); return fl != null ? fl.intensity     : 0f; }
                 case "fl_drenaje":   return Flashlight.DevMultiplicadorDrenaje;
+                case "fra_altura":   return Rediseno.FranjaLinternaAjustes.Altura;
+                case "fra_espera":   return Rediseno.FranjaLinternaAjustes.Espera;
                 case "cb_zoom":      { var cb = GetCardboard();  return cb != null ? cb.Scale   : 0f; }
                 case "cb_offL":      { var cb = GetCardboard();  return cb != null ? cb.OffsetL : 0f; }
                 case "cb_offR":      { var cb = GetCardboard();  return cb != null ? cb.OffsetR : 0f; }
@@ -916,6 +944,9 @@ namespace Gamepad
                 case "vhs_tinte":    Gameplay.VHSSettings.Tinte      = Mathf.Clamp(value, 0f, 100f) / 100f; break;
                 // Los arb_ clampean adentro de ArbmosDebug (setters).
                 case "arb_hide":     Gameplay.ArbmosDebug.HideDev         = value; break;
+                // Los fra_ clampean adentro de FranjaLinternaAjustes (setters).
+                case "fra_altura":   Rediseno.FranjaLinternaAjustes.Altura = value; break;
+                case "fra_espera":   Rediseno.FranjaLinternaAjustes.Espera = value; break;
                 case "arb_exposure": Gameplay.ArbmosDebug.ExposureDev     = value; break;
                 case "arb_commit":   Gameplay.ArbmosDebug.AttackCommitDev = value; break;
                 case "ent_velocidad": EntitySpeedSettings.Multiplier = value; break;
@@ -1260,6 +1291,7 @@ namespace Gamepad
                 case Page.ARCalidad:
                 case Page.VHS:
                 case Page.Arbmos:
+                case Page.Franja:
                 case Page.Entities:
                     _page = Page.Options; _focus = 0; _focusLast = true; break;
                 default: // Main
@@ -1345,6 +1377,10 @@ namespace Gamepad
                 case "arbmos":
                     if (Debug.isDebugBuild) { _page = Page.Arbmos; _focus = 0; _focusLast = true; }
                     break;
+                case "franja":
+                    if (Debug.isDebugBuild) { _page = Page.Franja; _focus = 0; _focusLast = true; }
+                    break;
+                case "franjadebug": Rediseno.FranjaLinternaAjustes.MostrarDebug = !Rediseno.FranjaLinternaAjustes.MostrarDebug; break;
                 case "entidades":
                     if (Debug.isDebugBuild) { _page = Page.Entities; _focus = 0; _focusLast = true; }
                     break;

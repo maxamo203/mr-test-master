@@ -11,9 +11,16 @@ namespace Rediseno
     // dónde mirás:
     //   - Recoger: mirar una pila o reliquia ~1,2 s (se llena un anillo verde con el ícono
     //     de recoger). Acercarse la recoge más rápido.
+    //   - Prender/apagar: FRANJA DE LA LINTERNA. Una franja que rodea al jugador a ~32° por
+    //     encima del horizonte: levantar la vista y cruzarla prende o apaga al instante (sin
+    //     anillo: se pensó para un momento de pánico). Después hay que bajar la vista por
+    //     debajo de ella y esperar un instante para volver a usarla. Casi nadie mira para
+    //     arriba (el libro y las pilas están abajo, las entidades a la altura de la cara).
+    //     Ajustes en FranjaLinternaAjustes (dev).
     //   - Prender/apagar mirando el piso: DESACTIVADO (mirarPisoApaga) — se superponía con
-    //     alumbrar el libro. Más adelante, quizás un objeto fijo en el escenario.
-    //   - Mirar arriba ~1,5 s: abre la pausa.
+    //     alumbrar el libro.
+    //   - Mirar arriba ~1,5 s para abrir la pausa: DESACTIVADO por ahora (mirarArribaPausa),
+    //     para que no choque con la franja (para llegar arriba había que cruzarla).
     //   - Luz intensa: sola, mientras el libro que se está oscureciendo (o un Sorken) quede
     //     centrado en el haz. El libro y el Sorken sólo cuentan la luz en modo intenso.
     //
@@ -46,6 +53,9 @@ namespace Rediseno
         [SerializeField, Range(10f, 80f)] private float pisoRearmeGrados = 45f;
 
         [Header("Mirar arriba (abrir la pausa)")]
+        [Tooltip("DESACTIVADO por ahora: para mirar tan arriba había que cruzar la franja de la " +
+                 "linterna y la prendía/apagaba.")]
+        [SerializeField] private bool mirarArribaPausa = false;
         [SerializeField, Min(0.1f)] private float segundosMirarArriba = 1.5f;
         [Tooltip("Grados por encima del horizonte para empezar a llenar el anillo de la pausa.")]
         [SerializeField, Range(30f, 89f)] private float arribaGrados = 62f;
@@ -166,7 +176,7 @@ namespace Rediseno
                 bool puede = mirarPisoApaga && _pisoArmado && abajo >= pisoGrados && _frio <= 0f &&
                              _fl != null && _fl.Operational;
                 // Mirar arriba: abrir la pausa (con el visor no hay botón que tocar).
-                bool arriba = _pisoArmado && -abajo >= arribaGrados && _frio <= 0f &&
+                bool arriba = mirarArribaPausa && _pisoArmado && -abajo >= arribaGrados && _frio <= 0f &&
                               PauseMenuController.Instance != null;
                 if (arriba)
                 {
@@ -198,6 +208,39 @@ namespace Rediseno
 
             // 3) Intensa automática sobre el libro / el Sorken.
             ActualizarIntensa(cam, dt);
+
+            // 4) Franja de la linterna: prender / apagar.
+            ActualizarFranja(cam, dt);
+        }
+
+        // ── Franja de la linterna ─────────────────────────────────────────────
+        // Cruzarla hacia arriba prende/apaga al instante. Para volver a usarla hay que bajar la
+        // vista por debajo de la franja (con un margen, para no titilar justo en el borde) y que
+        // pase la espera.
+        private const float MargenRearme = 8f;
+        private bool  _franjaArmada = true;
+        private float _franjaFrio;
+        private float _avisoFranjaHasta;
+        private bool  _avisoPrendida;
+
+        private void ActualizarFranja(Transform cam, float dt)
+        {
+            _franjaFrio -= dt;
+            float altura = Mathf.Asin(Mathf.Clamp(cam.forward.y, -1f, 1f)) * Mathf.Rad2Deg;
+            float franja = FranjaLinternaAjustes.Altura;
+            FranjaLinternaAjustes.AlturaVista = altura;
+
+            if (altura < franja - MargenRearme) { _franjaArmada = true; return; }
+            if (altura < franja || !_franjaArmada) return;
+
+            _franjaArmada = false;
+            if (_franjaFrio > 0f) { FranjaLinternaAjustes.UltimoCambio = "muy seguido"; return; }
+            if (_fl == null || !_fl.Operational) { FranjaLinternaAjustes.UltimoCambio = "sin linterna"; return; }
+            _fl.Toggle();
+            _franjaFrio = FranjaLinternaAjustes.Espera;
+            _avisoFranjaHasta = Time.unscaledTime + 0.45f;
+            _avisoPrendida = _fl.isOn;
+            FranjaLinternaAjustes.UltimoCambio = _fl.isOn ? "prendida" : "apagada";
         }
 
         // Cierra un gesto ejecutado: enfriamiento y hay que levantar la vista para volver a
@@ -311,25 +354,81 @@ namespace Rediseno
             {
                 // Donde cae "el frente" en cada ojo según la calibración (ver OjosVisor).
                 UI.OjosVisor.Centros(out var izq, out var der);
+                float ojoW = Screen.width * 0.5f;
+                DibujarFranja(izq, s, 0f, ojoW);
+                DibujarFranja(der, s, ojoW, ojoW);
                 DibujarMira(izq, s);
                 DibujarMira(der, s);
             }
             else
             {
-                DibujarMira(new Vector2(Screen.width * 0.5f, Screen.height * 0.5f), s);
+                var c = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+                DibujarFranja(c, s, 0f, Screen.width);
+                DibujarMira(c, s);
             }
 
             GUI.matrix = prevM;
             GUI.color = prevC;
         }
 
+        // La franja: una línea fina a la altura de la franja (se mueve con el cuarto, con la misma
+        // escala que la imagen de cámara) con el ícono de la linterna al medio. Aparece al
+        // acercar la vista y se marca más al estar cerca. Más el debug (dev) debajo de la mira.
+        private MRCardboardController _mr;
+
+        private void DibujarFranja(Vector2 c, float s, float x0, float ancho)
+        {
+            float altura = FranjaLinternaAjustes.AlturaVista;
+            float franja = FranjaLinternaAjustes.Altura;
+            if (FranjaLinternaAjustes.MostrarDebug)
+            {
+                var st = MortuoriumTheme.Estilo(MortuoriumTheme.FMono, Mathf.RoundToInt(18 * s),
+                                                MortuoriumTheme.Cream, TextAnchor.MiddleCenter);
+                GUI.color = Color.white;
+                GUI.Label(new Rect(c.x - 200f * s, c.y + 48f * s, 400f * s, 28f * s),
+                          $"vista {altura:0}° / franja {franja:0}° · {FranjaLinternaAjustes.UltimoCambio}", st);
+            }
+
+            float cerca = Mathf.InverseLerp(franja - 25f, franja - 3f, altura);
+            if (cerca <= 0f) return;
+            if (_mr == null) _mr = FindAnyObjectByType<MRCardboardController>();
+            float ppd = _mr != null ? _mr.PixelesPorGrado() : 0f;
+            if (ppd <= 0f) ppd = Screen.width * 0.5f / (UI.Cabeza.MitadVista * 2f);
+            float y = c.y - (franja - altura) * ppd;
+            if (y < -20f * s) return;
+
+            float alfa = 0.15f + 0.55f * cerca;
+            var col = new Color(MortuoriumTheme.Tan.r, MortuoriumTheme.Tan.g, MortuoriumTheme.Tan.b, alfa);
+            GUI.color = col;
+            GUI.DrawTexture(new Rect(x0 + ancho * 0.08f, y - 1.5f * s, ancho * 0.84f, 3f * s), Texture2D.whiteTexture);
+
+            // Ícono + qué va a pasar al cruzarla, centrados sobre la línea.
+            string texto = _fl != null && _fl.isOn ? "APAGAR LINTERNA" : "PRENDER LINTERNA";
+            var stTexto = MortuoriumTheme.Estilo(MortuoriumTheme.FBebas, Mathf.RoundToInt(26 * s),
+                                                 MortuoriumTheme.Tan, TextAnchor.MiddleLeft);
+            float ri = 13f * s, sep = 8f * s;
+            float tw = stTexto.CalcSize(new GUIContent(texto)).x;
+            float x = c.x - (ri * 2f + sep + tw) * 0.5f, yc = y - 26f * s;
+            GUI.DrawTexture(new Rect(x, yc - ri, ri * 2f, ri * 2f), IconosMirada.Linterna);
+            GUI.Label(new Rect(x + ri * 2f + sep, yc - 18f * s, tw + 4f, 36f * s), texto, stTexto);
+        }
+
         private void DibujarMira(Vector2 c, float s)
         {
-            if (_gesto == Gesto.Ninguno || _progreso <= 0f) return;
+            // Recién prendida/apagada con la franja: el ícono un instante, anillo lleno.
+            bool avisoFranja = Time.unscaledTime < _avisoFranjaHasta;
+            if (!avisoFranja && (_gesto == Gesto.Ninguno || _progreso <= 0f)) return;
             var punto = IconosMirada.Punto;
+            float progreso = _progreso;
 
             Color col; Texture2D icono;
-            if (_gesto == Gesto.Recoger) { col = ColRecoger; icono = IconosMirada.Recoger; }
+            if (avisoFranja && _gesto == Gesto.Ninguno)
+            {
+                col = _avisoPrendida ? ColPrender : ColApagar;
+                icono = IconosMirada.Linterna;
+                progreso = 1f;
+            }
+            else if (_gesto == Gesto.Recoger) { col = ColRecoger; icono = IconosMirada.Recoger; }
             else if (_gesto == Gesto.Pausa) { col = new Color(0.91f, 0.89f, 0.84f, 1f); icono = IconosMirada.Pausa; }
             else
             {
@@ -340,7 +439,7 @@ namespace Rediseno
 
             // Anillo de puntos que se encienden en sentido horario desde arriba.
             float radio = 30f * s, rd = 3.2f * s;
-            int encendidos = Mathf.CeilToInt(Mathf.Clamp01(_progreso) * PuntosAnillo);
+            int encendidos = Mathf.CeilToInt(Mathf.Clamp01(progreso) * PuntosAnillo);
             for (int i = 0; i < PuntosAnillo; i++)
             {
                 float a = i / (float)PuntosAnillo * Mathf.PI * 2f;
