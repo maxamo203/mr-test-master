@@ -50,6 +50,17 @@ public class MRCardboardController : MonoBehaviour
     // ExitCardboard, al que también pasa OnDisable (cambio de escena).
     public static bool Activo { get; private set; }
 
+    // Centro horizontal (u de viewport de la cámara AR) de lo que ven los ojos: cada ojo
+    // muestra un recorte corrido de la RT, así que el medio de la vista no es 0,5. Promedio
+    // de los dos ojos (la convergencia se cancela). 0,5 fuera de Cardboard.
+    public static float CentroVistaU { get; private set; } = 0.5f;
+
+    // Corrimiento (m, sobre el eje derecho de la cámara) del pase de ojo que se está
+    // rendeando ahora; 0 fuera de esos pases. Lo usa lo que cuelga de la cámara y tiene que
+    // quedar a una profundidad real en estéreo (LocalDeath: el retrato del asesino), que si
+    // no se corre con cada ojo y queda sin disparidad, como si estuviera en el infinito.
+    public static float DesplazamientoOjo { get; private set; }
+
     // _rtL siempre existe. _rtR sólo en estéreo (en mono los dos ojos muestran _rtL).
     private RenderTexture      _rtL, _rtR;
     private RenderTexture      _prevTarget;
@@ -136,6 +147,7 @@ public class MRCardboardController : MonoBehaviour
 
         CardboardActive = false;
         Activo = false;
+        CentroVistaU = 0.5f;
         Debug.Log("[MRCardboard] Cardboard OFF (AR mono a pantalla).");
     }
 
@@ -205,6 +217,7 @@ public class MRCardboardController : MonoBehaviour
 
         _poseCentro = centro; _poseDesplazada = true;
         t.position = centro - der * mitad;
+        DesplazamientoOjo = -mitad;
         arCamera.targetTexture = _rtL;
         arCamera.Render();
 
@@ -212,6 +225,7 @@ public class MRCardboardController : MonoBehaviour
         // así da igual si el postRender del pase manual ya restauró la pose o no.
         _poseCentro = centro; _poseDesplazada = true;
         t.position = centro + der * mitad;
+        DesplazamientoOjo = mitad;
         arCamera.targetTexture = _rtR;
     }
 
@@ -224,6 +238,7 @@ public class MRCardboardController : MonoBehaviour
     {
         if (!_poseDesplazada) return;
         _poseDesplazada = false;
+        DesplazamientoOjo = 0f;
         if (arCamera != null) arCamera.transform.position = _poseCentro;
     }
 
@@ -291,6 +306,7 @@ public class MRCardboardController : MonoBehaviour
 
         ApplyEye(_leftImg,  offL + conv, sx, new Vector2(W * 0.25f, H * 0.5f), halfW, H, sliceAspect);
         ApplyEye(_rightImg, offR - conv, sx, new Vector2(W * 0.75f, H * 0.5f), halfW, H, sliceAspect);
+        CentroVistaU = (_leftImg.uvRect.center.x + _rightImg.uvRect.center.x) * 0.5f;
     }
 
     // Dónde cae en pantalla, en cada ojo, el punto que está justo al frente de la cámara a

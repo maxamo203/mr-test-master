@@ -12,14 +12,113 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9ad2fc919df694e3b93086f813248b80, type: 3}
   m_Name: RetratoAsesinoConfig
   m_EditorClassIdentifier: Assembly-CSharp::Gameplay.RetratoAsesinoConfig
-  encuadreAlto: 0.158
-  margen: 1.61
-  corrimientoVertical: -0.08
-  corrimientoHorizontal: 0.076
-  distanciaMin: 0.35
-  distanciaMax: 3.44
-  margenCorte: 0.108
   revelar: 0.64
-  sostener: 1.71
-  temblorGrados: 5
-  luzIntensidad: 0.96
+  sostener: 1
+  general:
+    encuadreAlto: 0.158
+    margen: 1.61
+    corrimientoVertical: -0.08
+    corrimientoLateral: 0
+    campoVisualReferencia: 60
+    poseClip: {fileID: 0}
+    poseMomento: 1
+    rotacion: {x: 0, y: 0, z: 0}
+    distanciaMin: 0.35
+    distanciaMax: 3.44
+    evitarCorte: 1
+    margenCorte: 0.108
+    temblorGrados: 5
+    luzIntensidad: 0.96
+    luzRojaActiva: 1
+    luzRojaColor: {r: 1, g: 0.21404596, b: 0, a: 1}
+    luzRojaIntensidad: 4.23
+    luzRojaRango: 2.26
+    luzRojaAbajo: 0.382
+    luzRojaAdelante: 0.55
+    parpadeoActivo: 1
+    parpadeoVelocidad: 28.7
+    parpadeoProfundidad: 0.029
+    parpadeoApagones: 9.04
+    parpadeoApagonDuracion: 0.06
+  porEntidad:
+  - entidad: 3
+    ajuste:
+      encuadreAlto: 0.158
+      margen: 1.61
+      corrimientoVertical: -0.08
+      corrimientoLateral: 0
+      campoVisualReferencia: 60
+      poseClip: {fileID: 0}
+      poseMomento: 1
+      rotacion: {x: 0, y: 0, z: 0}
+      distanciaMin: 0.35
+      distanciaMax: 3.44
+      evitarCorte: 1
+      margenCorte: 0.108
+      temblorGrados: 5
+      luzIntensidad: 0.96
+      luzRojaActiva: 1
+      luzRojaColor: {r: 1, g: 0.21404596, b: 0, a: 1}
+      luzRojaIntensidad: 4.23
+      luzRojaRango: 2.26
+      luzRojaAbajo: 0.382
+      luzRojaAdelante: 0.55
+      parpadeoActivo: 1
+      parpadeoVelocidad: 12
+      parpadeoProfundidad: 0.5
+      parpadeoApagones: 1.5
+      parpadeoApagonDuracion: 0.06
+  - entidad: 4
+    ajuste:
+      encuadreAlto: 0.299
+      margen: 0.45
+      corrimientoVertical: -0.52
+      corrimientoLateral: 0
+      campoVisualReferencia: 65.1
+      poseClip: {fileID: 0}
+      poseMomento: 1
+      rotacion: {x: 0, y: 0, z: 0}
+      distanciaMin: 0.32
+      distanciaMax: 3.44
+      evitarCorte: 1
+      margenCorte: 0.18
+      temblorGrados: 5
+      luzIntensidad: 2.2
+      luzRojaActiva: 1
+      luzRojaColor: {r: 1, g: 0.21404596, b: 0, a: 1}
+      luzRojaIntensidad: 4.82
+      luzRojaRango: 2
+      luzRojaAbajo: 0.35
+      luzRojaAdelante: 0.42
+      parpadeoActivo: 1
+      parpadeoVelocidad: 12
+      parpadeoProfundidad: 0.5
+      parpadeoApagones: 1.5
+      parpadeoApagonDuracion: 0.06
+  - entidad: 5
+    ajuste:
+      encuadreAlto: 0.158
+      margen: 2.49
+      corrimientoVertical: -0.26
+      corrimientoLateral: 0
+      campoVisualReferencia: 60
+      poseClip: {fileID: -623603649343465320, guid: e96ba315df1fa484cbca9c4306543ce5, type: 3}
+      poseMomento: 0.589
+      rotacion: {x: 95.98, y: 0, z: 0}
+      distanciaMin: 0.35
+      distanciaMax: 3.44
+      evitarCorte: 1
+      margenCorte: 0.108
+      temblorGrados: 5
+      luzIntensidad: 1.63
+      luzRojaActiva: 1
+      luzRojaColor: {r: 1, g: 0.21404596, b: 0, a: 1}
+      luzRojaIntensidad: 3.96
+      luzRojaRango: 1.99
+      luzRojaAbajo: 0.31
+      luzRojaAdelante: 0.55
+      parpadeoActivo: 1
+      parpadeoVelocidad: 12
+      parpadeoProfundidad: 0.5
+      parpadeoApagones: 1.5
+      parpadeoApagonDuracion: 0.06
