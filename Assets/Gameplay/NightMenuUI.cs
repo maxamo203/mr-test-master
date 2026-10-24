@@ -62,6 +62,7 @@ namespace Gameplay
         // Práctica elegida en TUTORIALES mientras se elige su escenario (Ninguno = noche
         // normal) y, para esa práctica, los escaneos que no le sirven con su motivo.
         private TutorialTipo _tutorialPendiente;
+        private bool _caminoPendiente;
         private readonly Dictionary<string, string> _noSirve = new();
 
         // US-1.1: chequeo de versión mínima de SO (Android 14 / iOS 17). A diferencia
@@ -107,6 +108,7 @@ namespace Gameplay
             if (sesion.EnTutorial)
             {
                 sesion.Tutorial = TutorialTipo.Ninguno;
+                sesion.Camino   = false;
                 PantallaActual  = Pantalla.Tutoriales;
             }
 
@@ -114,10 +116,12 @@ namespace Gameplay
             // ESCENARIO): se retoma esa práctica en vez de caer en el menú principal, con el
             // escenario recién guardado/editado ya elegido si le sirve.
             var tutorial = _tutorialTrasEscaner;
+            bool camino = _caminoTrasEscaner;
             _tutorialTrasEscaner = TutorialTipo.Ninguno;
+            _caminoTrasEscaner = false;
             if (tutorial != TutorialTipo.Ninguno)
             {
-                IniciarTutorial(tutorial);
+                IniciarPractica(tutorial, camino);
                 var escaneado = SaveLoadUI.NombreEdicion;
                 if (PantallaActual == Pantalla.Entorno && !string.IsNullOrEmpty(escaneado) && EsJugable(escaneado))
                     _mapSel = escaneado;
@@ -163,6 +167,8 @@ namespace Gameplay
             !(_hasImg.TryGetValue(escena, out var ok) && ok) ? "Sin imagen de referencia: no se puede jugar"
             : _noSirve.TryGetValue(escena, out var motivo) ? motivo : null;
         public TutorialTipo TutorialPendiente => _tutorialPendiente;
+        // ¿Lo pendiente es el camino del TUTORIAL (pasos encadenados) y no una práctica suelta?
+        public bool CaminoPendiente => _caminoPendiente;
         public int ElementosDe(string escena) => _itemCount.TryGetValue(escena, out var n) ? n : 0;
         public bool CreandoSala => _pendingMode == GameSession.SessionMode.MultiHost;
 
@@ -264,15 +270,27 @@ namespace Gameplay
         public void CerrarAviso() => Volver();
         public static void Salir() => SalirDelJuego();
         public void AbrirOpciones()      => PantallaActual = Pantalla.Opciones;
-        public void AbrirTutoriales()    { _tutorialPendiente = TutorialTipo.Ninguno; PantallaActual = Pantalla.Tutoriales; }
+        public void AbrirTutoriales()
+        {
+            _tutorialPendiente = TutorialTipo.Ninguno;
+            _caminoPendiente = false;
+            PantallaActual = Pantalla.Tutoriales;
+        }
 
         // Arranca una práctica: un jugador, fuera del catálogo (NightIndex = -1: no
         // desbloquea noches ni toca récords). Todas se juegan en un escenario escaneado, que
         // se elige en ¿DÓNDE JUGÁS?; sin escenario jugable caen en "falta". Sólo en
         // development build SORKEN y VELETH ofrecen además ARMAR EN EL MOMENTO (sin escaneo,
         // ArmadoRapido): entonces van a ¿DÓNDE JUGÁS? aunque no haya escenario.
-        public void IniciarTutorial(TutorialTipo tipo)
+        public void IniciarTutorial(TutorialTipo tipo) => IniciarPractica(tipo, camino: false);
+
+        // El camino del TUTORIAL desde ese paso: al superarlo sigue el próximo en la misma
+        // sesión (TutorialCamino). El escenario tiene que servir para todos los que faltan.
+        public void IniciarCamino(TutorialTipo desde) => IniciarPractica(desde, camino: true);
+
+        private void IniciarPractica(TutorialTipo tipo, bool camino)
         {
+            _caminoPendiente = camino;
             if (Tutoriales.Config(tipo) == null)
             {
                 Debug.LogError($"[NightMenu] Falta la NightConfig del tutorial {tipo} en Resources/Tutoriales.");
@@ -297,7 +315,7 @@ namespace Gameplay
         // Herramienta de testeo, sólo en development build: sin escaneo la oclusión depende
         // de la profundidad del celular (bien con LiDAR, floja en Android). En release las
         // prácticas se juegan siempre en un escenario escaneado.
-        public bool PuedeArmarEnElMomento => Debug.isDebugBuild && ArmadoRapido.Usa(_tutorialPendiente);
+        public bool PuedeArmarEnElMomento => Debug.isDebugBuild && !_caminoPendiente && ArmadoRapido.Usa(_tutorialPendiente);
         public void ArmarEnElMomento()
         {
             if (PuedeArmarEnElMomento) ArrancarTutorial(_tutorialPendiente, null);
@@ -380,9 +398,18 @@ namespace Gameplay
             }
             _noSirve.Clear();
             if (_tutorialPendiente == TutorialTipo.Ninguno) return;
+            // En el camino del TUTORIAL el escenario tiene que servir también para los pasos
+            // que siguen (p.ej. el Sorken necesita una puerta o ventana marcada).
+            int desde = _caminoPendiente ? Mathf.Max(0, TutorialCamino.Indice(_tutorialPendiente)) : 0;
             foreach (var n in _scans)
             {
-                string motivo = Tutoriales.MotivoNoSirve(_tutorialPendiente, ScanSerializer.Load(n));
+                var data = ScanSerializer.Load(n);
+                string motivo = null;
+                if (_caminoPendiente)
+                    for (int i = desde; i < TutorialCamino.Pasos.Length && motivo == null; i++)
+                        motivo = Tutoriales.MotivoNoSirve(TutorialCamino.Pasos[i], data);
+                else
+                    motivo = Tutoriales.MotivoNoSirve(_tutorialPendiente, data);
                 if (motivo != null) _noSirve[n] = motivo;
             }
         }
@@ -398,11 +425,13 @@ namespace Gameplay
         // Práctica desde la que se fue al escáner (Ninguno si no). Estático: sobrevive al
         // viaje ida y vuelta de escenas; lo consume Awake.
         private static TutorialTipo _tutorialTrasEscaner;
+        private static bool _caminoTrasEscaner;
 
         private void IrAlEscaner(string nombreEdicion)
         {
             ScannerLaunchParams.EditScanName = nombreEdicion;
             _tutorialTrasEscaner = _tutorialPendiente;
+            _caminoTrasEscaner = _caminoPendiente;
             SceneFlow.GoTo(SceneFlow.EscenaEscaner);
         }
 
@@ -411,6 +440,7 @@ namespace Gameplay
         {
             _pendingMode = mode;
             _tutorialPendiente = TutorialTipo.Ninguno;
+            _caminoPendiente = false;
             RefrescarScans();
             // Falta un entorno escaneado: es un callejón sin salida, se avisa con el
             // sonido de alerta y no con el de confirmación que ya sonó al tocar el botón.
@@ -503,9 +533,12 @@ namespace Gameplay
             var s = GameSession.Ensure();
             s.Mode          = GameSession.SessionMode.SinglePlayer;
             s.Tutorial      = tipo;
+            s.Camino        = _caminoPendiente;
             s.SelectedNight = Tutoriales.Config(tipo);
             s.SelectedMap   = mapa;
-            s.Nights        = null;
+            // El camino termina ofreciendo JUGAR NOCHE 1 en la misma sesión: necesita el
+            // catálogo. NightIndex sigue en -1 mientras dura el tutorial.
+            s.Nights        = _caminoPendiente ? Nights : null;
             s.NightIndex    = -1;
             s.HostPort      = NetworkConfig.DefaultPort;
             SceneFlow.GoTo(_lobbyScene);

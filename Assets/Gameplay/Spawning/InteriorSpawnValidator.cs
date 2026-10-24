@@ -29,7 +29,17 @@ namespace Gameplay.Spawning
         public static int GeometryVersion => ComputeGeometrySignature();
         public static string FailureReason => _failureReason;
 
+        // Listo para validar. Con SpawnDev.ExigirCuartoCerrado apagado (dev), si las paredes no
+        // cierran igual se sigue: sin topología, los chequeos de "adentro del cuarto" se omiten.
         public static bool TryEnsureReady(out string reason)
+        {
+            bool listo = TryEnsureTopology(out reason);
+            if (listo || SpawnDev.ExigirCuartoCerrado) return listo;
+            reason = null;
+            return true;
+        }
+
+        private static bool TryEnsureTopology(out string reason)
         {
             int signature = ComputeGeometrySignature();
             if (signature == _cachedSignature)
@@ -76,7 +86,9 @@ namespace Gameplay.Spawning
 
             Vector2 point = Xz(relativePosition);
             float footprint = Mathf.Max(0.02f, objectRadius);
-            if (!_topology.ContainsDisc(point, footprint + DefaultWallMargin))
+            // Sin topología (cuarto cerrado no exigido, dev): sólo los chequeos de muebles.
+            bool conCuarto = _topology != null;
+            if (conCuarto && !_topology.ContainsDisc(point, footprint + DefaultWallMargin))
             {
                 reason = "la huella cruza una pared o queda fuera del interior";
                 return false;
@@ -90,7 +102,7 @@ namespace Gameplay.Spawning
                     return false;
                 }
                 if (!FurnitureSupports(support, relativePosition, footprint, out reason)) return false;
-                if (!FurnitureFootprintIsInside(support, out reason)) return false;
+                if (conCuarto && !FurnitureFootprintIsInside(support, out reason)) return false;
             }
             else if (OverlapsFurniture(point, footprint + 0.03f, null))
             {
@@ -98,7 +110,7 @@ namespace Gameplay.Spawning
                 return false;
             }
 
-            if (!HasReachablePickup(point, Mathf.Max(0.5f, pickupRange), support))
+            if (conCuarto && !HasReachablePickup(point, Mathf.Max(0.5f, pickupRange), support))
             {
                 reason = "no existe una posicion interior accesible para recogerlo";
                 return false;
@@ -153,6 +165,7 @@ namespace Gameplay.Spawning
         {
             roomIndex = -1;
             if (!TryEnsureReady(out reason)) return false;
+            if (_topology == null) { reason = null; return true; }   // cuarto cerrado no exigido (dev)
             if (WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady)
             {
                 reason = "WorldOrigin no esta listo";

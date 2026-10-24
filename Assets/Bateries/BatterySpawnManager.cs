@@ -26,6 +26,10 @@ namespace Bateries
     {
         public static BatterySpawnManager Instance { get; private set; }
 
+        // Frena la aparición de pilas (pasos del TUTORIAL). Estático para poder fijarlo antes
+        // de que arranque la noche; quien lo prende lo apaga al morir con la escena.
+        public static bool Retenidas;
+
         [Header("Tipos de pila (archivo independiente)")]
         [SerializeField] private BatteryRaritySet rarities;
 
@@ -257,7 +261,15 @@ namespace Bateries
             }
 
             if (scatterOnFloor && _points.Count < maxSpawnPoints && FloorPoint.Instance != null)
-                ScatterFloorGrid();
+                ScatterFloorGrid(FloorPoint.Instance.LocalPosition);
+
+            // Dev (OPCIONES → DESARROLLO): grilla de piso también alrededor del jugador, a la
+            // altura del PISO si hay o del piso detectado. Complementa la del PISO; los puntos
+            // que caen encima de otros los descarta la reserva común.
+            string pisoAuto = null;
+            if (scatterOnFloor && Gameplay.Spawning.SpawnDev.PisoAutomatico && _points.Count < maxSpawnPoints &&
+                Gameplay.Spawning.SpawnDev.TryCentroPisoAutomatico(out var centroAuto, out pisoAuto))
+                ScatterFloorGrid(centroAuto);
 
             // Arrancar todos vacios: se llenan tras initialSpawnDelay, sin exigir que el
             // jugador se aleje (la regla de proximidad solo aplica a la reaparicion).
@@ -271,13 +283,14 @@ namespace Bateries
             _status = _points.Count > 0
                 ? $"{_points.Count} puntos interiores; {_rejectedCount} rechazados."
                 : $"sin puntos interiores validos ({_lastRejection ?? "sin superficies candidatas"}); esperando.";
+            if (pisoAuto != null) _status += $" Piso automático: {pisoAuto}.";
         }
 
-        private void ScatterFloorGrid()
+        // Grilla de piso alrededor de `c` (anchor-relativo, a la altura del piso).
+        private void ScatterFloorGrid(Vector3 c)
         {
             if (WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady) return;
 
-            Vector3 c = FloorPoint.Instance.LocalPosition;
             for (float dx = -floorRadius; dx <= floorRadius; dx += floorSpacing)
             for (float dz = -floorRadius; dz <= floorRadius; dz += floorSpacing)
             {
@@ -360,6 +373,11 @@ namespace Bateries
                 return;
             }
 
+            // Pasos del TUTORIAL donde todavía no van pilas (la linterna; en pilas y cordura,
+            // hasta que la batería se vacía): los timers no corren, así al soltarlas se
+            // respeta la demora de cada punto.
+            if (Retenidas) return;
+
             var players = NetworkManager.Instance.ServerPlayerWorldPositions();
             float dt = Time.deltaTime;
 
@@ -430,6 +448,40 @@ namespace Bateries
             p.netId       = netId;
             p.rarityIndex = rarity.rarityIndex;
             _byNetId[netId] = p;
+        }
+
+        // TUTORIAL: deja UNA pila ya mismo, sin esperar los timers, en el punto válido que
+        // quede más cerca de DistanciaGuia del jugador (ni encima ni en la otra punta). Las
+        // demás siguen frenadas con Retenidas. False si todavía no hay dónde (puntos sin
+        // armar o ninguno válido): se vuelve a pedir más tarde.
+        public bool ServerSpawnUnaAhora(Vector3 jugador, out uint netId)
+        {
+            netId = 0;
+            if (!_started || NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return false;
+            if (WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady) return false;
+            foreach (var p in _points)
+                if (p.occupied) { netId = p.netId; return true; }
+
+            _ordenGuia.Clear();
+            _ordenGuia.AddRange(_points);
+            _ordenGuia.Sort((a, b) => PuntajeGuia(a, jugador).CompareTo(PuntajeGuia(b, jugador)));
+            foreach (var p in _ordenGuia)
+            {
+                Spawn(p);
+                if (p.occupied) { netId = p.netId; return true; }
+            }
+            return false;
+        }
+
+        // Distancia ideal (metros) de la pila del tutorial al jugador.
+        private const float DistanciaGuia = 2.5f;
+        private readonly List<SpawnPoint> _ordenGuia = new();
+
+        private static float PuntajeGuia(SpawnPoint p, Vector3 jugador)
+        {
+            Vector3 d = WorldOrigin.Instance.ToWorld(p.relPos) - jugador;
+            d.y = 0f;
+            return Mathf.Abs(d.magnitude - DistanciaGuia);
         }
 
         // ── Pickup (server) ───────────────────────────────────────────────────

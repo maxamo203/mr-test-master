@@ -5,21 +5,35 @@ using T = MortuoriumTheme;
 
 namespace Gameplay
 {
-    // Práctica PILAS Y RELIQUIAS, en dos partes:
-    //  1. PILAS: juntar MetaPilas. La PRIMERA no carga al toque: se congela el drenaje y
-    //     aparece un aviso encima de la barra (Rediseno.Menus.AvisoPrimeraPila2) con lo que
-    //     suma; al tocar CONTINUAR la barra se llena animada y el drenaje sigue.
-    //  2. RELIQUIAS: recién ahí se sueltan (CollectibleSpawnManager.Retenidas) y hay que
-    //     juntar MetaReliquias.
+    // Práctica PILAS Y CORDURA (segundo paso del TUTORIAL), en cuatro partes:
+    //  1. GASTAR: la noche arranca con la batería al CargaInicial. La pista pide usar la luz
+    //     intensa y una barra muestra el gasto por segundo, para que se vea cuánto más
+    //     consume.
+    //  2. LA PILA: con la batería vacía aparece UNA pila al toque, cerca
+    //     (BatterySpawnManager.ServerSpawnUnaAhora), y una flecha lleva hasta ella
+    //     (GuiaTutorial). No carga al toque: se congela el drenaje y aparece un aviso encima
+    //     de la barra (Rediseno.Menus.AvisoPrimeraPila2) con lo que suma; al tocar
+    //     CONTINUAR la barra se llena animada.
+    //  3. CORDURA: aparece su barra (en las prácticas está oculta) con un aviso que la
+    //     explica (Rediseno.Menus.AvisoCordura2): la bajan las criaturas, no la oscuridad.
+    //  4. LA RELIQUIA: igual que la pila, una sola y al toque, con la flecha.
+    // Las apariciones normales de pilas y reliquias quedan frenadas todo el paso
+    // (Retenidas): en el tutorial no se espera ni se juntan de a muchas.
     // Al terminar, la noche se gana como un amanecer (ServerNightSurvived) y FinDeNoche2 la
-    // muestra como PRÁCTICA COMPLETA. Con NightIndex = -1 no mueve progresión ni récords.
+    // muestra como paso superado. Con NightIndex = -1 no mueve progresión ni récords.
     //
-    // El avance va en las filas 1-2 del HUD de la noche (la cordura acá no se usa) y una
-    // pista arriba dice qué hacer. Se crea sola en SampleScene sólo en esta práctica y
-    // muere con la escena. Un jugador: el host es el único dispositivo.
+    // El avance va en las filas 1-2 del HUD de la noche y una pista arriba dice qué hacer.
+    // Se crea sola en SampleScene sólo en esta práctica y muere con la escena. Un jugador:
+    // el host es el único dispositivo.
     public class TutorialPilasReliquias : MonoBehaviour
     {
-        public const int MetaPilas = 3, MetaReliquias = 3;
+        public const int MetaPilas = 1, MetaReliquias = 1;
+        // Cada cuánto se vuelve a intentar dejar la pieza si todavía no hay dónde.
+        private const float SegundosReintento = 0.5f;
+        // Tras cuánto sin lugar se le explica al jugador por qué no aparece.
+        private const float SegundosSinLugar = 4f;
+        // Con la batería llena, vaciarla con la luz normal tardaría medio minuto.
+        private const float CargaInicial = 0.3f;
         // Respiro entre la última pieza y el cartel de fin, para que se oiga el pickup.
         private const float DemoraFin = 1.5f;
         // Lo que tarda la barra en llenarse con la primera pila, tras CONTINUAR.
@@ -43,19 +57,28 @@ namespace Gameplay
 
         public static TutorialPilasReliquias Instance { get; private set; }
 
-        private enum Fase { Pilas, Reliquias }
+        private enum Fase { Gastar, Pilas, Cordura, Reliquias }
 
         private Fase _fase;
         private int _pilas;
         private bool _enPartida;
+        private bool _cargaInicialPuesta;
         private float _finEn = -1f;
         private Flashlight _linterna;
+
+        // La pieza que hay que ir a buscar (la pila o la reliquia) y su guía.
+        private uint _pieza;
+        private bool _hayPieza;
+        private float _reintentoEn, _buscandoLugarDesde = -1f;
 
         // Primera pila: la carga que se retuvo hasta CONTINUAR.
         private bool _primeraHecha, _esperandoAnimacion;
         private float _cargaRetenida;
 
+        // Aviso de la primera pila (AvisoPrimeraPila2).
         public bool AvisoAbierto { get; private set; }
+        // Aviso de la cordura (AvisoCordura2).
+        public bool AvisoCorduraAbierto { get; private set; }
         public int PorcentajeRetenido =>
             Linterna != null && Linterna.maxCharge > 0f
                 ? Mathf.RoundToInt(100f * Mathf.Min(_cargaRetenida, Linterna.maxCharge) / Linterna.maxCharge) : 0;
@@ -71,7 +94,9 @@ namespace Gameplay
             Flashlight.PilaRecogida += AlRecogerPila;
             Flashlight.RetenerCarga = RetenerPrimeraCarga;
             Collectibles.CollectibleSpawnManager.Retenidas = true;
+            Bateries.BatterySpawnManager.Retenidas = true;
             new GameObject("AvisoPrimeraPila2").AddComponent<Rediseno.Menus.AvisoPrimeraPila2>();
+            new GameObject("AvisoCordura2").AddComponent<Rediseno.Menus.AvisoCordura2>();
         }
 
         private void OnDestroy()
@@ -80,13 +105,17 @@ namespace Gameplay
             Flashlight.PilaRecogida -= AlRecogerPila;
             if (Flashlight.RetenerCarga == RetenerPrimeraCarga) Flashlight.RetenerCarga = null;
             Collectibles.CollectibleSpawnManager.Retenidas = false;
+            Bateries.BatterySpawnManager.Retenidas = false;
+            SanityHUD.MostrarEnPractica = false;
+            Rediseno.ControlMirada.ObjetivoIntensa = null;
             CerrarAviso();
+            CerrarAvisoCordura();
             Instance = null;
         }
 
         private void AlRecogerPila()
         {
-            if (_enPartida) _pilas++;
+            if (_enPartida && _fase == Fase.Pilas) _pilas++;
         }
 
         // Flashlight.AddCharge pregunta antes de cargar: la primera pila se queda acá.
@@ -101,8 +130,8 @@ namespace Gameplay
             return true;
         }
 
-        // CONTINUAR del aviso: ahora sí la barra sube (animada); el drenaje vuelve cuando
-        // termina de llenarse.
+        // CONTINUAR del aviso de la primera pila: ahora sí la barra sube (animada); el
+        // drenaje vuelve cuando termina de llenarse.
         public void Continuar()
         {
             if (!AvisoAbierto) return;
@@ -115,11 +144,29 @@ namespace Gameplay
         private void CerrarAviso()
         {
             AvisoAbierto = false;
-            Bateries.ContextActionController.AvisoAbierto = false;
+            Bateries.ContextActionController.AvisoAbierto = AvisoCorduraAbierto;
+        }
+
+        // CONTINUAR del aviso de la cordura: siguen las reliquias.
+        public void ContinuarCordura()
+        {
+            if (!AvisoCorduraAbierto) return;
+            CerrarAvisoCordura();
+            _fase = Fase.Reliquias;
+            SoltarPieza();
+        }
+
+        private void CerrarAvisoCordura()
+        {
+            AvisoCorduraAbierto = false;
+            Bateries.ContextActionController.AvisoAbierto = AvisoAbierto;
         }
 
         private void Update()
         {
+            // El TUTORIAL pasó al paso siguiente (o a la Noche 1) sin recargar la escena.
+            if (!Tutoriales.Vigente(TutorialTipo.PilasReliquias)) { Destroy(gameObject); return; }
+
             var net = NetworkManager.Instance;
             bool enPartida = net != null && net.GameStarted;
             // Flanco de subida: arranque en frío y cada REPETIR (no recarga la escena; la
@@ -128,17 +175,46 @@ namespace Gameplay
             _enPartida = enPartida;
             if (!enPartida || !net.IsServer) return;
 
+            // La linterna se llena en OnGameStarted; recién después se la deja baja.
+            if (!_cargaInicialPuesta && Linterna != null)
+            {
+                _cargaInicialPuesta = true;
+                Linterna.currentCharge = Linterna.maxCharge * CargaInicial;
+            }
+
             if (_esperandoAnimacion && Linterna != null && !Linterna.CargandoAnimado)
             {
                 _esperandoAnimacion = false;
                 Linterna.DrenajePausado = false;
             }
 
-            if (_fase == Fase.Pilas && _pilas >= MetaPilas && !AvisoAbierto)
+            switch (_fase)
             {
-                _fase = Fase.Reliquias;
-                Collectibles.CollectibleSpawnManager.Retenidas = false;
+                case Fase.Gastar:
+                    // En el visor sin mando la intensa sólo sale mirando un objetivo: el libro.
+                    var libro = RitualBookView.Active;
+                    Rediseno.ControlMirada.ObjetivoIntensa = libro != null ? libro.PuntoDeLuz : (Vector3?)null;
+                    if (libro != null) Rediseno.ControlMirada.RadioObjetivoIntensa = libro.RadioAproximado;
+                    if (Linterna != null && Linterna.IsEmpty)
+                    {
+                        _fase = Fase.Pilas;
+                        Rediseno.ControlMirada.ObjetivoIntensa = null;
+                        SoltarPieza();
+                    }
+                    break;
+                case Fase.Pilas:
+                    if (_pilas < MetaPilas) DejarPieza(reliquia: false);
+                    if (_pilas >= MetaPilas && !AvisoAbierto && !_esperandoAnimacion)
+                    {
+                        _fase = Fase.Cordura;
+                        SanityHUD.MostrarEnPractica = true;
+                        AvisoCorduraAbierto = true;
+                        Bateries.ContextActionController.AvisoAbierto = true;
+                    }
+                    break;
             }
+
+            if (_fase == Fase.Reliquias && Reliquias < MetaReliquias) DejarPieza(reliquia: true);
 
             if (_finEn < 0f)
             {
@@ -151,16 +227,64 @@ namespace Gameplay
             }
         }
 
+        // Deja la pieza de esta parte si todavía no está (reintenta mientras no haya dónde).
+        private void DejarPieza(bool reliquia)
+        {
+            if (_hayPieza || Time.time < _reintentoEn) return;
+            var cam = Camera.main;
+            if (cam == null) return;
+            if (_buscandoLugarDesde < 0f) _buscandoLugarDesde = Time.time;
+            Vector3 jugador = cam.transform.position;
+            if (reliquia)
+            {
+                var m = Collectibles.CollectibleSpawnManager.Instance;
+                _hayPieza = m != null && m.ServerSpawnUnaAhora(jugador, out _pieza);
+            }
+            else
+            {
+                var m = Bateries.BatterySpawnManager.Instance;
+                _hayPieza = m != null && m.ServerSpawnUnaAhora(jugador, out _pieza);
+            }
+            if (_hayPieza) _buscandoLugarDesde = -1f;
+            else _reintentoEn = Time.time + SegundosReintento;
+        }
+
+        private void SoltarPieza()
+        {
+            _hayPieza = false;
+            _pieza = 0;
+            _reintentoEn = 0f;
+            _buscandoLugarDesde = -1f;
+        }
+
+        // ¿Dónde está la pieza ahora? False si ya no está (la recogió).
+        private bool PosicionPieza(out Vector3 pos)
+        {
+            pos = default;
+            var reg = EntityRegistry.Instance;
+            if (!_hayPieza || reg == null || !reg.TryGet(_pieza, out var e) || e == null) return false;
+            pos = e.transform.position;
+            return true;
+        }
+
+        private bool SinLugar => !_hayPieza && _buscandoLugarDesde >= 0f &&
+                                 Time.time - _buscandoLugarDesde > SegundosSinLugar;
+
         private void Reiniciar()
         {
-            _fase = Fase.Pilas;
+            SoltarPieza();
+            _fase = Fase.Gastar;
             _pilas = 0;
             _finEn = -1f;
+            _cargaInicialPuesta = false;
             _primeraHecha = false;
             _esperandoAnimacion = false;
             _cargaRetenida = 0f;
             CerrarAviso();
+            CerrarAvisoCordura();
+            SanityHUD.MostrarEnPractica = false;
             Collectibles.CollectibleSpawnManager.Retenidas = true;
+            Bateries.BatterySpawnManager.Retenidas = true;
         }
 
         private void OnGUI()
@@ -170,26 +294,52 @@ namespace Gameplay
 
             UIScale.Begin();
             float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
-            // Filas 1 y 2: las que usan cordura y amanecer en una noche normal (acá no hay).
-            // Las reliquias aparecen recién en su parte.
-            Fila(vw, vh, 1, "PILAS", Mathf.Min(_pilas, MetaPilas), MetaPilas);
-            if (_fase == Fase.Reliquias)
-                Fila(vw, vh, 2, "RELIQUIAS", Mathf.Min(Reliquias, MetaReliquias), MetaReliquias);
-            if (!AvisoAbierto) PistaTutorial.Dibujar(vw, Texto());
+            // Filas 1 y 2: las que usan cordura y amanecer en una noche normal. Desde la
+            // parte de la cordura, la fila 1 es suya (SanityHUD).
+            switch (_fase)
+            {
+                case Fase.Gastar:
+                    float gasto = Linterna != null ? Linterna.CurrentDrainPerSecond : 0f;
+                    float maxGasto = Linterna != null ? Mathf.Max(0.01f, Linterna.brightDrainPerSecond) : 1f;
+                    bool intensa = Linterna != null && Linterna.Mode == FlashlightMode.Bright;
+                    T.HudBarra(vw, vh, 1, gasto / maxGasto, intensa ? T.Red : T.Tan, "GASTO", $"-{gasto:0}/s");
+                    break;
+                case Fase.Pilas:
+                    Fila(vw, vh, 1, "PILA", Mathf.Min(_pilas, MetaPilas), MetaPilas);
+                    break;
+                case Fase.Reliquias:
+                    Fila(vw, vh, 2, "RELIQUIA", Mathf.Min(Reliquias, MetaReliquias), MetaReliquias);
+                    break;
+            }
+            if (AvisoAbierto || AvisoCorduraAbierto) return;
+            PistaTutorial.Dibujar(vw, Texto());
+            if ((_fase == Fase.Pilas || _fase == Fase.Reliquias) && PosicionPieza(out var pos))
+                GuiaTutorial.Dibujar(pos, _fase == Fase.Pilas ? "PILA" : "RELIQUIA");
         }
+
+        private static string NoHayLugar(string que) =>
+            $"No encuentro dónde dejar {que}: el escenario necesita piso escaneado y paredes que cierren el cuarto.";
 
         private static void Fila(float vw, float vh, int fila, string nombre, int n, int meta) =>
             T.HudBarra(vw, vh, fila, (float)n / meta, n >= meta ? T.Green : T.Tan, nombre, $"{n}/{meta}");
 
         private string Texto()
         {
-            if (Completa) return "¡Práctica completa!";
-            if (_fase == Fase.Reliquias)
-                return "Ahora las reliquias del ritual: aparecen de a una. Buscala, apuntale y recogela.";
-            if (_pilas == 0)
-                return "La linterna se gasta. Buscá una pila en el piso: apuntale y recogela.";
-            int faltan = MetaPilas - _pilas;
-            return faltan == 1 ? "Bien. Juntá una pila más." : $"Bien. Juntá {faltan} pilas más.";
+            if (Completa) return "¡Paso completo!";
+            switch (_fase)
+            {
+                case Fase.Gastar:
+                    bool intensa = Linterna != null && Linterna.Mode == FlashlightMode.Bright;
+                    if (intensa) return "Mirá cómo cae: la luz intensa gasta cuatro veces más. Seguí hasta vaciarla.";
+                    return Rediseno.ControlMirada.Activo
+                        ? "La batería está baja. Mirá el libro ritual de frente: la luz se concentra sola y la gasta rápido."
+                        : $"La batería está baja. Gastala toda con la luz intensa ({PistaTutorial.ComoLuzIntensa()}).";
+                case Fase.Reliquias:
+                    if (SinLugar) return NoHayLugar("la reliquia");
+                    return "Apareció una reliquia del ritual. Seguí la flecha, apuntale y recogela.";
+            }
+            if (SinLugar) return NoHayLugar("la pila");
+            return "Te quedaste sin luz. Apareció una pila: seguí la flecha, apuntale y recogela.";
         }
     }
 }

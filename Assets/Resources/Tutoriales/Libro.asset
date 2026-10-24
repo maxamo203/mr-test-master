@@ -23,8 +23,8 @@ MonoBehaviour:
   sanityMax: 100
   arbmosActive: 0
   bookActive: 1
-  bookEventDelayMin: 6
-  bookEventDelayMax: 10
+  bookEventDelayMin: 2
+  bookEventDelayMax: 4
   bookConsumeSeconds: 14
   bookDefenseSeconds: 3
   velethChaseSpeed: 0.8

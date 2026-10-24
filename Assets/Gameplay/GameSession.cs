@@ -77,6 +77,11 @@ namespace Gameplay
         public TutorialTipo Tutorial { get; set; } = TutorialTipo.Ninguno;
         public bool EnTutorial => Tutorial != TutorialTipo.Ninguno;
 
+        // ¿La práctica es un paso del TUTORIAL (el camino de pasos encadenados,
+        // TutorialCamino) y no una práctica suelta? Al superar un paso se pasa al siguiente
+        // en la misma sesión AR, sin volver al menú.
+        public bool Camino { get; set; }
+
         // Práctica que se arma en el momento (sin escaneo): SelectedMap queda null y el lobby
         // abre el armado rápido en vez de buscar la imagen (ARLobbyManager.BeginHostFlow).
         // SORKEN y VELETH también se pueden jugar sobre un escenario escaneado: ahí hay mapa
@@ -102,5 +107,5 @@ namespace Gameplay
         }
     }
 
-    public enum TutorialTipo { Ninguno, PilasReliquias, Sorken, Arbmos, Libro }
+    public enum TutorialTipo { Ninguno, PilasReliquias, Sorken, Arbmos, Libro, Linterna }
 }

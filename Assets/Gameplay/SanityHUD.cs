@@ -11,6 +11,10 @@ namespace Gameplay
     // Wiring: poner en un GameObject de SampleScene. Se muestra solo en partida.
     public class SanityHUD : MonoBehaviour
     {
+        // El paso PILAS Y CORDURA del TUTORIAL presenta la barra aunque ahí nada la baje
+        // (TutorialPilasReliquias lo prende y lo apaga).
+        public static bool MostrarEnPractica;
+
         private static readonly int ID_DISTORT = Shader.PropertyToID("_SanityDistort");
 
         private void Awake()
@@ -43,7 +47,8 @@ namespace Gameplay
             UIScale.Begin();
             float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
             var tutorial = GameSession.Instance != null ? GameSession.Instance.Tutorial : TutorialTipo.Ninguno;
-            bool practica = tutorial != TutorialTipo.Ninguno && tutorial != TutorialTipo.Arbmos;
+            bool practica = tutorial != TutorialTipo.Ninguno && tutorial != TutorialTipo.Arbmos &&
+                            !MostrarEnPractica;
             if (!espectando && !practica)
             {
                 Color fill = Color.Lerp(T.Red, T.Blue, pct);

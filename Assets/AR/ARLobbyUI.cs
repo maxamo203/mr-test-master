@@ -66,6 +66,8 @@ public class ARLobbyUI : MonoBehaviour
         if (_lobby.State == ARLobbyManager.LobbyState.Idle) return;
         // Con la pausa abierta no se dibuja nada: debajo de la pausa parecía parte de ella.
         if (Gamepad.PauseMenuController.IsOpen) return;
+        // Tutorial pasando de paso o reintentando: arranca solo, detrás de su tarjeta.
+        if (Gameplay.TutorialCamino.EnTransicion && _lobby.State != ARLobbyManager.LobbyState.GameStarted) return;
 
         UIScale.Begin();
         float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;

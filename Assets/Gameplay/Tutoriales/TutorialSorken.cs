@@ -76,6 +76,9 @@ namespace Gameplay
 
         private void Update()
         {
+            // El TUTORIAL pasó al paso siguiente (o a la Noche 1) sin recargar la escena.
+            if (!Tutoriales.Vigente(TutorialTipo.Sorken)) { Destroy(gameObject); return; }
+
             var net = NetworkManager.Instance;
             bool enPartida = net != null && net.GameStarted;
             // Flanco de subida: arranque en frío y cada REPETIR (no recarga la escena).
@@ -110,12 +113,39 @@ namespace Gameplay
             int n = Mathf.Min(_echados, MetaEchar);
             T.HudBarra(vw, vh, 1, (float)n / MetaEchar, n >= MetaEchar ? T.Green : T.Tan, "ECHARLO", $"{n}/{MetaEchar}");
             PistaTutorial.Dibujar(vw, Time.time < _avisoHasta && _aviso != null ? _aviso : Texto());
+            var s = SorkenActivo();
+            if (s != null) GuiaTutorial.Dibujar(s.Position + Vector3.up, "SORKEN");
         }
+
+        // El Sorken que está entrando o adentro (null si no hay). El registro de entidades se
+        // recorre cada medio segundo, no por frame.
+        private SorkenEntity SorkenActivo()
+        {
+            if (Time.unscaledTime >= _buscarSorkenEn)
+            {
+                _buscarSorkenEn = Time.unscaledTime + 0.5f;
+                _sorken = null;
+                var reg = EntityRegistry.Instance;
+                if (reg != null)
+                    foreach (var e in reg.All)
+                    {
+                        if (e == null || e.EntityTypeId != EntityTypeIds.Sorken) continue;
+                        var s = e.GetComponent<SorkenEntity>();
+                        if (s != null && s.State != SorkenState.Idle) { _sorken = s; break; }
+                    }
+            }
+            return _sorken != null && _sorken.State != SorkenState.Idle ? _sorken : null;
+        }
+
+        private SorkenEntity _sorken;
+        private float _buscarSorkenEn;
 
         private string Texto()
         {
             if (Completa) return "¡Práctica completa!";
             string luz = PistaTutorial.ComoLuzIntensa();
+            if (SorkenActivo() != null)
+                return $"¡Ahí viene! Seguí la flecha y echalo con la luz intensa ({luz}).";
             return $"El Sorken va a intentar entrar por la puerta o ventana que marcaste. Echalo con la luz intensa ({luz}): " +
                    "alumbrá la entrada mientras intenta pasar, o a él si ya entró.";
         }

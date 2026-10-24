@@ -245,7 +245,10 @@ namespace Rediseno.Menus
             jugar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
             jugar.style.marginTop = 10;
             jugar.style.marginBottom = 18;
-            jugar.Add(TemaUI.Texto(practica ? $"PRACTICAR · {Tutoriales.Titulo(tutorial)}" : $"JUGAR · NOCHE {n + 1}",
+            string textoJugar = !practica ? $"JUGAR · NOCHE {n + 1}"
+                              : menu.CaminoPendiente ? $"TUTORIAL · PASO {TutorialCamino.Indice(tutorial) + 1}"
+                              : $"PRACTICAR · {Tutoriales.Titulo(tutorial)}";
+            jugar.Add(TemaUI.Texto(textoJugar,
                                    TemaUI.Bebas, 70, TemaUI.Cream, 7f));
             var sub = TemaUI.Texto(string.IsNullOrEmpty(esc) ? "Elegí un escenario arriba"
                                    : $"{(nombreNoche.Length > 0 ? nombreNoche + " · " : "")}en {esc}",
