@@ -72,6 +72,7 @@ namespace Rediseno.Menus
             if (_lobby == null) _lobby = ARLobbyManager.Instance;
             if (_lobby == null || NetworkManager.Instance == null) return false;
             if (PauseMenuController.IsOpen) return false;   // la pausa va encima, sola
+            if (Gameplay.TutorialCamino.EnTransicion) return false;  // el tutorial arranca solo, detrás de su tarjeta
             return EstadoMigrado(_lobby.State);
         }
 

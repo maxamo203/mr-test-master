@@ -11,8 +11,11 @@ namespace Gameplay
     //     apaga del todo, todavía no sale Veleth: RitualBookDirector lo restaura
     //     (VelethHabilitada es false) y se vuelve a intentar hasta lograrlo.
     //  2. VELETH: ahora hay que DEJAR que el libro se apague. Sale Veleth, que no se echa con
-    //     la luz; hay que aguantar SegundosEscapar mientras persigue. Si te atrapa, te morís
-    //     como en una noche; REINTENTAR PRÁCTICA retoma directo en esta parte.
+    //     la luz ni se puede escapar de ella (en una noche persigue hasta atrapar a todos): esta
+    //     parte es una demostración. Si te atrapa, te morís como en una noche (retrato y todo)
+    //     pero el paso cuenta como superado (CompletadaPorVeleth) y FinDeNoche2 lo muestra así.
+    //     Si aguantás SegundosEscapar sin que te atrape, también (y Veleth se retira): así
+    //     nadie queda trabado si Veleth no llega.
     // Al completar, Veleth se retira, la noche se gana (ServerNightSurvived) y FinDeNoche2 la
     // muestra como PRÁCTICA COMPLETA.
     // La primera vez que el libro empieza a oscurecerse aparece un aviso sobre la barra de
@@ -56,6 +59,9 @@ namespace Gameplay
         private bool _avisoLuzMostrado;
 
         public bool AvisoAbierto { get; private set; }
+
+        // ¿Terminó porque Veleth atrapó al jugador? (la demostración se cumplió igual).
+        public bool CompletadaPorVeleth { get; private set; }
 
         // ¿Perder el libro invoca a Veleth? Sólo en la segunda parte; antes, el director lo
         // restaura para volver a intentarlo.
@@ -168,12 +174,23 @@ namespace Gameplay
                 _escapado = 0f;
                 _finEn = -1f;
                 _aviso = null;
+                CompletadaPorVeleth = false;
             }
             if (!enPartida) CerrarAviso();
             _enPartida = enPartida;
-            // Muerto ya no cuenta: el reloj de escape no puede ganar la práctica detrás de la
-            // pantalla de muerte (es de un jugador, así que cualquier muerte es la suya).
-            if (!enPartida || !net.IsServer || ServerDeaths.Count > 0) return;
+            if (!enPartida || !net.IsServer) return;
+            // Te atrapó Veleth: era la demostración, el paso queda superado igual. Muerto, el
+            // reloj de escape ya no corre (es de un jugador: cualquier muerte es la suya).
+            if (ServerDeaths.Count > 0)
+            {
+                if ((_fase == Fase.Emergiendo || _fase == Fase.Cazando) && !CompletadaPorVeleth)
+                {
+                    CompletadaPorVeleth = true;
+                    _fase = Fase.Completa;   // REPETIR arranca de cero
+                    TutorialCamino.MarcarSuperado(TutorialTipo.Libro);
+                }
+                return;
+            }
 
             var libro = RitualBookDirector.Instance;
             if (!_avisoLuzMostrado && libro != null && libro.Fase == RitualBookPhase.Consuming)
@@ -216,8 +233,15 @@ namespace Gameplay
                 T.HudBarra(vw, vh, 1, listo ? 1f : t / SegundosEscapar, listo ? T.Green : T.Tan,
                            "ESCAPAR", listo ? "LISTO" : $"{Mathf.FloorToInt(t)}/{SegundosEscapar:0} s");
             }
-            if (!AvisoAbierto)
-                PistaTutorial.Dibujar(vw, Time.time < _avisoHasta && _aviso != null ? _aviso : Texto());
+            if (AvisoAbierto) return;
+            PistaTutorial.Dibujar(vw, Time.time < _avisoHasta && _aviso != null ? _aviso : Texto());
+            var veleth = VelethEntity.Active;
+            var libro = RitualBookView.Active;
+            if ((_fase == Fase.Emergiendo || _fase == Fase.Cazando) && veleth != null)
+                GuiaTutorial.Dibujar(veleth.Position + Vector3.up, "VELETH");
+            else if (_fase == Fase.Salvar && libro != null && RitualBookDirector.Instance != null &&
+                     RitualBookDirector.Instance.Fase == RitualBookPhase.Consuming)
+                GuiaTutorial.Dibujar(libro.PuntoDeLuz, "LIBRO");
         }
 
         private string Texto()
@@ -225,8 +249,8 @@ namespace Gameplay
             switch (_fase)
             {
                 case Fase.Completa:   return "¡Práctica completa!";
-                case Fase.Cazando:    return "La luz no la frena. Alejate y poné paredes o muebles entre ustedes.";
-                case Fase.Emergiendo: return "Veleth sale del libro. Cuando termine de salir, te va a perseguir: alejate ya.";
+                case Fase.Cazando:    return "La luz no la frena y no se cansa. Alejate: mirá cuánto aguantás.";
+                case Fase.Emergiendo: return "Veleth sale del libro. Esto es lo que pasa cuando el libro se apaga.";
                 case Fase.DejarApagar:return "Esta vez dejá que el libro se apague: no lo alumbres y mirá qué pasa.";
             }
             var libro = RitualBookDirector.Instance;

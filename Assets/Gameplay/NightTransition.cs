@@ -83,7 +83,10 @@ namespace Gameplay
             // se volvía a la pantalla de sincronización sin ver el mapa — justo cuando hay
             // que verlo para saber si está alineado. Al arrancar la noche de nuevo,
             // SceneOccluderMode las vuelve a ocultar.
-            SceneOccluderMode.Instance?.Restore();
+            // Salvo en el tutorial al pasar de paso o reintentar: ahí se arranca solo, detrás
+            // de una tarjeta, y mostrarlas un instante era un parpadeo del modo escaneo
+            // (TutorialCamino.EnTransicion; si la sala necesita al jugador, las muestra él).
+            if (!TutorialCamino.EnTransicion) SceneOccluderMode.Instance?.Restore();
 
             DetenerSistemas();
         }

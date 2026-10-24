@@ -42,7 +42,7 @@ MonoBehaviour:
   bookActive: 0
   flashlightConeAngleDeg: 32
   flashlightRange: 9
-  initialAttemptDelay: 6
+  initialAttemptDelay: 1.5
   emergeTimeoutSeconds: 18
   retreatSeconds: 2.5
   grabHoldSeconds: 1.5

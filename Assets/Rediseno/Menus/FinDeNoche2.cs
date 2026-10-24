@@ -92,6 +92,7 @@ namespace Rediseno.Menus
             var ses = GameSession.Instance;
             string firma = $"{_selector}|{sobrevivio}|{NightTransition.PuedeReiniciar}|" +
                            $"{(ses != null ? ses.Tutorial : TutorialTipo.Ninguno)}|{(ses != null && ses.Camino)}|" +
+                           $"{(TutorialLibro.Instance != null && TutorialLibro.Instance.CompletadaPorVeleth)}|" +
                            $"{(ld != null && ld.PuedeEspectar)}|{EnVisor}|{NightResult.NocheDesbloqueada}|{_logCopiado}";
             if (firma == _firma) return;
             _firma = firma;
@@ -122,7 +123,7 @@ namespace Rediseno.Menus
                                         TemaUI.Elite, 38, TemaUI.Muted, 0f, TextAnchor.MiddleCenter);
                 bien.style.marginTop = 8; bien.style.marginBottom = 30;
                 _cuerpo.Add(bien);
-                var repetir = PiezasUI.Boton(Nav, "REPETIR PRÁCTICA", NightTransition.Reintentar);
+                var repetir = PiezasUI.Boton(Nav, "REPETIR PRÁCTICA", TutorialCamino.ReintentarPaso);
                 repetir.style.backgroundImage = TemaUI.DegradeRojo;
                 repetir.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
                 _cuerpo.Add(repetir);
@@ -134,6 +135,12 @@ namespace Rediseno.Menus
             // asesino y todo), pero acá sólo se ofrece reintentarla o volver a la lista.
             if (!sobrevivio && sesion != null && sesion.EnTutorial)
             {
+                // Veleth te atrapó en la demostración del libro: el paso se superó igual.
+                if (TutorialLibro.Instance != null && TutorialLibro.Instance.CompletadaPorVeleth)
+                {
+                    ArmarAtrapadoPorVeleth(sesion);
+                    return;
+                }
                 _cuerpo.Add(TemaUI.Texto("MORISTE", TemaUI.Bebas, 150, TemaUI.Red, 10f, TextAnchor.MiddleCenter));
                 var mal = TemaUI.Texto(sesion.Tutorial switch
                                        {
@@ -146,7 +153,7 @@ namespace Rediseno.Menus
                 mal.style.marginTop = 8; mal.style.marginBottom = 30;
                 _cuerpo.Add(mal);
                 var reintentar = PiezasUI.Boton(Nav, sesion.Camino ? "REINTENTAR PASO" : "REINTENTAR PRÁCTICA",
-                                                NightTransition.Reintentar);
+                                                TutorialCamino.ReintentarPaso);
                 reintentar.style.backgroundImage = TemaUI.DegradeRojo;
                 reintentar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
                 _cuerpo.Add(reintentar);
@@ -253,8 +260,32 @@ namespace Rediseno.Menus
             continuar.style.backgroundImage = TemaUI.DegradeRojo;
             continuar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
             _cuerpo.Add(continuar);
-            _cuerpo.Add(PiezasUI.Boton(Nav, "REPETIR PASO", NightTransition.Reintentar));
+            _cuerpo.Add(PiezasUI.Boton(Nav, "REPETIR PASO", TutorialCamino.ReintentarPaso));
             _cuerpo.Add(PiezasUI.Boton(Nav, "SALIR DEL TUTORIAL", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
+        }
+
+        // LIBRO Y VELETH: de Veleth no se escapa, así que la segunda parte es una demostración
+        // y que te atrape también la completa (TutorialLibro.CompletadaPorVeleth).
+        private void ArmarAtrapadoPorVeleth(GameSession sesion)
+        {
+            _cuerpo.Add(TemaUI.Texto("TE ATRAPÓ VELETH", TemaUI.Bebas, 120, TemaUI.Red, 10f, TextAnchor.MiddleCenter));
+            var leccion = TemaUI.Texto("Si el libro se apaga, Veleth no perdona: la luz no la frena y no se cansa. " +
+                                       "La única defensa es que el libro nunca se apague.",
+                                       TemaUI.Elite, 36, TemaUI.Muted, 0f, TextAnchor.MiddleCenter);
+            leccion.style.marginTop = 8; leccion.style.marginBottom = 30;
+            _cuerpo.Add(leccion);
+
+            if (sesion.Camino)
+            {
+                ArmarFinDelTutorial();
+                return;
+            }
+            _cuerpo.Add(TemaUI.Texto("PRÁCTICA COMPLETA", TemaUI.Bebas, 80, TemaUI.Green, 8f, TextAnchor.MiddleCenter));
+            var repetir = PiezasUI.Boton(Nav, "REPETIR PRÁCTICA", TutorialCamino.ReintentarPaso);
+            repetir.style.backgroundImage = TemaUI.DegradeRojo;
+            repetir.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
+            _cuerpo.Add(repetir);
+            _cuerpo.Add(PiezasUI.Boton(Nav, "VOLVER AL TUTORIAL", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
         }
 
         private void ArmarFinDelTutorial()

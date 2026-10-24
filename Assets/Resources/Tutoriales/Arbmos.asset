@@ -39,8 +39,8 @@ MonoBehaviour:
   sanityMax: 100
   arbmosActive: 1
   arbmosForceSpawnAfterCooldown: 1
-  arbmosCooldownMin: 6
-  arbmosCooldownMax: 9
+  arbmosCooldownMin: 2
+  arbmosCooldownMax: 4
   arbmosSpawnDistance: 2
   arbmosSpawnChancePerAttempt: 1
   arbmosHideSeconds: 3

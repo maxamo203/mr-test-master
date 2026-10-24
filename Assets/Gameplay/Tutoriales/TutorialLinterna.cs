@@ -300,6 +300,10 @@ namespace Gameplay
                     break;
             }
             PistaTutorial.Dibujar(vw, Time.time < _avisoHasta && _aviso != null ? _aviso : Texto());
+            if (_fase == Fase.Concentrar && _marca != null)
+                GuiaTutorial.Dibujar(_marca.transform.position, "MARCA");
+            else if (_fase == Fase.Libro && RitualBookView.Active != null)
+                GuiaTutorial.Dibujar(RitualBookView.Active.PuntoDeLuz, "LIBRO");
         }
 
         private string Texto()

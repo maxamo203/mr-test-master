@@ -79,6 +79,8 @@ public class ARLobbyUI : MonoBehaviour
         // pantallas viejas (sincronización, imagen fantasma, anclas…) volvían a dibujarse
         // debajo de la pausa y parecían parte de ella.
         if (Rediseno.Flag.Activo && Gamepad.PauseMenuController.IsOpen) return;
+        // Tutorial pasando de paso o reintentando: arranca solo, detrás de su tarjeta.
+        if (Gameplay.TutorialCamino.EnTransicion && _lobby.State != ARLobbyManager.LobbyState.GameStarted) return;
 
         // El overlay de carga del mapa oscurece toda la pantalla: se dibuja DETRÁS de la
         // franja de sala de GameBootstrapper (mayor depth = más al fondo) para que

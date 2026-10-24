@@ -146,6 +146,8 @@ namespace Gameplay
             T.HudBarra(vw, vh, 2, (float)n / MetaOcultarse, n >= MetaOcultarse ? T.Green : T.Tan,
                        "OCULTARTE", $"{n}/{MetaOcultarse}");
             PistaTutorial.Dibujar(vw, Time.time < _avisoHasta && _aviso != null ? _aviso : Texto());
+            var arbmos = ArbmosEntity.Active;
+            if (arbmos != null) GuiaTutorial.Dibujar(arbmos.transform.position + Vector3.up * 1.2f, "ARBMOS");
         }
 
         private string Texto()
@@ -155,11 +157,11 @@ namespace Gameplay
                 return "Tu cordura llegó a cero: ahora viene a matarte. Alejate.";
             if (ArbmosPresente)
                 return LuzPrendida
-                    ? $"Ahí está. No le alumbres la cabeza: apagá la linterna ({PistaTutorial.ComoApagar()})."
+                    ? $"Ahí está, seguí la flecha. No le alumbres la cabeza: apagá la linterna ({PistaTutorial.ComoApagar()})."
                     : "Quedate a oscuras hasta que se vaya…";
             return LuzPrendida
-                ? "Algo te observa en la oscuridad. Mirá alrededor con la linterna hasta encontrarlo."
-                : "Prendé la linterna y mirá alrededor: el Arbmos aparece cerca tuyo.";
+                ? "Algo te observa en la oscuridad. Cuando aparezca, una flecha te va a mostrar dónde está."
+                : "Prendé la linterna: el Arbmos aparece cerca tuyo.";
         }
     }
 }

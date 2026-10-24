@@ -41,7 +41,7 @@ namespace Gameplay
             var prevC = GUI.color;
             GUI.matrix = Matrix4x4.identity;
             float s = Screen.height / 1080f;
-            float pulso = 0.65f + 0.35f * Mathf.Sin(Time.unscaledTime * 6f);
+            float pulso = 0.75f + 0.25f * Mathf.Sin(Time.unscaledTime * 6f);
             string texto = $"{nombre} · {metros:0.0} m";
             var estilo = T.Estilo(T.FMono, Mathf.RoundToInt(22 * s), T.Cream, TextAnchor.MiddleCenter);
 
@@ -72,12 +72,12 @@ namespace Gameplay
                 return;
             }
 
-            float radio = 120f * s, lado = 64f * s;
+            float radio = 125f * s, lado = 78f * s;
             Vector2 punta = centro + giro * radio;
             float grados = Mathf.Atan2(giro.y, giro.x) * Mathf.Rad2Deg;
             var m = GUI.matrix;
             GUIUtility.RotateAroundPivot(grados, punta);
-            GUI.color = new Color(T.Tan.r, T.Tan.g, T.Tan.b, pulso);
+            GUI.color = new Color(1f, 1f, 1f, pulso);
             GUI.DrawTexture(new Rect(punta.x - lado * 0.5f, punta.y - lado * 0.5f, lado, lado), Flecha);
             GUI.matrix = m;
 
@@ -87,7 +87,8 @@ namespace Gameplay
             GUI.Label(new Rect(c.x - 150f * s, c.y - 18f * s, 300f * s, 36f * s), texto, estilo);
         }
 
-        // Punta de flecha apuntando a +X, blanca con borde suave (se tiñe con GUI.color).
+        // Flecha roja apuntando a +X (cuerpo + punta) con un contorno oscuro, para que se
+        // lea sobre cualquier fondo. Ya trae los colores: se dibuja con GUI.color blanco.
         private static Texture2D Flecha
         {
             get
@@ -99,19 +100,26 @@ namespace Gameplay
                     name = "GuiaTutorial.Flecha", wrapMode = TextureWrapMode.Clamp,
                     filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave,
                 };
-                var px = new Color32[n * n];
+                Color rojo = T.Red, borde = new Color(0.04f, 0.02f, 0.02f, 1f);
+                const float grosorBorde = 3f;
+                var px = new Color[n * n];
                 for (int y = 0; y < n; y++)
                 for (int x = 0; x < n; x++)
                 {
-                    // Triángulo (12,8)-(12,56)-(56,32) en coordenadas de textura.
                     float u = x + 0.5f, v = y + 0.5f;
-                    float d = Mathf.Min(u - 12f,
-                              Mathf.Min(DistLado(u, v, 12f, 56f, 56f, 32f),
-                                        DistLado(u, v, 56f, 32f, 12f, 8f)));
-                    byte a = (byte)(Mathf.Clamp01(d / 1.5f) * 255f);
-                    px[y * n + x] = new Color32(255, 255, 255, a);
+                    // Cuerpo: rectángulo (6..38, 25..39). Punta: triángulo (34,8)-(34,56)-(60,32).
+                    float cuerpo = Mathf.Min(Mathf.Min(u - 6f, 38f - u), Mathf.Min(v - 25f, 39f - v));
+                    float punta = Mathf.Min(u - 34f,
+                                  Mathf.Min(DistLado(u, v, 34f, 56f, 60f, 32f),
+                                            DistLado(u, v, 60f, 32f, 34f, 8f)));
+                    float d = Mathf.Max(cuerpo, punta);   // >0 adentro de la flecha
+                    float relleno = Mathf.Clamp01(d / 1.2f);
+                    float contorno = Mathf.Clamp01((d + grosorBorde) / 1.2f);
+                    var c = Color.Lerp(borde, rojo, relleno);
+                    c.a = contorno;
+                    px[y * n + x] = c;
                 }
-                _flecha.SetPixels32(px);
+                _flecha.SetPixels(px);
                 _flecha.Apply(false, true);
                 return _flecha;
             }
