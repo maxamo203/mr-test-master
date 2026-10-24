@@ -19,8 +19,10 @@ namespace Rediseno
     //     Ajustes en FranjaLinternaAjustes (dev).
     //   - Prender/apagar mirando el piso: DESACTIVADO (mirarPisoApaga) — se superponía con
     //     alumbrar el libro.
-    //   - Mirar arriba ~1,5 s para abrir la pausa: DESACTIVADO por ahora (mirarArribaPausa),
-    //     para que no choque con la franja (para llegar arriba había que cruzarla).
+    //   - Pausa: ZONA DE LA PAUSA, de ~58° hasta arriba de todo (bien por encima de la franja
+    //     de la linterna). Sostener la vista ahí carga un anillo y abre el menú de pausa. Para
+    //     llegar hay que cruzar la franja de la linterna: si en esa misma subida la prendió o
+    //     apagó, al abrir la pausa se deshace (subiste a pausar, no a tocar la luz).
     //   - Luz intensa: sola, mientras el libro que se está oscureciendo (o un Sorken) quede
     //     centrado en el haz. El libro y el Sorken sólo cuentan la luz en modo intenso.
     //
@@ -57,14 +59,6 @@ namespace Rediseno
         [SerializeField, Range(30f, 89f)] private float pisoGrados = 62f;
         [Tooltip("Hay que subir la vista por encima de esto para poder repetir el gesto.")]
         [SerializeField, Range(10f, 80f)] private float pisoRearmeGrados = 45f;
-
-        [Header("Mirar arriba (abrir la pausa)")]
-        [Tooltip("DESACTIVADO por ahora: para mirar tan arriba había que cruzar la franja de la " +
-                 "linterna y la prendía/apagaba.")]
-        [SerializeField] private bool mirarArribaPausa = false;
-        [SerializeField, Min(0.1f)] private float segundosMirarArriba = 1.5f;
-        [Tooltip("Grados por encima del horizonte para empezar a llenar el anillo de la pausa.")]
-        [SerializeField, Range(30f, 89f)] private float arribaGrados = 62f;
 
         [Header("Luz intensa automática")]
         [Tooltip("Desvío máximo (grados) del centro de la vista para que se concentre.")]
@@ -180,15 +174,21 @@ namespace Rediseno
 
                 bool puede = mirarPisoApaga && _pisoArmado && abajo >= pisoGrados && _frio <= 0f &&
                              _fl != null && _fl.Operational;
-                // Mirar arriba: abrir la pausa (con el visor no hay botón que tocar).
-                bool arriba = mirarArribaPausa && _pisoArmado && -abajo >= arribaGrados && _frio <= 0f &&
+                // Zona de la pausa (con el visor no hay botón que tocar). Tras abrirla, hay que
+                // bajar la vista por debajo de la zona para que vuelva a funcionar: si no, al
+                // cerrar la pausa mirando arriba se volvía a abrir sola.
+                float alturaPausa = FranjaLinternaAjustes.AlturaPausa;
+                if (-abajo < alturaPausa - MargenRearme) _pausaArmada = true;
+                bool arriba = _pausaArmada && -abajo >= alturaPausa && _frio <= 0f &&
                               PauseMenuController.Instance != null;
                 if (arriba)
                 {
                     if (_gesto != Gesto.Pausa) { _gesto = Gesto.Pausa; _progreso = 0f; }
-                    _progreso += dt / segundosMirarArriba;
+                    _progreso += dt / FranjaLinternaAjustes.SegundosPausa;
                     if (_progreso >= 1f)
                     {
+                        DeshacerFranjaDeLaSubida();
+                        _pausaArmada = false;
                         PauseMenuController.Instance.AbrirPausa();
                         Terminar();
                     }
@@ -227,6 +227,10 @@ namespace Rediseno
         private float _franjaFrio;
         private float _avisoFranjaHasta;
         private bool  _avisoPrendida;
+        private bool  _pausaArmada = true;
+        // ¿La franja cambió la linterna en esta subida (todavía no se bajó la vista)? Y cómo
+        // estaba antes, para deshacerlo si la subida terminó en la zona de la pausa.
+        private bool  _cambioEnLaSubida, _prendidaAntesDeSubir;
 
         private void ActualizarFranja(Transform cam, float dt)
         {
@@ -235,17 +239,29 @@ namespace Rediseno
             float franja = FranjaLinternaAjustes.Altura;
             FranjaLinternaAjustes.AlturaVista = altura;
 
-            if (altura < franja - MargenRearme) { _franjaArmada = true; return; }
+            if (altura < franja - MargenRearme) { _franjaArmada = true; _cambioEnLaSubida = false; return; }
             if (altura < franja || !_franjaArmada) return;
 
             _franjaArmada = false;
             if (_franjaFrio > 0f) { FranjaLinternaAjustes.UltimoCambio = "muy seguido"; return; }
             if (_fl == null || !_fl.Operational) { FranjaLinternaAjustes.UltimoCambio = "sin linterna"; return; }
+            _prendidaAntesDeSubir = _fl.isOn;
             _fl.Toggle();
+            _cambioEnLaSubida = true;
             _franjaFrio = FranjaLinternaAjustes.Espera;
             _avisoFranjaHasta = Time.unscaledTime + 0.45f;
             _avisoPrendida = _fl.isOn;
             FranjaLinternaAjustes.UltimoCambio = _fl.isOn ? "prendida" : "apagada";
+        }
+
+        // Se subió a pausar, no a tocar la luz: si la franja la cambió en el camino, vuelve a
+        // como estaba.
+        private void DeshacerFranjaDeLaSubida()
+        {
+            if (!_cambioEnLaSubida) return;
+            _cambioEnLaSubida = false;
+            if (_fl != null && _fl.isOn != _prendidaAntesDeSubir) _fl.Toggle();
+            _avisoFranjaHasta = 0f;
         }
 
         // Cierra un gesto ejecutado: enfriamiento y hay que levantar la vista para volver a
@@ -398,27 +414,38 @@ namespace Rediseno
                           $"vista {altura:0}° / franja {franja:0}° · {FranjaLinternaAjustes.UltimoCambio}", st);
             }
 
-            float cerca = Mathf.InverseLerp(franja - 25f, franja - 3f, altura);
-            if (cerca <= 0f) return;
             if (_mr == null) _mr = FindAnyObjectByType<MRCardboardController>();
             float ppd = _mr != null ? _mr.PixelesPorGrado() : 0f;
             if (ppd <= 0f) ppd = Screen.width * 0.5f / (UI.Cabeza.MitadVista * 2f);
-            float y = c.y - (franja - altura) * ppd;
-            if (y < -20f * s) return;
+
+            DibujarLinea(c, s, x0, ancho, ppd, altura, franja, MortuoriumTheme.Tan, IconosMirada.Linterna,
+                         _fl != null && _fl.isOn ? "APAGAR LINTERNA" : "PRENDER LINTERNA");
+            // La zona de la pausa: su borde de abajo (de ahí hasta arriba de todo).
+            DibujarLinea(c, s, x0, ancho, ppd, altura, FranjaLinternaAjustes.AlturaPausa, MortuoriumTheme.Cream,
+                         IconosMirada.Pausa, "PAUSA · SOSTENÉ LA MIRADA");
+        }
+
+        // Una línea a 'grados' sobre el horizonte, con ícono y texto encima. Aparece al
+        // acercar la vista y se marca más al estar cerca.
+        private static void DibujarLinea(Vector2 c, float s, float x0, float ancho, float ppd, float altura,
+                                         float grados, Color color, Texture2D icono, string texto)
+        {
+            float cerca = Mathf.InverseLerp(grados - 25f, grados - 3f, altura);
+            if (cerca <= 0f) return;
+            float y = c.y - (grados - altura) * ppd;
+            if (y < -20f * s || y > Screen.height + 60f * s) return;
 
             float alfa = 0.15f + 0.55f * cerca;
-            var col = new Color(MortuoriumTheme.Tan.r, MortuoriumTheme.Tan.g, MortuoriumTheme.Tan.b, alfa);
-            GUI.color = col;
+            GUI.color = new Color(color.r, color.g, color.b, alfa);
             GUI.DrawTexture(new Rect(x0 + ancho * 0.08f, y - 1.5f * s, ancho * 0.84f, 3f * s), Texture2D.whiteTexture);
 
             // Ícono + qué va a pasar al cruzarla, centrados sobre la línea.
-            string texto = _fl != null && _fl.isOn ? "APAGAR LINTERNA" : "PRENDER LINTERNA";
             var stTexto = MortuoriumTheme.Estilo(MortuoriumTheme.FBebas, Mathf.RoundToInt(26 * s),
-                                                 MortuoriumTheme.Tan, TextAnchor.MiddleLeft);
+                                                 color, TextAnchor.MiddleLeft);
             float ri = 13f * s, sep = 8f * s;
             float tw = stTexto.CalcSize(new GUIContent(texto)).x;
             float x = c.x - (ri * 2f + sep + tw) * 0.5f, yc = y - 26f * s;
-            GUI.DrawTexture(new Rect(x, yc - ri, ri * 2f, ri * 2f), IconosMirada.Linterna);
+            GUI.DrawTexture(new Rect(x, yc - ri, ri * 2f, ri * 2f), icono);
             GUI.Label(new Rect(x + ri * 2f + sep, yc - 18f * s, tw + 4f, 36f * s), texto, stTexto);
         }
 

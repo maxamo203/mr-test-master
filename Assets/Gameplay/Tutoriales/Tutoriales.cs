@@ -36,7 +36,7 @@ namespace Gameplay
             TutorialTipo.PilasReliquias => "La batería se gasta: recargala con pilas y conocé tu cordura",
             TutorialTipo.Sorken         => "Entra por puertas y ventanas. La luz intensa lo echa",
             TutorialTipo.Arbmos         => "Con éste es al revés: apagá la luz para que se vaya",
-            TutorialTipo.Libro          => "Salvá el libro con luz. Si se apaga, escapale a Veleth",
+            TutorialTipo.Libro          => "Salvá el libro con luz. Si se apaga, sale Veleth",
             _                           => "",
         };
 

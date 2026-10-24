@@ -318,7 +318,7 @@ namespace Gameplay
         }
 
         private static string NoHayLugar(string que) =>
-            $"No encuentro dónde dejar {que}: el escenario necesita piso escaneado y paredes que cierren el cuarto.";
+            $"No hay dónde dejar {que}: faltan piso o paredes que cierren el cuarto.";
 
         private static void Fila(float vw, float vh, int fila, string nombre, int n, int meta) =>
             T.HudBarra(vw, vh, fila, (float)n / meta, n >= meta ? T.Green : T.Tan, nombre, $"{n}/{meta}");
@@ -330,16 +330,16 @@ namespace Gameplay
             {
                 case Fase.Gastar:
                     bool intensa = Linterna != null && Linterna.Mode == FlashlightMode.Bright;
-                    if (intensa) return "Mirá cómo cae: la luz intensa gasta cuatro veces más. Seguí hasta vaciarla.";
+                    if (intensa) return "La intensa gasta 4 veces más. Seguí hasta vaciarla.";
                     return Rediseno.ControlMirada.Activo
-                        ? "La batería está baja. Mirá el libro ritual de frente: la luz se concentra sola y la gasta rápido."
-                        : $"La batería está baja. Gastala toda con la luz intensa ({PistaTutorial.ComoLuzIntensa()}).";
+                        ? "Batería baja. Mirá el libro de frente para gastarla."
+                        : $"Gastá la batería con luz intensa ({PistaTutorial.ComoLuzIntensa()}).";
                 case Fase.Reliquias:
                     if (SinLugar) return NoHayLugar("la reliquia");
-                    return "Apareció una reliquia del ritual. Seguí la flecha, apuntale y recogela.";
+                    return "Seguí la flecha y recogé la reliquia.";
             }
             if (SinLugar) return NoHayLugar("la pila");
-            return "Te quedaste sin luz. Apareció una pila: seguí la flecha, apuntale y recogela.";
+            return "Sin luz. Seguí la flecha y recogé la pila.";
         }
     }
 }

@@ -926,6 +926,16 @@ private void BeginCoverStart()
         // retiradas por perder al objetivo no se informan: nadie lo echó. Si atrapa, se
         // muere como en cualquier noche (también en la práctica).
         public enum ResultadoSorken { EchadoEnLaEntrada, EchadoAdentro }
+
+        // ¿Hay un Sorken entrando? Y el punto de la entrada: lo que hay que alumbrar para
+        // echarlo ahí (el Sorken mismo está detrás de la pared hasta que la cruza). Lo usa la
+        // práctica del Sorken para su flecha. Server-only, como todo el director.
+        public bool TryPuntoDeEntrada(out Vector3 punto)
+        {
+            bool entrando = _phase == Phase.Entering && _marker != null;
+            punto = entrando ? _marker.transform.position : default;
+            return entrando;
+        }
         public static event System.Action<ResultadoSorken> IntentoResuelto;
 
         private void Retreat(ResultadoSorken? motivo = null)

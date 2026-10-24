@@ -23,7 +23,7 @@ namespace Gameplay
     // (Time.timeScale = 0: congela el libro, el humo y las animaciones) hasta CONTINUAR.
     public class TutorialLibro : MonoBehaviour
     {
-        public const int MetaSalvar = 2;
+        public const int MetaSalvar = 1;
         public const float SegundosEscapar = 5f;
         private const float DemoraFin = 1.5f;
         private const float SegundosAviso = 4f;
@@ -117,18 +117,18 @@ namespace Gameplay
                     if (_salvados >= MetaSalvar)
                     {
                         _fase = Fase.DejarApagar;
-                        Avisar("¡Lo salvaste! Ahora dejá que se apague: vas a conocer lo que sale de él.");
+                        Avisar("¡Lo salvaste! Ahora dejalo apagarse.");
                     }
                     else
                     {
-                        Avisar("¡Bien! Volvió a brillar: lo salvaste.");
+                        Avisar("¡Bien! Lo salvaste.");
                     }
                     break;
                 case Fase.Salvar:
-                    Avisar("Se apagó del todo. En una noche de verdad, de ahí sale Veleth. Volvé a intentarlo.");
+                    Avisar("Se apagó. En una noche, de ahí sale Veleth. Otra vez.");
                     break;
                 case Fase.DejarApagar when salvado:
-                    Avisar("Esta vez no lo alumbres: dejalo apagarse para conocer a Veleth.");
+                    Avisar("Esta vez no lo alumbres: dejalo apagarse.");
                     break;
                 case Fase.DejarApagar:
                     _fase = Fase.Emergiendo;
@@ -237,10 +237,14 @@ namespace Gameplay
             PistaTutorial.Dibujar(vw, Time.time < _avisoHasta && _aviso != null ? _aviso : Texto());
             var veleth = VelethEntity.Active;
             var libro = RitualBookView.Active;
+            bool seApaga = RitualBookDirector.Instance != null &&
+                           RitualBookDirector.Instance.Fase == RitualBookPhase.Consuming;
             if ((_fase == Fase.Emergiendo || _fase == Fase.Cazando) && veleth != null)
                 GuiaTutorial.Dibujar(veleth.Position + Vector3.up, "VELETH");
-            else if (_fase == Fase.Salvar && libro != null && RitualBookDirector.Instance != null &&
-                     RitualBookDirector.Instance.Fase == RitualBookPhase.Consuming)
+            // Veleth todavía no salió: la flecha va al libro, que es de donde va a salir.
+            else if (_fase == Fase.Emergiendo && libro != null)
+                GuiaTutorial.Dibujar(libro.PuntoDeLuz, "VELETH");
+            else if ((_fase == Fase.Salvar || _fase == Fase.DejarApagar) && seApaga && libro != null)
                 GuiaTutorial.Dibujar(libro.PuntoDeLuz, "LIBRO");
         }
 
@@ -249,16 +253,16 @@ namespace Gameplay
             switch (_fase)
             {
                 case Fase.Completa:   return "¡Práctica completa!";
-                case Fase.Cazando:    return "La luz no la frena y no se cansa. Alejate: mirá cuánto aguantás.";
-                case Fase.Emergiendo: return "Veleth sale del libro. Esto es lo que pasa cuando el libro se apaga.";
-                case Fase.DejarApagar:return "Esta vez dejá que el libro se apague: no lo alumbres y mirá qué pasa.";
+                case Fase.Cazando:    return "¡Te persigue! La luz no la frena: alejate.";
+                case Fase.Emergiendo: return "Veleth está saliendo del libro…";
+                case Fase.DejarApagar:return "No lo alumbres: dejá que se apague.";
             }
             var libro = RitualBookDirector.Instance;
             if (libro != null && libro.Fase == RitualBookPhase.Consuming)
                 return libro.Alumbrando > 0
-                    ? "Seguí alumbrándolo hasta que vuelva a brillar…"
-                    : $"¡El libro se apaga! Alumbralo con la luz intensa ({PistaTutorial.ComoLuzIntensa()}).";
-            return "Quedate cerca del libro ritual. Cuando se empiece a oscurecer, alumbralo.";
+                    ? "Seguí alumbrándolo…"
+                    : $"¡Se apaga! Luz intensa al libro ({PistaTutorial.ComoLuzIntensa()}).";
+            return "Cuando el libro se oscurezca, alumbralo.";
         }
     }
 }

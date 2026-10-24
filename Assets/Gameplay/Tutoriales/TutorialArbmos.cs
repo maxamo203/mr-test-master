@@ -76,18 +76,18 @@ namespace Gameplay
                     if (_loVioConLuz)
                     {
                         _ocultas++;
-                        Avisar("¡Bien! Te quedaste a oscuras y se fue.");
+                        Avisar("¡Bien! A oscuras, se fue.");
                     }
                     else
                     {
-                        Avisar("Se fue, pero ni lo viste. Prendé la linterna, encontralo y recién ahí apagala.");
+                        Avisar("Se fue sin que lo vieras. Encontralo con luz y recién ahí apagala.");
                     }
                     break;
                 case ArbmosDirector.ResultadoArbmos.Provocado:
-                    Avisar("Le alumbraste la cabeza: ¡viene! Una vez que ataca, apagar la luz ya no lo frena.");
+                    Avisar("Le alumbraste la cabeza: ¡viene! Ya no lo frena la oscuridad.");
                     break;
                 case ArbmosDirector.ResultadoArbmos.Golpe:
-                    Avisar("Te alcanzó y te sacó cordura. Con la cordura en cero, el Arbmos mata.");
+                    Avisar("Te sacó cordura. Si llega a cero, el Arbmos mata.");
                     break;
             }
         }
@@ -154,14 +154,14 @@ namespace Gameplay
         {
             if (Completa) return "¡Práctica completa!";
             if (ArbmosEntity.Active != null && ArbmosEntity.Active.Lethal)
-                return "Tu cordura llegó a cero: ahora viene a matarte. Alejate.";
+                return "Cordura en cero: viene a matarte. ¡Alejate!";
             if (ArbmosPresente)
                 return LuzPrendida
-                    ? $"Ahí está, seguí la flecha. No le alumbres la cabeza: apagá la linterna ({PistaTutorial.ComoApagar()})."
+                    ? $"No le alumbres la cabeza: apagá la linterna ({PistaTutorial.ComoApagar()})."
                     : "Quedate a oscuras hasta que se vaya…";
             return LuzPrendida
-                ? "Algo te observa en la oscuridad. Cuando aparezca, una flecha te va a mostrar dónde está."
-                : "Prendé la linterna: el Arbmos aparece cerca tuyo.";
+                ? "Algo te observa. Ya va a aparecer cerca tuyo."
+                : $"Prendé la linterna ({PistaTutorial.ComoPrender()}).";
         }
     }
 }

@@ -17,8 +17,8 @@ MonoBehaviour:
     con la luz intensa.
   nightDurationSeconds: 0
   sorkenActive: 1
-  attemptIntervalMin: 8
-  attemptIntervalMax: 12
+  attemptIntervalMin: 0.5
+  attemptIntervalMax: 1
   entryRepelSeconds: 2
   entryGraceSeconds: 14
   entryAnimationSeconds: 3

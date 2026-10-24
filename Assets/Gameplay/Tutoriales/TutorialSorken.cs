@@ -16,7 +16,7 @@ namespace Gameplay
     {
         private const float DemoraFin = 2f;
         // Cuánto queda a la vista el aviso de un resultado (lo echaste / te atrapó).
-        private const float SegundosAviso = 4f;
+        private const float SegundosAviso = 2.5f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -64,8 +64,8 @@ namespace Gameplay
         {
             if (!_enPartida || Completa) return;
             _echados++;
-            string donde = r == GameDirector.ResultadoSorken.EchadoEnLaEntrada ? "antes de que entre" : "cuando ya había entrado";
-            Avisar(Completa ? $"¡Bien! Lo echaste {donde}." : $"¡Bien! Lo echaste {donde}. Va a volver: echalo otra vez.");
+            string donde = r == GameDirector.ResultadoSorken.EchadoEnLaEntrada ? "en la entrada" : "adentro";
+            Avisar(Completa ? $"¡Bien! Lo echaste {donde}." : $"¡Bien! Lo echaste {donde}. Va a volver.");
         }
 
         private void Avisar(string texto)
@@ -113,12 +113,19 @@ namespace Gameplay
             int n = Mathf.Min(_echados, MetaEchar);
             T.HudBarra(vw, vh, 1, (float)n / MetaEchar, n >= MetaEchar ? T.Green : T.Tan, "ECHARLO", $"{n}/{MetaEchar}");
             PistaTutorial.Dibujar(vw, Time.time < _avisoHasta && _aviso != null ? _aviso : Texto());
-            var s = SorkenActivo();
-            if (s != null) GuiaTutorial.Dibujar(s.Position + Vector3.up, "SORKEN");
+            // Mientras entra, la flecha va al punto de la entrada (es lo que hay que alumbrar);
+            // una vez adentro, a él.
+            if (Entrando(out var entrada)) GuiaTutorial.Dibujar(entrada, "ENTRADA");
+            else
+            {
+                var s = SorkenActivo();
+                if (s != null) GuiaTutorial.Dibujar(s.Position + Vector3.up, "SORKEN");
+            }
         }
 
-        // El Sorken que está entrando o adentro (null si no hay). El registro de entidades se
-        // recorre cada medio segundo, no por frame.
+        // El Sorken del intento en curso (null si no hay): existe desde que empieza a salir el
+        // humo en la entrada (GameDirector lo crea quieto ahí) hasta que se va. El registro de
+        // entidades se recorre cada medio segundo, no por frame.
         private SorkenEntity SorkenActivo()
         {
             if (Time.unscaledTime >= _buscarSorkenEn)
@@ -131,23 +138,32 @@ namespace Gameplay
                     {
                         if (e == null || e.EntityTypeId != EntityTypeIds.Sorken) continue;
                         var s = e.GetComponent<SorkenEntity>();
-                        if (s != null && s.State != SorkenState.Idle) { _sorken = s; break; }
+                        if (s != null) { _sorken = s; break; }
                     }
             }
-            return _sorken != null && _sorken.State != SorkenState.Idle ? _sorken : null;
+            return _sorken != null ? _sorken : null;   // != de Unity: ya despawneado = null
         }
 
         private SorkenEntity _sorken;
         private float _buscarSorkenEn;
 
+        private static bool Entrando(out Vector3 entrada)
+        {
+            entrada = default;
+            return GameDirector.Instance != null && GameDirector.Instance.TryPuntoDeEntrada(out entrada);
+        }
+
         private string Texto()
         {
             if (Completa) return "¡Práctica completa!";
             string luz = PistaTutorial.ComoLuzIntensa();
-            if (SorkenActivo() != null)
-                return $"¡Ahí viene! Seguí la flecha y echalo con la luz intensa ({luz}).";
-            return $"El Sorken va a intentar entrar por la puerta o ventana que marcaste. Echalo con la luz intensa ({luz}): " +
-                   "alumbrá la entrada mientras intenta pasar, o a él si ya entró.";
+            var s = SorkenActivo();
+            if (Entrando(out _))
+                return s != null && s.State == SorkenState.Idle
+                    ? $"Está apareciendo. Luz intensa a la entrada ({luz})."
+                    : $"¡Está entrando! Luz intensa a la entrada ({luz}).";
+            if (s != null) return $"¡Entró! Alumbralo a él ({luz}).";
+            return "Va a aparecer en una puerta o ventana.";
         }
     }
 }

@@ -510,7 +510,7 @@ namespace Gamepad
 
                 Etiqueta(new Rect(x, y, w, 50f), "FRANJA LINTERNA (DEV)", _title); y += 58f;
                 Etiqueta(new Rect(x + 14f, y, w - 28f, 56f),
-                          "Levantar la vista hasta cruzar la franja prende/apaga la linterna.", _status);
+                          "Cruzar la franja prende/apaga la linterna. Más arriba, sostener la vista abre la pausa.", _status);
                 y += 62f;
 
                 AddToggle("franjadebug", new Rect(x, y, w, 52f), "Mostrar altura de la vista en la mira",
@@ -519,6 +519,10 @@ namespace Gamepad
                           Rediseno.FranjaLinternaAjustes.Altura, 20f, 70f, "{0:0}°"); y += 68f;
                 AddSlider("fra_espera", new Rect(x, y, w, 60f), "Espera entre cambios",
                           Rediseno.FranjaLinternaAjustes.Espera, 0.1f, 2f, "{0:0.0} s"); y += 68f;
+                AddSlider("fra_pausa", new Rect(x, y, w, 60f), "Altura de la zona de pausa",
+                          Rediseno.FranjaLinternaAjustes.AlturaPausa, 35f, 85f, "{0:0}°"); y += 68f;
+                AddSlider("fra_pausa_seg", new Rect(x, y, w, 60f), "Carga de la pausa",
+                          Rediseno.FranjaLinternaAjustes.SegundosPausa, 0.3f, 3f, "{0:0.0} s"); y += 68f;
 
                 y += 6f;
                 AddButton("volver", new Rect(x, y, w, 60f), "Volver");
@@ -693,6 +697,8 @@ namespace Gamepad
                 case "arb_hide":     step = 0.1f;   break;
                 case "fra_altura":   step = 1f;     break;
                 case "fra_espera":   step = 0.1f;   break;
+                case "fra_pausa":    step = 1f;     break;
+                case "fra_pausa_seg": step = 0.1f;  break;
                 case "arb_exposure": step = 0.05f;  break;
                 case "arb_commit":   step = 0.05f;  break;
                 case "ent_velocidad": step = 0.05f; break;
@@ -723,6 +729,8 @@ namespace Gamepad
                 case "fl_drenaje":   return Flashlight.DevMultiplicadorDrenaje;
                 case "fra_altura":   return Rediseno.FranjaLinternaAjustes.Altura;
                 case "fra_espera":   return Rediseno.FranjaLinternaAjustes.Espera;
+                case "fra_pausa":    return Rediseno.FranjaLinternaAjustes.AlturaPausa;
+                case "fra_pausa_seg": return Rediseno.FranjaLinternaAjustes.SegundosPausa;
                 case "cb_zoom":      { var cb = GetCardboard();  return cb != null ? cb.Scale   : 0f; }
                 case "cb_offL":      { var cb = GetCardboard();  return cb != null ? cb.OffsetL : 0f; }
                 case "cb_offR":      { var cb = GetCardboard();  return cb != null ? cb.OffsetR : 0f; }
@@ -785,6 +793,8 @@ namespace Gamepad
                 // Los fra_ clampean adentro de FranjaLinternaAjustes (setters).
                 case "fra_altura":   Rediseno.FranjaLinternaAjustes.Altura = value; break;
                 case "fra_espera":   Rediseno.FranjaLinternaAjustes.Espera = value; break;
+                case "fra_pausa":    Rediseno.FranjaLinternaAjustes.AlturaPausa = value; break;
+                case "fra_pausa_seg": Rediseno.FranjaLinternaAjustes.SegundosPausa = value; break;
                 case "arb_exposure": Gameplay.ArbmosDebug.ExposureDev     = value; break;
                 case "arb_commit":   Gameplay.ArbmosDebug.AttackCommitDev = value; break;
                 case "ent_velocidad": EntitySpeedSettings.Multiplier = value; break;

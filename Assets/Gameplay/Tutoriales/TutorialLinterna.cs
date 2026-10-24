@@ -139,7 +139,7 @@ namespace Gameplay
                         BorrarMarca();
                         _avance = 0f;
                         _fase = RitualBookView.Active != null ? Fase.Libro : Fase.Completa;
-                        Avisar("¡Eso es concentrar la luz! Gasta más batería, pero es la que sirve contra lo que viene.");
+                        Avisar("¡Eso es concentrar! Gasta más, pero es la que sirve.");
                     }
                     break;
 
@@ -150,7 +150,7 @@ namespace Gameplay
                     if (_avance >= SegundosSostener)
                     {
                         _fase = Fase.Completa;
-                        Avisar("Así se cuida el libro. Cuando se oscurezca, vas a tener que hacer esto.");
+                        Avisar("Así se cuida el libro.");
                     }
                     break;
             }
@@ -314,14 +314,14 @@ namespace Gameplay
                     return "¡Listo! Ya manejás la linterna.";
                 case Fase.Apagar:
                     return Linterna != null && !Linterna.isOn
-                        ? $"Bien, quedaste a oscuras. Prendela otra vez ({PistaTutorial.ComoPrender()})."
+                        ? $"Ahora prendela ({PistaTutorial.ComoPrender()})."
                         : $"Apagá la linterna ({PistaTutorial.ComoApagar()}).";
             }
             if (!LuzPrendida) return $"Prendé la linterna ({PistaTutorial.ComoPrender()}).";
             if (_alumbrando) return "¡Ahí! Sostené la luz encima…";
             return _fase == Fase.Libro
-                ? $"Ahora el libro ritual, el centro del ritual. Concentrá la luz en él ({PistaTutorial.ComoLuzIntensa()})."
-                : $"Apareció una marca frente a vos. Concentrá la luz en ella ({PistaTutorial.ComoLuzIntensa()}).";
+                ? $"Ahora concentrá la luz en el libro ({PistaTutorial.ComoLuzIntensa()})."
+                : $"Concentrá la luz en la marca ({PistaTutorial.ComoLuzIntensa()}).";
         }
     }
 }

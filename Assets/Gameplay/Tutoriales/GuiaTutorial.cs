@@ -87,8 +87,8 @@ namespace Gameplay
             GUI.Label(new Rect(c.x - 150f * s, c.y - 18f * s, 300f * s, 36f * s), texto, estilo);
         }
 
-        // Flecha roja apuntando a +X (cuerpo + punta) con un contorno oscuro, para que se
-        // lea sobre cualquier fondo. Ya trae los colores: se dibuja con GUI.color blanco.
+        // Flecha roja apuntando a +X (cuerpo + punta), con borde suave. Ya trae el color: se
+        // dibuja con GUI.color blanco.
         private static Texture2D Flecha
         {
             get
@@ -100,8 +100,7 @@ namespace Gameplay
                     name = "GuiaTutorial.Flecha", wrapMode = TextureWrapMode.Clamp,
                     filterMode = FilterMode.Bilinear, hideFlags = HideFlags.HideAndDontSave,
                 };
-                Color rojo = T.Red, borde = new Color(0.04f, 0.02f, 0.02f, 1f);
-                const float grosorBorde = 3f;
+                Color rojo = T.Red;
                 var px = new Color[n * n];
                 for (int y = 0; y < n; y++)
                 for (int x = 0; x < n; x++)
@@ -113,10 +112,8 @@ namespace Gameplay
                                   Mathf.Min(DistLado(u, v, 34f, 56f, 60f, 32f),
                                             DistLado(u, v, 60f, 32f, 34f, 8f)));
                     float d = Mathf.Max(cuerpo, punta);   // >0 adentro de la flecha
-                    float relleno = Mathf.Clamp01(d / 1.2f);
-                    float contorno = Mathf.Clamp01((d + grosorBorde) / 1.2f);
-                    var c = Color.Lerp(borde, rojo, relleno);
-                    c.a = contorno;
+                    var c = rojo;
+                    c.a = Mathf.Clamp01(d / 1.2f);
                     px[y * n + x] = c;
                 }
                 _flecha.SetPixels(px);
