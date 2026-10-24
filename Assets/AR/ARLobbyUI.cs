@@ -1,30 +1,22 @@
 using Scanner;
 using UnityEngine;
 using T = MortuoriumTheme;
-using Mapa = ARLobbyManager.EstadoMapa;
 
-// UI del lobby AR (SampleScene) con la estética del prototipo: la pantalla de
-// SINCRONIZACIÓN (todos apuntan la cámara a la imagen de referencia del mapa)
-// y el briefing de la noche cuando el host arranca la partida.
+// Briefing de la noche (SampleScene): el cartel NOCHE X + texto que entra al arrancar la
+// partida. Las pantallas previas a la noche (sincronización, carga del mapa, anclas, ubicar
+// el entorno) las dibuja Rediseno.Menus (PanelSincronizacion2 / PanelAnclas2 / PanelUbicar2);
+// la lógica de estados vive en ARLobbyManager.
 //
-// Se dibuja ENCIMA de la cámara AR y DEBAJO/JUNTO al panel de sala de
-// GameBootstrapper (que ocupa la franja superior). La lógica de estados vive en
-// ARLobbyManager; acá solo se presenta.
+// Mientras hay lobby también pinta de negro las franjas fuera del área segura: la cámara
+// se ve sólo dentro, igual que en el resto de las pantallas sobre la cámara AR.
 public class ARLobbyUI : MonoBehaviour
 {
     [Header("Briefing de la noche")]
     [Tooltip("Segundos que el título de la noche permanece en pantalla al arrancar.")]
     [SerializeField] private float _briefingDuration = 3f;
 
-    [Header("Sincronización")]
-    [Tooltip("Opacidad (0-1) de la imagen de referencia guardada como guía fantasma " +
-             "mientras se busca la zona en el entorno, para reencuadrar la cámara.")]
-    [SerializeField, Range(0.1f, 0.8f)] private float _ghostAlpha = 0.35f;
-
     private ARLobbyManager _lobby;
     private NetworkManager _net;
-    private ARImageAnchor  _imageAnchor;
-    private readonly Gamepad.ImguiGamepadMenu _nav = new();
 
     // Briefing: cartel de intro (NOCHE X + texto) que entra deslizándose desde la
     // izquierda con fade, se sostiene y sale con fade. Sin overlay ni botón; dura
@@ -40,15 +32,12 @@ public class ARLobbyUI : MonoBehaviour
 
     private void Start()
     {
-        _lobby       = ARLobbyManager.Instance;
-        _net         = NetworkManager.Instance;
-        _imageAnchor = FindFirstObjectByType<ARImageAnchor>();
+        _lobby = ARLobbyManager.Instance;
+        _net   = NetworkManager.Instance;
     }
 
     private void Update()
     {
-        _nav.Update();
-
         if (_lobby == null) return;
 
         // Al salir de GameStarted (reinicio de noche sin cerrar la sesión) rearmamos el
@@ -75,516 +64,19 @@ public class ARLobbyUI : MonoBehaviour
     {
         if (_lobby == null || _net == null) return;
         if (_lobby.State == ARLobbyManager.LobbyState.Idle) return;
-        // Rediseño 2.0: con la pausa abierta los paneles nuevos se esconden; sin esto, las
-        // pantallas viejas (sincronización, imagen fantasma, anclas…) volvían a dibujarse
-        // debajo de la pausa y parecían parte de ella.
-        if (Rediseno.Flag.Activo && Gamepad.PauseMenuController.IsOpen) return;
-
-        // El overlay de carga del mapa oscurece toda la pantalla: se dibuja DETRÁS de la
-        // franja de sala de GameBootstrapper (mayor depth = más al fondo) para que
-        // "UNIDO A LA SALA · conectado a …" siga legible encima.
-        bool cargandoMapa = _lobby.MapaPendiente;
-        GUI.depth = cargandoMapa ? 1 : 0;
+        // Con la pausa abierta no se dibuja nada: debajo de la pausa parecía parte de ella.
+        if (Gamepad.PauseMenuController.IsOpen) return;
 
         UIScale.Begin();
-        _nav.Begin();
-
         float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
 
         // Franjas fuera del área segura en negro (cámara visible sólo dentro).
         T.FillOutsideSafeArea(T.Bg);
 
-        if (_lobby.State == ARLobbyManager.LobbyState.GameStarted)
-        {
-            if (!_briefingDone) DrawBriefing(vw, vh);
-            _nav.End();
-            return;
-        }
-
-        // Rediseño 2.0: estas pantallas todavía no se dibujan en estéreo (se manejan
-        // arrastrando con el dedo); con el visor puesto, se sale del visor para usarlas.
-
-        // ── ARMADO RÁPIDO de las prácticas: sólo lo dibuja Rediseno.Menus.PanelArmadoRapido2 ──
-        if (_lobby.State == ARLobbyManager.LobbyState.ArmadoRapido) { _nav.End(); return; }
-
-        // ── COLOCACIÓN DE ANCLAS (pantalla propia, con retícula) ──────────────
-        // Rediseño 2.0: la dibuja Rediseno.Menus.PanelAnclas2 (estéreo, con la ruedita).
-        if (_lobby.State == ARLobbyManager.LobbyState.PlacingAnchors && Rediseno.Menus.PanelAnclas2.Mostrando)
-        {
-            _nav.End();
-            return;
-        }
-        if (_lobby.State == ARLobbyManager.LobbyState.PlacingAnchors)
-        {
-            DrawColocarAnclas(vw, vh);
-            _nav.End();
-            return;
-        }
-
-        // ── CALIBRACIÓN MANUAL (sin la imagen física) ────────────────────────
-        // Rediseño 2.0: la dibuja Rediseno.Menus.PanelUbicar2 (estéreo, con la ruedita).
-        if (_lobby.State == ARLobbyManager.LobbyState.CalibrandoManual &&
-            Rediseno.Menus.PanelUbicar2.Mostrando)
-        {
-            _nav.End();
-            return;
-        }
-        if (_lobby.State == ARLobbyManager.LobbyState.CalibrandoManual)
-        {
-            DrawCalibracionManual(vw, vh);
-            _nav.End();
-            return;
-        }
-
-        // ── OBTENIENDO EL ENTORNO DEL HOST (cliente, antes de tener el mapa) ──
-        // Sin esto el cliente veía "Buscando la imagen…" sobre una escena vacía y no
-        // había forma de saber que en realidad el mapa todavía estaba en camino.
-        // Rediseño 2.0: la carga del escenario la muestra PanelSincronizacion2 (estéreo).
-        if (cargandoMapa && Rediseno.Menus.PanelSincronizacion2.Mostrando)
-        {
-            _nav.End();
-            return;
-        }
-        if (cargandoMapa)
-        {
-            DrawCargaMapa(vw, vh);
-            _nav.End();
-            return;
-        }
-
-        // Rediseño 2.0: la sincronización la dibuja el panel nuevo (estéreo con Cardboard).
-        if (Rediseno.Menus.PanelSincronizacion2.Mostrando) { _nav.End(); return; }
-
-        // ── SINCRONIZACIÓN (encima de la cámara, debajo de la franja de sala) ──
-        bool solo = Gameplay.GameSession.Instance != null &&
-                    Gameplay.GameSession.Instance.SoloUnJugador;
-
-        T.Gradiente(new Rect(0, vh - 320f, vw, 320f), 0.9f, haciaAbajo: false);
-
-        float y = vh - 290f;
-        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 36f), "SINCRONIZACIÓN",
-                  T.Estilo(T.FBebas, 26, T.Cream));
-        if (!solo) DrawContadorSala(new Rect(Pad, y, vw - Pad * 2f, 36f));
-        y += 38f;
-
-        string entorno = Gameplay.GameSession.Instance != null &&
-                         !string.IsNullOrEmpty(Gameplay.GameSession.Instance.SelectedMap)
-            ? $"Entorno: {Gameplay.GameSession.Instance.SelectedMap}"
-            : "Entorno compartido por el host";
-        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), entorno,
-                  T.Estilo(T.FElite, 13, T.CreamDim));
-        y += 26f;
-
-        // El texto de sincronización se personaliza: en un jugador no hay "todos
-        // los jugadores" ni "mismo espacio virtual" (no hay con quién compartirlo).
-        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 40f),
-                  solo
-                      ? "Apuntá la cámara a la imagen de referencia para ubicarte " +
-                        "en tu espacio escaneado."
-                      : "Todos los jugadores deben apuntar la cámara a la imagen de " +
-                        "referencia para ubicarse en el mismo espacio virtual.",
-                  T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
-        y += 48f;
-
-        switch (_lobby.State)
-        {
-            case ARLobbyManager.LobbyState.Scanning:
-            {
-                DrawGhostImage(vw, vh);
-                // Mientras junta muestras de la pose se pide quietud: la ventana de
-                // convergencia (ARImageAnchor) se cierra más rápido con el celular quieto.
-                bool afinando = _imageAnchor != null && _imageAnchor.MuestrasActuales > 0;
-                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f),
-                          afinando ? $"Imagen encontrada, afinando… quedate quieto {Spinner()}"
-                                   : $"Buscando la imagen… {Spinner()}",
-                          T.Estilo(T.FMono, 13, T.Tan));
-
-                // El sistema AR rechazó la imagen guardada con el escaneo (poco detalle):
-                // el jugador tiene que saberlo, porque así nunca la va a encontrar.
-                string aviso = _imageAnchor != null ? _imageAnchor.AvisoImagen : null;
-                if (!string.IsNullOrEmpty(aviso))
-                    GUI.Label(new Rect(Pad, y + 26f, vw - Pad * 2f, 40f),
-                              aviso + " Podés ubicar el entorno a mano o re-escanearlo.",
-                              T.Estilo(T.FMono, 11, T.Tan, TextAnchor.UpperLeft, wrap: true));
-
-                // Escape: la imagen física se perdió / quedó en otro lado. El entorno
-                // ya está cargado, así que se puede ubicar el 0,0 a mano.
-                if (!string.IsNullOrEmpty(_errorManual))
-                    GUI.Label(new Rect(Pad, vh - 44f - 48f - 22f, vw - Pad * 2f, 20f), _errorManual,
-                              T.Estilo(T.FMono, 11, T.Red));
-                T.Boton(_nav, new Rect(Pad, vh - 44f - 48f, vw - Pad * 2f, 48f),
-                        "NO TENGO LA IMAGEN", primario: false,
-                        () => _errorManual = _lobby.CalibrarSinImagen(),
-                        enabled: _lobby.PuedeCalibrarManual, fontSize: 15);
-                break;
-            }
-
-            case ARLobbyManager.LobbyState.WaitingForClients:
-            {
-                // El contador de conectados/listos va arriba, junto al título (lo ven todos).
-                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f),
-                          solo ? "Imagen detectada · listo para empezar" : "Imagen detectada",
-                          T.Estilo(T.FMono, 12, T.Green));
-
-                bool puede = _lobby.CanStartGame;
-                float yAjustar = DrawAjustarEntorno(vw, vh - 44f - 56f - 12f);
-                if (!puede)
-                {
-                    string motivo = _lobby.StartBlockReason;
-                    if (!string.IsNullOrEmpty(motivo))
-                        GUI.Label(new Rect(Pad, yAjustar - 24f, vw - Pad * 2f, 22f), motivo,
-                                  T.Estilo(T.FMono, 11, T.Tan));
-                }
-                T.Boton(_nav, new Rect(Pad, vh - 44f - 56f, vw - Pad * 2f, 56f),
-                        "INICIAR NOCHE", primario: true, () => _lobby.ServerStartGame(),
-                        enabled: puede);
-                break;
-            }
-
-            case ARLobbyManager.LobbyState.AllReady:
-                GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 24f), "Imagen detectada",
-                          T.Estilo(T.FMono, 12, T.Green));
-                GUI.Label(new Rect(Pad, y + 26f, vw - Pad * 2f, 24f),
-                          "Esperando a que el host inicie la noche…",
-                          T.Estilo(T.FMono, 12, T.Muted));
-                DrawAjustarEntorno(vw, vh - 44f - 48f);
-                break;
-        }
-
-        _nav.End();
+        if (_lobby.State == ARLobbyManager.LobbyState.GameStarted && !_briefingDone)
+            DrawBriefing(vw, vh);
     }
 
-    // Contador de la sala, alineado a la derecha en la fila del título. Los números los
-    // calcula el host y los reparte (NetworkManager.LobbyJugadores/LobbyListos), así que
-    // host y clientes ven lo mismo; los dos cuentan al host. Verde cuando están todos.
-    private void DrawContadorSala(Rect fila)
-    {
-        int jugadores = _net.LobbyJugadores;
-        if (jugadores <= 0) return;   // cliente: todavía no llegó el primer LobbyStatus
-        int listos = Mathf.Min(_net.LobbyListos, jugadores);
-
-        GUI.Label(new Rect(fila.x, fila.y, fila.width, 20f), $"LISTOS {listos}/{jugadores}",
-                  T.Estilo(T.FBebas, 20, listos >= jugadores ? T.Green : T.Tan, TextAnchor.UpperRight));
-        GUI.Label(new Rect(fila.x, fila.y + 20f, fila.width, 16f),
-                  jugadores == 1 ? "1 jugador conectado" : $"{jugadores} jugadores conectados",
-                  T.Estilo(T.FMono, 10, T.Muted, TextAnchor.UpperRight));
-    }
-
-    // ── Obteniendo el entorno del host (overlay de carga, sólo cliente) ───
-    // Tapa la cámara con un velo (la escena todavía está vacía) y cuenta en qué fase
-    // está: esperar el anuncio → descargar el .mscn (con barra en bytes reales) →
-    // armar el mapa. Si una fase se estira, sugiere la causa probable.
-    private const float EsperaSospechosa = 8f;
-
-    private void DrawCargaMapa(float vw, float vh)
-    {
-        T.Fill(new Rect(0, 0, vw, vh), new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.85f));
-        UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
-
-        var   fase   = _lobby.MapaCliente;
-        float espera = Time.realtimeSinceStartup - _lobby.MapaEsperaDesde;
-        float w      = vw - Pad * 2f;
-        float y      = vh * 0.40f;
-
-        string titulo = fase switch
-        {
-            Mapa.EsperandoAnuncio => "ESPERANDO ENTORNO",
-            Mapa.Descargando      => "DESCARGANDO ENTORNO",
-            Mapa.Instalando       => "PREPARANDO ENTORNO",
-            _                     => "NO SE PUDO CARGAR EL ENTORNO",
-        };
-        GUI.Label(new Rect(Pad, y, w, 36f), titulo,
-                  T.Estilo(T.FBebas, 26, fase == Mapa.Error ? T.Red : T.Cream));
-        y += 38f;
-
-        GUI.Label(new Rect(Pad, y, w, 22f),
-                  string.IsNullOrEmpty(_lobby.MapaNombre)
-                      ? "Entorno compartido por el host"
-                      : $"Entorno: {_lobby.MapaNombre}",
-                  T.Estilo(T.FElite, 13, T.CreamDim));
-        y += 34f;
-
-        var    barra = new Rect(Pad, y, w, 30f);
-        string texto;
-        string aviso = null;
-        switch (fase)
-        {
-            case Mapa.EsperandoAnuncio:
-                T.Barra(barra, 0f, T.Tan, $"esperando al host {Spinner()}", null);
-                texto = "Conectado. Esperando que el host indique qué entorno se juega.";
-                if (espera > EsperaSospechosa)
-                    aviso = "Si no avanza, verificá que el host y vos tengan la misma " +
-                            "versión del juego.";
-                break;
-
-            case Mapa.Descargando:
-            {
-                // Total del frame en curso si ya empezó a llegar; si no, el anunciado.
-                int total  = _net.ClientMapaBytesAnunciados;
-                int leidos = 0;
-                if (_net.ClientProgresoMapa(out int l, out int t)) { leidos = l; total = t; }
-                float pct = total > 0 ? (float)leidos / total : 0f;
-                if (leidos > 0)
-                    T.Barra(barra, pct, T.Tan, $"{Tamano(leidos)} / {Tamano(total)}",
-                            $"{Mathf.FloorToInt(pct * 100f)}%");
-                else
-                    T.Barra(barra, 0f, T.Tan, $"solicitando {Spinner()}",
-                            total > 0 ? Tamano(total) : null);
-                texto = "El host te está enviando el escaneo del cuarto y su imagen de " +
-                        "referencia. Sólo pasa la primera vez: después queda guardado " +
-                        "en este dispositivo.";
-                if (leidos == 0 && espera > EsperaSospechosa)
-                    aviso = "El host todavía no responde. Verificá que sigan en la misma red Wi-Fi.";
-                break;
-            }
-
-            case Mapa.Instalando:
-                T.Barra(barra, 1f, T.Tan, $"armando el mapa {Spinner()}", "100%");
-                texto = "Armando las paredes y registrando la imagen de referencia…";
-                break;
-
-            default:
-                T.Barra(barra, 0f, T.Red, "error", null);
-                texto = "El entorno llegó dañado o incompleto.";
-                break;
-        }
-        y += 42f;
-
-        GUI.Label(new Rect(Pad, y, w, 48f), texto,
-                  T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
-        y += 52f;
-
-        if (aviso != null)
-            GUI.Label(new Rect(Pad, y, w, 40f), aviso,
-                      T.Estilo(T.FMono, 11, T.Tan, TextAnchor.UpperLeft, wrap: true));
-
-        if (fase == Mapa.Error)
-            T.Boton(_nav, new Rect(Pad, vh - 44f - 56f, w, 56f), "REINTENTAR", primario: true,
-                    () => _lobby.ReintentarMapa());
-    }
-
-    private static string Tamano(int bytes) =>
-        bytes >= 1024 * 1024 ? $"{bytes / (1024f * 1024f):0.0} MB"
-                             : $"{Mathf.CeilToInt(bytes / 1024f)} KB";
-
-    // Imagen de referencia guardada con el escaneo, semi-transparente y centrada
-    // en el área libre encima del panel: guía para reencuadrar la cámara sobre el
-    // punto físico exacto mientras ARImageAnchor intenta reengancharla.
-    private void DrawGhostImage(float vw, float vh)
-    {
-        if (!CapturedReference.HasImage) return;
-        var tex = CapturedReference.Texture;
-
-        float availableH = vh - 320f; // encima del panel de SINCRONIZACIÓN
-        if (availableH < 40f) return;
-
-        float w = vw * 0.55f;
-        float h = w * tex.height / (float)tex.width;
-        if (h > availableH * 0.7f)
-        {
-            h = availableH * 0.7f;
-            w = h * tex.width / (float)tex.height;
-        }
-
-        var r = new Rect((vw - w) * 0.5f, (availableH - h) * 0.5f, w, h);
-
-        var prevColor = GUI.color;
-        GUI.color = new Color(1f, 1f, 1f, _ghostAlpha);
-        GUI.DrawTexture(r, tex, ScaleMode.StretchToFill);
-        GUI.color = prevColor;
-        T.Borde(r, T.Cream, 2f);
-    }
-
-    // ── Colocación de anchor points (opción por dispositivo) ──────────────
-    // Retícula al centro + panel inferior. El jugador camina por su cuarto, apunta a
-    // superficies y coloca anclas; con LISTO cierra y arranca la corrección de deriva.
-    private void DrawColocarAnclas(float vw, float vh)
-    {
-        var mgr = AnchorPointManager.Instance;
-        // Nunca deberíamos llegar acá sin manager (ARLobbyManager lo crea antes de
-        // entrar al estado), pero si pasa lo creamos y dibujamos al frame siguiente:
-        // quedarse sin UI acá dejaría al jugador sin poder arrancar la partida.
-        if (mgr == null) { AnchorPointManager.Ensure(); return; }
-
-        // Retícula: cruz fina teñida por la calidad del punto. En Cardboard va una por
-        // ojo: el centro de la pantalla cae en la costura entre los dos.
-        var calidad = AnchorQuality.Instance;
-        if (MiraCardboard(mgr, out var ojoL, out var ojoR))
-        {
-            DibujarMira(ojoL, calidad);
-            DibujarMira(ojoR, calidad);
-        }
-        else
-        {
-            DibujarMira(new Vector2(vw * 0.5f, vh * 0.5f), calidad);
-        }
-
-        T.Gradiente(new Rect(0, vh - 400f, vw, 400f), 0.9f, haciaAbajo: false);
-        UIBlocker.AddVirtualRect(new Rect(0, vh - 400f, vw, 400f));
-
-        float y = vh - 370f;
-        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 36f), "PUNTOS DE ANCLAJE",
-                  T.Estilo(T.FBebas, 26, T.Cream));
-        y += 38f;
-
-        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 44f),
-                  "Recorré tu cuarto y colocá anclas apuntando a paredes o muebles. " +
-                  "cuantas más y más repartidas, menos se corre el mapa.",
-                  T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
-        y += 50f;
-
-        string estado = mgr.Count < AnchorPointManager.MinAnclas
-            ? $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
-            : $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
-        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), estado,
-                  T.Estilo(T.FMono, 13, mgr.PuedeCerrar ? T.Green : T.Tan));
-        y += 24f;
-
-        // Motivo del último rechazo.
-        if (!string.IsNullOrEmpty(_errorAnclas))
-            GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), _errorAnclas, T.Estilo(T.FMono, 11, T.Red));
-
-        // Los botones se dibujan SIEMPRE (deshabilitados en vez de ocultos): el foco
-        // del mando es una lista global y se resetea si cambia la cantidad de items.
-        float by = vh - 44f - 56f;
-        T.Boton(_nav, new Rect(Pad, by, vw - Pad * 2f, 56f), "COLOCAR ANCLA", primario: true,
-                () =>
-                {
-                    _errorAnclas = mgr.TryColocar(out var err) ? null : err;
-                    ReportarAnclas();
-                },
-                enabled: mgr.PuedeColocar);
-
-        float bw = (vw - Pad * 2f - 10f) * 0.5f;
-        by -= 52f;
-        T.Boton(_nav, new Rect(Pad, by, bw, 46f), "DESHACER", primario: false,
-                () => { mgr.DeshacerUltima(); _errorAnclas = null; ReportarAnclas(); },
-                enabled: mgr.Count > 0, fontSize: 16);
-        T.Boton(_nav, new Rect(Pad + bw + 10f, by, bw, 46f), "LISTO", primario: false,
-                () => { mgr.MarcarListo(); _errorAnclas = null; _lobby.AnchorPlacementDone(); },
-                enabled: mgr.PuedeCerrar, fontSize: 16);
-
-        // Escape: en un cuarto sin superficies trackeables no se llega al mínimo y el
-        // jugador quedaría sin poder arrancar la partida.
-        by -= 40f;
-        T.Boton(_nav, new Rect(Pad, by, vw - Pad * 2f, 34f), "OMITIR ANCLAS", primario: false,
-                () => { mgr.Omitir(); _errorAnclas = null; _lobby.AnchorPlacementDone(); },
-                fontSize: 13, textColor: T.Muted);
-    }
-
-    private static void DibujarMira(Vector2 c, AnchorQuality calidad)
-    {
-        const float R = 20f, G = 6f, W = 2f;
-        var col = calidad != null ? calidad.Color : T.Cream;
-        T.Fill(new Rect(c.x - R, c.y - W * 0.5f, R - G, W), col);
-        T.Fill(new Rect(c.x + G, c.y - W * 0.5f, R - G, W), col);
-        T.Fill(new Rect(c.x - W * 0.5f, c.y - R, W, R - G), col);
-        T.Fill(new Rect(c.x - W * 0.5f, c.y + G, W, R - G), col);
-        if (calidad != null) calidad.DibujarBajoLaMira(c.x, c.y);
-    }
-
-    // Posición de la mira en cada ojo (coords virtuales de UIScale) si Cardboard está
-    // activo. Va en el punto de cada ojo que corresponde al centro de la cámara —por
-    // donde AnchorPointManager tira el raycast—, a la distancia del hit para que en
-    // estéreo la mira se fusione a la profundidad de la superficie apuntada.
-    private MRCardboardController _cardboard;
-
-    private bool MiraCardboard(AnchorPointManager mgr, out Vector2 izq, out Vector2 der)
-    {
-        izq = der = default;
-        if (!MRCardboardController.Activo) return false;
-        if (_cardboard == null) _cardboard = FindFirstObjectByType<MRCardboardController>();
-        if (_cardboard == null) return false;
-
-        float dist = 2f;
-        var cam = Camera.main;
-        if (mgr.UltimoHit.Hit && cam != null)
-            dist = Vector3.Dot(mgr.UltimoHit.Position - cam.transform.position, cam.transform.forward);
-
-        if (!_cardboard.MiraEnOjos(dist, out var pl, out var pr)) return false;
-
-        // Píxeles de pantalla → espacio virtual de UIScale (área segura escalada).
-        var   sg = UIScale.SafeGui;
-        float s  = UIScale.Factor;
-        izq = new Vector2((pl.x - sg.x) / s, (pl.y - sg.y) / s);
-        der = new Vector2((pr.x - sg.x) / s, (pr.y - sg.y) / s);
-        return true;
-    }
-
-    private string _errorAnclas;
-    private string _errorManual;
-
-    private void ReportarAnclas() => _lobby.ReportarAnclas();
-
-    // Con la imagen YA detectada, corregir a mano una pose que quedó corrida respecto
-    // del cuarto real. La otra vía es tocar directamente el marcador del 0,0 (el
-    // libro), pero eso no se ve: este botón es el que lo hace descubrible.
-    // Devuelve la Y donde quedó, para apilar lo de arriba.
-    // BUSCAR IMAGEN es la vuelta atrás del atajo del reintento: al reintentar una noche
-    // se conserva la calibración de la sesión AR anterior (no hace falta volver a apuntar
-    // a la imagen), así que este botón es el que descarta esa pose y relanza la búsqueda
-    // cuando el mapa quedó corrido de verdad.
-    //
-    // Los dos van lado a lado a propósito: apilados se comían el alto del panel y se
-    // superponían con el texto de estado.
-    private float DrawAjustarEntorno(float vw, float yBase)
-    {
-        const float h = 42f;
-        float y  = yBase - h;
-        float bw = (vw - Pad * 2f - 10f) * 0.5f;
-        T.Boton(_nav, new Rect(Pad, y, bw, h), "AJUSTAR ENTORNO", primario: false,
-                () => { _errorManual = null; _lobby.AbrirAjusteOrigen(); }, fontSize: 13);
-        T.Boton(_nav, new Rect(Pad + bw + 10f, y, bw, h), "BUSCAR IMAGEN", primario: false,
-                () => { _errorManual = null; _lobby.RecalibrarConImagen(); }, fontSize: 13);
-        return y;
-    }
-
-    // ── Calibración manual del 0,0 (sin la imagen física) ─────────────────
-    // El mapa ya está en pantalla, anclado donde el jugador apuntó. Acá sólo va el
-    // texto y los cierres: mover y rotar se hace arrastrando el gizmo 3D que
-    // ManualCalibration engancha al origen.
-    private void DrawCalibracionManual(float vw, float vh)
-    {
-        // Mira fina al centro: es el punto que usa RECENTRAR.
-        const float R = 20f, G = 6f, W = 2f;
-        float cx = vw * 0.5f, cy = vh * 0.5f;
-        var mira = new Color(T.Cream.r, T.Cream.g, T.Cream.b, 0.75f);
-        T.Fill(new Rect(cx - R, cy - W * 0.5f, R - G, W), mira);
-        T.Fill(new Rect(cx + G, cy - W * 0.5f, R - G, W), mira);
-        T.Fill(new Rect(cx - W * 0.5f, cy - R, W, R - G), mira);
-        T.Fill(new Rect(cx - W * 0.5f, cy + G, W, R - G), mira);
-
-        T.Gradiente(new Rect(0, vh - 360f, vw, 360f), 0.9f, haciaAbajo: false);
-        UIBlocker.AddVirtualRect(new Rect(0, vh - 200f, vw, 200f));
-
-        float y = vh - 330f;
-        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 36f), "UBICAR EL ENTORNO",
-                  T.Estilo(T.FBebas, 26, T.Cream));
-        y += 38f;
-
-        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 60f),
-                  "el mapa quedó centrado donde apuntaste. Arrastrá las flechas para " +
-                  "moverlo y el anillo para girarlo hasta que las paredes virtuales " +
-                  "coincidan con las reales.",
-                  T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
-        y += 66f;
-
-        if (!string.IsNullOrEmpty(_errorManual))
-            GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), _errorManual,
-                      T.Estilo(T.FMono, 11, T.Red));
-
-        float by = vh - 44f - 56f;
-        T.Boton(_nav, new Rect(Pad, by, vw - Pad * 2f, 56f), "LISTO", primario: true,
-                () => { _errorManual = null; _lobby.CalibracionManualLista(); });
-
-        by -= 52f;
-        T.Boton(_nav, new Rect(Pad, by, vw - Pad * 2f, 46f), "RECENTRAR ACÁ", primario: false,
-                () => _errorManual = _lobby.RecentrarManual(), fontSize: 15);
-    }
-
-    // ── Briefing de la noche (cartel de intro, sin overlay ni botón) ──────
-    // Entra deslizándose desde la izquierda con fade, se sostiene y sale con fade.
-    // Se dibuja directamente sobre la cámara.
     private void DrawBriefing(float vw, float vh)
     {
         float dur = Mathf.Max(0.1f, _briefingDuration);
@@ -612,9 +104,9 @@ public class ARLobbyUI : MonoBehaviour
         var prevColor = GUI.color;
         GUI.color = new Color(1f, 1f, 1f, alpha);
 
-        // Rediseño 2.0 con Cardboard: una copia por ojo (a pantalla completa quedaba partida
-        // entre los dos). Mismo contenido, centrado en cada ojo y más angosto.
-        if (Rediseno.Flag.Activo && MRCardboardController.Activo)
+        // Con Cardboard: una copia por ojo (a pantalla completa quedaba partida entre los
+        // dos). Mismo contenido, centrado en cada ojo y más angosto.
+        if (MRCardboardController.Activo)
         {
             BriefingPorOjo(night, slide);
             GUI.color = prevColor;
@@ -675,13 +167,5 @@ public class ARLobbyUI : MonoBehaviour
 
     // Easing suave para la entrada (desaceleración).
     private static float EaseOut(float k) => 1f - (1f - k) * (1f - k);
-
-    private float _spinnerTime;
-    private static readonly string[] _spinnerFrames = { "—", "\\", "|", "/" };
-
-    private string Spinner()
-    {
-        _spinnerTime += Time.deltaTime;
-        return _spinnerFrames[Mathf.FloorToInt(_spinnerTime * 6) % _spinnerFrames.Length];
-    }
 }
+

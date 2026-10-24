@@ -9,8 +9,8 @@ namespace Rediseno.Menus
 {
     // UNIRSE A SALA del Rediseño 2.0 (UI Toolkit), usable con el visor: lista las salas que
     // se anuncian en la red y conecta con un toque, el joystick o la mirada. La IP a mano
-    // necesita teclado: sólo se ofrece sin el visor. Reemplaza la pantalla Unirse de
-    // GameBootstrapper con el flag; la lógica (descubrimiento, conectar) sigue allá.
+    // necesita teclado: sólo se ofrece sin el visor. Es la pantalla Unirse de
+    // GameBootstrapper; la lógica (descubrimiento, conectar) vive allá.
     public class PanelUnirse2 : PantallaUI
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -22,7 +22,6 @@ namespace Rediseno.Menus
         }
 
         private static PanelUnirse2 _instancia;
-        public static bool Mostrando => _instancia != null && _instancia.EsVisible();
 
         private static void AlCargar(Scene s, LoadSceneMode m)
         {
@@ -52,7 +51,7 @@ namespace Rediseno.Menus
         protected override bool EsVisible()
         {
             var gb = GameBootstrapper.Instance;
-            return Flag.Activo && gb != null && gb.EnUnirse && !PauseMenuController.IsOpen;
+            return gb != null && gb.EnUnirse && !PauseMenuController.IsOpen;
         }
 
         protected override bool EnVisor => MRCardboardController.Activo;
@@ -130,22 +129,8 @@ namespace Rediseno.Menus
             else
             {
                 _lista.Add(PiezasUI.Seccion("O INGRESÁ LA IP DEL HOST"));
-                var campo = new TextField { value = gb.HostManual ?? "" };
-                campo.style.unityFontDefinition = TemaUI.Mono;
-                campo.style.fontSize = 34;
-                campo.style.color = TemaUI.Cream;
-                campo.style.marginBottom = 16;
-                var input = campo.Q(className: TextField.inputUssClassName);
-                if (input != null)
-                {
-                    input.style.backgroundColor = new Color(0.075f, 0.063f, 0.063f, 1f);
-                    TemaUI.Radio(input, 24);
-                    TemaUI.Borde(input, 2, TemaUI.Linea);
-                    TemaUI.Relleno(input, 22, 26);
-                    input.style.color = TemaUI.Cream;
-                }
-                campo.RegisterValueChangedCallback(e => { if (GameBootstrapper.Instance != null) GameBootstrapper.Instance.HostManual = e.newValue; });
-                _lista.Add(campo);
+                _lista.Add(PiezasUI.Campo(gb.HostManual,
+                    v => { if (GameBootstrapper.Instance != null) GameBootstrapper.Instance.HostManual = v; }));
                 var nota = TemaUI.Texto($"Ej: 192.168.1.42 — si no ponés puerto se usa el {NetworkConfig.DefaultPort} (o ip:puerto)",
                                         TemaUI.Mono, 22, TemaUI.Dim);
                 nota.style.marginBottom = 18;

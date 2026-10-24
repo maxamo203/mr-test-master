@@ -17,7 +17,11 @@ namespace Gameplay
     //                        Noche -> Entorno -> CONFIRMAR -> SampleScene (sala/espera)
     //       UNIRSE        -> SampleScene (autodescubrimiento / IP)
     //   ESCANEAR ENTORNO  -> lista de escaneos (editar/borrar/nuevo) -> ScannerScene
-    //   OPCIONES          -> volumen + estado del mando
+    //   OPCIONES          -> volumen + visor + estado del mando (-> CONTROL)
+    //
+    // Este componente es el MODELO del flujo: las pantallas las dibuja Rediseno.Menus
+    // (UI Toolkit) leyendo PantallaActual / AvisoActual. Sólo CONTROL (diagnóstico del
+    // mando) se sigue dibujando acá, en IMGUI.
     //
     // La elección viaja en GameSession (Mode / SelectedNight / SelectedMap / HostPort);
     // GameBootstrapper (SampleScene) la lee para hostear o unirse.
@@ -44,26 +48,7 @@ namespace Gameplay
 
         public enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control, Tutoriales }
 
-        private Pantalla _pantallaActual = Pantalla.Menu;
-
-        // Cada cambio de pantalla lleva el foco del mando a lo primero útil EN EL MISMO frame
-        // en que se dibuja la pantalla nueva (sin esto se veía un frame resaltado el botón
-        // con el índice viejo). En el menú raíz no hay flecha volver: el 0 es UN JUGADOR; en
-        // el resto el 0 es la flecha y se arranca en el 1. Si se vuelve a una pantalla con
-        // algo ya elegido, el foco va directo al "siguiente paso" (CONTINUAR / CONFIRMAR).
-        public Pantalla PantallaActual
-        {
-            get => _pantallaActual;
-            private set
-            {
-                if (_pantallaActual == value) return;
-                _pantallaActual = value;
-                bool hayEleccion = (value == Pantalla.Noches  && _nocheSel >= 0) ||
-                                   (value == Pantalla.Entorno && !string.IsNullOrEmpty(_mapSel));
-                if (hayEleccion) Gamepad.ImguiGamepadMenu.EnfocarMarcado();
-                else Gamepad.ImguiGamepadMenu.Enfocar(value == Pantalla.Menu ? 0 : 1);
-            }
-        }
+        public Pantalla PantallaActual { get; private set; } = Pantalla.Menu;
 
         // Modo que se está configurando en el sub-flujo Noche->Entorno (un jugador o
         // crear sala). MultiClient no pasa por acá (se une directo).
@@ -78,8 +63,6 @@ namespace Gameplay
         // normal) y, para esa práctica, los escaneos que no le sirven con su motivo.
         private TutorialTipo _tutorialPendiente;
         private readonly Dictionary<string, string> _noSirve = new();
-        private string _confirmarBorrar;       // nombre del escaneo a borrar (overlay Escaneos)
-        private Vector2 _scroll;
 
         // US-1.1: chequeo de versión mínima de SO (Android 14 / iOS 17). A diferencia
         // de los avisos de abajo, éste se re-evalúa en cada Awake, no se persiste.
@@ -93,11 +76,7 @@ namespace Gameplay
         // Android. Ver Riesgos Identificados en la documentación.
         private bool _mostrarAvisoIos;
 
-        // Sección "Avanzado" (puerto) de la pantalla de entorno, sólo para host multi.
-        private bool _avanzadoOpen;
-        private string _portText = NetworkConfig.DefaultPort.ToString();
-
-        // Navegación con gamepad (driver global en GamepadManager).
+        // Navegación con gamepad de la pantalla CONTROL (driver global en GamepadManager).
         private readonly Gamepad.ImguiGamepadMenu _nav = new();
 
         private const float Pad = 28f;
@@ -153,13 +132,12 @@ namespace Gameplay
             if (Instance == this) Instance = null;
         }
 
-        // ── Rediseño 2.0: lo usa el menú principal nuevo (Rediseno.Menus.MenuPrincipal2) ──
-        // ¿Qué pantalla se ve, sin ningún aviso encima? Las pantallas nuevas se muestran en
-        // lugar de la vieja cuando coincide.
+        // ── Modelo de las pantallas de Rediseno.Menus (MenuPrincipal2, MenusFlujoJuego…) ──
+        // ¿Qué pantalla se ve, sin ningún aviso encima? Cada pantalla nueva se muestra
+        // cuando coincide con la suya.
         public bool SinAvisos =>
             !_versionIncompatible && !HayAvisoSalida &&
-            !_mostrarAvisoVersionDesconocida && !_mostrarAvisoIos && _confirmarBorrar == null &&
-            !_confirmarEscaner;
+            !_mostrarAvisoVersionDesconocida && !_mostrarAvisoIos && !_confirmarEscaner;
         public bool MostrandoPrincipal => SinAvisos && PantallaActual == Pantalla.Menu;
         public bool Mostrando(Pantalla p) => SinAvisos && PantallaActual == p;
         public void VolverPantalla()     => Volver();
@@ -187,6 +165,15 @@ namespace Gameplay
         public TutorialTipo TutorialPendiente => _tutorialPendiente;
         public int ElementosDe(string escena) => _itemCount.TryGetValue(escena, out var n) ? n : 0;
         public bool CreandoSala => _pendingMode == GameSession.SessionMode.MultiHost;
+
+        // Puerto de la sala (sección AVANZADO de ¿DÓNDE JUGÁS?, sólo al crear sala). Vacío o
+        // inválido = el por defecto. Con uno custom la sala NO se autoanuncia por LAN: los
+        // demás tienen que escribir ip:puerto (ver GameBootstrapper.StartHost).
+        private string _portText = NetworkConfig.DefaultPort.ToString();
+        public string PuertoTexto { get => _portText; set => _portText = value; }
+        public int PuertoElegido =>
+            int.TryParse((_portText ?? "").Trim(), out int p) && p > 0 && p < 65536
+                ? p : NetworkConfig.DefaultPort;
 
         // CONTINUAR · NOCHE N del menú nuevo: directo a elegir escenario con esa noche puesta
         // (con el visor, cada paso de más cuesta). Sin escenario jugable cae en "falta".
@@ -220,7 +207,7 @@ namespace Gameplay
         public void EscanearNuevo()    => PedirEscaner(null);
         public void EditarEscenario(string escena) => PedirEscaner(escena);
 
-        // Rediseño 2.0: el escaneo es lo único que se hace SIN el visor (con el celular en la
+        // El escaneo es lo único que se hace SIN el visor (con el celular en la
         // mano y tocando la pantalla). Con el visor puesto, ir al escáner primero lo avisa
         // (AvisoMenu.EscanearSinVisor): aceptar saca del visor y sigue; volver deja todo como
         // estaba. Guardar el escaneo vuelve al menú, donde el visor se prende de nuevo.
@@ -229,7 +216,7 @@ namespace Gameplay
 
         private void PedirEscaner(string nombre)
         {
-            if (Rediseno.Flag.Activo && Rediseno.UI.ModoVisor.Activo)
+            if (Rediseno.UI.ModoVisor.Activo)
             {
                 _escanerPendiente = nombre;
                 _confirmarEscaner = true;
@@ -258,13 +245,13 @@ namespace Gameplay
         public int TotalNoches => Mathf.Max(1, Nights != null ? Nights.Length : 0);
         public void AbrirJugar()         => ConfigurarPartida(GameSession.SessionMode.SinglePlayer);
         public void AbrirMultijugador()  { if (BuildVariant.Multijugador) PantallaActual = Pantalla.CrearUnirse; }
-        // El menú nuevo abre MIS ESCENARIOS aunque esté vacío (ahí ofrece NUEVO ESCANEO): el
-        // atajo viejo de ir directo al escáner sorprendía, y con el visor puesto lo sacaba.
+        // MIS ESCENARIOS se abre aunque esté vacío (ahí ofrece NUEVO ESCANEO): ir directo
+        // al escáner sorprendía, y con el visor puesto lo sacaba.
         public void AbrirEscenarios()    { RefrescarScans(); PantallaActual = Pantalla.Escaneos; }
         public void BorrarEscenario(string escena) { ScanSerializer.Delete(escena); RefrescarScans(); }
 
-        // Avisos modales del menú, en el mismo orden de precedencia que OnGUI. Los dibuja
-        // Rediseno.Menus.AvisoMenu2 con el flag prendido.
+        // Avisos modales del menú, en orden de precedencia (el mismo que Volver). Los dibuja
+        // Rediseno.Menus.AvisoMenu2.
         public enum AvisoMenu { Ninguno, VersionIncompatible, Salida, VersionDesconocida, Ios, EscanearSinVisor }
         public AvisoMenu AvisoActual =>
             _versionIncompatible            ? AvisoMenu.VersionIncompatible :
@@ -318,14 +305,19 @@ namespace Gameplay
 
         private void Update()
         {
+            // Red de seguridad de la demo: ningún camino debería llevar a la pantalla de
+            // sesión compartida con el botón oculto, pero si alguno apareciera, cae al menú
+            // en vez de dejar entrar al multijugador.
+            if (!BuildVariant.Multijugador && PantallaActual == Pantalla.CrearUnirse)
+                PantallaActual = Pantalla.Menu;
+
             _nav.Update();
             HandleBackButton();
         }
 
         // Botón/gesto "atrás" de Android: el Input System nuevo lo reporta como
         // Key.Escape del teclado virtual. Replica la MISMA navegación que el botón
-        // "volver" (T.BotonVolver) de cada pantalla, con la misma precedencia que
-        // OnGUI usa para decidir qué se está mostrando (overlays primero).
+        // "volver" de cada pantalla (overlays primero).
         private void HandleBackButton()
         {
             var kb = Keyboard.current;
@@ -341,18 +333,16 @@ namespace Gameplay
             Volver();
         }
 
-        // Un paso atrás, con la misma precedencia que OnGUI (overlays primero). Lo usan el
-        // atrás de Android y el ← del mando (ImguiGamepadMenu.PedidoVolver).
+        // Un paso atrás, overlays primero (mismo orden que AvisoActual). Lo usan el atrás
+        // de Android, el ← del mando (ImguiGamepadMenu.PedidoVolver) y las pantallas nuevas.
         private void Volver()
         {
-            // Mismo orden de precedencia que OnGUI (qué overlay tapa a qué otro).
             // Bloqueo por versión no compatible: a propósito no tiene botón de
             // volver (no se puede omitir), así que el back tampoco hace nada acá.
             if (_versionIncompatible) return;
             if (HayAvisoSalida) { CerrarAvisoSalida(); return; }
             if (_mostrarAvisoVersionDesconocida) { CerrarAvisoVersionDesconocida(); return; }
             if (_mostrarAvisoIos) { CerrarAvisoIos(); return; }
-            if (_confirmarBorrar != null) { _confirmarBorrar = null; return; }
             if (_confirmarEscaner) { _confirmarEscaner = false; return; }
 
             switch (PantallaActual)
@@ -436,12 +426,13 @@ namespace Gameplay
         }
 
         // ------------------------------------------------------------ OnGUI
+        // Todas las pantallas y avisos del menú los dibuja Rediseno.Menus (UI Toolkit); acá
+        // sólo queda CONTROL (diagnóstico del mando), que no tiene versión nueva.
         private void OnGUI()
         {
-            // Rediseño 2.0: si una pantalla nueva (UI Toolkit) cubre la actual, la dibuja ella.
-            if (Rediseno.UI.PantallaUI.AlgunaVisible) return;
-            // Pantalla vieja con el visor puesto: todavía no sabe dibujarse en estéreo, así
-            // que se sale del visor en vez de dejar la vista partida.
+            if (PantallaActual != Pantalla.Control || Rediseno.UI.PantallaUI.AlgunaVisible) return;
+            // Todavía no sabe dibujarse en estéreo: se sale del visor en vez de dejar la
+            // vista partida.
             if (Rediseno.UI.ModoVisor.Activo) Rediseno.UI.ModoVisor.Set(false);
 
             UIScale.Begin();
@@ -453,109 +444,9 @@ namespace Gameplay
             T.FillScreen(T.Bg);
             UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
 
-            if (_versionIncompatible)
-            {
-                DrawBloqueoVersion(vw, vh);
-            }
-            else if (HayAvisoSalida)
-            {
-                DrawAvisoSalida(vw, vh);
-            }
-            else if (_mostrarAvisoVersionDesconocida)
-            {
-                DrawAvisoVersionDesconocida(vw, vh);
-            }
-            else if (_mostrarAvisoIos)
-            {
-                DrawAvisoIos(vw, vh);
-            }
-            else if (_confirmarBorrar != null)
-            {
-                DrawConfirmarBorrar(vw, vh);
-            }
-            else
-            {
-                // Red de seguridad de la demo: ningún camino debería llevar a la
-                // pantalla de sesión compartida con el botón oculto, pero si alguno
-                // apareciera, cae al menú en vez de dejar entrar al multijugador.
-                if (!BuildVariant.Multijugador && PantallaActual == Pantalla.CrearUnirse)
-                    PantallaActual = Pantalla.Menu;
-
-                switch (PantallaActual)
-                {
-                    case Pantalla.Menu:        DrawMenu(vw, vh);        break;
-                    case Pantalla.CrearUnirse: DrawCrearUnirse(vw, vh); break;
-                    case Pantalla.SinEntorno:  DrawSinEntorno(vw, vh);  break;
-                    case Pantalla.Noches:      DrawNoches(vw, vh);      break;
-                    case Pantalla.Entorno:     DrawEntorno(vw, vh);     break;
-                    case Pantalla.Escaneos:    DrawEscaneos(vw, vh);    break;
-                    case Pantalla.Opciones:    DrawOpciones(vw, vh);    break;
-                    case Pantalla.Control:     DrawControl(vw, vh);     break;
-                    // Sin IMGUI: sólo existe en el Rediseño 2.0 (MenuTutoriales2); con el flag apagado se vuelve al menú.
-                    case Pantalla.Tutoriales:  PantallaActual = Pantalla.Menu; break;
-                }
-            }
+            DrawControl(vw, vh);
 
             _nav.End();
-        }
-
-        // ------------------------------------------------------- pantallas
-        private void DrawMenu(float vw, float vh)
-        {
-            // Wordmark grande: el ancho escala con vw para que ocupe casi todo el
-            // ancho, igual que en el splash (así la transición splash -> menú no
-            // salta de tamaño/posición; de hecho es la misma imagen).
-            float logoW  = vw * 0.82f;
-            float titleY = vh * 0.24f;
-            float logoH  = T.LogoGlitch(new Rect((vw - logoW) * 0.5f, titleY, logoW, vh * 0.5f));
-            GUI.Label(new Rect(0, titleY + logoH + 4f, vw, 34f), "El ritual no debe parar",
-                      T.Estilo(T.FElite, 21, T.Muted, TextAnchor.MiddleCenter));
-
-            // La demo no tiene multijugador (ver BuildVariant): un botón menos, y el
-            // bloque arranca más abajo para que siga apoyado contra el pie de pantalla.
-            int botones = BuildVariant.Multijugador ? 4 : 3;
-            float bw = vw - Pad * 2f, bh = 56f, x = Pad;
-            float y = vh - 44f - (bh + 14f) * botones - 24f;
-
-            T.Boton(_nav, new Rect(x, y, bw, bh), "UN JUGADOR", primario: true,
-                    () => ConfigurarPartida(GameSession.SessionMode.SinglePlayer), fontSize: 22);
-            y += bh + 14f;
-            if (BuildVariant.Multijugador)
-            {
-                T.Boton(_nav, new Rect(x, y, bw, bh), "MULTIJUGADOR", false,
-                        () => PantallaActual = Pantalla.CrearUnirse);
-                y += bh + 14f;
-            }
-            T.Boton(_nav, new Rect(x, y, bw, bh), "ESCANEAR ENTORNO", false, OnEscanear);
-            y += bh + 14f;
-            T.Boton(_nav, new Rect(x, y, bw, bh), "OPCIONES", false, () => PantallaActual = Pantalla.Opciones);
-
-            GUI.Label(new Rect(0, vh - 36f, vw, 20f),
-                      BuildVariant.EsDemo ? "DEMO · equipo 112" : "Build interna · equipo 112",
-                      T.Estilo(T.FMono, 10, T.Disabled, TextAnchor.MiddleCenter));
-        }
-
-        private void OnEscanear()
-        {
-            RefrescarScans();
-            if (_scans.Count == 0) IrAlEscaner(null);
-            else PantallaActual = Pantalla.Escaneos;
-        }
-
-        private void DrawCrearUnirse(float vw, float vh)
-        {
-            T.BotonVolver(_nav, () => PantallaActual = Pantalla.Menu);
-
-            GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "SESIÓN COMPARTIDA",
-                      T.Estilo(T.FBebas, 28, T.Cream));
-
-            float y = 170f;
-            DrawCard(new Rect(Pad, y, vw - Pad * 2f, 84f), "CREAR SALA (HOST)",
-                     "Tu dispositivo aloja la sesión", primario: false,
-                     () => ConfigurarPartida(GameSession.SessionMode.MultiHost));
-            y += 100f;
-            DrawCard(new Rect(Pad, y, vw - Pad * 2f, 84f), "UNIRSE (CLIENTE)",
-                     "Buscar una sala o ingresar la IP", primario: false, UnirseComoCliente);
         }
 
         // Cliente: no elige noche ni entorno (los define/comparte el host). Va directo
@@ -576,32 +467,6 @@ namespace Gameplay
             SceneFlow.GoTo(_lobbyScene);
         }
 
-        private void DrawCard(Rect r, string titulo, string subtitulo, bool primario, System.Action onClick)
-        {
-            T.Celda(_nav, r, primario, onClick);
-            GUI.Label(new Rect(r.x + 20f, r.y + 16f, r.width - 40f, 32f), titulo,
-                      T.Estilo(T.FBebas, 24, T.Cream));
-            GUI.Label(new Rect(r.x + 20f, r.y + 50f, r.width - 40f, 24f), subtitulo,
-                      T.Estilo(T.FMono, 15, T.Dim));
-        }
-
-        // Alerta de "falta un entorno" (un jugador o crear sala). Vuelve al origen
-        // del sub-flujo y ofrece ir a escanear.
-        private void DrawSinEntorno(float vw, float vh)
-        {
-            T.BotonVolver(_nav, VolverDeSubflujo);
-
-            GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "FALTA UN ENTORNO",
-                      T.Estilo(T.FBebas, 28, T.Cream));
-            GUI.Label(new Rect(Pad, 140f, vw - Pad * 2f, 120f),
-                      "No hay ningún entorno escaneado (con imagen de referencia) todavía. " +
-                      "el ritual necesita conocer tu espacio real antes de empezar a jugar.",
-                      T.Estilo(T.FElite, 14, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
-
-            T.Boton(_nav, new Rect(Pad, vh - 44f - 58f, vw - Pad * 2f, 58f),
-                    "ESCANEAR ENTORNO", primario: true, () => IrAlEscaner(null));
-        }
-
         // Vuelve al punto de partida del sub-flujo (menú para un jugador, crear/unirse
         // para host).
         private void VolverDeSubflujo()
@@ -610,196 +475,6 @@ namespace Gameplay
             PantallaActual = _pendingMode == GameSession.SessionMode.MultiHost
                 ? Pantalla.CrearUnirse : Pantalla.Menu;
         }
-
-        private void DrawNoches(float vw, float vh)
-        {
-            T.BotonVolver(_nav, VolverDeSubflujo);
-
-            var nights = Nights;
-            GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "ELEGÍ LA NOCHE",
-                      T.Estilo(T.FBebas, 28, T.Cream));
-
-            int total = Mathf.Max(6, nights != null ? nights.Length : 0);
-            float gap = 12f;
-            float cw = (vw - Pad * 2f - gap) / 2f;
-            float ch = 86f;
-            float y0 = 150f;
-
-            for (int i = 0; i < total; i++)
-            {
-                int col = i % 2, fila = i / 2;
-                var r = new Rect(Pad + col * (cw + gap), y0 + fila * (ch + gap), cw, ch);
-
-                bool existe = nights != null && i < nights.Length && nights[i] != null;
-
-                // Recorte de la demo: la noche existe y está en el build, pero esta
-                // variante no la habilita. Candado con otro texto — no es que te falte
-                // ganar la anterior, es que te falta el juego completo.
-                if (existe && !BuildVariant.NocheHabilitada(i))
-                {
-                    T.Fill(r, new Color(1f, 1f, 1f, 0.02f));
-                    T.Borde(r, T.BorderDim);
-                    GUI.Label(new Rect(r.x, r.y + 12f, r.width, 34f), (i + 1).ToString(),
-                              T.Estilo(T.FBebas, 26, T.Disabled, TextAnchor.MiddleCenter));
-                    T.Candado(new Rect(r.center.x - 8f, r.y + 46f, 16f, 18f), T.Tan);
-                    GUI.Label(new Rect(r.x, r.y + 66f, r.width, 18f), "Versión completa",
-                              T.Estilo(T.FMono, 11, T.Tan, TextAnchor.MiddleCenter));
-                    continue;
-                }
-
-                if (existe && !NightProgress.Desbloqueada(i))
-                {
-                    // Configurada pero todavía no ganada la anterior: candado real.
-                    T.Fill(r, new Color(1f, 1f, 1f, 0.02f));
-                    T.Borde(r, T.BorderDim);
-                    GUI.Label(new Rect(r.x, r.y + 12f, r.width, 34f), (i + 1).ToString(),
-                              T.Estilo(T.FBebas, 26, T.Disabled, TextAnchor.MiddleCenter));
-                    T.Candado(new Rect(r.center.x - 8f, r.y + 46f, 16f, 18f), T.Disabled);
-                    GUI.Label(new Rect(r.x, r.y + 66f, r.width, 18f), "Bloqueada",
-                              T.Estilo(T.FMono, 12, T.Disabled, TextAnchor.MiddleCenter));
-                    continue;
-                }
-                if (!existe)
-                {
-                    // Celda "bloqueada": decorativa, sin interacción (paridad visual
-                    // con el prototipo cuando hay menos de 6 noches configuradas).
-                    T.Fill(r, new Color(1f, 1f, 1f, 0.02f));
-                    T.Borde(r, T.BorderDim);
-                    GUI.Label(new Rect(r.x, r.y + 12f, r.width, 34f), (i + 1).ToString(),
-                              T.Estilo(T.FBebas, 26, T.Disabled, TextAnchor.MiddleCenter));
-                    // Ícono de candado (en vez del texto "bloqueada").
-                    T.Candado(new Rect(r.center.x - 8f, r.y + 50f, 16f, 18f), T.Disabled);
-                    continue;
-                }
-
-                int idx = i;   // captura por iteración para el closure
-                bool sel = _nocheSel == i;
-                // Elegida la noche, el foco salta a CONTINUAR (marcado abajo).
-                T.Celda(_nav, r, primario: false,
-                        () => { _nocheSel = idx; Gamepad.ImguiGamepadMenu.EnfocarMarcado(); },
-                        bordeOverride: sel ? T.Red : (Color?)null,
-                        fillOverride: sel ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.14f) : (Color?)null);
-                GUI.Label(new Rect(r.x, r.y + 8f, r.width, 30f), (i + 1).ToString(),
-                          T.Estilo(T.FBebas, 24, T.Cream, TextAnchor.MiddleCenter));
-                GUI.Label(new Rect(r.x, r.y + 38f, r.width, 18f), sel ? "Elegida" : "Disponible",
-                          T.Estilo(T.FMono, 13, sel ? T.Tan : T.Dim, TextAnchor.MiddleCenter));
-
-                // Récord de reliquias de ESTA noche, por dispositivo (ver
-                // CollectibleProgress) — es por noche, no un número global. Sólo se
-                // muestra si la noche tiene reliquias habilitadas.
-                if (nights[i].collectiblesActive)
-                {
-                    int recordReliquias = CollectibleProgress.Record(i);
-                    int maxReliquias    = nights[i].collectibleMaxPerNight;
-                    string max = maxReliquias > 0 ? maxReliquias.ToString() : "∞";
-                    GUI.Label(new Rect(r.x, r.y + 60f, r.width, 16f),
-                              $"Reliquias {recordReliquias}/{max}",
-                              T.Estilo(T.FMono, 11, T.Tan, TextAnchor.MiddleCenter));
-                }
-            }
-
-            bool haySel = _nocheSel >= 0 && nights != null && _nocheSel < nights.Length &&
-                          nights[_nocheSel] != null && NightProgress.Desbloqueada(_nocheSel);
-            if (haySel)
-            {
-                string nombre = string.IsNullOrEmpty(nights[_nocheSel].displayName)
-                    ? $"NOCHE {_nocheSel + 1}" : nights[_nocheSel].displayName;
-                GUI.Label(new Rect(Pad, vh - 44f - 58f - 30f, vw - Pad * 2f, 26f), nombre,
-                          T.Estilo(T.FElite, 16, T.Muted, TextAnchor.MiddleCenter));
-                Gamepad.ImguiGamepadMenu.Marcar();
-                T.Boton(_nav, new Rect(Pad, vh - 44f - 58f, vw - Pad * 2f, 58f),
-                        "CONTINUAR", primario: true, () => PantallaActual = Pantalla.Entorno);
-            }
-        }
-
-        private void DrawEntorno(float vw, float vh)
-        {
-            T.BotonVolver(_nav, () => PantallaActual = Pantalla.Noches);
-
-            GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "ELEGÍ EL ENTORNO",
-                      T.Estilo(T.FBebas, 28, T.Cream));
-            GUI.Label(new Rect(Pad, 132f, vw - Pad * 2f, 38f),
-                      "Seleccioná un escaneo guardado para esta noche",
-                      T.Estilo(T.FElite, 14, T.Dim, wrap: true));
-
-            // "Avanzado" (puerto) anclado al borde inferior, arriba del CONFIRMAR.
-            // Sólo para host multijugador (en un jugador el puerto no importa).
-            bool host = _pendingMode == GameSession.SessionMode.MultiHost;
-            float confirmH = 58f;
-            float avanzadoH = !host ? 0f : (_avanzadoOpen ? 112f : 40f);
-            float avanzadoY = vh - 44f - confirmH - 14f - avanzadoH;
-
-            float listaY = 170f;
-            float listaBottom = (host ? avanzadoY : vh - 44f - confirmH - 14f) - 12f;
-
-            float rowH = 60f, gap = 10f;
-            var viewport = new Rect(Pad, listaY, vw - Pad * 2f, Mathf.Max(60f, listaBottom - listaY));
-            float contentH = _scans.Count * (rowH + gap);
-
-            _scroll = GUI.BeginScrollView(viewport, _scroll,
-                                          new Rect(0, 0, viewport.width - 16f, Mathf.Max(contentH, viewport.height)));
-            float y = 0f;
-            foreach (var name in _scans)
-            {
-                float w = viewport.width - 16f;
-                bool ok = _hasImg.TryGetValue(name, out var hi) && hi;   // jugable = con imagen
-                var fila = new Rect(0, y, w, rowH);
-                var mapName = name;   // captura por iteración
-
-                bool sel = _mapSel == name;
-                // Elegido el entorno, el foco salta a CONFIRMAR (marcado abajo).
-                T.Celda(_nav, fila, primario: false,
-                        () => { _mapSel = mapName; Gamepad.ImguiGamepadMenu.EnfocarMarcado(); }, enabled: ok,
-                        bordeOverride: sel ? T.Red : (Color?)null,
-                        fillOverride: sel ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.14f) : (Color?)null);
-                GUI.Label(new Rect(fila.x + 14f, y, w - 160f, rowH),
-                          ok ? name : $"{name}  (sin imagen de ref)",
-                          T.Estilo(T.FMono, 14, ok ? T.Cream : T.Disabled));
-                GUI.Label(new Rect(fila.x + 14f, y, w - 28f, rowH),
-                          $"{(_itemCount.TryGetValue(name, out var c) ? c : 0)} elementos",
-                          T.Estilo(T.FMono, 14, T.Dim, TextAnchor.MiddleRight));
-                y += rowH + gap;
-            }
-            GUI.EndScrollView();
-
-            if (host) DrawAvanzadoPuerto(vw, avanzadoY);
-
-            bool puedeConfirmar = !string.IsNullOrEmpty(_mapSel);
-            Gamepad.ImguiGamepadMenu.Marcar();
-            T.Boton(_nav, new Rect(Pad, vh - 44f - confirmH, vw - Pad * 2f, confirmH),
-                    "CONFIRMAR", primario: true, Confirmar, enabled: puedeConfirmar);
-        }
-
-        // Sección "Avanzado" (host): puerto TCP. Se dibuja desde 'y' hacia abajo.
-        private void DrawAvanzadoPuerto(float vw, float y)
-        {
-            float w = vw - Pad * 2f;
-            var header = new Rect(Pad, y, w, 28f);
-            UIBlocker.AddVirtualRect(header);
-            bool foco = Gamepad.ImguiGamepadMenu.NextHasFocus;
-            if (foco) T.Fill(header, new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.12f));
-            _nav.Button(header, $"AVANZADO {(_avanzadoOpen ? "(-)" : "(+)")}",
-                        T.Estilo(T.FMono, 15, foco ? T.Cream : T.Muted, TextAnchor.MiddleLeft),
-                        () => { AudioManager.Sonar(c => c.uiConfirmar); _avanzadoOpen = !_avanzadoOpen; });
-            y += 32f;
-
-            if (!_avanzadoOpen) return;
-
-            GUI.Label(new Rect(Pad, y, 120f, 22f), "PUERTO", T.Estilo(T.FMono, 14, T.Muted));
-            y += 22f;
-            _portText = T.CampoTexto(new Rect(Pad, y, 150f, 46f), _portText,
-                                     NetworkConfig.DefaultPort.ToString());
-            bool custom = PuertoElegido() != NetworkConfig.DefaultPort;
-            GUI.Label(new Rect(Pad + 162f, y, w - 162f, 54f),
-                      custom ? "Puerto custom: NO se autoanuncia; los demás deben escribir ip:puerto"
-                             : "Por defecto: se autoanuncia por LAN (los demás lo encuentran solos)",
-                      T.Estilo(T.FMono, 12, custom ? T.Tan : T.Dim, TextAnchor.UpperLeft, wrap: true));
-        }
-
-        // Puerto válido del campo (o el por defecto si está vacío/inválido).
-        private int PuertoElegido() =>
-            int.TryParse((_portText ?? "").Trim(), out int p) && p > 0 && p < 65536
-                ? p : NetworkConfig.DefaultPort;
 
         private void Confirmar()
         {
@@ -818,7 +493,7 @@ namespace Gameplay
             s.Nights        = Nights;
             s.NightIndex    = _nocheSel;
             s.HostPort      = _pendingMode == GameSession.SessionMode.MultiHost
-                ? PuertoElegido() : NetworkConfig.DefaultPort;
+                ? PuertoElegido : NetworkConfig.DefaultPort;
             SceneFlow.GoTo(_lobbyScene);
         }
 
@@ -836,106 +511,6 @@ namespace Gameplay
             SceneFlow.GoTo(_lobbyScene);
         }
 
-        // ── Gestión de escaneos (desde "ESCANEAR ENTORNO") ────────────────────
-        private void DrawEscaneos(float vw, float vh)
-        {
-            T.BotonVolver(_nav, () => PantallaActual = Pantalla.Menu);
-
-            GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "ESCANEO DE ENTORNO",
-                      T.Estilo(T.FBebas, 28, T.Cream));
-            GUI.Label(new Rect(Pad, 132f, vw - Pad * 2f, 38f),
-                      "Continuá editando un escaneo guardado o empezá uno nuevo",
-                      T.Estilo(T.FElite, 14, T.Dim, wrap: true));
-
-            float rowH = 64f, gap = 10f;
-            float listaY = 170f;
-            float listaH = vh - listaY - 44f - 58f - 20f;
-            var viewport = new Rect(Pad, listaY, vw - Pad * 2f, listaH);
-            float contentH = _scans.Count * (rowH + gap);
-
-            _scroll = GUI.BeginScrollView(viewport, _scroll,
-                                          new Rect(0, 0, viewport.width - 16f, Mathf.Max(contentH, listaH)));
-            float y = 0f;
-            foreach (var nombre in _scans)
-            {
-                float w = viewport.width - 16f;
-                var fila  = new Rect(0, y, w, rowH);
-                var zonaBorrar = new Rect(fila.xMax - 78f, y + 8f, 70f, rowH - 16f);
-                var zonaAbrir  = new Rect(0, y, w - 86f, rowH);
-
-                var n = nombre;   // captura por iteración
-                T.Borde(fila, T.Border);
-                T.Celda(_nav, zonaAbrir, primario: false, () => IrAlEscaner(n));
-                GUI.Label(new Rect(fila.x + 14f, y, w - 240f, rowH), n,
-                          T.Estilo(T.FMono, 15, T.Cream));
-                GUI.Label(new Rect(fila.x + 14f, y, zonaBorrar.x - fila.x - 22f, rowH),
-                          $"{(_itemCount.TryGetValue(n, out var c) ? c : 0)} elementos · editar",
-                          T.Estilo(T.FMono, 14, T.Dim, TextAnchor.MiddleRight));
-
-                // Pedir confirmación de borrado es destructivo: alerta, no confirmación.
-                T.Celda(_nav, zonaBorrar, primario: false,
-                        () => { AudioManager.Sonar(c2 => c2.uiAlerta); _confirmarBorrar = n; },
-                        bordeOverride: T.Red);
-                GUI.Label(zonaBorrar, "Borrar", T.Estilo(T.FMono, 14, T.Red, TextAnchor.MiddleCenter));
-
-                y += rowH + gap;
-            }
-            GUI.EndScrollView();
-
-            T.Boton(_nav, new Rect(Pad, vh - 44f - 58f, vw - Pad * 2f, 58f),
-                    "+ NUEVO ESCANEO", primario: true, () => IrAlEscaner(null));
-        }
-
-        private void DrawConfirmarBorrar(float vw, float vh)
-        {
-            T.Fill(new Rect(0, 0, vw, vh), new Color(0f, 0f, 0f, 0.7f));
-
-            float pw = vw - 56f, ph = 190f;
-            var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
-            T.Panel(panel, T.BgPanel, T.Red);
-
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 20f, pw - 44f, 30f),
-                      $"¿ELIMINAR \"{_confirmarBorrar}\"?", T.Estilo(T.FBebas, 20, T.Cream));
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 56f, pw - 44f, 24f),
-                      "Esta acción no se puede deshacer", T.Estilo(T.FMono, 15, T.Muted));
-
-            float bw = (pw - 44f - 10f) / 2f;
-            T.Boton(_nav, new Rect(panel.x + 22f, panel.yMax - 70f, bw, 48f),
-                    "CANCELAR", false, () => _confirmarBorrar = null, fontSize: 16);
-            T.Boton(_nav, new Rect(panel.x + 22f + bw + 10f, panel.yMax - 70f, bw, 48f),
-                    "ELIMINAR", true, () =>
-                    {
-                        ScanSerializer.Delete(_confirmarBorrar);
-                        _confirmarBorrar = null;
-                        RefrescarScans();
-                    }, fontSize: 16);
-        }
-
-        // US-1.1: bloqueo duro por versión de SO no soportada (Android < 14 / iOS < 17).
-        // A diferencia de los avisos de abajo, no tiene forma de descartarse: no hay
-        // nada jugable que ofrecer, así que la única acción posible es salir.
-        private void DrawBloqueoVersion(float vw, float vh)
-        {
-            T.Fill(new Rect(0, 0, vw, vh), new Color(0f, 0f, 0f, 0.85f));
-
-            float pw = vw - 56f, ph = 284f;
-            var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
-            T.Panel(panel, T.BgPanel, T.Red);
-
-            const float iconSize = 60f;
-            MortuoriumIcons.Draw(new Rect(panel.center.x - iconSize / 2f, panel.y + 14f, iconSize, iconSize),
-                                  MortuoriumIcons.Icon.Pentagrama);
-
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 82f, pw - 44f, 30f),
-                      "VERSIÓN NO COMPATIBLE", T.Estilo(T.FBebas, 20, T.Cream));
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 118f, pw - 44f, 90f),
-                      "Lo sentimos, la versión de su dispositivo no es compatible con el juego.",
-                      T.Estilo(T.FElite, 14, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
-
-            T.Boton(_nav, new Rect(panel.x + 22f, panel.yMax - 62f, pw - 44f, 46f),
-                    "SALIR", true, SalirDelJuego, fontSize: 16, textColor: T.Red);
-        }
-
         private static void SalirDelJuego()
         {
 #if UNITY_EDITOR
@@ -945,65 +520,10 @@ namespace Gameplay
 #endif
         }
 
-        // US-1.1: aviso (una sola vez) de que no se pudo determinar con certeza la
-        // versión del SO. No bloquea: solo recomienda actualizar para evitar
-        // inestabilidad o problemas de rendimiento no cubiertos por las pruebas.
-        private void DrawAvisoVersionDesconocida(float vw, float vh)
-        {
-            T.Fill(new Rect(0, 0, vw, vh), new Color(0f, 0f, 0f, 0.7f));
-
-            float pw = vw - 56f, ph = 314f;
-            var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
-            T.Panel(panel, T.BgPanel, T.Tan);
-
-            const float iconSize = 60f;
-            MortuoriumIcons.Draw(new Rect(panel.center.x - iconSize / 2f, panel.y + 14f, iconSize, iconSize),
-                                  MortuoriumIcons.Icon.Pentagrama);
-
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 82f, pw - 44f, 30f),
-                      "NO PUDIMOS VERIFICAR TU VERSIÓN", T.Estilo(T.FBebas, 18, T.Cream));
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 118f, pw - 44f, 130f),
-                      "No pudimos determinar la versión de tu sistema operativo. Es posible que " +
-                      "experimentes inestabilidad o problemas de rendimiento. Para la mejor " +
-                      "experiencia recomendamos Android 14 o superior, o iOS 17 o superior.",
-                      T.Estilo(T.FElite, 13, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
-
-            T.Boton(_nav, new Rect(panel.x + 22f, panel.yMax - 62f, pw - 44f, 46f),
-                    "ENTENDIDO", true, CerrarAvisoVersionDesconocida, fontSize: 16);
-        }
-
         private void CerrarAvisoVersionDesconocida()
         {
             _mostrarAvisoVersionDesconocida = false;
             GameOptions.AvisoVersionDesconocidaVisto = true;
-        }
-
-        // US-1.5: aviso de compatibilidad, una sola vez por dispositivo Android (la
-        // deriva/re-localización del entorno escaneado es mucho menor en iOS; ver
-        // "Riesgos Identificados" en la documentación). No bloquea seguir en Android.
-        private void DrawAvisoIos(float vw, float vh)
-        {
-            T.Fill(new Rect(0, 0, vw, vh), new Color(0f, 0f, 0f, 0.7f));
-
-            float pw = vw - 56f, ph = 314f;
-            var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
-            T.Panel(panel, T.BgPanel, T.Tan);
-
-            const float iconSize = 60f;
-            MortuoriumIcons.Draw(new Rect(panel.center.x - iconSize / 2f, panel.y + 14f, iconSize, iconSize),
-                                  MortuoriumIcons.Icon.Pentagrama);
-
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 82f, pw - 44f, 30f),
-                      "MEJOR EXPERIENCIA EN iOS", T.Estilo(T.FBebas, 20, T.Cream));
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 118f, pw - 44f, 130f),
-                      "En dispositivos iOS el seguimiento de realidad aumentada es más estable " +
-                      "y sufre mucho menos deriva espacial que en Android. Podés seguir jugando " +
-                      "en este dispositivo sin problema, pero si tenés un iPhone a mano vas a " +
-                      "tener la mejor experiencia posible.",
-                      T.Estilo(T.FElite, 13, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
-
-            T.Boton(_nav, new Rect(panel.x + 22f, panel.yMax - 62f, pw - 44f, 46f),
-                    "ENTENDIDO", true, CerrarAvisoIos, fontSize: 16);
         }
 
         private void CerrarAvisoIos()
@@ -1018,164 +538,9 @@ namespace Gameplay
         private static bool HayAvisoSalida =>
             GameSession.Instance != null && !string.IsNullOrEmpty(GameSession.Instance.AvisoSalida);
 
-        private void DrawAvisoSalida(float vw, float vh)
-        {
-            T.Fill(new Rect(0, 0, vw, vh), new Color(0f, 0f, 0f, 0.7f));
-
-            float pw = vw - 56f, ph = 270f;
-            var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
-            T.Panel(panel, T.BgPanel, T.Tan);
-
-            const float iconSize = 60f;
-            MortuoriumIcons.Draw(new Rect(panel.center.x - iconSize / 2f, panel.y + 14f, iconSize, iconSize),
-                                  MortuoriumIcons.Icon.Pentagrama);
-
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 82f, pw - 44f, 30f),
-                      GameSession.Instance.AvisoSalida, T.Estilo(T.FBebas, 20, T.Cream));
-            GUI.Label(new Rect(panel.x + 22f, panel.y + 118f, pw - 44f, 80f),
-                      "La partida terminó porque el host salió o se cortó la red. " +
-                      "Podés volver a unirte cuando abra una sala nueva.",
-                      T.Estilo(T.FElite, 13, T.CreamDim, TextAnchor.UpperLeft, wrap: true));
-
-            T.Boton(_nav, new Rect(panel.x + 22f, panel.yMax - 62f, pw - 44f, 46f),
-                    "ENTENDIDO", true, CerrarAvisoSalida, fontSize: 16);
-        }
-
         private void CerrarAvisoSalida()
         {
             if (GameSession.Instance != null) GameSession.Instance.AvisoSalida = null;
-        }
-
-        private void DrawOpciones(float vw, float vh)
-        {
-            T.BotonVolver(_nav, () => PantallaActual = Pantalla.Menu);
-
-            GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "OPCIONES",
-                      T.Estilo(T.FBebas, 28, T.Cream));
-
-            float y = 160f;
-
-            // Rediseño 2.0: apagado = la app como venía funcionando (ver Rediseno.Flag).
-            T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
-                         "REDISEÑO 2.0 (EXPERIMENTAL)",
-                         "Controles por mirada con el visor y lo nuevo. Apagalo para la versión de siempre",
-                         GameOptions.Rediseno2,
-                         () => GameOptions.Rediseno2 = !GameOptions.Rediseno2);
-            y += 68f;
-
-            // Volumen maestro (persistente).
-            int volPct = Mathf.RoundToInt(GameOptions.Volumen * 100f);
-            GUI.Label(new Rect(Pad, y, vw - Pad * 2f - 70f, 22f), "VOLUMEN",
-                      T.Estilo(T.FMono, 13, T.CreamDim));
-            GUI.Label(new Rect(vw - Pad - 70f, y, 70f, 22f), $"{volPct}%",
-                      T.Estilo(T.FMono, 13, T.Tan, TextAnchor.MiddleRight));
-            y += 26f;
-            float nuevoVol = T.Slider(new Rect(Pad, y, vw - Pad * 2f, 30f),
-                                      GameOptions.Volumen, 0f, 1f);
-            if (!Mathf.Approximately(nuevoVol, GameOptions.Volumen)) GameOptions.Volumen = nuevoVol;
-            y += 54f;
-
-            // Canales: el maestro de arriba los tapa a los dos. Se separan porque en un
-            // juego de terror los efectos son INFORMACIÓN (de dónde viene el Sorken, la
-            // alerta del libro) y el jugador tiene que poder bajar la música sin perderlos.
-            // La voz no entra acá: tiene su propio volumen en el menú de pausa.
-            y = FilaVolumen(vw, y, "MÚSICA", GameOptions.VolumenMusica,
-                            v => GameOptions.VolumenMusica = v);
-            y = FilaVolumen(vw, y, "EFECTOS", GameOptions.VolumenEfectos,
-                            v => GameOptions.VolumenEfectos = v);
-
-            // Anchor points extra: opción por dispositivo (ver AnchorPointManager).
-            T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
-                         "PUNTOS DE ANCLAJE",
-                         "Colocá anclas en tu cuarto antes de empezar (menos deriva)",
-                         GameOptions.PuntosAncla,
-                         () => GameOptions.PuntosAncla = !GameOptions.PuntosAncla);
-            y += 68f;
-
-            // Detección automática de paredes: WIP desconectado, ver
-            // GameOptions.AutoWallScanBetaEnabled — no mostrar esta fila hasta que
-            // esté cableado y probado en dispositivo (no borrar, solo ocultar).
-            if (GameOptions.AutoWallScanBetaEnabled)
-            {
-                T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
-                             "PARED AUTOMÁTICA (BETA)",
-                             "En el escáner, sugiere paredes detectadas por la cámara para confirmar/ajustar",
-                             GameOptions.EscaneoAutoBeta,
-                             () => GameOptions.EscaneoAutoBeta = !GameOptions.EscaneoAutoBeta);
-                y += 68f;
-            }
-
-            // El filtro de cinta es opcional. La oscuridad usa una capa independiente y
-            // permanece activa aunque el jugador lo apague.
-            T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
-                         "FILTRO VHS",
-                         "Grano, líneas y distorsión de cámara (no afecta la oscuridad)",
-                         GameOptions.VhsActivo,
-                         () => GameOptions.VhsActivo = !GameOptions.VhsActivo);
-            y += 68f;
-
-            // Estado del mando + botón para ir al visualizador.
-            var gm = Gamepad.GamepadManager.Instance;
-            string estado = (gm != null && gm.IsConnected)
-                ? $"Joystick: {gm.DisplayName}\nestado: conectado"
-                : "Joystick: ninguno\nconectá un mando por Bluetooth desde el sistema";
-            var caja = new Rect(Pad, y, vw - Pad * 2f, 56f);
-            T.Borde(caja, T.Border);
-            GUI.Label(new Rect(caja.x + 14f, caja.y + 8f, caja.width - 28f, caja.height - 16f),
-                      estado, T.Estilo(T.FMono, 15, gm != null && gm.IsConnected ? T.CreamDim : T.Muted, TextAnchor.UpperLeft, wrap: true));
-            y += 68f;
-            T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 52f), "CONTROL (MANDO)", false,
-                    () => PantallaActual = Pantalla.Control);
-            y += 64f;
-
-            // ── Herramientas de desarrollo ────────────────────────────────────
-            // Sólo en development build (en release ni se dibujan ni se compilan las
-            // llamadas): tocar la progresión a mano no puede llegar al jugador.
-            if (!Debug.isDebugBuild) return;
-
-            var nights = Nights;
-            int total  = nights != null ? nights.Length : 0;
-
-            GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f), "DESARROLLO", T.Estilo(T.FMono, 11, T.Red));
-            y += 22f;
-
-            // Catálogo de noches: dev (default de este build) o prod, para probar con los
-            // datos reales. Cada uno tiene su propio progreso (NightProgress), así que el
-            // contador de abajo cambia con él. Rige desde la próxima partida que se arme.
-            T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
-                         "NOCHES DE PROD",
-                         PlayDataProfile.UseProduction ? "Usando Nights/prod (datos reales)"
-                                                       : "Usando Nights/dev",
-                         PlayDataProfile.UseProduction,
-                         () => UsarNochesProd(!PlayDataProfile.UseProduction));
-            y += 64f;
-            GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f),
-                      $"Progreso: {NightProgress.Desbloqueadas} de {total} noches desbloqueadas",
-                      T.Estilo(T.FMono, 11, T.CreamDim));
-            y += 26f;
-
-            float bw = (vw - Pad * 2f - 10f) * 0.5f;
-            T.Boton(_nav, new Rect(Pad, y, bw, 46f), "DESBLOQUEAR TODAS", primario: false,
-                    () => NightProgress.DesbloquearTodas(total), enabled: total > 0, fontSize: 13);
-            T.Boton(_nav, new Rect(Pad + bw + 10f, y, bw, 46f), "BORRAR PROGRESO", primario: false,
-                    NightProgress.BorrarProgreso, fontSize: 13, textColor: T.Red);
-        }
-
-        // Una fila de volumen (etiqueta + porcentaje + slider), con el mismo look que el
-        // maestro de arriba. Devuelve la Y siguiente. Ocupa 80px, igual que aquél.
-        private float FilaVolumen(float vw, float y, string etiqueta, float valor,
-                                  System.Action<float> set)
-        {
-            GUI.Label(new Rect(Pad, y, vw - Pad * 2f - 70f, 22f), etiqueta,
-                      T.Estilo(T.FMono, 13, T.CreamDim));
-            GUI.Label(new Rect(vw - Pad - 70f, y, 70f, 22f),
-                      $"{Mathf.RoundToInt(valor * 100f)}%",
-                      T.Estilo(T.FMono, 13, T.Tan, TextAnchor.MiddleRight));
-            y += 26f;
-
-            float nuevo = T.Slider(new Rect(Pad, y, vw - Pad * 2f, 30f), valor, 0f, 1f);
-            if (!Mathf.Approximately(nuevo, valor)) set(nuevo);
-            return y + 54f;
         }
 
         private void DrawControl(float vw, float vh)

@@ -22,7 +22,6 @@ namespace Rediseno.Menus
         }
 
         private static Espectando2 _instancia;
-        public static bool Mostrando => _instancia != null && _instancia.EsVisible();
 
         private static void AlCargar(Scene s, LoadSceneMode m)
         {
@@ -47,7 +46,7 @@ namespace Rediseno.Menus
 
         protected override bool EsVisible()
         {
-            if (!Flag.Activo || PauseMenuController.IsOpen) return false;
+            if (PauseMenuController.IsOpen) return false;
             var ld = LocalDeath.Instance;
             return ld != null && ld.Espectando && !NightResult.Sobrevivio;
         }

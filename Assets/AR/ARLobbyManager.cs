@@ -469,10 +469,8 @@ public class ARLobbyManager : MonoBehaviour
     {
         if (State == LobbyState.GameStarted) return;
 
-        // Buscar la imagen es apuntarle con el centro de la pantalla, que en estéreo no
-        // es lo que ve ninguno de los dos ojos: se vuelve a la vista mono. Con el
-        // rediseño la búsqueda tiene panel y guía en estéreo, así que el visor sigue.
-        if (!Rediseno.Flag.Activo) MRCardboardController.SalirSiActivo();
+        // La búsqueda tiene panel y guía en estéreo (PanelSincronizacion2), así que el
+        // visor sigue puesto.
         State = LobbyState.Scanning;
 
         // keepVisualPosition: false → la escena se mueve con el anchor nuevo, que es

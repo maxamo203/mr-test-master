@@ -30,7 +30,6 @@ namespace Rediseno.UI
         private void AlCargar(Scene s, LoadSceneMode m)
         {
             _mr = null;
-            if (!Flag.Activo) return;
             if (s.name == SceneFlow.EscenaJuego && ModoVisor.Activo) _intentarHasta = Time.unscaledTime + 6f;
             else _intentarHasta = 0f;
             if (s.name == SceneFlow.EscenaMenu) ModoVisor.ReaplicarOrientacion();
@@ -39,7 +38,6 @@ namespace Rediseno.UI
 
         private void Update()
         {
-            if (!Flag.Activo) return;
             if (SceneManager.GetActiveScene().name != SceneFlow.EscenaJuego) return;
             if (_mr == null) _mr = FindAnyObjectByType<MRCardboardController>();
             if (_mr == null) return;

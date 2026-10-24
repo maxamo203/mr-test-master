@@ -7,8 +7,7 @@ using UnityEngine.UIElements;
 namespace Rediseno.Menus
 {
     // UBICAR EL ENTORNO (calibración a mano del 0,0) del Rediseño 2.0, usable con el visor.
-    // La pantalla vieja sólo se manejaba arrastrando las flechas del gizmo con el dedo; acá
-    // el mapa se mueve con filas ajustables: con la ruedita ↑↓ elegís la fila y ←→ ajustás
+    // El mapa se mueve con filas ajustables: con la ruedita ↑↓ elegís la fila y ←→ ajustás
     // (con repetición); con la mirada o el dedo, los botones − / + de cada fila. El gizmo
     // sigue enganchado, así que sin visor también se puede arrastrar como antes.
     //
@@ -56,7 +55,6 @@ namespace Rediseno.Menus
 
         protected override bool EsVisible()
         {
-            if (!Flag.Activo) return false;
             if (_lobby == null) _lobby = ARLobbyManager.Instance;
             if (_lobby == null || PauseMenuController.IsOpen) return false;
             return _lobby.State == ARLobbyManager.LobbyState.CalibrandoManual;

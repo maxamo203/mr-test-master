@@ -7,11 +7,9 @@ using UnityEngine.UIElements;
 namespace Rediseno.Menus
 {
     // Fin de la noche (SOBREVIVISTE / MORISTE) del Rediseño 2.0, usable con el visor.
-    // Reemplaza a DeathScreenUI con el flag: mismas acciones (reintentar, siguiente noche,
-    // elegir noche, espectar, volver al menú) y misma lógica de quién puede qué (sólo el
-    // host reinicia). En Cardboard se dibuja una vez por ojo, delante tuyo.
-    //
-    // ESPECTAR deja de verse en el visor por ahora: su barra para volver todavía es vieja.
+    // Acciones: reintentar, siguiente noche, elegir noche, espectar, volver al menú; sólo el
+    // host reinicia. Las reglas de qué ofrecer viven en DeathScreenUI. En Cardboard se
+    // dibuja una vez por ojo, delante tuyo. Espectando, la barra para volver es Espectando2.
     public class FinDeNoche2 : PantallaUI
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -23,7 +21,6 @@ namespace Rediseno.Menus
         }
 
         private static FinDeNoche2 _instancia;
-        public static bool Mostrando => _instancia != null && _instancia.EsVisible();
 
         private static void AlCargar(Scene s, LoadSceneMode m)
         {
@@ -50,12 +47,11 @@ namespace Rediseno.Menus
 
         protected override bool EsVisible()
         {
-            if (!Flag.Activo) return false;
             var ld = LocalDeath.Instance;
             bool muerto = ld != null && ld.PresentationReady;
             bool sobrevivio = NightResult.Sobrevivio;
             if (!muerto && !sobrevivio) { _selector = false; _logCopiado = -1; return false; }
-            if (!sobrevivio && ld != null && ld.Espectando) return false;   // barra vieja
+            if (!sobrevivio && ld != null && ld.Espectando) return false;   // Espectando2
             return true;
         }
 

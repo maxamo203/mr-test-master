@@ -71,11 +71,8 @@ namespace Gameplay
             RitualBookDirector.Instance?.Reiniciar();   // el libro vuelve a verse limpio
             VelethDirector.Instance?.StopRun();
 
-            // Cardboard NO se apaga acá: si el dispositivo sigue calibrado en esta sesión
-            // AR (el caso normal al reintentar), la sincronización no busca la imagen y el
-            // jugador puede seguir con el visor puesto. Los caminos que sí necesitan la
-            // pantalla mono salen solos (ARLobbyManager.RecalibrarConImagen →
-            // MRCardboardController.SalirSiActivo).
+            // Cardboard NO se apaga acá: toda la sincronización (también buscar la imagen)
+            // tiene panel en estéreo, así que el jugador puede seguir con el visor puesto.
 
             // Volver a MOSTRAR las paredes escaneadas. Durante la noche están ocultas
             // (SceneOccluderMode las oculta solo al arrancar; el toggle de la pausa sólo

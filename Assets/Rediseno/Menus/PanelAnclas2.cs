@@ -8,8 +8,8 @@ namespace Rediseno.Menus
 {
     // PUNTOS DE ANCLAJE (colocar anclas extra contra la deriva) del Rediseño 2.0, usable con
     // el visor: la mira va en el centro de cada ojo (ahí apunta el raycast de la cámara) y los
-    // botones se eligen con el mando o tocándolos. Misma lógica que la pantalla vieja de
-    // ARLobbyUI (AnchorPointManager / ARLobbyManager).
+    // botones se eligen con el mando o tocándolos. La lógica vive en AnchorPointManager /
+    // ARLobbyManager.
     //
     // Visor SIN joystick (menús quietos en el cuarto, se elige mirando): no hay botón COLOCAR
     // ANCLA — para "apretarlo" había que mirarlo, y así se dejaba de apuntar adonde iba el
@@ -74,7 +74,6 @@ namespace Rediseno.Menus
 
         protected override bool EsVisible()
         {
-            if (!Flag.Activo) return false;
             if (_lobby == null) _lobby = ARLobbyManager.Instance;
             if (_lobby == null || PauseMenuController.IsOpen) return false;
             return _lobby.State == ARLobbyManager.LobbyState.PlacingAnchors && AnchorPointManager.Instance != null;

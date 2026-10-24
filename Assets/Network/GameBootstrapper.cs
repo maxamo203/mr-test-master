@@ -8,9 +8,12 @@ using T = MortuoriumTheme;
 //
 //   SinglePlayer / MultiHost -> arranca el host con el entorno elegido y muestra la
 //                               SALA (sincronizar la imagen; multi además espera a
-//                               los jugadores). ARLobbyUI dibuja el estado encima.
-//   MultiClient              -> muestra UNIRSE (autodescubrimiento por LAN + IP
-//                               manual) y al conectar pasa a la SALA como cliente.
+//                               los jugadores). PanelSincronizacion2 dibuja el estado.
+//   MultiClient              -> muestra UNIRSE (Rediseno.Menus.PanelUnirse2:
+//                               autodescubrimiento por LAN + IP manual) y al conectar
+//                               pasa a la SALA como cliente.
+//
+// Acá sólo se dibuja la franja de la SALA (dirección para compartir con los demás).
 //
 // Puerto: GameSession.HostPort (por defecto NetworkConfig.DefaultPort). El host se
 // autoanuncia por LAN SÓLO en el puerto por defecto y sólo si es multijugador; con
@@ -37,9 +40,6 @@ public class GameBootstrapper : MonoBehaviour
     private bool                  _autoHostPendiente;
     private string                _autoHostMapa;
 
-    // Navegación con gamepad de todos los botones del lobby.
-    private readonly Gamepad.ImguiGamepadMenu _nav = new();
-
     private const float Pad = 28f;
 
     public static GameBootstrapper Instance { get; private set; }
@@ -55,7 +55,7 @@ public class GameBootstrapper : MonoBehaviour
         if (Instance == this) Instance = null;
     }
 
-    // ── Rediseño 2.0: lo usa Rediseno.Menus.PanelUnirse2 (UNIRSE en estéreo) ──
+    // ── Modelo de UNIRSE: lo dibuja Rediseno.Menus.PanelUnirse2 ──
     public bool EnUnirse => _pantalla == Pantalla.Unirse;
     public IReadOnlyDictionary<string, LanDiscovery.DiscoveredHost> Salas => _lan != null ? _lan.Hosts : null;
     public string HostManual { get => _host; set => _host = value; }
@@ -89,7 +89,6 @@ public class GameBootstrapper : MonoBehaviour
 
     private void Update()
     {
-        _nav.Update();
         if (_autoHostPendiente)
         {
             _autoHostPendiente = false;
@@ -99,100 +98,21 @@ public class GameBootstrapper : MonoBehaviour
 
     private void OnGUI()
     {
-        // Rediseño 2.0: debajo de la pausa no se dibuja lo viejo (UNIRSE, franja de sala).
-        if (Rediseno.Flag.Activo && Gamepad.PauseMenuController.IsOpen) return;
+        // Debajo de la pausa no se dibuja la franja de sala.
+        if (Gamepad.PauseMenuController.IsOpen) return;
+        // UNIRSE lo dibuja Rediseno.Menus.PanelUnirse2 (estéreo con Cardboard).
+        if (_pantalla != Pantalla.Sala) return;
 
         UIScale.Begin();
-        _nav.Begin();
-
         float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
 
-        // Rediseño 2.0: UNIRSE lo dibuja la pantalla nueva (estéreo con Cardboard).
-        if (_pantalla == Pantalla.Unirse && Rediseno.Menus.PanelUnirse2.Mostrando)
-        {
-            _nav.End();
-            return;
-        }
+        // En la SALA la cámara queda visible dentro del área segura y sólo se ennegrecen
+        // las franjas de afuera (notch / home indicator).
+        T.FillOutsideSafeArea(T.Bg);
 
-        // UNIRSE tapa la cámara (fondo opaco en toda la pantalla); en la SALA la
-        // cámara queda visible dentro del área segura y sólo se ennegrecen las
-        // franjas de afuera (notch / home indicator).
-        if (_pantalla != Pantalla.Sala)
-        {
-            T.FillScreen(T.Bg);
-            UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
-        }
-        else
-        {
-            T.FillOutsideSafeArea(T.Bg);
-        }
-
-        switch (_pantalla)
-        {
-            case Pantalla.Unirse: DrawUnirse(vw, vh); break;
-            // Rediseño 2.0: con el visor la franja de sala (MODO CARDBOARD, PAREDES…) quedaba
-            // partida entre los ojos y no se puede tocar; salir del visor está en la pausa.
-            case Pantalla.Sala:
-                if (!(Rediseno.Flag.Activo && MRCardboardController.Activo)) DrawSala(vw, vh);
-                break;
-        }
-
-        _nav.End();
-    }
-
-    // ── UNIRSE (cliente) ──────────────────────────────────────────────────
-
-    private void DrawUnirse(float vw, float vh)
-    {
-        T.BotonVolver(_nav, SalirDeUnirse);
-
-        GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "UNIRSE A SALA",
-                  T.Estilo(T.FBebas, 28, T.Cream));
-
-        float y = 132f;
-
-        // Salas encontradas automáticamente en la red (sólo hosts en el puerto por
-        // defecto se autoanuncian). Tocar una se conecta directo.
-        var hosts = _lan != null ? _lan.Hosts : null;
-        int encontradas = hosts != null ? hosts.Count : 0;
-
-        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f),
-                  encontradas > 0 ? "Salas en tu red:" : "Buscando salas en tu red…",
-                  T.Estilo(T.FElite, 12, T.Dim));
-        y += 28f;
-
-        if (hosts != null)
-        {
-            foreach (var h in hosts.Values)
-            {
-                var fila = new Rect(Pad, y, vw - Pad * 2f, 52f);
-                var host = h;   // captura por iteración
-                T.Celda(_nav, fila, primario: false,
-                        () => Conectar(host.Address, host.GamePort));
-                string nombre = string.IsNullOrEmpty(host.Name) ? "Sala" : host.Name;
-                GUI.Label(new Rect(fila.x + 14f, fila.y + 6f, fila.width - 28f, 22f), nombre,
-                          T.Estilo(T.FMono, 14, T.Cream));
-                GUI.Label(new Rect(fila.x + 14f, fila.y + 28f, fila.width - 28f, 18f),
-                          $"{host.Address} : {host.GamePort}", T.Estilo(T.FMono, 11, T.Dim));
-                y += 60f;
-            }
-        }
-
-        y += 8f;
-        // IP manual (para host con puerto custom, u otra red). Si no ponés puerto,
-        // se asume el por defecto.
-        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 20f), "…o ingresá la IP del host",
-                  T.Estilo(T.FMono, 11, T.Muted));
-        y += 24f;
-        _host = T.CampoTexto(new Rect(Pad, y, vw - Pad * 2f, 50f), _host, "192.168.1.42");
-        y += 56f;
-        GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 18f),
-                  $"Si no ponés puerto se usa el {NetworkConfig.DefaultPort} (o escribí ip:puerto)",
-                  T.Estilo(T.FMono, 10, T.Dim));
-        y += 30f;
-
-        T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f), "CONECTAR", primario: true,
-                () => { ParseHostPort(_host, out var ip, out var pt); Conectar(ip, pt); });
+        // Con el visor la franja de sala quedaba partida entre los ojos y no se puede
+        // leer; salir del visor está en la pausa.
+        if (!MRCardboardController.Activo) DrawSala(vw, vh);
     }
 
     private void SalirDeUnirse()
@@ -219,19 +139,20 @@ public class GameBootstrapper : MonoBehaviour
     private void DrawSala(float vw, float vh)
     {
         // La cámara AR queda visible: solo franjas con gradiente arriba/abajo.
-        // ARLobbyUI dibuja el estado de sincronización + INICIAR debajo de esto.
+        // PanelSincronizacion2 dibuja el estado de sincronización + INICIAR debajo.
         T.Gradiente(new Rect(0, 0, vw, 220f), 0.85f, haciaAbajo: true);
 
         bool solo = Gameplay.GameSession.Instance != null &&
                     Gameplay.GameSession.Instance.SoloUnJugador;
 
         // Cabecera. En modo un jugador NO mostramos la dirección de sala (no hay
-        // nadie a quien compartírsela): solo el título de la noche.
+        // nadie a quien compartírsela) ni título: la cabecera queda vacía.
         if (solo && _isHost)
         {
-            bool practica = Gameplay.GameSession.Instance.EnTutorial;
-            GUI.Label(new Rect(Pad, 14f, vw - Pad * 2f, 34f), practica ? "PRÁCTICA" : "TU NOCHE",
-                      T.Estilo(T.FBebas, 24, T.Cream));
+            // Sin "TU NOCHE"; sólo se rotula la práctica.
+            if (Gameplay.GameSession.Instance.EnTutorial)
+                GUI.Label(new Rect(Pad, 14f, vw - Pad * 2f, 34f), "PRÁCTICA",
+                          T.Estilo(T.FBebas, 24, T.Cream));
         }
         else if (_isHost)
         {

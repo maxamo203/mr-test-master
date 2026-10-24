@@ -6,20 +6,16 @@ using UnityEngine.UIElements;
 
 namespace Rediseno.Menus
 {
-    // Menú principal del Rediseño 2.0 (UI Toolkit). Reemplaza SOLO la pantalla raíz de
-    // NightMenuUI cuando el flag está prendido; las demás pantallas (noches, escenarios,
-    // opciones…) siguen siendo las IMGUI de siempre hasta que se migren. Si el jugador
-    // está en el visor y elige algo que lleva a una pantalla vieja, se sale del visor
-    // (esas pantallas todavía no se dibujan en estéreo).
+    // Menú principal del Rediseño 2.0 (UI Toolkit): la pantalla raíz de NightMenuUI. Las
+    // demás pantallas tienen la suya (MenusFlujoJuego, MenuEscenarios2, MenuOpciones2…);
+    // sólo CONTROL sigue en IMGUI, y si se llega ahí con el visor puesto se sale del visor
+    // (todavía no se dibuja en estéreo).
     //
     // Se crea solo en NightMenuScene (RuntimeInitializeOnLoadMethod + sceneLoaded): no
     // hay que tocar la escena.
     public class MenuPrincipal2 : PantallaUI
     {
         public static MenuPrincipal2 Instance { get; private set; }
-
-        // ¿Lo está dibujando este menú? NightMenuUI no dibuja su pantalla raíz cuando sí.
-        public static bool Mostrando => Instance != null && Instance.EsVisible();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -35,8 +31,10 @@ namespace Rediseno.Menus
             new GameObject("MenuPrincipal2").AddComponent<MenuPrincipal2>();
         }
 
-        private Texture2D _fondoA, _fondoB;
-        private VisualElement _capaA, _capaB, _puntoRec;
+        private Texture2D[] _fondos;
+        private VisualElement[] _capas;
+        private VisualElement _puntoRec, _contenedorFondo;
+        private int _capaFrente = -1;
         private Label _rec, _ctaTitulo, _ctaSub;
         private VisualElement _iconoVisor;
         private float _t;
@@ -47,31 +45,33 @@ namespace Rediseno.Menus
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             base.Awake();
-            _fondoA = Resources.Load<Texture2D>("Rediseno/fondo_sorken");
-            _fondoB = Resources.Load<Texture2D>("Rediseno/fondo_arbmos");
+            _fondos = new[]
+            {
+                Resources.Load<Texture2D>("Rediseno/fondo_sorken"),
+                Resources.Load<Texture2D>("Rediseno/fondo_entidad"),
+                Resources.Load<Texture2D>("Rediseno/fondo_veleth_menu"),
+            };
         }
 
         protected override void OnDestroy()
         {
             if (Instance == this) Instance = null;
-            // Al irse del menú (a una partida o al escáner) sin pasar por la pantalla vieja.
             base.OnDestroy();
         }
 
         protected override bool EsVisible()
         {
             var menu = NightMenuUI.Instance;
-            return Flag.Activo && menu != null && menu.MostrandoPrincipal;
+            return menu != null && menu.MostrandoPrincipal;
         }
 
-        protected override Texture FondoVisor => _fondoA;
+        protected override Texture FondoVisor => _fondos != null ? _fondos[0] : null;
 
         protected override void AlCambiarVisor(bool visor)
         {
             // En el visor el fondo lo dibuja PantallaUI detrás, con profundidad.
             DisplayStyle d = visor ? DisplayStyle.None : DisplayStyle.Flex;
-            if (_capaA != null) _capaA.style.display = d;
-            if (_capaB != null) _capaB.style.display = d;
+            if (_contenedorFondo != null) _contenedorFondo.style.display = d;
             if (_iconoVisor != null)
                 _iconoVisor.style.backgroundImage = visor ? IconosMenu.Celular : IconosMenu.Visor;
         }
@@ -81,12 +81,18 @@ namespace Rediseno.Menus
         {
             raiz.style.backgroundColor = Color.clear;
 
-            // Fondo animado: dos capas del concept art que se funden, con paneo lento.
-            _capaA = Capa(_fondoA);
-            _capaB = Capa(_fondoB);
-            _capaB.style.opacity = 0f;
-            raiz.Add(_capaA);
-            raiz.Add(_capaB);
+            // Fondo animado: las capas del concept art se funden de a una, con paneo lento.
+            _contenedorFondo = new VisualElement { pickingMode = PickingMode.Ignore };
+            Llenar(_contenedorFondo);
+            raiz.Add(_contenedorFondo);
+            _capas = new VisualElement[_fondos.Length];
+            for (int i = 0; i < _capas.Length; i++)
+            {
+                _capas[i] = Capa(_fondos[i]);
+                _capas[i].style.opacity = i == 0 ? 1f : 0f;
+                _contenedorFondo.Add(_capas[i]);
+            }
+            _capaFrente = -1;
             var sombra = new VisualElement { pickingMode = PickingMode.Ignore };
             Llenar(sombra);
             sombra.style.backgroundImage = TemaUI.SombraAbajo;
@@ -186,8 +192,8 @@ namespace Rediseno.Menus
             ActualizarTextos();
         }
 
-        // Pasa a otra pantalla de NightMenuUI. Si esa pantalla ya está migrada (UI Toolkit)
-        // el visor sigue; si todavía es vieja (IMGUI), NightMenuUI sale del visor solo.
+        // Pasa a otra pantalla de NightMenuUI. Si esa pantalla es UI Toolkit el visor sigue;
+        // si es IMGUI (CONTROL), NightMenuUI sale del visor solo.
         private void Abrir(System.Action<NightMenuUI> accion)
         {
             var menu = NightMenuUI.Instance;
@@ -216,16 +222,32 @@ namespace Rediseno.Menus
         {
             _t += dt;
             if (_puntoRec != null) _puntoRec.style.opacity = Mathf.Repeat(_t, 1.6f) < 0.8f ? 1f : 0.2f;
-            if (ModoVisor.Activo || _capaA == null) return;
+            if (ModoVisor.Activo || _capas == null) return;
 
-            // Paneo lento (26 s ida y vuelta) y fundido entre Sorken y Arbmos.
+            // Paneo lento (26 s ida y vuelta) y fundido cada SegundosPorFondo: la capa que
+            // entra sube al frente y se funde sobre la anterior, que sigue opaca debajo.
+            const float SegundosPorFondo = 13f, SegundosFundido = 1.3f;
             float k = Mathf.SmoothStep(0f, 1f, Mathf.PingPong(_t / 26f, 1f));
-            _capaA.style.scale = new Scale(Vector3.one * Mathf.Lerp(1.04f, 1.16f, k));
-            _capaA.style.translate = new Translate(Length.Percent(-3f * k), Length.Percent(2f * k));
-            float f = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((Mathf.PingPong(_t / 13f, 1f) - 0.45f) / 0.1f));
-            _capaB.style.opacity = f;
-            _capaB.style.scale = new Scale(Vector3.one * Mathf.Lerp(1.10f, 1.18f, k));
-            _capaB.style.translate = new Translate(Length.Percent(2f - 4f * k), Length.Percent(-2f * k));
+            int n = _capas.Length;
+            int actual = (int)(_t / SegundosPorFondo) % n;
+            if (actual != _capaFrente)
+            {
+                _capaFrente = actual;
+                _capas[actual].BringToFront();
+                if (_t >= SegundosPorFondo)
+                    for (int i = 0; i < n; i++)
+                        if (i != actual) _capas[i].style.opacity = i == (actual + n - 1) % n ? 1f : 0f;
+            }
+            float f = _t < SegundosPorFondo ? 1f
+                : Mathf.SmoothStep(0f, 1f, (_t % SegundosPorFondo) / SegundosFundido);
+            _capas[actual].style.opacity = f;
+            for (int i = 0; i < n; i++)
+            {
+                _capas[i].style.scale = new Scale(Vector3.one * Mathf.Lerp(i % 2 == 0 ? 1.04f : 1.10f, i % 2 == 0 ? 1.16f : 1.18f, k));
+                _capas[i].style.translate = i % 2 == 0
+                    ? new Translate(Length.Percent(-3f * k), Length.Percent(2f * k))
+                    : new Translate(Length.Percent(2f - 4f * k), Length.Percent(-2f * k));
+            }
 
             // Si vuelve al menú desde otra pantalla, refrescar (se pudo ganar una noche).
             if (Time.frameCount % 30 == 0) ActualizarTextos();

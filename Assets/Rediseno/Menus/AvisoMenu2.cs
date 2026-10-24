@@ -12,7 +12,6 @@ namespace Rediseno.Menus
     public class AvisoMenu2 : PantallaUI
     {
         private static AvisoMenu2 _instancia;
-        public static bool Mostrando => _instancia != null && _instancia.EsVisible();
 
         private VisualElement _fondo, _cuerpo;
         private NightMenuUI.AvisoMenu _armado = NightMenuUI.AvisoMenu.Ninguno;
@@ -33,7 +32,7 @@ namespace Rediseno.Menus
         protected override bool EsVisible()
         {
             var menu = NightMenuUI.Instance;
-            return Flag.Activo && menu != null && menu.AvisoActual != NightMenuUI.AvisoMenu.Ninguno;
+            return menu != null && menu.AvisoActual != NightMenuUI.AvisoMenu.Ninguno;
         }
 
         protected override Texture FondoVisor => TarjetasNoche.Arte(0);

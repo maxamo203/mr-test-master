@@ -100,7 +100,7 @@ namespace Bateries
             EnsureComponent<FlashlightToggleAction>();
             EnsureComponent<BatteryPickupAction>();
             EnsureComponent<Collectibles.CollectiblePickupAction>();
-            // Rediseño 2.0: control por mirada (sólo actúa con el flag; ver Rediseno.Flag).
+            // Control por mirada (Cardboard sin joystick).
             EnsureComponent<Rediseno.ControlMirada>();
         }
 
@@ -332,12 +332,10 @@ namespace Bateries
             bool held = g != null && (g.buttonSouth.isPressed || g.buttonEast.isPressed ||
                                       g.buttonNorth.isPressed || g.buttonWest.isPressed);
 
-            // VR Box en modo mouse: el botón de la linterna es la B (ver BotonBDelMando).
-            // Rediseño 2.0: del VR BOX sólo cuenta la ruedita. La acción del momento (recoger
-            // lo apuntado; si no, prender/apagar) es la ruedita → — mantenida concentra, igual
+            // VR Box en modo mouse: sólo cuenta la ruedita. La acción del momento (recoger lo
+            // apuntado; si no, prender/apagar) es la ruedita → — mantenida concentra, igual
             // que el botón de siempre. ↑ intensa, ↓ apagada y ← (mantener) pausa van aparte.
-            if (!Rediseno.Flag.Activo) held |= ClicMandoMouse() || BotonBDelMando();
-            else held |= PalancaDerecha();
+            held |= PalancaDerecha();
 
             // Mobile sin mando: dos dedos apoyados = el mismo botón (es el gesto que en main
             // prendía/apagaba la linterna). Toque corto prende/apaga, mantener concentra.
@@ -397,21 +395,6 @@ namespace Bateries
             GUI.matrix = prevM;
         }
 
-        private static bool ClicMandoMouse()
-        {
-            var gm = GamepadManager.Instance;
-            var mouse = Mouse.current;
-            return gm != null && gm.UsesMouseInput && mouse != null && mouse.leftButton.isPressed;
-        }
-
-        // VR BOX en Android (verificado en el motorola edge 30 con getevent + log): la A sale
-        // como BTN_MOUSE pero Unity NO la ve como Mouse.leftButton — Android la convierte en
-        // un toque de un dedo donde está el cursor escondido, y ese toque ahora abre la pausa
-        // (PauseMenuController). La B (BTN_SIDE) llega como Mouse.backButton, así que ESA es
-        // la de la linterna: toque prende/apaga (o recoge). Es un pulso de un frame — el mando
-        // no informa cuándo se suelta —; la luz intensa va por la palanca (UpdatePalancaVRBox).
-        private static bool BotonBDelMando() => VRBoxInput.BHeld;
-
         private static bool DosDedosApoyados()
         {
             var ts = Touchscreen.current;
@@ -445,9 +428,9 @@ namespace Bateries
             Scanner.UIScale.Begin();
             float vw = Scanner.UIScale.VirtualWidth, vh = Scanner.UIScale.VirtualHeight;
 
-            // Rediseño 2.0 con Cardboard: no se puede tocar nada, pero hay que saber que lo que
-            // apuntás se puede recoger. Cartel chico en cada ojo, debajo del centro de la vista.
-            if (Rediseno.Flag.Activo && MRCardboardController.Activo)
+            // Con Cardboard no se puede tocar nada, pero hay que saber que lo que apuntás se
+            // puede recoger. Cartel chico en cada ojo, debajo del centro de la vista.
+            if (MRCardboardController.Activo)
             {
                 _screenPrimaryHeld = false;
                 if (_current != null && _current.ShowActionButton && !string.IsNullOrEmpty(_currentLabel) &&
@@ -469,9 +452,7 @@ namespace Bateries
 
             string holdTime = brightHoldSeconds.ToString("0.#");
             string como = vrBox
-                ? (Rediseno.Flag.Activo
-                    ? "palanca a la derecha · arriba: intensa · abajo: apagada"
-                    : "botón B · palanca arriba: intensa · abajo: apagada")
+                ? "palanca a la derecha · arriba: intensa · abajo: apagada"
                 : pad
                 ? $"botón A · mantener {holdTime} s: luz intensa"
                 : $"mantener {holdTime} s: luz intensa";

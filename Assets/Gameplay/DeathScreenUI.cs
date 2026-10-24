@@ -1,172 +1,13 @@
 using UnityEngine;
-using Scanner;   // UIScale, UIBlocker
-using T = MortuoriumTheme;
 
 namespace Gameplay
 {
-    // Pantalla de muerte del jugador local (estilo Mortuorium). Se muestra cuando
-    // LocalDeath.IsDead. "VOLVER AL MENÚ" limpia los singletons cross-scene (mismo
-    // criterio que SceneFlow) y carga el menú de noche.
+    // Fin de la noche del jugador local (MORISTE / SOBREVIVISTE). La pantalla la dibuja
+    // Rediseno.Menus.FinDeNoche2 (y la barra de espectador, Espectando2); este componente
+    // de SampleScene sólo asegura LocalDeath y aporta las reglas de qué ofrecer al terminar.
     public class DeathScreenUI : MonoBehaviour
     {
-        [SerializeField] private string _menuScene = "NightMenuScene";
-
-        private readonly Gamepad.ImguiGamepadMenu _nav = new();
-
-        private const float Pad = 28f;
-
         private void Awake() => LocalDeath.Ensure();
-
-        private void Update() => _nav.Update();
-
-        // Modal para elegir cualquier noche del catálogo (no sólo la siguiente).
-        private bool _selectorAbierto;
-        private int _logCopiado = -1;   // PROVISORIO: líneas del último COPIAR LOG (DEV)
-
-        private void OnGUI()
-        {
-            var ld = LocalDeath.Instance;
-            bool muerto     = ld != null && ld.PresentationReady;
-            bool sobrevivio = NightResult.Sobrevivio;
-            if (!muerto && !sobrevivio) { _selectorAbierto = false; _logCopiado = -1; return; }
-
-            // Rediseño 2.0: la dibuja la pantalla nueva (UI Toolkit, estéreo con Cardboard).
-            if (Rediseno.Menus.FinDeNoche2.Mostrando || Rediseno.Menus.Espectando2.Mostrando) return;
-
-            UIScale.Begin();
-            _nav.Begin();
-
-            float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
-
-            // Espectando: sin overlay, sólo la barra para volver a la pantalla de muerte.
-            if (!sobrevivio && ld.Espectando)
-            {
-                _selectorAbierto = false;
-                DrawEspectando(ld, vw);
-                _nav.End();
-                return;
-            }
-
-            // Overlay oscuro en toda la pantalla (incluye fuera del área segura).
-            T.FillScreen(new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.92f));
-            UIBlocker.AddVirtualRect(new Rect(0, 0, vw, vh));
-
-            // El modal reemplaza a la pantalla de muerte: si dibujáramos las dos, los
-            // botones de abajo seguirían recibiendo taps a través del overlay.
-            if (_selectorAbierto)
-            {
-                DrawSelectorNoches(vw, vh);
-                _nav.End();
-                return;
-            }
-
-            // Título (con leve glitch cromático), según cómo terminó la noche.
-            string titulo  = sobrevivio ? "SOBREVIVISTE" : "MORISTE";
-            Color  colorTit = sobrevivio ? T.Green : T.Red;
-            var titRect = new Rect(0, vh * 0.28f, vw, 90f);
-            GUI.Label(new Rect(titRect.x + 2f, titRect.y, titRect.width, titRect.height), titulo,
-                      T.Estilo(T.FBebas, 64, new Color(0f, 0.22f, 0.20f, 0.5f), TextAnchor.MiddleCenter));
-            GUI.Label(titRect, titulo, T.Estilo(T.FBebas, 64, colorTit, TextAnchor.MiddleCenter));
-
-            GUI.Label(new Rect(Pad, vh * 0.28f + 96f, vw - Pad * 2f, 26f),
-                      sobrevivio ? "Amaneció. el ritual sigue, pero no esta noche."
-                                 : "El ritual te reclamó… por ahora.",
-                      T.Estilo(T.FElite, 14, T.Muted, TextAnchor.MiddleCenter));
-
-            // Fin de la demo: superaste la última noche de esta variante. Reemplaza al
-            // aviso de desbloqueo porque en la demo ese aviso mentiría — la progresión
-            // desbloquea la noche siguiente igual, pero la variante no la habilita.
-            if (sobrevivio && FinDeLaDemo())
-                DrawFinDemo(vw, vh);
-            // Aviso de desbloqueo (sólo si esta victoria movió de verdad la progresión;
-            // rejugar una noche ya superada no desbloquea nada).
-            else if (sobrevivio && NightResult.NocheDesbloqueada > 0)
-                GUI.Label(new Rect(Pad, vh * 0.28f + 126f, vw - Pad * 2f, 24f),
-                          $"Noche {NightResult.NocheDesbloqueada} desbloqueada",
-                          T.Estilo(T.FMono, 12, T.Tan, TextAnchor.MiddleCenter));
-
-            // Moriste pero la noche sigue (quedan compañeros vivos): se puede ocultar la
-            // pantalla para mirar la partida sin intervenir.
-            bool espectable = !sobrevivio && ld.PuedeEspectar;
-            if (espectable)
-                GUI.Label(new Rect(Pad, vh * 0.28f + 126f, vw - Pad * 2f, 24f),
-                          "Tus compañeros siguen en pie",
-                          T.Estilo(T.FMono, 12, T.Tan, TextAnchor.MiddleCenter));
-
-            // Reintentar / cambiar de noche sólo las decide el host: reinician la noche
-            // para TODOS. El cliente espera (al llegar el ResetNight revive).
-            bool host = NightTransition.PuedeReiniciar;
-            float y = vh - 44f - 58f;
-
-            T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 58f),
-                    "VOLVER AL MENÚ", primario: !host && !espectable, ReturnToMenu);
-
-            // PROVISORIO (dev build): copiar el log del retrato del asesino, sin consola
-            // de Xcode. Arriba a la derecha para no correr la botonera. Ver LogMuerteDev.
-            if (LogMuerteDev.Disponible && !sobrevivio)
-            {
-                var rLog = new Rect(vw - Pad - 220f, Pad + 70f, 220f, 46f);
-                T.Boton(_nav, rLog, "COPIAR LOG (DEV)", primario: false,
-                        () => _logCopiado = LogMuerteDev.Copiar(), fontSize: 14);
-                if (_logCopiado >= 0)
-                    GUI.Label(new Rect(rLog.x - 80f, rLog.yMax + 4f, rLog.width + 80f, 20f),
-                              $"copiado ({_logCopiado} líneas)",
-                              T.Estilo(T.FMono, 11, T.CreamDim, TextAnchor.MiddleRight));
-            }
-
-            if (espectable)
-            {
-                y -= 66f;
-                T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 58f),
-                        "ESPECTAR PARTIDA", primario: !host, ld.Espectar);
-            }
-
-            if (host)
-            {
-                y -= 66f;
-                T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 58f),
-                        "ELEGIR NOCHE", primario: false,
-                        () => _selectorAbierto = true,
-                        enabled: NightTransition.HayCatalogoDeNoches, fontSize: 18);
-
-                y -= 66f;
-                // Tras ganar lo natural es seguir; tras morir, repetir.
-                if (sobrevivio && SiguienteDesbloqueada(out int idxSiguiente))
-                    T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 58f),
-                            "SIGUIENTE NOCHE", primario: true,
-                            () => NightTransition.IrANoche(idxSiguiente));
-                else
-                    T.Boton(_nav, new Rect(Pad, y, vw - Pad * 2f, 58f),
-                            "REINTENTAR NOCHE", primario: true, NightTransition.Reintentar);
-            }
-            else
-            {
-                GUI.Label(new Rect(Pad, y - 34f, vw - Pad * 2f, 24f),
-                          "Esperando a que el host reinicie la noche…",
-                          T.Estilo(T.FMono, 11, T.Dim, TextAnchor.MiddleCenter));
-            }
-
-            _nav.End();
-        }
-
-        // Barra de espectador: arriba, a la izquierda del botón de pausa (vw-84), para
-        // no tapar las barras de cordura/amanecer de abajo. Sólo bloquea su propio rect;
-        // el resto de la pantalla queda libre para mirar.
-        private void DrawEspectando(LocalDeath ld, float vw)
-        {
-            var barra = new Rect(Pad, 28f, vw - Pad - 96f, 60f);
-            UIBlocker.AddVirtualRect(barra);
-            T.Panel(barra, new Color(T.Bg.r, T.Bg.g, T.Bg.b, 0.8f), T.Red);
-
-            GUI.Label(new Rect(barra.x + 12f, barra.y + 6f, barra.width - 24f, 26f), "ESPECTANDO",
-                      T.Estilo(T.FBebas, 22, T.Red));
-            GUI.Label(new Rect(barra.x + 12f, barra.y + 32f, barra.width * 0.5f, 20f), "Estás muerto",
-                      T.Estilo(T.FMono, 10, T.Dim));
-
-            const float bw = 110f;
-            T.Boton(_nav, new Rect(barra.xMax - bw - 8f, barra.y + 8f, bw, 44f),
-                    "VOLVER", primario: false, ld.DejarDeEspectar, fontSize: 16);
-        }
 
         // ¿La noche recién superada era la ÚLTIMA que habilita la demo, y hay más en el
         // catálogo? Lo segundo importa: sin noches de más no hay nada que ofrecer y el
@@ -183,23 +24,6 @@ namespace Gameplay
                    !BuildVariant.NocheHabilitada(sig);
         }
 
-        // Cartel de cierre de la demo. Se apoya justo debajo del subtítulo; los botones
-        // arrancan recién en vh-234, así que no hay riesgo de pisarlos.
-        private static void DrawFinDemo(float vw, float vh)
-        {
-            var caja = new Rect(Pad, vh * 0.28f + 122f, vw - Pad * 2f, 132f);
-            T.Fill(caja, new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.07f));
-            T.Borde(caja, T.Tan);
-
-            GUI.Label(new Rect(caja.x, caja.y + 12f, caja.width, 30f), "FIN DE LA DEMO",
-                      T.Estilo(T.FBebas, 24, T.Tan, TextAnchor.MiddleCenter));
-
-            GUI.Label(new Rect(caja.x + 14f, caja.y + 46f, caja.width - 28f, 74f),
-                      $"Podés seguir jugando estas {BuildVariant.NochesDemo} noches todas las veces " +
-                      "que quieras. La versión completa suma más noches y modo multijugador.",
-                      T.Estilo(T.FMono, 12, T.CreamDim, TextAnchor.UpperCenter, wrap: true));
-        }
-
         // ¿La noche recién superada dejó desbloqueada una siguiente que existe?
         internal static bool SiguienteDesbloqueada(out int index)
         {
@@ -210,77 +34,6 @@ namespace Gameplay
             if (!s.NocheDisponible(sig) || !NightProgress.Desbloqueada(sig)) return false;
             index = sig;
             return true;
-        }
-
-
-        // Selector de noche: grilla con TODAS las del catálogo, marcando la que se
-        // acaba de jugar. Mismo lenguaje visual que la grilla del menú principal
-        // (NightMenuUI.DrawNoches): número grande + estado, celda bloqueada con candado
-        // donde no hay NightConfig configurada.
-        private void DrawSelectorNoches(float vw, float vh)
-        {
-            var s = GameSession.Instance;
-            var nights = s != null ? s.Nights : null;
-
-            GUI.Label(new Rect(Pad, 90f, vw - Pad * 2f, 40f), "ELEGÍ LA NOCHE",
-                      T.Estilo(T.FBebas, 28, T.Cream));
-            GUI.Label(new Rect(Pad, 130f, vw - Pad * 2f, 22f),
-                      "La sesión no se reinicia: tus anclas siguen puestas",
-                      T.Estilo(T.FMono, 11, T.Dim));
-
-            int total = Mathf.Max(6, nights != null ? nights.Length : 0);
-            const float gap = 12f, ch = 86f, y0 = 170f;
-            float cw = (vw - Pad * 2f - gap) / 2f;
-
-            for (int i = 0; i < total; i++)
-            {
-                int col = i % 2, fila = i / 2;
-                var r = new Rect(Pad + col * (cw + gap), y0 + fila * (ch + gap), cw, ch);
-
-                // Sin NightConfig configurada, o todavía no desbloqueada: candado.
-                if (s == null || !s.NocheDisponible(i) || !NightProgress.Desbloqueada(i))
-                {
-                    T.Fill(r, new Color(1f, 1f, 1f, 0.02f));
-                    T.Borde(r, T.BorderDim);
-                    GUI.Label(new Rect(r.x, r.y + 12f, r.width, 34f), (i + 1).ToString(),
-                              T.Estilo(T.FBebas, 26, T.Disabled, TextAnchor.MiddleCenter));
-                    T.Candado(new Rect(r.center.x - 8f, r.y + 50f, 16f, 18f), T.Disabled);
-                    continue;
-                }
-
-                int idx = i;                       // captura por iteración para el closure
-                bool actual = s.NightIndex == i;   // la que acabás de jugar
-
-                T.Celda(_nav, r, primario: false,
-                        () => { _selectorAbierto = false; NightTransition.IrANoche(idx); },
-                        bordeOverride: actual ? T.Red : (Color?)null,
-                        fillOverride: actual ? new Color(T.Red.r, T.Red.g, T.Red.b, 0.14f) : (Color?)null);
-
-                GUI.Label(new Rect(r.x, r.y + 10f, r.width, 32f), (i + 1).ToString(),
-                          T.Estilo(T.FBebas, 26, T.Cream, TextAnchor.MiddleCenter));
-
-                var noche = s.Nights[i];
-                string nombre = noche != null && !string.IsNullOrEmpty(noche.displayName)
-                    ? noche.displayName : $"Noche {i + 1}";
-                GUI.Label(new Rect(r.x + 6f, r.y + 42f, r.width - 12f, 18f), nombre.ToUpperInvariant(),
-                          T.Estilo(T.FMono, 10, T.CreamDim, TextAnchor.MiddleCenter));
-
-                GUI.Label(new Rect(r.x, r.y + 62f, r.width, 18f),
-                          actual ? "Recién jugada" : "Disponible",
-                          T.Estilo(T.FMono, 10, actual ? T.Red : T.Dim, TextAnchor.MiddleCenter));
-            }
-
-            T.Boton(_nav, new Rect(Pad, vh - 44f - 58f, vw - Pad * 2f, 58f),
-                    "VOLVER", primario: false, () => _selectorAbierto = false, fontSize: 18);
-        }
-
-        private void ReturnToMenu()
-        {
-            // Mismo teardown que cualquier otra salida de partida: frena los directores
-            // DontDestroyOnLoad, limpia el estado estático (muertes, cordura, NightResult),
-            // resetea la sesión AR y destruye los singletons cross-escena. Antes esto era
-            // una copia a mano de SceneFlow.GoTo y se quedaba atrás cuando GoTo cambiaba.
-            SceneFlow.GoTo(_menuScene);
         }
     }
 }

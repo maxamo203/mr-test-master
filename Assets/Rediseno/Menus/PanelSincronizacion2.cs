@@ -8,13 +8,12 @@ using UnityEngine.UIElements;
 namespace Rediseno.Menus
 {
     // SINCRONIZACIÓN del Rediseño 2.0 (UI Toolkit): buscar la imagen de referencia, esperar
-    // a los demás e INICIAR NOCHE. Reemplaza esa parte de ARLobbyUI con el flag prendido y
-    // funciona con el visor puesto: la guía de la imagen ("fantasma") queda fija en el
+    // a los demás e INICIAR NOCHE (también la carga del mapa del host). Funciona con el
+    // visor puesto: la guía de la imagen ("fantasma") queda fija en el
     // centro de cada ojo para encuadrar, y el panel va más chico y abajo, quieto en el
     // cuarto, para no tapar lo que se está buscando. Joystick: ↑↓, → elige, ← vuelve.
     //
-    // AJUSTAR ENTORNO y NO TENGO LA IMAGEN llevan a la calibración a mano (mover el mapa
-    // arrastrando con el dedo), que todavía es la pantalla vieja.
+    // AJUSTAR ENTORNO y NO TENGO LA IMAGEN llevan a la calibración a mano (PanelUbicar2).
     public class PanelSincronizacion2 : PantallaUI
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -68,7 +67,6 @@ namespace Rediseno.Menus
 
         protected override bool EsVisible()
         {
-            if (!Flag.Activo) return false;
             if (_lobby == null) _lobby = ARLobbyManager.Instance;
             if (_lobby == null || NetworkManager.Instance == null) return false;
             if (PauseMenuController.IsOpen) return false;   // la pausa va encima, sola

@@ -7,9 +7,9 @@ using UnityEngine.UIElements;
 namespace Rediseno.Menus
 {
     // Pantallas del flujo de juego del menú principal (Rediseño 2.0), usables con el visor:
-    // ELEGÍ LA NOCHE → ¿DÓNDE JUGÁS? (escenario + JUGAR) y FALTA UN ESCENARIO. Reemplazan a
-    // las IMGUI de NightMenuUI con el flag; la lógica (noche elegida, escenario, confirmar)
-    // sigue en NightMenuUI. Se crean solas en NightMenuScene.
+    // ELEGÍ LA NOCHE → ¿DÓNDE JUGÁS? (escenario + JUGAR) y FALTA UN ESCENARIO. La lógica
+    // (noche elegida, escenario, confirmar) vive en NightMenuUI. Se crean solas en
+    // NightMenuScene.
     public static class MenusFlujoJuego
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -52,7 +52,7 @@ namespace Rediseno.Menus
         protected override bool EsVisible()
         {
             var menu = NightMenuUI.Instance;
-            return Flag.Activo && menu != null && menu.Mostrando(Cual);
+            return menu != null && menu.Mostrando(Cual);
         }
 
         protected override Texture FondoVisor => ArteFondo;
@@ -262,9 +262,6 @@ namespace Rediseno.Menus
             var otra = PiezasUI.Boton(nav, "ELEGIR OTRA NOCHE", () => NightMenuUI.Instance?.ElegirOtraNoche());
             otra.style.marginBottom = 0;
             pie.Add(otra);
-
-            if (menu.CreandoSala)
-                pie.Add(PiezasUI.Seccion($"SALA EN EL PUERTO {NetworkConfig.DefaultPort} (para cambiarlo, apagá el rediseño)"));
         }
     }
 

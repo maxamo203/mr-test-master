@@ -10,7 +10,7 @@ using UnityEngine;
 // y verificaron en un preview aparte; acá se replica ese rasterizado.
 public static class MortuoriumIcons
 {
-    public enum Icon { Pared, Cubo, Puerta, Marca, Piso, RecalFijo, RecalMover, Ancla, Pentagrama, Origen }
+    public enum Icon { Pared, Cubo, Puerta, Marca, Piso, RecalFijo, RecalMover, Ancla, Origen }
 
     private const int N = 128;
     private static readonly Dictionary<Icon, Texture2D> _cache = new();
@@ -108,24 +108,6 @@ public static class MortuoriumIcons
         Vector2 dir = (b - a).normalized;
         Vector2 n = new Vector2(-dir.y, dir.x) * (width * 0.5f);
         Poly(col, a + n, b + n, b - n, a - n);
-    }
-
-    // Pentagrama real: polígono estrellado {5/2} — 5 vértices de un pentágono
-    // regular, unidos salteando uno (0-2-4-1-3-0), que es lo que genera las
-    // líneas cruzadas típicas del símbolo (no una silueta de estrella "inflada").
-    // Invertido (una punta hacia abajo) = el sello "satánico"/Baphomet, como ⛧.
-    // Coords unitarias [0,1].
-    private static void Pentagram(float cx, float cy, float r, float strokeW, Color32 col)
-    {
-        var v = new Vector2[5];
-        for (int i = 0; i < 5; i++)
-        {
-            float ang = Mathf.PI / 2f + i * 2f * Mathf.PI / 5f;   // punta hacia abajo
-            v[i] = new Vector2(cx + Mathf.Cos(ang) * r, cy + Mathf.Sin(ang) * r);
-        }
-        int[] order = { 0, 2, 4, 1, 3, 0 };
-        for (int i = 0; i < order.Length - 1; i++)
-            Line(v[order[i]], v[order[i + 1]], strokeW, col);
     }
 
     private static Color32 Shade(Color32 c, float f) => new Color32(
@@ -240,12 +222,6 @@ public static class MortuoriumIcons
                 Disc(o.x, o.y, 0.065f, cream);
                 break;
             }
-            // Sello de brujería: pentagrama invertido (una punta hacia abajo) dentro
-            // de un círculo, como ⛧.
-            case Icon.Pentagrama:
-                Ring(0.5f, 0.5f, 0.42f, 0.395f, Color.white);
-                Pentagram(0.5f, 0.5f, 0.34f, 0.028f, Color.white);
-                break;
         }
 
         var tex = new Texture2D(N, N, TextureFormat.RGBA32, mipChain: false)

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Globalization;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
@@ -10,15 +9,15 @@ using T = MortuoriumTheme;
 
 namespace Gamepad
 {
-    // Panel de pausa (overlay) que se puede abrir y navegar TANTO con el gamepad
-    // como con los dedos (touch), de forma simultánea. Por ahora contiene la
-    // sección "Opciones", que muestra el estado del joystick y un gamepad virtual
-    // que refleja las pulsaciones en vivo. Más adelante crecerá con más cosas.
+    // Pausa (overlay) que se puede abrir y navegar TANTO con el gamepad como con los
+    // dedos (touch), de forma simultánea. Es el MODELO de la pausa: arma cada página como
+    // una lista de elementos (ver Modelo) que dibuja Rediseno.Menus.MenuPausa2. Acá sólo
+    // se dibujan el botón de pausa y las páginas CONTROL (mando virtual + diagnóstico).
     //
     // Es solo overlay: no toca Time.timeScale (el AR/escaneo sigue corriendo
-    // detrás). Toda la UI es IMGUI con el mismo patrón del resto del proyecto
-    // (UIScale.Begin + coords virtuales; el tap real se detecta con EnhancedTouch
-    // porque GUI.Button no dispara click confiable en iOS — ver RecalibrateButton).
+    // detrás). Lo IMGUI usa el mismo patrón del resto del proyecto (UIScale.Begin +
+    // coords virtuales; el tap real se detecta con EnhancedTouch porque GUI.Button no
+    // dispara click confiable en iOS — ver RecalibrateButton).
     //
     // Se auto-crea junto con GamepadManager (ver GamepadManager.Bootstrap).
     [DefaultExecutionOrder(-55)]
@@ -38,11 +37,8 @@ namespace Gamepad
         private Page _page = Page.Main;
         // "Salir al menú" pide una segunda pulsación de confirmación (corta la partida).
         private bool _confirmSalir;
+        // Foco de las páginas IMGUI (CONTROL). Al entrar a una página vuelve a 0.
         private int  _focus;
-        // Al entrar a una página, enfocar el ÚLTIMO ítem (siempre "Volver"/"Reanudar") en vez
-        // del primero, para no dejar resaltado el primer contenido (p. ej. "Control"). Se
-        // resuelve en OnGUI, cuando ya se sabe cuántos ítems hay.
-        private bool _focusLast;
 
         // El resaltado amarillo es el indicador de foco del GAMEPAD. Con touch no hay
         // "selección" persistente, así que solo lo mostramos si hay un mando conectado
@@ -56,27 +52,15 @@ namespace Gamepad
         private readonly List<Item> _items = new();
         private Rect _pauseBtnRect;
 
-        // Sliders (parámetros de linterna): además del item focusable, guardamos las zonas
-        // [-]/[+] y el valor (para editarlo tocándolo) para el hit-test de tap.
-        private struct SliderHit { public string id; public Rect dec; public Rect inc; public Rect val; }
-        private readonly List<SliderHit> _sliderHits = new();
         private Flashlight _fl;
         private CardboardCalibrationUI _cb;
 
-        // Edición manual del valor de un slider: id en edición, teclado nativo (device) y
-        // el texto actual. En editor se usa un GUI.TextField con el teclado físico.
-        private string _editingSlider;
-        private TouchScreenKeyboard _kb;
-        private string _editText = "";
-
-        // Navegación con gamepad: cooldowns de auto-repeat (foco vertical / ajuste horizontal).
-        private float _navCooldown;
+        // Navegación con gamepad de las páginas IMGUI (CONTROL): repetición tipo teclado.
         private readonly Rediseno.RepeticionNav _rep = new();
-        private float _adjCooldown;
 
         // Estilos / texturas IMGUI.
         private static Texture2D _tex;
-        private GUIStyle _btn, _icon, _title, _status, _battTxt, _toggleLbl;
+        private GUIStyle _btn, _icon, _title, _status, _battTxt;
 
         // En el menú principal no hay nada que pausar (y sus OPCIONES ya cubren las del
         // jugador): ni botón ni menú. Se cachea por escena para no comparar el nombre en
@@ -109,13 +93,15 @@ namespace Gamepad
             if (_enMenuPrincipal) _open = false;
         }
 
-        // ── Rediseño 2.0: modelo de la página para Rediseno.Menus.MenuPausa2 ──────────
-        // Con el flag, las páginas no se dibujan: cada AddButton/AddToggle/AddSlider/texto
-        // se anota acá y la pausa nueva (UI Toolkit, estéreo en Cardboard) lo dibuja y
+        // ── Modelo de la página para Rediseno.Menus.MenuPausa2 ─────────────────────────
+        // Las páginas no se dibujan acá: cada AddButton/AddToggle/AddSlider/texto se anota
+        // en el modelo y la pausa nueva (UI Toolkit, estéreo en Cardboard) lo dibuja y
         // acciona con los mismos ids. Así toda página nueva o cambiada aparece sola en la
-        // pausa nueva. CONTROL y su diagnóstico quedan viejos: dibujan cosas propias (el
-        // mando virtual), que el modelo no describe.
-        public enum TipoElementoPausa { Titulo, Texto, Boton, Interruptor, Deslizador }
+        // pausa. CONTROL y su diagnóstico son la excepción: dibujan cosas propias (el mando
+        // virtual) que el modelo no describe, así que siguen en IMGUI.
+        // Medidor: barra sólo de lectura (Valor 0..1, marca en Max 0..1; On = pasa la marca;
+        // Min < 0 = apagado). Se refresca cada frame como el resto del modelo.
+        public enum TipoElementoPausa { Titulo, Texto, Boton, Interruptor, Deslizador, Medidor }
         public struct ElementoPausa
         {
             public TipoElementoPausa Tipo;
@@ -174,14 +160,13 @@ namespace Gamepad
             UIScale.Begin();
             EnsureStyles();
             _items.Clear();
-            _sliderHits.Clear();
 
             float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
 
             // Botón de pausa, siempre visible (arriba-derecha, zona libre).
             _pauseBtnRect = new Rect(vw - 84f, 28f, 60f, 60f);
             UIBlocker.AddVirtualRect(_pauseBtnRect);
-            if (!(Rediseno.Flag.Activo && MRCardboardController.Activo))
+            if (!MRCardboardController.Activo)
             {
                 DrawRect(_pauseBtnRect, new Color(0f, 0f, 0f, 0.5f));
                 T.Borde(_pauseBtnRect, T.Border);
@@ -190,9 +175,9 @@ namespace Gamepad
 
             if (!_open) return;
 
-            // Rediseño 2.0: la página no se dibuja acá; se DESCRIBE (Modelo) y la dibuja
-            // Rediseno.Menus.MenuPausa2 con el estilo nuevo, en estéreo si hay Cardboard.
-            _soloModelo = Rediseno.Flag.Activo && PaginaMigrable;
+            // La página no se dibuja acá; se DESCRIBE (Modelo) y la dibuja
+            // Rediseno.Menus.MenuPausa2, en estéreo si hay Cardboard.
+            _soloModelo = PaginaMigrable;
             _modelo.Clear();
 
             // Overlay oscuro que bloquea la escena de atrás.
@@ -201,12 +186,13 @@ namespace Gamepad
             UIBlocker.AddVirtualRect(full);
 
             // El chat de voz sólo existe en una sesión multijugador: si no hay sala, ni
-            // se ofrece la subcategoría (y el panel de Opciones queda más bajo).
+            // se ofrece la subcategoría.
             bool hayVoz = Voice.VoiceChatManager.SesionConVoz;
 
-            // Panel centrado. La altura depende de la página (cada submenú tiene su alto).
+            // Panel centrado (sólo se dibuja en las páginas CONTROL; el resto usa el modelo).
             float pw = Mathf.Min(vw - 40f, 560f);
-            float ph = Mathf.Min(vh - 120f, AltoPagina(hayVoz));
+            float altoPagina = _page == Page.ControlDiag ? 168f + ControllerDiagnostics.Alto : 892f;
+            float ph = Mathf.Min(vh - 120f, altoPagina);
             var panel = new Rect((vw - pw) / 2f, (vh - ph) / 2f, pw, ph);
             if (!_soloModelo)
             {
@@ -261,11 +247,9 @@ namespace Gamepad
                 if (hayVoz) { AddButton("voz", new Rect(x, y, w, 64f), "CHAT DE VOZ"); y += 76f; }
                 AddToggle("vhsmenus", new Rect(x, y, w, 52f), "Filtro VHS",
                           GameOptions.VhsActivo); y += 64f;
-                AddToggle("rediseno", new Rect(x, y, w, 52f), "Rediseño 2.0 (experimental)",
-                          GameOptions.Rediseno2); y += 64f;
-                // Rediseño 2.0: cómo se ven los menús con el visor (entrar/salir del visor es
-                // el toggle Modo Cardboard de la página principal).
-                if (Rediseno.Flag.Activo && GetCardboard() != null)
+                // Cómo se ven los menús con el visor (entrar/salir del visor es el toggle
+                // Modo Cardboard de la página principal).
+                if (GetCardboard() != null)
                 {
                     AddToggle("menuscuarto", new Rect(x, y, w, 52f), "Menús quietos en el cuarto",
                               GameOptions.MenusEnElCuarto); y += 64f;
@@ -399,9 +383,9 @@ namespace Gamepad
                 AddToggle("vozmic", new Rect(x, y, w, 52f),
                           "Micrófono (transmitir)", GameOptions.VozMic); y += 58f;
 
-                // Barra de nivel del micrófono con la marca del umbral: sin esto el
-                // slider de sensibilidad se ajusta a ciegas.
-                DrawNivelMic(new Rect(x + 14f, y, w - 28f, 16f), vc); y += 30f;
+                // Nivel del micrófono con la marca del umbral: sin esto el slider de
+                // sensibilidad se ajusta a ciegas.
+                AddNivelMic(vc);
 
                 AddSlider("voz_vol", new Rect(x, y, w, 60f), "Volumen voces",
                           GameOptions.VozVolumen * 100f, 0f, 100f, "{0:0}%"); y += 68f;
@@ -472,7 +456,7 @@ namespace Gamepad
 
                 // Un slider por ingrediente (0% = apagado) para poder calibrar la mezcla
                 // en el dispositivo, más el multiplicador global. Ojo: el prefijo "vhs_"
-                // marca slider (ver IsSlider), por eso el toggle del REC va sin guion
+                // marca slider (ver Adjust), por eso el toggle del REC va sin guion
                 // bajo, igual que "vozmic" en la página de voz.
                 AddSlider("vhs_int",    new Rect(x, y, w, 60f), "Intensidad global",
                           Gameplay.VHSSettings.Intensidad * 100f, 0f, 100f, "{0:0}%"); y += 68f;
@@ -614,18 +598,11 @@ namespace Gamepad
                 AddButton("volver", new Rect(x, y, w, 60f), "Volver");
             }
 
-            // Resuelve el foco: si se pidió "enfocar el último" (al entrar a la página), ahora
-            // que ya sabemos cuántos ítems hay, apuntamos a "Volver"/"Reanudar". Si no, clamp.
-            if (_items.Count > 0)
-            {
-                // Rediseño 2.0: la primera opción (con el joystick, enfocar "Volver" hacía que un →
-                // de más te sacara de la página). Sin el flag, como siempre: el último.
-                if (_focusLast) { _focus = Rediseno.Flag.Activo ? 0 : _items.Count - 1; _focusLast = false; }
-                else _focus = Mathf.Clamp(_focus, 0, _items.Count - 1);
-            }
+            if (_items.Count > 0) _focus = Mathf.Clamp(_focus, 0, _items.Count - 1);
         }
 
-        // Dibuja un botón (resaltado si tiene el foco) y lo registra como ítem.
+        // Dibuja un botón (resaltado si tiene el foco) y lo registra como ítem. Sólo las
+        // páginas CONTROL lo dibujan; en el resto se anota en el modelo.
         private void AddButton(string id, Rect rect, string label)
         {
             if (_soloModelo) { _modelo.Add(new ElementoPausa { Tipo = TipoElementoPausa.Boton, Id = id, Texto = label }); return; }
@@ -645,68 +622,13 @@ namespace Gamepad
             _items.Add(new Item { id = id, rect = rect });
         }
 
-        // Dibuja un slider (label + valor + barra + botones [-]/[+]). Se registra como ítem
-        // focusable (gamepad izq/der ajusta) y sus zonas [-]/[+] para el tap.
+        // Anota un slider en el modelo (MenuPausa2 lo dibuja y lo ajusta con Ajustar). El
+        // rect queda por simetría con AddButton; las páginas con sliders no se dibujan acá.
         private void AddSlider(string id, Rect rect, string label, float value,
                                float min, float max, string fmt)
         {
-            if (_soloModelo)
-            {
-                _modelo.Add(new ElementoPausa { Tipo = TipoElementoPausa.Deslizador, Id = id, Texto = label,
-                                                Valor = value, Min = min, Max = max, Formato = fmt });
-                return;
-            }
-            bool focused = ShowFocus && _items.Count == _focus;
-            DrawRect(rect, focused ? new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.18f)
-                                   : new Color(1f, 1f, 1f, 0.05f));
-            if (focused) T.Borde(rect, T.Tan);
-
-            float btnW = rect.height - 12f;
-            var dec = new Rect(rect.xMax - btnW * 2f - 14f, rect.y + 6f, btnW, btnW);
-            var inc = new Rect(rect.xMax - btnW - 8f,       rect.y + 6f, btnW, btnW);
-
-            // Zona del VALOR (tocable para editar) y label a la izquierda.
-            float valW = 128f;
-            var valRect = new Rect(dec.x - valW - 10f, rect.y + 6f, valW, rect.height - 24f);
-            var lblRect = new Rect(rect.x + 14f, rect.y, valRect.x - rect.x - 16f, rect.height - 12f);
-
-            GUI.Label(lblRect, $"{label}:", _toggleLbl);
-
-            if (_editingSlider == id)
-            {
-                DrawRect(valRect, new Color(0.18f, 0.18f, 0.24f)); // fondo de campo
-#if UNITY_EDITOR
-                GUI.SetNextControlName("edit_" + id);
-                _editText = GUI.TextField(valRect, _editText, _toggleLbl);
-                GUI.FocusControl("edit_" + id);
-                if (Event.current.type == EventType.KeyDown &&
-                    (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter))
-                    CommitEdit();
-#else
-                GUI.Label(valRect, _editText, _toggleLbl); // el texto lo llena el teclado nativo
-#endif
-            }
-            else
-            {
-                DrawRect(valRect, new Color(1f, 1f, 1f, 0.06f)); // pista visual de "tocable"
-                GUI.Label(new Rect(valRect.x + 6f, valRect.y, valRect.width - 6f, valRect.height),
-                          string.Format(fmt, value), _toggleLbl);
-            }
-
-            // Barra min..max (bajo el label).
-            float t = Mathf.InverseLerp(min, max, value);
-            var barBg = new Rect(lblRect.x, rect.yMax - 12f, lblRect.width, 5f);
-            DrawRect(barBg, new Color(1f, 1f, 1f, 0.12f));
-            DrawRect(new Rect(barBg.x, barBg.y, barBg.width * Mathf.Clamp01(t), barBg.height), T.Red);
-
-            T.Borde(dec, T.Border);
-            T.Borde(inc, T.Border);
-            GUI.Label(dec, "-", _btn);
-            GUI.Label(inc, "+", _btn);
-
-            UIBlocker.AddVirtualRect(rect);
-            _items.Add(new Item { id = id, rect = rect });
-            _sliderHits.Add(new SliderHit { id = id, dec = dec, inc = inc, val = valRect });
+            _modelo.Add(new ElementoPausa { Tipo = TipoElementoPausa.Deslizador, Id = id, Texto = label,
+                                            Valor = value, Min = min, Max = max, Formato = fmt });
         }
 
         private Flashlight GetFlashlight()
@@ -745,87 +667,6 @@ namespace Gamepad
             var cb = GetCardboard();
             if (cb != null) cb.Save();
         }
-
-        // Alto del panel según la página. La de voz crece con la cantidad de jugadores
-        // (un slider por cada uno).
-        private float AltoPagina(bool hayVoz)
-        {
-            switch (_page)
-            {
-                case Page.Control:    return 892f;
-                case Page.ControlDiag: return 168f + ControllerDiagnostics.Alto;
-                case Page.Flashlight: return 728f;   // +68 por el slider "Drenaje batería"
-                case Page.Cardboard:
-                {
-                    // 3 sliders de óptica + el toggle de estéreo; con el estéreo prendido
-                    // aparecen además los sliders de IPD y convergencia.
-                    var cbAlto = GetCardboard();
-                    return 524f + (cbAlto != null && cbAlto.Estereo3D ? 136f : 0f);
-                }
-                // +64 por el toggle "Filtro VHS" (prod), +76 por "VHS (DEV)" y
-                // +76 por "ARBMOS (DEV)". El volumen dejó de ser un slider acá: ahora es el
-                // botón AUDIO (mismo alto que el slider que reemplazó, +4).
-                case Page.Options:    return (Debug.isDebugBuild ? 1208f : 688f) + (hayVoz ? 76f : 0f);
-                // 3 sliders + la nota sobre el chat de voz.
-                case Page.Audio:      return 420f;
-                case Page.ARCalidad:  return 490f;
-                // 7 sliders (global + 6 ingredientes) + el toggle del REC.
-                case Page.VHS:        return 760f;
-                // 2 toggles + 3 sliders + la ayuda de arriba.
-                case Page.Arbmos:     return 620f;
-                case Page.Franja:     return 552f;
-                case Page.Entities:   return 320f;
-                case Page.Voice:
-                {
-                    var vc = Voice.VoiceChatManager.Instance;
-                    int n  = vc != null ? vc.Otros.Count : 0;
-                    return 428f + (n > 0 ? n * 68f : 40f);
-                }
-                case Page.DebugPanels:
-                {
-                    int n = DebugHud.Paneles.Count;
-                    return 176f + (n > 0 ? n * 58f : 66f);
-                }
-                case Page.Main:
-                {
-                    // +64 por cada toggle de partida (Cardboard / paredes / sólidas dev).
-                    int toggles = (GetModoCardboard() != null ? 1 : 0);
-                    if (OclusorDisponible() != null)
-                        toggles += Application.isEditor || Debug.isDebugBuild ? 2 : 1;
-                    return 400f + toggles * 64f;
-                }
-                default: return 400f;
-            }
-        }
-
-        // Barra de nivel del micrófono propio + marca roja del umbral de la VAD: si el
-        // nivel no pasa la marca, el micro no transmite.
-        private void DrawNivelMic(Rect r, Voice.VoiceChatManager vc)
-        {
-            if (_soloModelo) return;   // el medidor todavía no existe en la pausa nueva
-            DrawRect(r, new Color(1f, 1f, 1f, 0.10f));
-            if (vc == null || !vc.MicAbierto) return;
-
-            // El RMS de la voz vive en la parte baja del rango: se escala para que la
-            // barra se mueva de forma legible (x6 ≈ voz normal llenando la barra).
-            const float Escala = 6f;
-            float umbral = Voice.VoiceChatManager.UmbralActual();
-            float nivel  = Mathf.Clamp01(vc.NivelMic * Escala);
-
-            DrawRect(new Rect(r.x, r.y, r.width * nivel, r.height),
-                     vc.NivelMic >= umbral ? T.Tan : new Color(1f, 1f, 1f, 0.35f));
-            DrawRect(new Rect(r.x + r.width * Mathf.Clamp01(umbral * Escala) - 1f,
-                              r.y - 2f, 2f, r.height + 4f), T.Red);
-        }
-
-        // Los sliders llevan prefijo por familia: fl_ (linterna), cb_ (cardboard),
-        // opt_ (opciones de usuario) y voz_ (chat de voz; "vozmic" es un toggle, no
-        // lleva guion bajo justamente para no caer acá).
-        private static bool IsSlider(string id) =>
-            id != null && (id.StartsWith("fl_") || id.StartsWith("cb_") ||
-                           id.StartsWith("opt_") || id.StartsWith("voz_") ||
-                           id.StartsWith("vhs_") || id.StartsWith("arb_") || id.StartsWith("ent_") ||
-                           id.StartsWith("fra_"));
 
         // "voz_p3" → el slider de volumen del cliente 3. Los ids se arman en la página
         // de voz a partir del roster, así que son dinámicos.
@@ -953,53 +794,28 @@ namespace Gamepad
             }
         }
 
-        // ── Edición manual del valor (tocar el número) ────────────────────────
-        private void BeginEdit(string id)
+        // Nivel del micrófono propio + marca del umbral de la VAD: si el nivel no pasa la
+        // marca, el micro no transmite. El RMS de la voz vive en la parte baja del rango: se
+        // escala para que la barra se mueva de forma legible (x6 ≈ voz normal llenándola).
+        private void AddNivelMic(Voice.VoiceChatManager vc)
         {
-            if (_editingSlider == id) return;
-            CommitEdit(); // confirmar cualquier edición previa
-            _editingSlider = id;
-            _editText = CurrentValue(id).ToString("0.###", CultureInfo.InvariantCulture);
-            if (TouchScreenKeyboard.isSupported)
-                _kb = TouchScreenKeyboard.Open(_editText, TouchScreenKeyboardType.DecimalPad,
-                                               autocorrection: false, multiline: false,
-                                               secure: false, alert: false, textPlaceholder: "");
+            const float Escala = 6f;
+            bool abierto = vc != null && vc.MicAbierto;
+            float umbral = Voice.VoiceChatManager.UmbralActual();
+            _modelo.Add(new ElementoPausa
+            {
+                Tipo  = TipoElementoPausa.Medidor, Id = "voz_nivel", Texto = "Nivel del micrófono",
+                Valor = abierto ? Mathf.Clamp01(vc.NivelMic * Escala) : 0f,
+                Max   = Mathf.Clamp01(umbral * Escala),
+                On    = abierto && vc.NivelMic >= umbral,
+                Min   = abierto ? 0f : -1f,
+            });
         }
 
-        private void CommitEdit()
-        {
-            if (_editingSlider == null) return;
-            if (float.TryParse(_editText, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
-                SetSliderValue(_editingSlider, v);
-            CancelEdit();
-        }
-
-        private void CancelEdit()
-        {
-            _editingSlider = null;
-            _editText = "";
-            if (_kb != null) { _kb.active = false; _kb = null; }
-        }
-
-        // Dibuja una fila con label a la izquierda y un checkbox a la derecha. Se registra
-        // como ítem (tap / South la togglean, igual que un botón).
+        // Anota un interruptor en el modelo (MenuPausa2 lo dibuja; se acciona como un botón).
         private void AddToggle(string id, Rect rect, string label, bool value)
         {
-            if (_soloModelo) { _modelo.Add(new ElementoPausa { Tipo = TipoElementoPausa.Interruptor, Id = id, Texto = label, On = value }); return; }
-            bool focused = ShowFocus && _items.Count == _focus;
-            DrawRect(rect, focused ? new Color(T.Tan.r, T.Tan.g, T.Tan.b, 0.18f)
-                                   : new Color(1f, 1f, 1f, 0.05f));
-            if (focused) T.Borde(rect, T.Tan);
-            GUI.Label(new Rect(rect.x + 14f, rect.y, rect.width - 100f, rect.height), label, _toggleLbl);
-
-            // Pill ON/OFF a la derecha (estilo prototipo).
-            var pill = new Rect(rect.xMax - 76f, rect.y + (rect.height - 30f) * 0.5f, 60f, 30f);
-            T.Borde(pill, value ? T.Tan : T.Border);
-            GUI.Label(pill, value ? "ON" : "OFF",
-                      T.Estilo(T.FMono, 13, value ? T.Tan : T.Dim, TextAnchor.MiddleCenter));
-
-            UIBlocker.AddVirtualRect(rect);
-            _items.Add(new Item { id = id, rect = rect });
+            _modelo.Add(new ElementoPausa { Tipo = TipoElementoPausa.Interruptor, Id = id, Texto = label, On = value });
         }
 
         // ---------------------------------------------------------------- Update
@@ -1007,7 +823,7 @@ namespace Gamepad
         {
             if (PantallaFinal() || SaveLoadUI.EstaAbierto)
             {
-                if (_open) { CommitEdit(); _open = false; _page = Page.Main; _confirmSalir = false; }
+                if (_open) { _open = false; _page = Page.Main; _confirmSalir = false; }
                 _mantenerPausa = 0f;
                 return;
             }
@@ -1025,12 +841,12 @@ namespace Gamepad
             // "volver" (bloque de navegación más abajo).
             bool vrBoxMouse = GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput;
 
-            // Rediseño 2.0: del VR BOX sólo cuenta la ruedita. En plena partida, mantenerla
-            // hacia ← un momento abre la pausa (con un anillo que se llena). Tiene que ser
-            // "mantener" y no un toque para que no se abra sin querer.
-            // También en la sincronización nueva (ahí ← no hace otra cosa): con el visor
-            // puesto es la única forma de llegar a la pausa (y a salir del visor).
-            if (Rediseno.Flag.Activo && !_open && vrBoxMouse &&
+            // Del VR BOX sólo cuenta la ruedita. En plena partida, mantenerla hacia ← un
+            // momento abre la pausa (con un anillo que se llena). Tiene que ser "mantener" y
+            // no un toque para que no se abra sin querer.
+            // También en la sincronización (ahí ← no hace otra cosa): con el visor puesto es
+            // la única forma de llegar a la pausa (y a salir del visor).
+            if (!_open && vrBoxMouse &&
                 ((NetworkManager.Instance != null && NetworkManager.Instance.GameStarted) ||
                  Rediseno.Menus.PanelSincronizacion2.Mostrando))
             {
@@ -1046,15 +862,15 @@ namespace Gamepad
             }
             else _mantenerPausa = 0f;
 
-            // Rediseño 2.0: la B del VR BOX abre la pausa en plena noche, en el escáner y en las
-            // pantallas previas a la noche (sincronización, ubicar el entorno, anclas), donde la
-            // B no hace otra cosa: con el visor puesto es el camino para volver al menú. En los
+            // La B del VR BOX abre la pausa en plena noche, en el escáner y en las pantallas
+            // previas a la noche (sincronización, ubicar el entorno, anclas), donde la B no
+            // hace otra cosa: con el visor puesto es el camino para volver al menú. En los
             // menús es "volver"; con la pausa abierta vuelve/cierra desde la pausa misma. El
             // bloqueo evita que la misma B que cerró la pausa la vuelva a abrir.
             bool previaNoche = Rediseno.Menus.PanelSincronizacion2.Mostrando ||
                                Rediseno.Menus.PanelUbicar2.Mostrando ||
                                Rediseno.Menus.PanelAnclas2.Mostrando;
-            if (Rediseno.Flag.Activo && !_open && vrBoxMouse && VRBoxInput.CancelDown &&
+            if (!_open && vrBoxMouse && VRBoxInput.CancelDown &&
                 Rediseno.BloqueoNav.Libre(0f, 0f) &&
                 (_enEscaner || previaNoche ||
                  (NetworkManager.Instance != null && NetworkManager.Instance.GameStarted)))
@@ -1077,63 +893,32 @@ namespace Gamepad
                 var pv = new Vector2((tapPx.x - sg.x) / f,
                                      (Screen.height - tapPx.y - sg.y) / f); // a virtual
 
-                // La A del VR BOX llega como un toque donde está el cursor escondido: con el
-                // menú cerrado, un toque "suelto" lo abre. Sólo en plena partida y fuera de
-                // cualquier UI — si no, también lo abría cada toque con el dedo en los menús y
-                // pantallas de la app (al pasar de una a otra salía la pausa).
-                // La A abre la pausa también con el rediseño (probado: funciona bien). Además
-                // existe mantener la ruedita ← (ver arriba).
-                // Con el rediseño el puntero está capturado en todo el juego: la A llega como
-                // CLIC de mouse, no como toque. Sólo eso abre la pausa; los dedos no (soltar
-                // los dos dedos de concentrar la linterna la abría por error).
-                bool aDelVRBox = !_open && vrBoxMouse && (!Rediseno.Flag.Activo || (tapDeMouse && !VRBoxInput.AConsumida)) &&
+                // La A del VR BOX abre la pausa en plena partida (además de mantener la
+                // ruedita ←, ver arriba). El puntero está capturado en todo el juego, así que
+                // la A llega como CLIC de mouse donde está el cursor escondido, no como toque.
+                // Sólo eso abre la pausa; los dedos no (soltar los dos dedos de concentrar la
+                // linterna la abría por error). Y fuera de cualquier UI — si no, también la
+                // abría cada clic en los menús y pantallas de la app.
+                bool aDelVRBox = !_open && vrBoxMouse && tapDeMouse && !VRBoxInput.AConsumida &&
                                  NetworkManager.Instance != null && NetworkManager.Instance.GameStarted &&
                                  !UIBlocker.IsPointerOver(tapPx);
                 if (_pauseBtnRect.Contains(pv) || aDelVRBox)
                 {
                     Toggle();
                 }
-                // Rediseño 2.0: con el VR BOX la A llega como clic de mouse donde está el cursor
-                // escondido; no puede tocar el ítem que caiga debajo (la A elige el enfocado).
-                else if (_open && !(Rediseno.Flag.Activo && vrBoxMouse && tapDeMouse))
+                // Con el VR BOX la A llega como clic de mouse donde está el cursor escondido; no
+                // puede tocar el ítem que caiga debajo (la A elige el enfocado).
+                else if (_open && !(vrBoxMouse && tapDeMouse))
                 {
-                    // Si estabas editando y el tap NO cae en ese campo, confirmar la edición.
-                    if (_editingSlider != null)
-                    {
-                        bool onField = false;
-                        for (int i = 0; i < _sliderHits.Count; i++)
-                            if (_sliderHits[i].id == _editingSlider && _sliderHits[i].val.Contains(pv)) { onField = true; break; }
-                        if (!onField) CommitEdit();
-                    }
-
-                    // Zonas de los sliders: valor (editar), [-] y [+]. Tienen prioridad.
-                    bool handled = false;
-                    for (int i = 0; i < _sliderHits.Count; i++)
-                    {
-                        var sh = _sliderHits[i];
-                        if (sh.val.Contains(pv)) { BeginEdit(sh.id);            FocusById(sh.id); handled = true; break; }
-                        if (sh.dec.Contains(pv)) { CommitEdit(); Adjust(sh.id, -1f); FocusById(sh.id); handled = true; break; }
-                        if (sh.inc.Contains(pv)) { CommitEdit(); Adjust(sh.id, +1f); FocusById(sh.id); handled = true; break; }
-                    }
-                    if (!handled)
-                        for (int i = 0; i < _items.Count; i++)
-                            if (_items[i].rect.Contains(pv)) { _focus = i; Activate(_items[i].id); break; }
+                    for (int i = 0; i < _items.Count; i++)
+                        if (_items[i].rect.Contains(pv)) { _focus = i; Activate(_items[i].id); break; }
                 }
-            }
-
-            // Teclado nativo (device): reflejar el texto y confirmar/cancelar al cerrar.
-            if (_editingSlider != null && _kb != null)
-            {
-                _editText = _kb.text;
-                var st = _kb.status;
-                if (st == TouchScreenKeyboard.Status.Done) CommitEdit();
-                else if (st == TouchScreenKeyboard.Status.Canceled ||
-                         st == TouchScreenKeyboard.Status.LostFocus) CancelEdit();
             }
 
             if (!_open) return;
 
-            // Rediseño 2.0: la pausa nueva (UI Toolkit) maneja su propia navegación.
+            // La pausa nueva (UI Toolkit) maneja su propia navegación; lo de abajo es sólo
+            // para las páginas CONTROL, que siguen en IMGUI.
             if (Rediseno.UI.PantallaUI.AlgunaVisible) return;
 
             // En el diagnóstico la B es justo lo que se está probando: no puede sacarte de la
@@ -1148,52 +933,25 @@ namespace Gamepad
             {
                 if (_items.Count > 0)
                 {
-                    // B vuelve (con y sin el rediseño; en el diagnóstico no, es lo que se prueba).
+                    // B vuelve (en el diagnóstico no, es lo que se prueba).
                     if (!probandoB && VRBoxInput.CancelDown) { Back(); return; }
-                    if (!Rediseno.Flag.Activo && VRBoxInput.ConfirmDown) Activate(_items[_focus].id);
-                    // Rediseño 2.0: la A elige (como en las pantallas nuevas). Consumida, para que
-                    // al soltarla no abra la pausa de nuevo si lo elegido la cerró.
-                    if (Rediseno.Flag.Activo && VRBoxInput.APressedThisFrame)
+                    // La A elige (como en las pantallas nuevas). Consumida, para que al
+                    // soltarla no abra la pausa de nuevo si lo elegido la cerró.
+                    if (VRBoxInput.APressedThisFrame)
                     {
                         VRBoxInput.ConsumirA();
                         Activate(_items[_focus].id);
                         return;
                     }
 
-                    var delta = VRBoxInput.Delta;
-                    float hx = Mathf.Abs(delta.x) > 3f ? Mathf.Clamp(delta.x / 12f, -1f, 1f) : 0f;
-                    float hy = Mathf.Abs(delta.y) > 3f ? Mathf.Clamp(delta.y / 12f, -1f, 1f) : 0f;
-                    if (Rediseno.Flag.Activo)
+                    // Eje suavizado (el crudo llega a pulsos) y repetición tipo teclado.
+                    var st = VRBoxInput.SmoothedStick;
+                    int paso = _rep.Tick(Mathf.Abs(st.y) >= Mathf.Abs(st.x) ? st.y : 0f, Time.unscaledDeltaTime);
+                    if (paso != 0)
                     {
-                        // Eje suavizado (el crudo llega a pulsos) y repetición tipo teclado.
-                        hx = VRBoxInput.SmoothedStick.x; hy = VRBoxInput.SmoothedStick.y;
-                        int paso = _rep.Tick(Mathf.Abs(hy) >= Mathf.Abs(hx) ? hy : 0f, Time.unscaledDeltaTime);
-                        if (paso != 0)
-                        {
-                            _focus = (_focus + (paso > 0 ? -1 : 1) + _items.Count) % _items.Count;
-                            AudioManager.Sonar(c => c.uiNavegar);
-                        }
+                        _focus = (_focus + (paso > 0 ? -1 : 1) + _items.Count) % _items.Count;
+                        AudioManager.Sonar(c => c.uiNavegar);
                     }
-
-                    _navCooldown -= Time.unscaledDeltaTime;
-                    if (!Rediseno.Flag.Activo && Mathf.Abs(delta.y) > 3f)
-                    {
-                        if (_navCooldown <= 0f)
-                        {
-                            _focus = (_focus + (delta.y > 0 ? -1 : 1) + _items.Count) % _items.Count;
-                            AudioManager.Sonar(c => c.uiNavegar);
-                            _navCooldown = 0.18f;
-                        }
-                    }
-                    else _navCooldown = 0f;
-
-                    _adjCooldown -= Time.unscaledDeltaTime;
-                    string focusId = _items[_focus].id;
-                    if (IsSlider(focusId) && Mathf.Abs(delta.x) > 3f)
-                    {
-                        if (_adjCooldown <= 0f) { Adjust(focusId, delta.x > 0 ? 1f : -1f); _adjCooldown = 0.12f; }
-                    }
-                    else if (Mathf.Abs(delta.x) <= 3f) _adjCooldown = 0f;
                 }
                 return; // no procesar el bloque de gamepad en modo mouse
             }
@@ -1206,83 +964,46 @@ namespace Gamepad
                 float hxp = gp.dpad.ReadValue().x;
                 if (Mathf.Abs(hxp) < 0.5f) hxp = gp.leftStick.ReadValue().x;
 
-                if (Rediseno.Flag.Activo)
+                int paso = _rep.Tick(Mathf.Abs(dy) >= Mathf.Abs(hxp) ? dy : 0f, Time.unscaledDeltaTime);
+                if (paso != 0)
                 {
-                    int paso = _rep.Tick(Mathf.Abs(dy) >= Mathf.Abs(hxp) ? dy : 0f, Time.unscaledDeltaTime);
-                    if (paso != 0)
-                    {
-                        _focus = (_focus + (paso > 0 ? -1 : 1) + _items.Count) % _items.Count;
-                        AudioManager.Sonar(c => c.uiNavegar);
-                    }
+                    _focus = (_focus + (paso > 0 ? -1 : 1) + _items.Count) % _items.Count;
+                    AudioManager.Sonar(c => c.uiNavegar);
                 }
 
-                _navCooldown -= Time.unscaledDeltaTime;
-                if (!Rediseno.Flag.Activo && Mathf.Abs(dy) > 0.5f)
-                {
-                    if (_navCooldown <= 0f)
-                    {
-                        _focus = (_focus + (dy < 0 ? 1 : -1) + _items.Count) % _items.Count;
-                        AudioManager.Sonar(c => c.uiNavegar);
-                        _navCooldown = 0.18f;
-                    }
-                }
-                else _navCooldown = 0f; // soltó → próximo movimiento es inmediato
-
-                // Ajuste horizontal (izq/der) cuando el ítem con foco es un slider.
-                _adjCooldown -= Time.unscaledDeltaTime;
-                string focusId = _items[_focus].id;
-                if (IsSlider(focusId))
-                {
-                    float dx = gp.dpad.ReadValue().x;
-                    if (Mathf.Abs(dx) < 0.5f) dx = gp.leftStick.ReadValue().x;
-                    if (Mathf.Abs(dx) > 0.5f)
-                    {
-                        if (_adjCooldown <= 0f) { Adjust(focusId, dx > 0 ? 1f : -1f); _adjCooldown = 0.12f; }
-                    }
-                    else _adjCooldown = 0f;
-                }
-
-                // Activar con South (A/✕) — para botones/toggles (los sliders usan izq/der).
+                // Activar con South (A/✕).
                 if (gp.buttonSouth.wasPressedThisFrame)
                     Activate(_items[_focus].id);
             }
-        }
-
-        private void FocusById(string id)
-        {
-            for (int i = 0; i < _items.Count; i++)
-                if (_items[i].id == id) { _focus = i; return; }
         }
 
         // -------------------------------------------------------------- Acciones
         private void Toggle()
         {
             if (_enMenuPrincipal && !_open) return;   // el Start del mando tampoco la abre acá
-            CommitEdit();
             _open = !_open;
             if (_open) AudioManager.Sonar(c => c.uiConfirmar);
             else       AudioManager.Sonar(c => c.uiVolver);
             if (!_open) SaveCardboard();   // al cerrar, persistir la calibración
             _page = Page.Main;
             _confirmSalir = false;
-            _focus = 0; _focusLast = true;
+            _focus = 0;
         }
 
         // Un nivel hacia atrás: submenú → Opciones, Opciones → Main, Main → cerrar.
         private void Back()
         {
-            CommitEdit();
             AudioManager.Sonar(c => c.uiVolver);
             _confirmSalir = false;
             switch (_page)
             {
                 case Page.Options:
-                    _page = Page.Main; _focus = 0; _focusLast = true; break;
+                    _page = Page.Main; _focus = 0; break;
                 case Page.ControlDiag:
-                    _page = Page.Control; _focus = 0; _focusLast = true; break;
+                    _page = Page.Control; _focus = 0; break;
                 case Page.Cardboard:
                     SaveCardboard();
-                    _page = Page.Options; _focus = 0; _focusLast = true; break;
+                    _page = Page.Options; _focus = 0; break;
                 case Page.Audio:
                 case Page.Control:
                 case Page.Flashlight:
@@ -1293,7 +1014,7 @@ namespace Gamepad
                 case Page.Arbmos:
                 case Page.Franja:
                 case Page.Entities:
-                    _page = Page.Options; _focus = 0; _focusLast = true; break;
+                    _page = Page.Options; _focus = 0; break;
                 default: // Main
                     _open = false; break;
             }
@@ -1321,16 +1042,16 @@ namespace Gamepad
 
             switch (id)
             {
-                case "opciones":  _page = Page.Options;    _focus = 0; _focusLast = true; break;
-                case "audio":     _page = Page.Audio;      _focus = 0; _focusLast = true; break;
-                case "control":   _page = Page.Control;    _focus = 0; _focusLast = true; break;
-                case "controldiag": _page = Page.ControlDiag; _focus = 0; _focusLast = true; break;
-                case "cardboard": _page = Page.Cardboard;  _focus = 0; _focusLast = true; break;
-                case "arcalidad": _page = Page.ARCalidad;  _focus = 0; _focusLast = true; break;
+                case "opciones":  _page = Page.Options;    _focus = 0; break;
+                case "audio":     _page = Page.Audio;      _focus = 0; break;
+                case "control":   _page = Page.Control;    _focus = 0; break;
+                case "controldiag": _page = Page.ControlDiag; _focus = 0; break;
+                case "cardboard": _page = Page.Cardboard;  _focus = 0; break;
+                case "arcalidad": _page = Page.ARCalidad;  _focus = 0; break;
                 case "arq_0":     ARQuality.Actual = ARQuality.Nivel.Rendimiento; break;
                 case "arq_1":     ARQuality.Actual = ARQuality.Nivel.Equilibrado; break;
                 case "arq_2":     ARQuality.Actual = ARQuality.Nivel.Calidad;     break;
-                case "voz":       _page = Page.Voice;      _focus = 0; _focusLast = true; break;
+                case "voz":       _page = Page.Voice;      _focus = 0; break;
                 case "vozmic":    GameOptions.VozMic = !GameOptions.VozMic; break;
                 case "modocardboard":
                 {
@@ -1346,7 +1067,7 @@ namespace Gamepad
                 case "paredessolidas": SceneOccluderMode.Instance?.ToggleSolidDebug(); break;
                 case "estereo3d": { var cb = GetCardboard(); if (cb != null) cb.Estereo3D = !cb.Estereo3D; break; }
                 case "linterna":
-                    if (Debug.isDebugBuild) { _page = Page.Flashlight; _focus = 0; _focusLast = true; }
+                    if (Debug.isDebugBuild) { _page = Page.Flashlight; _focus = 0; }
                     break;
                 case "reanudar":  _open = false; SaveCardboard(); break;
                 case "salir":
@@ -1359,30 +1080,29 @@ namespace Gamepad
                 case "volver":    Back(); break;
                 case "debughud":  DebugHud.SetVisible(!DebugHud.Visible); break;
                 case "dbgpaneles":
-                    if (Debug.isDebugBuild) { _page = Page.DebugPanels; _focus = 0; _focusLast = true; }
+                    if (Debug.isDebugBuild) { _page = Page.DebugPanels; _focus = 0; }
                     break;
                 case "envlight":  EnvironmentLightingController.Enabled = !EnvironmentLightingController.Enabled; break;
                 case "meshlight": FlashlightMeshLighting.Enabled       = !FlashlightMeshLighting.Enabled;       break;
 
                 // ── US-11.1 (VHS) ────────────────────────────────────────────
                 case "vhsmenus":  GameOptions.VhsActivo = !GameOptions.VhsActivo; break;
-                case "rediseno":  GameOptions.Rediseno2 = !GameOptions.Rediseno2; break;
                 case "menuscuarto": GameOptions.MenusEnElCuarto = !GameOptions.MenusEnElCuarto; break;
                 case "vhs":
-                    if (Debug.isDebugBuild) { _page = Page.VHS; _focus = 0; _focusLast = true; }
+                    if (Debug.isDebugBuild) { _page = Page.VHS; _focus = 0; }
                     break;
                 case "vhsrec":    Gameplay.VHSSettings.Rec = !Gameplay.VHSSettings.Rec; break;
 
                 // ── Arbmos V2 (DEV) — umbrales de luz ───────────────────────
                 case "arbmos":
-                    if (Debug.isDebugBuild) { _page = Page.Arbmos; _focus = 0; _focusLast = true; }
+                    if (Debug.isDebugBuild) { _page = Page.Arbmos; _focus = 0; }
                     break;
                 case "franja":
-                    if (Debug.isDebugBuild) { _page = Page.Franja; _focus = 0; _focusLast = true; }
+                    if (Debug.isDebugBuild) { _page = Page.Franja; _focus = 0; }
                     break;
                 case "franjadebug": Rediseno.FranjaLinternaAjustes.MostrarDebug = !Rediseno.FranjaLinternaAjustes.MostrarDebug; break;
                 case "entidades":
-                    if (Debug.isDebugBuild) { _page = Page.Entities; _focus = 0; _focusLast = true; }
+                    if (Debug.isDebugBuild) { _page = Page.Entities; _focus = 0; }
                     break;
                 case "arbover":   Gameplay.ArbmosDebug.Activo    = !Gameplay.ArbmosDebug.Activo;    break;
             }
@@ -1450,8 +1170,6 @@ namespace Gamepad
             _battTxt = new GUIStyle(GUI.skin.label) { fontSize = 18, alignment = TextAnchor.MiddleLeft, font = android ? null : T.FMono };
             _battTxt.normal.textColor = T.Cream;
 
-            _toggleLbl = new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.MiddleLeft, wordWrap = true, font = android ? null : T.FMono };
-            _toggleLbl.normal.textColor = T.CreamDim;
         }
 
         // Dibuja una batería (cuerpo + terminal) con relleno proporcional y el

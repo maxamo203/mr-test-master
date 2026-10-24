@@ -19,7 +19,7 @@ namespace Rediseno.Menus
         public static Texture2D Arte(int i)
         {
             if (_sorken == null) _sorken = Resources.Load<Texture2D>("Rediseno/fondo_sorken");
-            if (_arbmos == null) _arbmos = Resources.Load<Texture2D>("Rediseno/fondo_arbmos");
+            if (_arbmos == null) _arbmos = Resources.Load<Texture2D>("Rediseno/fondo_entidad");
             if (_veleth == null) _veleth = Resources.Load<Texture2D>("Rediseno/fondo_veleth");
             return i < 3 ? _sorken : i < 5 ? _arbmos : _veleth;
         }

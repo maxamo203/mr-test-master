@@ -24,7 +24,7 @@ namespace Rediseno
     //   - Luz intensa: sola, mientras el libro que se está oscureciendo (o un Sorken) quede
     //     centrado en el haz. El libro y el Sorken sólo cuentan la luz en modo intenso.
     //
-    // Sólo actúa con el flag del rediseño prendido, en partida, en Cardboard y SIN mando
+    // Sólo actúa en partida, en Cardboard y SIN mando
     // conectado (con joystick manda el joystick). Lo agrega ContextActionController a su
     // propio GameObject y corre después de él (que resuelve la acción apuntada del frame).
     [DefaultExecutionOrder(10)]
@@ -112,7 +112,6 @@ namespace Rediseno
 
         private static bool DebeActivarse()
         {
-            if (!Flag.Activo) return false;
             var net = NetworkManager.Instance;
             if (net == null || !net.GameStarted) return false;
             if (PauseMenuController.IsOpen) return false;

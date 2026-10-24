@@ -46,7 +46,7 @@ namespace Rediseno.Menus
         private struct Vinculo
         {
             public Label Texto, Valor;
-            public VisualElement Relleno, Pastilla;
+            public VisualElement Relleno, Pastilla, Marca;
             public Label PastillaTxt;
         }
         private readonly List<Vinculo> _vinculos = new();
@@ -68,7 +68,7 @@ namespace Rediseno.Menus
         protected override bool EsVisible()
         {
             var p = PauseMenuController.Instance;
-            return Flag.Activo && p != null && PauseMenuController.IsOpen && p.PaginaMigrable &&
+            return p != null && PauseMenuController.IsOpen && p.PaginaMigrable &&
                    SceneManager.GetActiveScene().name != SceneFlow.EscenaMenu;
         }
 
@@ -259,6 +259,42 @@ namespace Rediseno.Menus
                         v.Texto = l; v.Valor = val; v.Relleno = rel;
                         break;
                     }
+
+                    case Tipo.Medidor:
+                    {
+                        // Sólo lectura (no entra en la navegación): barra en vivo + marca roja.
+                        var t = PiezasUI.Ignorar(PiezasUI.Tarjeta());
+                        var arriba = PiezasUI.Ignorar(new VisualElement());
+                        arriba.style.flexDirection = FlexDirection.Row;
+                        arriba.style.justifyContent = Justify.SpaceBetween;
+                        arriba.style.alignItems = Align.Center;
+                        arriba.style.marginBottom = 16;
+                        var l = TemaUI.Texto(Mayus(m.Texto), TemaUI.Bebas, 42, TemaUI.Cream, 4f);
+                        l.style.flexShrink = 1;
+                        arriba.Add(l);
+                        var val = TemaUI.Texto("", TemaUI.Mono, 26, TemaUI.Dim, 0f, TextAnchor.MiddleRight);
+                        arriba.Add(val);
+                        t.Add(arriba);
+
+                        var pista = PiezasUI.Ignorar(new VisualElement());
+                        pista.style.height = 16;
+                        TemaUI.Radio(pista, 8);
+                        pista.style.backgroundColor = new Color(1f, 1f, 1f, 0.10f);
+                        var rel = PiezasUI.Ignorar(new VisualElement());
+                        rel.style.height = Length.Percent(100);
+                        TemaUI.Radio(rel, 8);
+                        pista.Add(rel);
+                        var marca = PiezasUI.Ignorar(new VisualElement());
+                        marca.style.position = Position.Absolute;
+                        marca.style.top = -6; marca.style.bottom = -6;
+                        marca.style.width = 4; marca.style.marginLeft = -2;
+                        marca.style.backgroundColor = TemaUI.Red;
+                        pista.Add(marca);
+                        t.Add(pista);
+                        _lista.Add(t);
+                        v.Texto = l; v.Valor = val; v.Relleno = rel; v.Marca = marca;
+                        break;
+                    }
                 }
                 _vinculos.Add(v);
             }
@@ -304,6 +340,18 @@ namespace Rediseno.Menus
                             float k = m.Max > m.Min ? Mathf.Clamp01((m.Valor - m.Min) / (m.Max - m.Min)) : 0f;
                             v.Relleno.style.width = Length.Percent(k * 100f);
                             if (v.Texto != null) v.Texto.text = Mayus(m.Texto);
+                        }
+                        break;
+                    case Tipo.Medidor:
+                        if (v.Relleno != null)
+                        {
+                            bool apagado = m.Min < 0f;
+                            v.Relleno.style.width = Length.Percent(Mathf.Clamp01(m.Valor) * 100f);
+                            v.Relleno.style.backgroundColor = m.On ? TemaUI.Tan : new Color(1f, 1f, 1f, 0.35f);
+                            v.Marca.style.display = apagado ? DisplayStyle.None : DisplayStyle.Flex;
+                            v.Marca.style.left = Length.Percent(Mathf.Clamp01(m.Max) * 100f);
+                            v.Valor.text = apagado ? "APAGADO" : m.On ? "TRANSMITE" : "";
+                            v.Valor.style.color = m.On ? TemaUI.Tan : TemaUI.Dim;
                         }
                         break;
                 }

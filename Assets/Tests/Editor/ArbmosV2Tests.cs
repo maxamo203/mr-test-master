@@ -359,7 +359,7 @@ Assert.That(flashlight.VisualOuterAngleDeg - flashlight.VisualInnerAngleDeg,
     }
 
     [Test]
-    public void ClipDePersecucionUsaLaMismaEscalaQueElPrefab()
+    public void ClipDePersecucionAnimaLosHuesosDelPrefab()
     {
         var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
             "Assets/Prefabs/Arbmos.prefab");
@@ -368,31 +368,13 @@ Assert.That(flashlight.VisualOuterAngleDeg - flashlight.VisualInnerAngleDeg,
         Assert.That(animator, Is.Not.Null);
         Assert.That(animator.chaseClip, Is.Not.Null);
 
-        bool foundRootScale = false;
-        bool foundHipHeight = false;
-        foreach (var binding in UnityEditor.AnimationUtility.GetCurveBindings(animator.chaseClip))
+        var bindings = UnityEditor.AnimationUtility.GetCurveBindings(animator.chaseClip);
+        Assert.That(bindings.Length, Is.GreaterThan(0));
+        foreach (var binding in bindings)
         {
-            var curve = UnityEditor.AnimationUtility.GetEditorCurve(animator.chaseClip, binding);
-            if (curve == null) continue;
-
-            if (binding.path == "target_character" &&
-                binding.propertyName.StartsWith("m_LocalScale."))
-            {
-                foundRootScale = true;
-                foreach (var key in curve.keys)
-                    Assert.That(key.value, Is.EqualTo(1f).Within(0.001f));
-            }
-
-            if (binding.path == "target_character/Hips" &&
-                binding.propertyName == "m_LocalPosition.y")
-            {
-                foundHipHeight = true;
-                foreach (var key in curve.keys)
-                    Assert.That(key.value, Is.GreaterThan(0.5f));
-            }
+            if (binding.path.Length == 0) continue;
+            Assert.That(prefab.transform.Find(binding.path), Is.Not.Null,
+                $"El clip anima '{binding.path}', que no existe en el prefab.");
         }
-
-        Assert.That(foundRootScale, Is.True);
-        Assert.That(foundHipHeight, Is.True);
     }
 }

@@ -57,9 +57,9 @@ namespace Rediseno.UI
             if (!CabezaPorCamara) Cabeza.Recentrar();
         }
 
-        // ¿Hay alguna pantalla nueva a la vista? Las pantallas viejas (IMGUI) no se dibujan
-        // mientras tanto, y si se llega a una vieja estando en el visor se sale del visor
-        // (todavía no saben dibujarse en estéreo). Ver NightMenuUI.OnGUI.
+        // ¿Hay alguna pantalla UI Toolkit a la vista? Las IMGUI que quedan (CONTROL del mando)
+        // no se dibujan mientras tanto, y si se llega a una estando en el visor se sale del
+        // visor (todavía no saben dibujarse en estéreo). Ver NightMenuUI.OnGUI.
         public static bool AlgunaVisible => _visibles > 0;
         private static int _visibles;
 

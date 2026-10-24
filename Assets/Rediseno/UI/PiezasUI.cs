@@ -303,5 +303,27 @@ namespace Rediseno.UI
             padre.Add(t);
             return l;
         }
+
+        // Caja de texto (IP, puerto). Necesita el teclado del sistema: no se ofrece con el
+        // visor puesto. No entra en el MenuNavegable (se toca con el dedo).
+        public static TextField Campo(string valor, Action<string> alCambiar)
+        {
+            var campo = new TextField { value = valor ?? "" };
+            campo.style.unityFontDefinition = TemaUI.Mono;
+            campo.style.fontSize = 34;
+            campo.style.color = TemaUI.Cream;
+            campo.style.marginBottom = 16;
+            var input = campo.Q(className: TextField.inputUssClassName);
+            if (input != null)
+            {
+                input.style.backgroundColor = new Color(0.075f, 0.063f, 0.063f, 1f);
+                TemaUI.Radio(input, 24);
+                TemaUI.Borde(input, 2, TemaUI.Linea);
+                TemaUI.Relleno(input, 22, 26);
+                input.style.color = TemaUI.Cream;
+            }
+            campo.RegisterValueChangedCallback(e => alCambiar?.Invoke(e.newValue));
+            return campo;
+        }
     }
 }

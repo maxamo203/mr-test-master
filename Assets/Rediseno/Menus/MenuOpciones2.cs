@@ -6,13 +6,12 @@ using UnityEngine.UIElements;
 
 namespace Rediseno.Menus
 {
-    // OPCIONES del menú principal, Rediseño 2.0 (UI Toolkit). Reemplaza a la pantalla
-    // Opciones de NightMenuUI con el flag prendido y funciona con el visor puesto: con mando
-    // ↑↓ recorre, ←/→ ajustan los volúmenes, → activa; con la mirada se miran los
-    // interruptores o los botones − / + de cada volumen.
+    // OPCIONES del menú principal, Rediseño 2.0 (UI Toolkit). Se muestra en la pantalla
+    // Opciones de NightMenuUI y funciona con el visor puesto: con mando ↑↓ recorre, ←/→
+    // ajustan los volúmenes, → activa; con la mirada se miran los interruptores o los
+    // botones − / + de cada volumen.
     //
-    // Mismas opciones que la pantalla vieja (y las mismas claves de GameOptions). CONTROL
-    // (MANDO) sigue llevando al visualizador viejo, que todavía no está migrado.
+    // CONTROL (MANDO) lleva al visualizador del mando, que sigue en IMGUI (NightMenuUI).
     public class MenuOpciones2 : PantallaUI
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -52,7 +51,7 @@ namespace Rediseno.Menus
         protected override bool EsVisible()
         {
             var menu = NightMenuUI.Instance;
-            return Flag.Activo && menu != null && menu.Mostrando(NightMenuUI.Pantalla.Opciones);
+            return menu != null && menu.Mostrando(NightMenuUI.Pantalla.Opciones);
         }
 
         protected override Texture FondoVisor => _arte;
@@ -75,10 +74,6 @@ namespace Rediseno.Menus
             var lista = PiezasUI.Lista();
             Desplazable = lista;
             col.Add(lista);
-
-            lista.Add(PiezasUI.Interruptor(nav, "REDISEÑO 2.0 (EXPERIMENTAL)",
-                "Controles por mirada, menús nuevos y visor en toda la app. Apagalo para la versión de siempre",
-                () => GameOptions.Rediseno2, v => GameOptions.Rediseno2 = v));
 
             lista.Add(PiezasUI.Seccion("SONIDO"));
             lista.Add(PiezasUI.Deslizador(nav, "VOLUMEN", () => GameOptions.Volumen, v => GameOptions.Volumen = v));
@@ -127,8 +122,8 @@ namespace Rediseno.Menus
             if (Debug.isDebugBuild)
             {
                 lista.Add(PiezasUI.Seccion("DESARROLLO"));
-                // Mismo interruptor que la pantalla vieja: cada catálogo tiene su propio
-                // progreso, así que el contador de abajo cambia con él.
+                // Cada catálogo tiene su propio progreso, así que el contador de abajo
+                // cambia con él.
                 lista.Add(PiezasUI.Interruptor(nav, "NOCHES DE PROD",
                     "Prendido: Nights/prod (datos reales). Apagado: Nights/dev. Rige desde la próxima partida",
                     () => PlayDataProfile.UseProduction,

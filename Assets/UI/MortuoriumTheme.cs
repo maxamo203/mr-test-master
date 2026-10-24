@@ -7,7 +7,8 @@ using Gamepad;
 // todos los menús, portado del prototipo HTML (Assets/Prototipo Navegacion).
 //
 // Uso: dentro de un OnGUI que ya llamó a UIScale.Begin(), dibujar con las
-// primitivas (Fill/Borde/Panel) y los widgets (Boton, Celda, CampoTexto, Slider).
+// primitivas (Fill/Borde/Panel) y los widgets (Boton, BotonVolver, Barra) o, en las
+// pantallas con el estilo 2.0, sus variantes redondeadas (Boton2, Slider2, CampoTexto2…).
 // Los botones se integran con ImguiGamepadMenu para navegarse con el mando: el
 // resaltado de foco lo pinta este tema (borde dorado) en vez del tint amarillo.
 //
@@ -275,30 +276,6 @@ public static class MortuoriumTheme
         GUI.color = prev;
     }
 
-    // Ícono de candado dibujado con rects (no depende de fuentes con emoji).
-    // Se ajusta al rect r: cuerpo abajo + arco (U invertida) arriba + cerradura.
-    public static void Candado(Rect r, Color c)
-    {
-        float bodyH = r.height * 0.58f;
-        var body = new Rect(r.x, r.yMax - bodyH, r.width, bodyH);
-
-        // Arco: dos verticales + travesaño superior, centrado y más angosto que el cuerpo.
-        float t     = Mathf.Max(2f, r.width * 0.14f);
-        float archW = r.width * 0.62f;
-        float archX = r.x + (r.width - archW) * 0.5f;
-        float archH = (r.height - bodyH) + t;   // baja un poco tras el cuerpo
-        Fill(new Rect(archX, r.y, t, archH), c);
-        Fill(new Rect(archX + archW - t, r.y, t, archH), c);
-        Fill(new Rect(archX, r.y, archW, t), c);
-
-        // Cuerpo.
-        Fill(body, c);
-
-        // Cerradura (agujero) en el centro del cuerpo, con el color del fondo.
-        float kh = bodyH * 0.42f, kw = Mathf.Max(2f, r.width * 0.12f);
-        Fill(new Rect(body.center.x - kw * 0.5f, body.y + bodyH * 0.28f, kw, kh), Bg);
-    }
-
     // ── Barras de HUD (batería / cordura) ─────────────────────────────────
     // Geometría compartida para apilar las barras del HUD abajo-izquierda, en
     // coords VIRTUALES (tras UIScale.Begin). fila 0 = la de más abajo (batería),
@@ -339,17 +316,12 @@ public static class MortuoriumTheme
         float w  = HudBarWCardboard;
         float y  = (Screen.height * HudCardboardBaseY - sg.y) / s
                  - HudBarH - fila * (HudBarH + HudBarGap);
-        float pxL = Screen.width * 0.25f, pxR = Screen.width * 0.75f;
-        // Rediseño 2.0: el centro de cada ojo según la calibración del visor (zoom +
-        // distancia de cada ojo). Con el centro de cada mitad, las dos copias de la barra
-        // no caían en el mismo lugar y no se fusionaban.
-        if (Rediseno.Flag.Activo)
-        {
-            Rediseno.UI.OjosVisor.Centros(out var izq, out var der);
-            pxL = izq.x; pxR = der.x;
-        }
-        float cxL = (pxL - sg.x) / s;
-        float cxR = (pxR - sg.x) / s;
+        // El centro de cada ojo según la calibración del visor (zoom + distancia de cada
+        // ojo). Con el centro de cada mitad, las dos copias de la barra no caían en el
+        // mismo lugar y no se fusionaban.
+        Rediseno.UI.OjosVisor.Centros(out var izq, out var der);
+        float cxL = (izq.x - sg.x) / s;
+        float cxR = (der.x - sg.x) / s;
         a = new Rect(cxL - w * 0.5f, y, w, HudBarH);
         b = new Rect(cxR - w * 0.5f, y, w, HudBarH);
         return 2;
@@ -411,96 +383,6 @@ public static class MortuoriumTheme
 
     // ── Widgets ───────────────────────────────────────────────────────────
 
-    // Título con "glitch" cromático (sombra roja/teal) tipo MORTUORIUM.
-    public static void TituloGlitch(Rect r, string texto, int size)
-    {
-        // "size" es un tamaño MÁXIMO deseado: si el texto no entra en r.width lo
-        // encogemos hasta que entre. Hace falta porque en Android Estilo() apaga
-        // las fuentes custom (Bebas Neue no renderiza bien ahí — ver EnsureFonts)
-        // y cae al font default del skin, bastante más ancho a igual tamaño de
-        // punto; sin este ajuste, con TextAnchor.MiddleCenter y sin wrap, el título
-        // se recorta simétrico por los dos extremos (p. ej. "MORTUORIUM" -> "ORTUORIU").
-        float anchoTexto = Estilo(FBebas, size, Color.white, TextAnchor.MiddleCenter)
-                           .CalcSize(new GUIContent(texto)).x;
-        if (anchoTexto > r.width * 0.98f && anchoTexto > 0f)
-            size = Mathf.Max(8, Mathf.FloorToInt(size * (r.width * 0.98f / anchoTexto)));
-
-        var rojo = new Color(1f, 0.12f, 0.20f, 0.55f);
-        var teal = new Color(0f, 0.86f, 0.78f, 0.35f);
-        // El desplazamiento del glitch escala con el tamaño (para que se vea igual
-        // de "corrido" con títulos grandes o chicos).
-        float off = Mathf.Max(2f, size * 0.03f);
-        GUI.Label(new Rect(r.x + off, r.y, r.width, r.height), texto, Estilo(FBebas, size, rojo, TextAnchor.MiddleCenter));
-        GUI.Label(new Rect(r.x - off, r.y, r.width, r.height), texto, Estilo(FBebas, size, teal, TextAnchor.MiddleCenter));
-        GUI.Label(r, texto, Estilo(FBebas, size, Cream, TextAnchor.MiddleCenter));
-    }
-
-    // Wordmark MORTUORIUM como imagen (LogoMortuorium), con el mismo glitch
-    // cromático rojo/teal de TituloGlitch pero VIVO en vez de estático: el
-    // corrimiento "respira" con ruido y cada pocos segundos da un salto de
-    // tracking tipo VHS (glitch más marcado + un par de franjas de estática).
-    // r.width manda (el logo ocupa ese ancho, centrado); r.height es sólo un
-    // límite generoso por si el aspect ratio no entra. Devuelve el alto final
-    // usado, para que el que llama pueda ubicar lo que va debajo.
-    //
-    // Si falta el recurso (Resources/Logo/mortuorium.png), cae al wordmark de
-    // texto para no dejar el menú sin título.
-    public static float LogoGlitch(Rect r)
-    {
-        EnsureLogo();
-        if (_logo == null)
-        {
-            float size = Mathf.RoundToInt(r.height * 0.62f);
-            TituloGlitch(r, "MORTUORIUM", (int)size);
-            return r.height;
-        }
-
-        float aspect = (float)_logo.width / _logo.height;
-        float w = r.width, h = w / aspect;
-        if (h > r.height) { h = r.height; w = h * aspect; }
-        var logoRect = new Rect(r.x + (r.width - w) * 0.5f, r.y, w, h);
-
-        float t = Time.unscaledTime;
-        const float cycle = 3.6f, pulseDur = 0.14f;
-        float phase = Mathf.Repeat(t, cycle);
-        bool  pulsing = phase < pulseDur;
-        float pulseK  = pulsing ? 1f - phase / pulseDur : 0f; // 1 -> 0 durante el pulso
-
-        // Corrimiento cromático: "respira" con ruido; durante el pulso se dispara.
-        float baseOff = w * 0.006f;
-        float wander  = Mathf.PerlinNoise(t * 0.6f, 0f) - 0.5f;
-        float off     = baseOff * (1f + wander * 1.4f) + w * 0.05f * pulseK;
-
-        var prev = GUI.color;
-        GUI.color = new Color(1f, 0.12f, 0.20f, 0.55f + 0.3f * pulseK);
-        GUI.DrawTexture(new Rect(logoRect.x + off, logoRect.y, w, h), _logo, ScaleMode.StretchToFill, true);
-        GUI.color = new Color(0f, 0.86f, 0.78f, 0.35f + 0.3f * pulseK);
-        GUI.DrawTexture(new Rect(logoRect.x - off, logoRect.y, w, h), _logo, ScaleMode.StretchToFill, true);
-
-        // Capa principal: durante el pulso, un parpadeo breve de opacidad (drop de tracking).
-        GUI.color = new Color(Cream.r, Cream.g, Cream.b, pulsing ? Mathf.Lerp(1f, 0.55f, pulseK) : 1f);
-        GUI.DrawTexture(logoRect, _logo, ScaleMode.StretchToFill, true);
-
-        // Estática: un par de franjas finas durante el pulso (mismo truco que
-        // ArbmosDistortionHUD.DrawLocalizedGlitch, con Texture2D.whiteTexture).
-        if (pulsing)
-        {
-            var rng = new System.Random(Mathf.FloorToInt(t / cycle));
-            int bands = 1 + rng.Next(2);
-            for (int i = 0; i < bands; i++)
-            {
-                float y  = logoRect.y + (float)rng.NextDouble() * h;
-                float bh = 2f + (float)rng.NextDouble() * 4f;
-                float dx = ((float)rng.NextDouble() - 0.5f) * w * 0.04f;
-                GUI.color = new Color(1f, 1f, 1f, 0.10f + 0.18f * pulseK);
-                GUI.DrawTexture(new Rect(logoRect.x + dx, y, w, bh), Texture2D.whiteTexture);
-            }
-        }
-
-        GUI.color = prev;
-        return h;
-    }
-
     // Botón estándar del tema: borde 2px + texto Bebas centrado.
     //   primario=true  -> borde rojo (acción principal)
     //   con foco del gamepad -> borde/tint dorado
@@ -555,100 +437,6 @@ public static class MortuoriumTheme
         if (nav != null) nav.Button(r, "", invisible, volver);
         else if (GUI.Button(r, "", invisible)) volver();
         GUI.Label(r, "<", st);
-    }
-
-    // Celda/fila navegable con dibujo custom: pinta fondo+borde (con foco) y un
-    // botón invisible; el contenido se dibuja después por el caller sobre el rect.
-    // Devuelve el color de borde usado (por si el caller quiere combinar).
-    public static void Celda(ImguiGamepadMenu nav, Rect r, bool primario, Action onClick,
-                             bool enabled = true, Color? bordeOverride = null,
-                             Color? fillOverride = null)
-    {
-        bool foco = nav != null && enabled && ImguiGamepadMenu.NextHasFocus;
-        Color borde = !enabled ? BorderDim : foco ? Tan : bordeOverride ?? (primario ? Red : Border);
-        if (foco) Fill(r, new Color(Tan.r, Tan.g, Tan.b, 0.12f));
-        else Fill(r, fillOverride ?? new Color(0f, 0f, 0f, 0.35f));
-        Borde(r, borde);
-
-        bool prevEnabled = GUI.enabled;
-        GUI.enabled = enabled;
-        var st = Estilo(FMono, 1, Color.clear, TextAnchor.MiddleCenter);
-        if (nav != null)
-            nav.Button(r, "", st,
-                       () => { if (enabled) { AudioManager.Sonar(c => c.uiConfirmar); onClick?.Invoke(); } });
-        else if (GUI.Button(r, "", st) && enabled) { AudioManager.Sonar(c => c.uiConfirmar); onClick?.Invoke(); }
-        GUI.enabled = prevEnabled;
-    }
-
-    // Campo de texto estilizado. En device, tocar el campo abre el teclado nativo
-    // (comportamiento estándar de IMGUI en iOS/Android).
-    public static string CampoTexto(Rect r, string valor, string placeholder)
-    {
-        Fill(r, BgField);
-        Borde(r, Border);
-        var st = _fieldStyle ??= CrearFieldStyle();
-        string nuevo = GUI.TextField(new Rect(r.x + 12f, r.y, r.width - 24f, r.height), valor ?? "", st);
-        if (string.IsNullOrEmpty(nuevo) && !string.IsNullOrEmpty(placeholder))
-            GUI.Label(new Rect(r.x + 12f, r.y, r.width - 24f, r.height), placeholder,
-                      Estilo(FMono, 15, Dim));
-        return nuevo;
-    }
-
-    private static GUIStyle _fieldStyle;
-    private static GUIStyle CrearFieldStyle()
-    {
-        var st = new GUIStyle(GUI.skin.textField)
-        {
-            // En Android las fuentes custom no renderizan bien (ver Estilo()) — con
-            // FMono directo el texto se actualiza pero el glyph no se pinta, así que
-            // parece que "no se ve lo que escribís" aunque el valor sí cambie.
-            font = Application.platform == RuntimePlatform.Android ? null : FMono,
-            fontSize = 15, alignment = TextAnchor.MiddleLeft,
-        };
-        st.normal.textColor = st.focused.textColor = st.hover.textColor = st.active.textColor = Cream;
-        st.normal.background = st.focused.background = st.hover.background = st.active.background = null;
-        return st;
-    }
-
-    // Slider horizontal con la estética del prototipo (track fino, acento rojo).
-    public static float Slider(Rect r, float valor, float min, float max)
-    {
-        float t = Mathf.InverseLerp(min, max, valor);
-        var track = new Rect(r.x, r.y + r.height * 0.5f - 2f, r.width, 4f);
-        Fill(track, BorderDim);
-        Fill(new Rect(track.x, track.y, track.width * t, track.height), Red);
-
-        // Slider invisible encima para el drag (estilos transparentes + thumb rojo).
-        _sliderBg    ??= new GUIStyle();
-        _sliderThumb ??= CrearThumbStyle();
-        float nuevo = GUI.HorizontalSlider(r, valor, min, max, _sliderBg, _sliderThumb);
-        return nuevo;
-    }
-
-    private static GUIStyle _sliderBg, _sliderThumb;
-    private static Texture2D _thumbTex;
-    private static GUIStyle CrearThumbStyle()
-    {
-        _thumbTex = new Texture2D(1, 1, TextureFormat.RGBA32, false);
-        _thumbTex.SetPixel(0, 0, Red);
-        _thumbTex.Apply();
-        _thumbTex.hideFlags = HideFlags.HideAndDontSave;
-        var st = new GUIStyle { fixedWidth = 14f, fixedHeight = 26f };
-        st.normal.background = _thumbTex;
-        return st;
-    }
-
-    // Fila de opción con toggle ON/OFF a la derecha (estilo prototipo).
-    public static void FilaToggle(ImguiGamepadMenu nav, Rect r, string titulo, string subtitulo,
-                                  bool valor, Action onToggle)
-    {
-        Celda(nav, r, primario: false, onClick: onToggle);
-        GUI.Label(new Rect(r.x + 14f, r.y + 8f, r.width - 120f, 22f), titulo, Estilo(FMono, 14, Cream));
-        if (!string.IsNullOrEmpty(subtitulo))
-            GUI.Label(new Rect(r.x + 14f, r.y + 30f, r.width - 120f, 18f), subtitulo, Estilo(FMono, 11, Dim));
-        var pill = new Rect(r.xMax - 74f, r.y + (r.height - 30f) * 0.5f, 58f, 30f);
-        Borde(pill, valor ? Tan : Border);
-        GUI.Label(pill, valor ? "ON" : "OFF", Estilo(FMono, 12, valor ? Tan : Dim, TextAnchor.MiddleCenter));
     }
 
     // ══ Estilo 2.0 en IMGUI ════════════════════════════════════════════════
@@ -769,9 +557,10 @@ public static class MortuoriumTheme
         return GUI.HorizontalSlider(r, valor, min, max, _sliderBg, _sliderThumb2);
     }
 
-    private static GUIStyle _sliderThumb2;
+    private static GUIStyle _sliderBg, _sliderThumb2;
 
-    // Campo de texto 2.0 (tarjeta redondeada).
+    // Campo de texto 2.0 (tarjeta redondeada). En device, tocar el campo abre el teclado
+    // nativo (comportamiento estándar de IMGUI en iOS/Android).
     public static string CampoTexto2(Rect r, string valor, string placeholder)
     {
         if (Event.current.type == EventType.Repaint) Tarjeta2(r, BgField);
@@ -781,5 +570,21 @@ public static class MortuoriumTheme
             GUI.Label(new Rect(r.x + 14f, r.y, r.width - 28f, r.height), placeholder,
                       Estilo(FMono, 15, Dim));
         return nuevo;
+    }
+
+    private static GUIStyle _fieldStyle;
+    private static GUIStyle CrearFieldStyle()
+    {
+        var st = new GUIStyle(GUI.skin.textField)
+        {
+            // En Android las fuentes custom no renderizan bien (ver Estilo()) — con
+            // FMono directo el texto se actualiza pero el glyph no se pinta, así que
+            // parece que "no se ve lo que escribís" aunque el valor sí cambie.
+            font = Application.platform == RuntimePlatform.Android ? null : FMono,
+            fontSize = 15, alignment = TextAnchor.MiddleLeft,
+        };
+        st.normal.textColor = st.focused.textColor = st.hover.textColor = st.active.textColor = Cream;
+        st.normal.background = st.focused.background = st.hover.background = st.active.background = null;
+        return st;
     }
 }

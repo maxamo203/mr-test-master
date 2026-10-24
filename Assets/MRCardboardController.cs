@@ -50,14 +50,6 @@ public class MRCardboardController : MonoBehaviour
     // ExitCardboard, al que también pasa OnDisable (cambio de escena).
     public static bool Activo { get; private set; }
 
-    // Sale de Cardboard si está prendido. Para los flujos que necesitan la pantalla mono
-    // (apuntar el centro a la imagen, arrastrar el gizmo del ajuste manual).
-    public static void SalirSiActivo()
-    {
-        var cb = FindAnyObjectByType<MRCardboardController>();
-        if (cb != null && cb.CardboardActive) cb.SetCardboard(false);
-    }
-
     // _rtL siempre existe. _rtR sólo en estéreo (en mono los dos ojos muestran _rtL).
     private RenderTexture      _rtL, _rtR;
     private RenderTexture      _prevTarget;
@@ -86,26 +78,8 @@ public class MRCardboardController : MonoBehaviour
     {
         if (on == CardboardActive) return;
 
-        // No entrar mientras se está buscando la imagen de referencia (calibrando):
-        // el fantasma de esa pantalla se dibuja a pantalla completa, sin contemplar
-        // el split de ojos izq/der, y queda superpuesto justo en el medio de los dos.
-        // Sólo mientras la búsqueda está EN CURSO y la noche no arrancó: con la noche activa
-        // (o con el mapa ubicado a mano, o el reintento que conserva la calibración) IsFound
-        // puede seguir en falso y el botón MODO CARDBOARD quedaba muerto en plena partida.
-        if (on)
-        {
-            var anchor = FindFirstObjectByType<ARImageAnchor>();
-            bool enPartida = NetworkManager.Instance != null && NetworkManager.Instance.GameStarted;
-            // Con el rediseño la búsqueda tiene su panel en estéreo (PanelSincronizacion2):
-            // el visor se puede usar en toda la app, también buscando la imagen.
-            if (!Rediseno.Flag.Activo &&
-                anchor != null && anchor.Buscando && !ManualCalibration.Calibrado && !enPartida)
-            {
-                Debug.LogWarning("[MRCardboard] No se puede entrar a Cardboard mientras se busca la imagen de referencia.");
-                return;
-            }
-        }
-
+        // El visor se puede usar en toda la app, también buscando la imagen de referencia:
+        // la búsqueda tiene su panel en estéreo (PanelSincronizacion2).
         if (!ResolveArCamera())
         {
             Debug.LogError("[MRCardboard] No encontré la cámara AR; no puedo entrar a modo Cardboard.");
