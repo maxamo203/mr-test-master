@@ -5,13 +5,10 @@ using UnityEngine.SceneManagement;
 // Solo controla el DarknessOverlay (oscurece todo menos el cono de la linterna, en tiempo
 // real; genérico Android + iOS). Es el efecto de "linterna de terror" — sirve para probar.
 //
-// La otra opción, iluminar la MALLA dinámica del entorno con LiDAR/AR, es un feature aparte:
-// ver FlashlightMeshLighting.
-//
 // Se auto-crea (RuntimeInitializeOnLoadMethod) y persiste el estado en PlayerPrefs, así el
 // toggle del menú de pausa funciona sin wiring. Resuelve el componente de cada escena en
 // Start y en cada carga de escena.
-[DefaultExecutionOrder(120)] // después de los managers AR / AdaptiveOcclusion
+[DefaultExecutionOrder(120)] // después de los managers AR
 public class EnvironmentLightingController : MonoBehaviour
 {
     public static EnvironmentLightingController Instance { get; private set; }
@@ -74,8 +71,7 @@ public class EnvironmentLightingController : MonoBehaviour
     public void Toggle() => Enabled = !Enabled;
 
     // Genérico (Android + iOS): el DarknessOverlay oscurece todo menos el cono de la
-    // linterna en tiempo real. La malla iluminada por LiDAR/AR es OTRA opción aparte
-    // (ver FlashlightMeshLighting).
+    // linterna en tiempo real.
     public void Apply()
     {
         if (_darkness == null) _darkness = FindFirstObjectByType<DarknessOverlay>();

@@ -571,13 +571,10 @@ namespace Gamepad
                 if (!Debug.isDebugBuild) { _page = Page.Options; return; }
                 Etiqueta(new Rect(x, y, w, 50f), "LINTERNA (DEV)", _title); y += 62f;
 
-                // Toggles de iluminación (efecto de oscurecido y malla LiDAR/AR).
+                // Toggle de iluminación (efecto de oscurecido).
                 AddToggle("envlight", new Rect(x, y, w, 52f),
                           "Iluminación del entorno (tiempo real)",
                           EnvironmentLightingController.Enabled); y += 62f;
-                AddToggle("meshlight", new Rect(x, y, w, 52f),
-                          "Iluminar malla del entorno (LiDAR/AR)",
-                          FlashlightMeshLighting.Enabled); y += 66f;
 
                 var fl = GetFlashlight();
                 if (fl == null)
@@ -1083,7 +1080,6 @@ namespace Gamepad
                     if (Debug.isDebugBuild) { _page = Page.DebugPanels; _focus = 0; }
                     break;
                 case "envlight":  EnvironmentLightingController.Enabled = !EnvironmentLightingController.Enabled; break;
-                case "meshlight": FlashlightMeshLighting.Enabled       = !FlashlightMeshLighting.Enabled;       break;
 
                 // ── US-11.1 (VHS) ────────────────────────────────────────────
                 case "vhsmenus":  GameOptions.VhsActivo = !GameOptions.VhsActivo; break;

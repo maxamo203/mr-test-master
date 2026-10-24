@@ -6,7 +6,7 @@ using UnityEngine.XR.ARSubsystems;
 // Nivel de calidad de los SUBSISTEMAS AR durante el gameplay: es la perilla que más
 // pesa en batería y temperatura del dispositivo.
 //
-// Por qué existe: en un iPhone con LiDAR, AdaptiveOcclusion prendía la malla de
+// Por qué existe: en un iPhone con LiDAR, un sistema anterior prendía la malla de
 // reconstrucción a density=1 Y la profundidad neuronal en Best al mismo tiempo. Las
 // dos features más caras de ARKit, las dos al máximo. El coste no se ve como GPU:
 // la malla llega por chunks que Unity convierte en GameObjects y Mesh en el HILO
@@ -36,12 +36,9 @@ public static class ARQuality
             if (GameOptions.CalidadAR == (int)value) return;
             GameOptions.CalidadAR = (int)value;
             Aplicar();
-            OnCambio?.Invoke();
         }
     }
 
-    // Lo escuchan los sistemas que tienen que reconfigurarse (AdaptiveOcclusion).
-    public static event Action OnCambio;
 
     // ── Parámetros derivados ──────────────────────────────────────────────
 
@@ -109,7 +106,7 @@ public static class ARQuality
 
     // Se aplica en CADA carga de escena, no sólo cuando el jugador cambia el nivel:
     // los managers AR nacen con los valores serializados del prefab (profundidad en
-    // Best, etc.) y nadie más los ajusta — el AdaptiveOcclusion que lo hacía no está
+    // Best, etc.) y nadie más los ajusta — el sistema anterior que lo hacía ya no existe
     // en ninguna escena. Sin esto, el nivel elegido no tenía efecto hasta tocarlo en
     // el menú de pausa, y cada partida arrancaba con todo al máximo.
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -166,8 +163,8 @@ public static class ARQuality
             occ.enabled = modo != EnvironmentDepthMode.Disabled;
         }
 
-        // La malla de LiDAR sólo se configura si alguien la prendió (FlashlightMeshLighting,
-        // LiDARScanner): en la escena de juego arranca apagada — sin prefab no genera nada
+        // La malla de LiDAR sólo se configura si alguien la prendió
+        // (LiDARScanner): en la escena de juego arranca apagada — sin prefab no genera nada
         // y reconstruir el cuarto a densidad 1 era el grueso del consumo al entrar.
         var mesh = UnityEngine.Object.FindFirstObjectByType<ARMeshManager>();
         if (mesh != null && mesh.enabled && mesh.subsystem != null)

@@ -135,7 +135,7 @@ public class AnchorQuality : MonoBehaviour
         if (existente != null) return existente;
 
         // [RequireComponent(typeof(XROrigin))]: tiene que ir sobre el XROrigin, no en
-        // un GameObject suelto. Mismo patrón que AdaptiveOcclusion con el ARMeshManager.
+        // un GameObject suelto. Mismo patrón que el resto de los sistemas AR.
         var origin = FindFirstObjectByType<XROrigin>();
         if (origin == null)
         {
