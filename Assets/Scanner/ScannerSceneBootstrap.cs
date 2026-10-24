@@ -88,6 +88,15 @@ namespace Scanner
             fsm.SetMode(ScannerMode.Idle);
         }
 
+        // Anclas automáticas: el barrido cierra solo (MarcarListo) al llegar al objetivo;
+        // acá se libera el escáner. Con LISTO manual el panel ya lo hizo (no-op).
+        private void Update()
+        {
+            var fsm = ScanStateMachine.Instance;
+            if (fsm == null || fsm.Current != ScannerMode.Anchor_Place) return;
+            if (AnchorPointManager.Instance is { Listo: true }) fsm.SetMode(ScannerMode.Idle);
+        }
+
         private void OnDestroy()
         {
             if (_imageAnchor != null) _imageAnchor.OnImageReacquired -= OnAnchorReady;

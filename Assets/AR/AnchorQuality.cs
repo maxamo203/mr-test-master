@@ -44,6 +44,7 @@ public class AnchorQuality : MonoBehaviour
 
     public float  Score01  => _score;
     public int    PuntosCerca => _puntosCerca;
+    public bool   Activo   => _activo;
 
     public Nivel Level =>
         _scoreObjetivo <= 0f ? Nivel.Nula :
@@ -117,19 +118,21 @@ public class AnchorQuality : MonoBehaviour
     }
 
     // Encender sólo mientras se está colocando: el point cloud es un subsistema más
-    // corriendo por frame.
+    // corriendo por frame. Excepción: la vista de debug (AnclasDebugViz, sólo dev build)
+    // lo mantiene prendido para dibujar la nube.
     public void SetActivo(bool on)
     {
         if (_activo == on) return;
         _activo = on;
 
         if (on && _pcm == null) _pcm = AsegurarPointCloudManager();
-        if (_pcm != null) _pcm.enabled = on;
+        if (_pcm != null) _pcm.enabled = on || AnclasDebugViz.Activo;
 
         if (!on) { _score = 0f; _scoreObjetivo = 0f; _densidad = 0f; _puntosCerca = 0; }
     }
 
-    private static ARPointCloudManager AsegurarPointCloudManager()
+    // El ARPointCloudManager de la escena (lo crea apagado si no existe). Null sin XROrigin.
+    public static ARPointCloudManager AsegurarPointCloudManager()
     {
         var existente = FindFirstObjectByType<ARPointCloudManager>();
         if (existente != null) return existente;

@@ -430,14 +430,18 @@ public class ARLobbyUI : MonoBehaviour
         y += 38f;
 
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 44f),
-                  "Recorré tu cuarto y colocá anclas apuntando a paredes o muebles. " +
-                  "cuantas más y más repartidas, menos se corre el mapa.",
+                  mgr.Automatico
+                      ? "Mirá despacio alrededor del cuarto: paredes, muebles y rincones. Las anclas se ponen solas."
+                      : "Recorré tu cuarto y colocá anclas apuntando a paredes o muebles. " +
+                        "cuantas más y más repartidas, menos se corre el mapa.",
                   T.Estilo(T.FMono, 11, T.Muted, TextAnchor.UpperLeft, wrap: true));
         y += 50f;
 
-        string estado = mgr.Count < AnchorPointManager.MinAnclas
-            ? $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
-            : $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
+        string estado = mgr.Automatico
+            ? $"Anclas: {mgr.Count} / {AnchorPointManager.ObjetivoBarrido}"
+            : mgr.Count < AnchorPointManager.MinAnclas
+                ? $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
+                : $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
         GUI.Label(new Rect(Pad, y, vw - Pad * 2f, 22f), estado,
                   T.Estilo(T.FMono, 13, mgr.PuedeCerrar ? T.Green : T.Tan));
         y += 24f;
@@ -448,23 +452,35 @@ public class ARLobbyUI : MonoBehaviour
 
         // Los botones se dibujan SIEMPRE (deshabilitados en vez de ocultos): el foco
         // del mando es una lista global y se resetea si cambia la cantidad de items.
+        // (El modo se fija al abrir la colocación, así que la cantidad no cambia en medio.)
         float by = vh - 44f - 56f;
-        T.Boton(_nav, new Rect(Pad, by, vw - Pad * 2f, 56f), "COLOCAR ANCLA", primario: true,
-                () =>
-                {
-                    _errorAnclas = mgr.TryColocar(out var err) ? null : err;
-                    ReportarAnclas();
-                },
-                enabled: mgr.PuedeColocar);
+        if (mgr.Automatico)
+        {
+            // Automático: el progreso lo reporta ARLobbyManager y el barrido cierra solo;
+            // LISTO cierra antes del objetivo.
+            T.Boton(_nav, new Rect(Pad, by, vw - Pad * 2f, 56f), "LISTO", primario: true,
+                    () => { mgr.MarcarListo(); _errorAnclas = null; _lobby.AnchorPlacementDone(); },
+                    enabled: mgr.PuedeCerrar);
+        }
+        else
+        {
+            T.Boton(_nav, new Rect(Pad, by, vw - Pad * 2f, 56f), "COLOCAR ANCLA", primario: true,
+                    () =>
+                    {
+                        _errorAnclas = mgr.TryColocar(out var err) ? null : err;
+                        ReportarAnclas();
+                    },
+                    enabled: mgr.PuedeColocar);
 
-        float bw = (vw - Pad * 2f - 10f) * 0.5f;
-        by -= 52f;
-        T.Boton(_nav, new Rect(Pad, by, bw, 46f), "DESHACER", primario: false,
-                () => { mgr.DeshacerUltima(); _errorAnclas = null; ReportarAnclas(); },
-                enabled: mgr.Count > 0, fontSize: 16);
-        T.Boton(_nav, new Rect(Pad + bw + 10f, by, bw, 46f), "LISTO", primario: false,
-                () => { mgr.MarcarListo(); _errorAnclas = null; _lobby.AnchorPlacementDone(); },
-                enabled: mgr.PuedeCerrar, fontSize: 16);
+            float bw = (vw - Pad * 2f - 10f) * 0.5f;
+            by -= 52f;
+            T.Boton(_nav, new Rect(Pad, by, bw, 46f), "DESHACER", primario: false,
+                    () => { mgr.DeshacerUltima(); _errorAnclas = null; ReportarAnclas(); },
+                    enabled: mgr.Count > 0, fontSize: 16);
+            T.Boton(_nav, new Rect(Pad + bw + 10f, by, bw, 46f), "LISTO", primario: false,
+                    () => { mgr.MarcarListo(); _errorAnclas = null; _lobby.AnchorPlacementDone(); },
+                    enabled: mgr.PuedeCerrar, fontSize: 16);
+        }
 
         // Escape: en un cuarto sin superficies trackeables no se llega al mínimo y el
         // jugador quedaría sin poder arrancar la partida.

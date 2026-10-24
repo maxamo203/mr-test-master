@@ -43,7 +43,7 @@ public static class AnchorVisuals
     // caché queda acotado.
     private static readonly System.Collections.Generic.Dictionary<Color, Material> _mats = new();
 
-    private static Material MaterialPara(Color color)
+    public static Material MaterialPara(Color color)
     {
         if (_mats.TryGetValue(color, out var mat) && mat != null) return mat;
 

@@ -8,7 +8,10 @@ public static class GameOptions
     private const string KeyVolumen     = "opt_volumen";
     private const string KeyVolMusica   = "opt_volumen_musica";
     private const string KeyVolEfectos  = "opt_volumen_efectos";
-    private const string KeyPuntosAncla = "opt_puntos_ancla";
+    // Clave nueva (antes "opt_puntos_ancla"): el default cambió y un 0 guardado con el
+    // default viejo lo pisaba.
+    private const string KeyPuntosAncla = "opt_puntos_ancla_v2";
+    private const string KeyAnclasAuto  = "opt_anclas_auto";
     private const string KeyEscaneoAutoBeta = "opt_escaneo_auto_beta";
     private const string KeyVozMic      = "opt_voz_mic";
     private const string KeyVozVolumen  = "opt_voz_volumen";
@@ -61,15 +64,28 @@ public static class GameOptions
         set => PlayerPrefs.SetFloat(KeyVolEfectos, Mathf.Clamp01(value));
     }
 
-    // ¿Este dispositivo coloca anchor points extra antes de empezar la partida?
+    // ¿Este dispositivo usa anchor points extra contra la deriva?
     // Es una decisión POR DISPOSITIVO (el cuarto y el tracking son de cada uno),
-    // no algo que el host imponga. Ver AnchorPointManager. Default: apagada.
+    // no algo que el host imponga. Ver AnchorPointManager. Default: encendida en
+    // development build (para probar las anclas automáticas), apagada en release.
     public static bool PuntosAncla
     {
-        get => PlayerPrefs.GetInt(KeyPuntosAncla, 0) == 1;
+        get => PlayerPrefs.GetInt(KeyPuntosAncla, Debug.isDebugBuild ? 1 : 0) == 1;
         set
         {
             PlayerPrefs.SetInt(KeyPuntosAncla, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    // Anclas automáticas (detectadas por AR) vs manuales (el jugador apunta y confirma).
+    // Switch de evaluación: sólo se puede cambiar en development build; release siempre automático.
+    public static bool AnclasAutomaticas
+    {
+        get => !Debug.isDebugBuild || PlayerPrefs.GetInt(KeyAnclasAuto, 1) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeyAnclasAuto, value ? 1 : 0);
             PlayerPrefs.Save();
         }
     }

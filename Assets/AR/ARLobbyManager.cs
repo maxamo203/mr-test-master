@@ -527,6 +527,9 @@ public class ARLobbyManager : MonoBehaviour
 
     private int _jugadoresPublicados = -1, _listosPublicados = -1;
 
+    // Anclas automáticas: último conteo reportado al host durante el barrido.
+    private int _anclasReportadas = -1;
+
     // ¿El host mismo está listo? Llegó a WaitingForClients sólo tras ubicar el entorno
     // y cerrar sus anclas (o en partida, donde el contador ya no se muestra).
     private bool HostListo =>
@@ -537,6 +540,14 @@ public class ARLobbyManager : MonoBehaviour
     // reinicio) y engancharse a cada uno era la forma de que el contador se trabara.
     private void Update()
     {
+        // Barrido automático de anclas (host Y cliente, por eso antes del corte de
+        // IsServer): el progreso se reporta al host y el barrido cierra solo.
+        if (State == LobbyState.PlacingAnchors && AnchorPointManager.Instance is { } anclas)
+        {
+            if (anclas.Count != _anclasReportadas) { _anclasReportadas = anclas.Count; ReportarAnclas(); }
+            if (anclas.Listo) AnchorPlacementDone();
+        }
+
         var net = NetworkManager.Instance;
         if (net == null || !net.IsServer || State == LobbyState.Idle) return;
 

@@ -242,6 +242,13 @@ namespace Gamepad
                                   occ.SolidDebugEnabled); y += 64f;
                     }
                 }
+                // Development build: nube de puntos AR + esferas de las anclas (también
+                // las que se agregan en partida). Ver AnclasDebugViz.
+                if (Debug.isDebugBuild)
+                {
+                    AddToggle("anclasviz", new Rect(x, y, w, 52f), "Anclas y nube de puntos (dev)",
+                              AnclasDebugViz.Activo); y += 64f;
+                }
 
                 AddButton("opciones", new Rect(x, y, w, 64f), "OPCIONES"); y += 76f;
                 AddButton("salir",    new Rect(x, y, w, 64f),
@@ -764,10 +771,12 @@ namespace Gamepad
                 }
                 case Page.Main:
                 {
-                    // +64 por cada toggle de partida (Cardboard / paredes / sólidas dev).
+                    // +64 por cada toggle de partida (Cardboard / paredes / sólidas dev /
+                    // anclas y nube dev).
                     int toggles = (GetModoCardboard() != null ? 1 : 0);
                     if (OclusorDisponible() != null)
                         toggles += Application.isEditor || Debug.isDebugBuild ? 2 : 1;
+                    if (Debug.isDebugBuild) toggles++;
                     return 400f + toggles * 64f;
                 }
                 default: return 400f;
@@ -1311,6 +1320,7 @@ namespace Gamepad
                 }
                 case "paredes":        SceneOccluderMode.Instance?.Toggle();          break;
                 case "paredessolidas": SceneOccluderMode.Instance?.ToggleSolidDebug(); break;
+                case "anclasviz":      AnclasDebugViz.SetActivo(!AnclasDebugViz.Activo); break;
                 case "estereo3d": { var cb = GetCardboard(); if (cb != null) cb.Estereo3D = !cb.Estereo3D; break; }
                 case "linterna":
                     if (Debug.isDebugBuild) { _page = Page.Flashlight; _focus = 0; _focusLast = true; }

@@ -979,10 +979,21 @@ namespace Gameplay
             // Anchor points extra: opción por dispositivo (ver AnchorPointManager).
             T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
                          "PUNTOS DE ANCLAJE",
-                         "Colocá anclas en tu cuarto antes de empezar (menos deriva)",
+                         "Anclas extra en tu cuarto contra la deriva del mapa",
                          GameOptions.PuntosAncla,
                          () => GameOptions.PuntosAncla = !GameOptions.PuntosAncla);
             y += 68f;
+
+            // Switch de evaluación auto/manual: sólo development build (release, automático).
+            if (Debug.isDebugBuild)
+            {
+                T.FilaToggle(_nav, new Rect(Pad, y, vw - Pad * 2f, 56f),
+                             "ANCLAS AUTOMÁTICAS (DEV)",
+                             "Encendido: se ponen solas mirando el cuarto. Apagado: se colocan a mano",
+                             GameOptions.AnclasAutomaticas,
+                             () => GameOptions.AnclasAutomaticas = !GameOptions.AnclasAutomaticas);
+                y += 68f;
+            }
 
             // Detección automática de paredes: WIP desconectado, ver
             // GameOptions.AutoWallScanBetaEnabled — no mostrar esta fila hasta que

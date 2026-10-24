@@ -644,14 +644,18 @@ namespace Scanner
             float y = panel.y + 10f;
 
             GUI.Label(new Rect(x, y, w, 30f),
-                      "Colocá anclas repartidas por el cuarto y tocá COLOCAR; " +
-                      "sirven para que el escaneo no se corra al alejarte",
+                      mgr.Automatico
+                          ? "Mirá despacio alrededor del cuarto: paredes, muebles y rincones. Las anclas se ponen solas."
+                          : "Colocá anclas repartidas por el cuarto y tocá COLOCAR; " +
+                            "sirven para que el escaneo no se corra al alejarte",
                       EstiloHint);
             y += 32f;
 
-            string estado = mgr.Count < AnchorPointManager.MinAnclas
-                ? $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
-                : $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
+            string estado = mgr.Automatico
+                ? $"Anclas: {mgr.Count} / {AnchorPointManager.ObjetivoBarrido}"
+                : mgr.Count < AnchorPointManager.MinAnclas
+                    ? $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}  ·  faltan {AnchorPointManager.MinAnclas - mgr.Count}"
+                    : $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
             GUI.Label(new Rect(x, y, w * 0.6f, 22f), estado,
                       T.Estilo(T.FMono, 12, mgr.PuedeCerrar ? T.Green : T.Tan));
             if (!string.IsNullOrEmpty(_errorAnclas))
@@ -659,12 +663,21 @@ namespace Scanner
                           T.Estilo(T.FMono, 10, T.Red, TextAnchor.MiddleRight));
             y += 26f;
 
-            float bw = (w - 10f) * 0.5f;
-            T.Boton2(null, new Rect(x, y, bw, 40f), "DESHACER", primario: false,
-                    () => { mgr.DeshacerUltima(); _errorAnclas = null; },
-                    enabled: mgr.Count > 0, fontSize: 14);
-            T.Boton2(null, new Rect(x + bw + 10f, y, bw, 40f), "LISTO", primario: false,
-                    () => CerrarAnclas(cerrar: true), enabled: mgr.PuedeCerrar, fontSize: 14);
+            if (mgr.Automatico)
+            {
+                // Automático: no hay COLOCAR ni DESHACER; LISTO cierra antes del objetivo.
+                T.Boton2(null, new Rect(x, y, w, 40f), "LISTO", primario: false,
+                        () => CerrarAnclas(cerrar: true), enabled: mgr.PuedeCerrar, fontSize: 14);
+            }
+            else
+            {
+                float bw = (w - 10f) * 0.5f;
+                T.Boton2(null, new Rect(x, y, bw, 40f), "DESHACER", primario: false,
+                        () => { mgr.DeshacerUltima(); _errorAnclas = null; },
+                        enabled: mgr.Count > 0, fontSize: 14);
+                T.Boton2(null, new Rect(x + bw + 10f, y, bw, 40f), "LISTO", primario: false,
+                        () => CerrarAnclas(cerrar: true), enabled: mgr.PuedeCerrar, fontSize: 14);
+            }
             y += 48f;
 
             T.Boton2(null, new Rect(x, y, w, 32f), "OMITIR ANCLAS", primario: false,
@@ -780,8 +793,12 @@ namespace Scanner
                     MoveTargetToCurrentReticle();
                     break;
                 case ScannerMode.Anchor_Place:
-                    _errorAnclas = AnchorPointManager.Ensure().TryColocar(out var err) ? null : err;
+                {
+                    var anclas = AnchorPointManager.Ensure();
+                    if (anclas.Automatico) break;   // en automático no se coloca a mano
+                    _errorAnclas = anclas.TryColocar(out var err) ? null : err;
                     break;
+                }
             }
         }
 

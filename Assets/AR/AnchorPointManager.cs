@@ -4,9 +4,10 @@ using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 
-// Anchor points distribuidos: anclas AR extra que el jugador coloca por su cuarto
-// ANTES de empezar la partida, para corregir la deriva (drift) del SLAM sin tener
-// que volver a la imagen de referencia.
+// Anchor points distribuidos: anclas AR extra repartidas por el cuarto para corregir
+// la deriva (drift) del SLAM sin tener que volver a la imagen de referencia. Las pone
+// el sistema solo (modo automático, GameOptions.AnclasAutomaticas: barrido tras
+// calibrar + reposición en partida) o el jugador a mano antes de empezar (manual).
 //
 // La idea: WorldOrigin cuelga de un ARAnchor, así que las correcciones de pose que
 // la plataforma le hace a ese anchor propagan solas a toda la escena escaneada. Con
@@ -35,6 +36,17 @@ public class AnchorPointManager : MonoBehaviour
 
     private const float MinSeparacion = 0.4f;   // m entre anclas (clusters hacen oscilar la elección)
 
+    // Modo automático (GameOptions.AnclasAutomaticas): las anclas las pone el sistema
+    // con el raycast de la mira, en un barrido del lobby y reponiendo en partida.
+    public  const int   ObjetivoBarrido     = 6;     // el barrido del lobby cierra solo al llegar
+    private const float SeparacionAuto      = 1.2f;  // m entre anclas automáticas (cobertura, no clusters)
+    private const float IntervaloBarrido    = 0.3f;  // s entre intentos durante el barrido
+    private const float IntervaloReposicion = 0.5f;  // s entre intentos en partida
+    private const float DistMinAuto         = 0.4f;  // m cámara→punto
+    private const float DistMaxAuto         = 4f;    // más lejos el hit es ruidoso
+    private const float GiroMaxAuto         = 60f;   // °/s: girando rápido hay motion blur y el tracking empeora
+    private const float RadioReferenciaM    = 3f;    // en partida: sólo con un ancla trackeando a esta distancia del punto
+
     // Selección del ancla activa.
     private const float IntervaloEval    = 0.25f;  // 4 Hz
     private const float HisteresisM      = 0.5f;   // el candidato tiene que estar esto más cerca
@@ -60,6 +72,7 @@ public class AnchorPointManager : MonoBehaviour
         public RaycastSource Fuente;
         public float        Calidad;       // score 0..1 en el momento de colocarla
         public GameObject   Visual;
+        public bool         EnPartida;     // la puso la reposición automática con la noche en curso
 
         // En editor no hay ARAnchor: el stub se considera siempre trackeando.
         public bool Trackeando => Go != null && (Ar == null || Ar.trackingState == TrackingState.Tracking);
@@ -93,6 +106,13 @@ public class AnchorPointManager : MonoBehaviour
     private float _ultimaCorreccionM;
     private float _ultimaCorreccionDeg;
 
+    // Modo automático: timer de intentos y giro de la cámara acumulado en la ventana.
+    private float   _autoTimer;
+    private Vector3 _fwdPrevio;
+    private bool    _hayFwdPrevio;
+    private float   _giroGrados;
+    private float   _giroSegundos;
+
     // ── Estado público ────────────────────────────────────────────────────
 
     public bool Listo    { get; private set; }   // el jugador cerró la colocación
@@ -107,6 +127,10 @@ public class AnchorPointManager : MonoBehaviour
     // herramienta ANCLAS del escáner puede abrir la colocación aunque la opción del
     // menú esté apagada.
     public bool Colocando { get; private set; }
+
+    // Anclas puestas por el sistema (true) o por el jugador (false). Se fija al abrir la
+    // colocación: cambiar la opción a mitad de sesión no mezcla los dos modos.
+    public bool Automatico { get; private set; }
 
     // Hit vivo bajo la mira mientras se coloca (lo dibujan ReticleController /
     // ARLobbyUI en vez de resolver el raycast por su cuenta otra vez).
@@ -244,13 +268,43 @@ public class AnchorPointManager : MonoBehaviour
         else
         {
             // Anclas siguientes: se guardan RELATIVAS AL ANCLA #1, no a WorldOrigin.
-            Medir(raiz.Go.transform, go.transform, out ancla.RelPosInA1, out ancla.RelRotInA1);
+            // En automático se miden contra el ancla trackeando más CERCANA y se componen
+            // al marco de a1: en partida el punto puede estar lejos de a1 y medir contra
+            // ella hornearía la deriva acumulada entre las dos zonas. Para la raíz
+            // RelInA1 es identidad, así que da lo mismo que medir contra a1.
+            var refA = Automatico ? AnclaReferencia(go.transform.position) ?? raiz : raiz;
+            Medir(refA.Go.transform, go.transform, out var p, out var r);
+            ancla.RelPosInA1 = refA.RelRotInA1 * p + refA.RelPosInA1;
+            ancla.RelRotInA1 = refA.RelRotInA1 * r;
             Derivar(ancla);
         }
 
-        ancla.Visual = CrearVisual(go.transform, _anclas.Count == 0);
+        // En partida (reposición automática) no hay esferas: OcultarVisuales corre una
+        // sola vez, en OnGameStarted. Salvo con la vista de debug (dev build) prendida.
+        ancla.EnPartida = EnPartida();
         _anclas.Add(ancla);
+        if (!ancla.EnPartida || AnclasDebugViz.Activo) ancla.Visual = CrearVisual(ancla, _anclas.Count == 1);
         return true;
+    }
+
+    private static bool EnPartida()
+    {
+        var net = NetworkManager.Instance;
+        return net != null && net.GameStarted;
+    }
+
+    // La vista de debug (AnclasDebugViz) se prendió o apagó: en partida las esferas
+    // existen sólo con ella; antes de la partida existen siempre (las ve quien coloca).
+    public void SincronizarVisualesDebug()
+    {
+        bool mostrar = !EnPartida() || AnclasDebugViz.Activo;
+        for (int i = 0; i < _anclas.Count; i++)
+        {
+            var a = _anclas[i];
+            if (a.Go == null) continue;
+            if (mostrar && a.Visual == null) a.Visual = CrearVisual(a, i == 0);
+            else if (!mostrar && a.Visual != null) { Destroy(a.Visual); a.Visual = null; }
+        }
     }
 
     public void DeshacerUltima()
@@ -273,9 +327,14 @@ public class AnchorPointManager : MonoBehaviour
     // corrección queda en pausa.
     public void AbrirColocacion()
     {
-        Colocando = true;
-        Listo     = false;
-        Omitido   = false;
+        Colocando  = true;
+        Listo      = false;
+        Omitido    = false;
+        Automatico = GameOptions.AnclasAutomaticas;
+        _autoTimer    = 0f;
+        _hayFwdPrevio = false;
+        _giroGrados   = 0f;
+        _giroSegundos = 0f;
     }
 
     // El jugador cerró la colocación: a partir de acá el loop corrige.
@@ -311,6 +370,8 @@ public class AnchorPointManager : MonoBehaviour
 #if UNITY_EDITOR
         NudgeCamaraEditor();
 #endif
+        if (Automatico && (Colocando || (Listo && !Omitido))) MedirGiro();
+
         bool colocando = Colocando && HayCalibracion;
 
         var calidad = AnchorQuality.Instance;
@@ -318,6 +379,7 @@ public class AnchorPointManager : MonoBehaviour
         {
             if (calidad != null) calidad.SetActivo(false);
             UltimoHit = ResolvedHit.Miss;
+            if (Automatico && Listo && !Omitido) TickReposicion();
             return;
         }
 
@@ -329,12 +391,125 @@ public class AnchorPointManager : MonoBehaviour
 
         UltimoHit = resolver.ResolveFromScreenCenter();
         calidad.Evaluar(UltimoHit);
+        if (Automatico) TickBarrido(calidad);
+    }
+
+    // ── Modo automático ───────────────────────────────────────────────────
+
+    // Barrido del lobby / escáner: el jugador mira el cuarto y cada IntervaloBarrido
+    // probamos poner un ancla en el punto bajo la mira. Cierra solo al llegar al objetivo.
+    private void TickBarrido(AnchorQuality calidad)
+    {
+        _autoTimer += Time.deltaTime;
+        if (_autoTimer < IntervaloBarrido) return;
+        _autoTimer = 0f;
+        float giro = GiroVentana();
+
+        if (!PasaFiltrosAuto(UltimoHit, giro)) return;
+        if (!PuedeColocar) return;
+#if !UNITY_EDITOR
+        // En editor el hit es siempre Fallback y puntúa Nula: ahí no filtramos.
+        if (calidad.Level < AnchorQuality.Nivel.Media) return;
+#endif
+        if (!TryColocar(UltimoHit, null, out _)) return;
+        if (_anclas.Count >= ObjetivoBarrido) MarcarListo();
+    }
+
+    // Reposición en partida (y en el escáner tras LISTO): suma anclas en zonas sin
+    // cobertura, siempre cerca de una que trackee (contra ella se mide). Sin nube de
+    // puntos: sólo fuentes que no la necesitan.
+    private void TickReposicion()
+    {
+        _autoTimer += Time.deltaTime;
+        if (_autoTimer < IntervaloReposicion) return;
+        _autoTimer = 0f;
+        float giro = GiroVentana();
+
+        if (!PuedeColocar || !HayCalibracion || ManualCalibration.Ajustando) return;
+        if (!SesionEstable()) return;
+        var fsm = ScanStateMachine.Instance;
+        if (fsm != null && EnFlujoMultiPaso(fsm.Current)) return;
+        // Nunca medir justo después de un re-enraizado.
+        if (Time.time - _ultimoCambio < CooldownS) return;
+
+        var resolver = EnsureResolver();
+        if (resolver == null) return;
+        var hit = resolver.ResolveFromScreenCenter();
+#if !UNITY_EDITOR
+        if (hit.Source != RaycastSource.LidarMesh && hit.Source != RaycastSource.ArPlane &&
+            hit.Source != RaycastSource.ArDepth) return;
+#endif
+        if (!PasaFiltrosAuto(hit, giro)) return;
+        if (!ValidarPunto(hit, out _)) return;
+
+        var refA = AnclaReferencia(hit.Position);
+        if (refA == null) return;
+        if ((refA.Go.transform.position - hit.Position).sqrMagnitude > RadioReferenciaM * RadioReferenciaM) return;
+
+        TryColocar(hit, null, out _);
+    }
+
+    // Velocidad de giro de la cámara: se ACUMULA cada frame el ángulo recorrido y se
+    // promedia por ventana de intento. Comparar sólo la mirada entre intentos no sirve:
+    // cuando un intento se saltea (cooldown, sesión inestable) el intervalo crece y un
+    // giro rápido que da casi una vuelta completa parece quieto. El promedio (y no el
+    // máximo por frame) evita que un tirón aislado del tracking bloquee la ventana.
+    private void MedirGiro()
+    {
+        var camT = CamaraT();
+        if (camT == null) return;
+        var fwd = camT.forward;
+        if (_hayFwdPrevio)
+        {
+            _giroGrados   += Vector3.Angle(_fwdPrevio, fwd);
+            _giroSegundos += Time.deltaTime;
+        }
+        _fwdPrevio    = fwd;
+        _hayFwdPrevio = true;
+    }
+
+    // °/s promedio desde el intento anterior; reinicia la ventana.
+    private float GiroVentana()
+    {
+        float v = _giroSegundos > 1e-4f ? _giroGrados / _giroSegundos : 0f;
+        _giroGrados = 0f;
+        _giroSegundos = 0f;
+        return v;
+    }
+
+    // Hit utilizable por el modo automático: a distancia razonable y sin que la cámara
+    // haya girado rápido en la ventana (motion blur = tracking peor).
+    private bool PasaFiltrosAuto(in ResolvedHit hit, float giroMax)
+    {
+        if (!hit.Hit || giroMax > GiroMaxAuto) return false;
+        var camT = CamaraT();
+        if (camT == null) return false;
+        float d = Vector3.Distance(camT.position, hit.Position);
+        return d >= DistMinAuto && d <= DistMaxAuto;
+    }
+
+    // Ancla trackeando más cercana a un punto (null si no hay ninguna).
+    private Ancla AnclaReferencia(Vector3 pos)
+    {
+        Ancla mejor = null;
+        float mejorD = float.MaxValue;
+        for (int i = 0; i < _anclas.Count; i++)
+        {
+            var a = _anclas[i];
+            if (!a.Trackeando) continue;
+            float d = (a.Go.transform.position - pos).sqrMagnitude;
+            if (d >= mejorD) continue;
+            mejorD = d;
+            mejor  = a;
+        }
+        return mejor;
     }
 
     // Al arrancar la noche las esferas sobran (inmersión + costo). El loop de
     // selección SIGUE corriendo: corregir en partida es el punto del feature.
     private void OcultarVisuales()
     {
+        if (AnclasDebugViz.Activo) return;   // dev: se dejan a la vista
         for (int i = 0; i < _anclas.Count; i++)
         {
             if (_anclas[i].Visual == null) continue;
@@ -625,15 +800,24 @@ public class AnchorPointManager : MonoBehaviour
             return false;
         }
 #endif
+        float sep = Automatico ? SeparacionAuto : MinSeparacion;
+        float sep2 = sep * sep;
         for (int i = 0; i < _anclas.Count; i++)
         {
             var otra = _anclas[i];
             if (otra.Go == null) continue;
-            if ((otra.Go.transform.position - hit.Position).sqrMagnitude < MinSeparacion * MinSeparacion)
+            if ((otra.Go.transform.position - hit.Position).sqrMagnitude < sep2)
             {
                 error = "muy cerca de otra ancla";
                 return false;
             }
+        }
+        // En automático tampoco pegada al anchor de la imagen: ahí ya hay cobertura.
+        if (Automatico && _tieneImg && _imageAnchor != null && _imageAnchor.CurrentAnchor != null &&
+            (_imageAnchor.CurrentAnchor.position - hit.Position).sqrMagnitude < sep2)
+        {
+            error = "muy cerca de otra ancla";
+            return false;
         }
         return true;
     }
@@ -724,13 +908,16 @@ public class AnchorPointManager : MonoBehaviour
 
     private static RaycastResolver EnsureResolver() => RaycastResolver.Ensure();
 
-    private static GameObject CrearVisual(Transform padre, bool esPrimera)
+    private static GameObject CrearVisual(Ancla a, bool esRaiz)
     {
         try
         {
-            // La primera es la raíz de la cadena: la marcamos distinto.
-            var color = esPrimera ? new Color(0.79f, 0.54f, 0.24f) : new Color(0.56f, 0.68f, 0.48f);
-            return AnchorVisuals.MakeSphere(padre, Vector3.zero, 0.06f, color);
+            // Raíz de la cadena: ámbar. Del barrido / a mano: verde. Repuesta en partida
+            // (sólo se ve con la vista de debug): azul.
+            var color = esRaiz      ? new Color(0.79f, 0.54f, 0.24f)
+                      : a.EnPartida ? new Color(0.35f, 0.60f, 0.95f)
+                                    : new Color(0.56f, 0.68f, 0.48f);
+            return AnchorVisuals.MakeSphere(a.Go.transform, Vector3.zero, 0.06f, color);
         }
         catch (System.Exception e)
         {
@@ -764,6 +951,8 @@ public class AnchorPointManager : MonoBehaviour
         var sb = new System.Text.StringBuilder(256);
         sb.Append("ANCLAS ").Append(_anclas.Count).Append('/').Append(MaxAnclas);
         sb.Append(Listo ? (Omitido ? "  [omitido]" : "  [listo]") : "  [colocando]");
+        sb.Append(Automatico ? "  auto" : "  manual");
+        if (AnclasDebugViz.Activo) sb.Append("  nube ").Append(AnclasDebugViz.PuntosVisibles).Append(" pts");
         sb.Append("\nactiva: ").Append(_activaId == 0 ? "imagen" : "#" + _activaId);
         sb.Append("   cambios ").Append(_cambios).Append("  rechazos ").Append(_rechazos);
         sb.Append("\núlt. corrección: ").Append((_ultimaCorreccionM * 100f).ToString("0"))

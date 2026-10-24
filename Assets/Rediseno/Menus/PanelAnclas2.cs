@@ -64,6 +64,7 @@ namespace Rediseno.Menus
         private Label _estado, _calidad, _error;
         private string _textoError;
         private string _firma;
+        private int _countPrevio;          // automático: suena al aparecer cada ancla
 
         protected override void Awake()
         {
@@ -121,10 +122,13 @@ namespace Rediseno.Menus
             if (mgr == null) return;
             bool mirada = ModoMirada;
             if (!mirada && _confirmando) CancelarConfirmacion();
-            string firma = $"{mgr.PuedeColocar}|{mgr.Count > 0}|{mgr.PuedeCerrar}|{mirada}|{_confirmando}";
+            string firma = $"{mgr.PuedeColocar}|{mgr.Count > 0}|{mgr.PuedeCerrar}|{mirada}|{_confirmando}|{mgr.Automatico}";
             if (firma != _firma) { _firma = firma; Armar(mgr); }
-            if (mirada) TickApuntar(mgr, dt);
+            // En automático no se apunta para confirmar: las anclas las pone el sistema.
+            if (mirada && !mgr.Automatico) TickApuntar(mgr, dt);
             else _carga = 0f;
+            if (mgr.Automatico && mgr.Count > _countPrevio) AudioManager.Sonar(c => c.uiConfirmar);
+            _countPrevio = mgr.Count;
             if (_fantasma != null)
             {
                 // Late un poco: es una vista previa, todavía no un ancla.
@@ -133,9 +137,11 @@ namespace Rediseno.Menus
             }
             if (_confirmando) return;   // el cartel no tiene estado ni calidad
 
-            _estado.text = mgr.Count < AnchorPointManager.MinAnclas
-                ? $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas} · faltan {AnchorPointManager.MinAnclas - mgr.Count}"
-                : $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
+            _estado.text = mgr.Automatico
+                ? $"Anclas: {mgr.Count} / {AnchorPointManager.ObjetivoBarrido}"
+                : mgr.Count < AnchorPointManager.MinAnclas
+                    ? $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas} · faltan {AnchorPointManager.MinAnclas - mgr.Count}"
+                    : $"Anclas: {mgr.Count} / {AnchorPointManager.MaxAnclas}";
             _estado.style.color = mgr.PuedeCerrar ? TemaUI.Green : TemaUI.Tan;
             var q = AnchorQuality.Instance;
             _calidad.text = q != null ? $"Punto apuntado: {q.Etiqueta}" : "";
@@ -152,7 +158,9 @@ namespace Rediseno.Menus
             if (ModoMirada && _confirmando) { ArmarConfirmacion(); return; }
             bool mirada = ModoMirada;
             _tarjeta.Add(TemaUI.Texto("PUNTOS DE ANCLAJE", TemaUI.Bebas, 64, TemaUI.Cream, 6f));
-            var ayuda = TemaUI.Texto(mirada
+            var ayuda = TemaUI.Texto(mgr.Automatico
+                ? "Mirá despacio alrededor del cuarto: paredes, muebles y rincones. Las anclas se ponen solas."
+                : mirada
                 ? "Apuntá con la mira a una pared o mueble y quedate quieto un momento para poner un ancla. " +
                   "Cuantas más y más repartidas, menos se corre el mapa."
                 : "Recorré tu cuarto y colocá anclas apuntando con la mira a paredes o muebles. " +
@@ -171,7 +179,7 @@ namespace Rediseno.Menus
 
             var botones = PiezasUI.Ignorar(new VisualElement());
             botones.style.marginTop = 20;
-            if (!mirada)
+            if (!mirada && !mgr.Automatico)
             {
                 var colocar = PiezasUI.Boton(Nav, "COLOCAR ANCLA", () =>
                 {
@@ -184,12 +192,13 @@ namespace Rediseno.Menus
                 colocar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
                 botones.Add(colocar);
             }
-            botones.Add(PiezasUI.Boton(Nav, "DESHACER", () =>
-            {
-                AnchorPointManager.Instance?.DeshacerUltima();
-                _textoError = null;
-                _lobby?.ReportarAnclas();
-            }, habilitado: mgr.Count > 0));
+            if (!mgr.Automatico)
+                botones.Add(PiezasUI.Boton(Nav, "DESHACER", () =>
+                {
+                    AnchorPointManager.Instance?.DeshacerUltima();
+                    _textoError = null;
+                    _lobby?.ReportarAnclas();
+                }, habilitado: mgr.Count > 0));
             botones.Add(PiezasUI.Boton(Nav, "LISTO", () =>
             {
                 AnchorPointManager.Instance?.MarcarListo();

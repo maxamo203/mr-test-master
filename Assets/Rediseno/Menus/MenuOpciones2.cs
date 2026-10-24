@@ -87,8 +87,12 @@ namespace Rediseno.Menus
 
             lista.Add(PiezasUI.Seccion("JUEGO"));
             lista.Add(PiezasUI.Interruptor(nav, "PUNTOS DE ANCLAJE",
-                "Colocá anclas en tu cuarto antes de empezar (menos deriva)",
+                "Anclas extra en tu cuarto contra la deriva del mapa",
                 () => GameOptions.PuntosAncla, v => GameOptions.PuntosAncla = v));
+            if (Debug.isDebugBuild)
+                lista.Add(PiezasUI.Interruptor(nav, "ANCLAS AUTOMÁTICAS (DEV)",
+                    "Encendido: se ponen solas mirando el cuarto. Apagado: se colocan a mano",
+                    () => GameOptions.AnclasAutomaticas, v => GameOptions.AnclasAutomaticas = v));
             if (GameOptions.AutoWallScanBetaEnabled)
                 lista.Add(PiezasUI.Interruptor(nav, "PARED AUTOMÁTICA (BETA)",
                     "En el escáner, sugiere paredes detectadas por la cámara",
