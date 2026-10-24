@@ -71,6 +71,19 @@ namespace Gameplay
         // porque GameSession sobrevive a SceneFlow.GoTo. NightMenuUI lo limpia al cerrarlo.
         public string AvisoSalida { get; set; }
 
+        // Práctica del menú TUTORIALES: se juega sobre un escenario escaneado (SelectedMap),
+        // con NightIndex = -1 para no mover ni progresión ni récords. NightMenuUI lo suelta
+        // al volver al menú (y abre TUTORIALES).
+        public TutorialTipo Tutorial { get; set; } = TutorialTipo.Ninguno;
+        public bool EnTutorial => Tutorial != TutorialTipo.Ninguno;
+
+        // Práctica que se arma en el momento (sin escaneo): SelectedMap queda null y el lobby
+        // abre el armado rápido en vez de buscar la imagen (ARLobbyManager.BeginHostFlow).
+        // SORKEN y VELETH también se pueden jugar sobre un escenario escaneado: ahí hay mapa
+        // y el lobby es el de siempre.
+        public bool ArmadoRapido => EnTutorial && Gameplay.ArmadoRapido.Usa(Tutorial) &&
+                                    string.IsNullOrEmpty(SelectedMap);
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -88,4 +101,6 @@ namespace Gameplay
             return Instance;
         }
     }
+
+    public enum TutorialTipo { Ninguno, PilasReliquias, Sorken, Arbmos, Libro }
 }

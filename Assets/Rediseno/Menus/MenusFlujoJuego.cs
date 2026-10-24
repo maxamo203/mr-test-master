@@ -28,6 +28,7 @@ namespace Rediseno.Menus
             if (Object.FindAnyObjectByType<MenuSinEscenario2>() == null) new GameObject("MenuSinEscenario2").AddComponent<MenuSinEscenario2>();
             if (Object.FindAnyObjectByType<MenuCrearUnirse2>() == null) new GameObject("MenuCrearUnirse2").AddComponent<MenuCrearUnirse2>();
             if (Object.FindAnyObjectByType<MenuEscenarios2>() == null) new GameObject("MenuEscenarios2").AddComponent<MenuEscenarios2>();
+            if (Object.FindAnyObjectByType<MenuTutoriales2>() == null) new GameObject("MenuTutoriales2").AddComponent<MenuTutoriales2>();
             if (Object.FindAnyObjectByType<AvisoMenu2>() == null) new GameObject("AvisoMenu2").AddComponent<AvisoMenu2>();
         }
     }
@@ -155,8 +156,17 @@ namespace Rediseno.Menus
     {
         protected override NightMenuUI.Pantalla Cual => NightMenuUI.Pantalla.Entorno;
         protected override string Titulo => "¿DÓNDE JUGÁS?";
-        protected override Texture2D ArteFondo =>
-            TarjetasNoche.Arte(NightMenuUI.Instance != null ? Mathf.Max(0, NightMenuUI.Instance.NocheElegida) : 0);
+        protected override Texture2D ArteFondo
+        {
+            get
+            {
+                var menu = NightMenuUI.Instance;
+                if (menu == null) return TarjetasNoche.Arte(0);
+                return menu.TutorialPendiente != TutorialTipo.Ninguno
+                    ? Tutoriales.Arte(menu.TutorialPendiente)
+                    : TarjetasNoche.Arte(Mathf.Max(0, menu.NocheElegida));
+            }
+        }
 
         protected override void Armar(VisualElement lista, MenuNavegable nav)
         {
@@ -182,7 +192,8 @@ namespace Rediseno.Menus
                 var izq = PiezasUI.Ignorar(new VisualElement());
                 izq.style.flexShrink = 1;
                 izq.Add(TemaUI.Texto(nombre, TemaUI.Bebas, 46, TemaUI.Cream, 3f));
-                var d = TemaUI.Texto(ok ? $"{menu.ElementosDe(nombre)} elementos" : "Sin imagen de referencia: no se puede jugar",
+                string motivo = menu.MotivoNoJugable(nombre);
+                var d = TemaUI.Texto(ok ? $"{menu.ElementosDe(nombre)} elementos" : motivo,
                                      TemaUI.Mono, 24, ok ? TemaUI.Muted : TemaUI.Tan);
                 izq.Add(d);
                 fila.Add(izq);
@@ -194,6 +205,17 @@ namespace Rediseno.Menus
                     Rearmar();
                 }, habilitada: ok);
             }
+
+            // Práctica: escanear otro escenario sin volver al menú principal. Al guardar (o
+            // salir) del escáner se vuelve acá con la misma práctica (NightMenuUI.Awake).
+            if (menu.TutorialPendiente != TutorialTipo.Ninguno)
+                lista.Add(PiezasUI.Boton(nav, "ESCANEAR UN ESCENARIO NUEVO", () => NightMenuUI.Instance?.EscanearNuevo()));
+            // SORKEN / VELETH sin escaneo: sólo development build (NightMenuUI.PuedeArmarEnElMomento),
+            // para testear el armado rápido (p.ej. en un iPhone con LiDAR).
+            if (menu.PuedeArmarEnElMomento)
+                lista.Add(PiezasUI.Opcion(nav, IconosMenu.Libro, "ARMAR EN EL MOMENTO (DEV)",
+                    "Sin escaneo: ubicás el libro y la entrada ahí mismo. Oclusión sólo por profundidad",
+                    () => NightMenuUI.Instance?.ArmarEnElMomento()));
         }
 
         // JUGAR y ELEGIR OTRA NOCHE van en el pie: con muchos escenarios se desplaza la lista
@@ -206,7 +228,9 @@ namespace Rediseno.Menus
             if (menu == null) return;
             int n = menu.NocheElegida;
             var noches = menu.Catalogo;
-            string nombreNoche = noches != null && n >= 0 && n < noches.Length && noches[n] != null &&
+            var tutorial = menu.TutorialPendiente;
+            bool practica = tutorial != TutorialTipo.Ninguno;
+            string nombreNoche = !practica && noches != null && n >= 0 && n < noches.Length && noches[n] != null &&
                                  !string.IsNullOrEmpty(noches[n].displayName)
                 ? noches[n].displayName.ToUpperInvariant() : "";
             string esc = menu.EscenarioElegido;
@@ -221,7 +245,8 @@ namespace Rediseno.Menus
             jugar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
             jugar.style.marginTop = 10;
             jugar.style.marginBottom = 18;
-            jugar.Add(TemaUI.Texto($"JUGAR · NOCHE {n + 1}", TemaUI.Bebas, 70, TemaUI.Cream, 7f));
+            jugar.Add(TemaUI.Texto(practica ? $"PRACTICAR · {Tutoriales.Titulo(tutorial)}" : $"JUGAR · NOCHE {n + 1}",
+                                   TemaUI.Bebas, 70, TemaUI.Cream, 7f));
             var sub = TemaUI.Texto(string.IsNullOrEmpty(esc) ? "Elegí un escenario arriba"
                                    : $"{(nombreNoche.Length > 0 ? nombreNoche + " · " : "")}en {esc}",
                                    TemaUI.Mono, 28, new Color(TemaUI.Cream.r, TemaUI.Cream.g, TemaUI.Cream.b, 0.85f));
@@ -232,6 +257,8 @@ namespace Rediseno.Menus
             var opJugar = nav.Agregar(jugar, () => NightMenuUI.Instance?.ConfirmarPartida(), habilitada: !string.IsNullOrEmpty(esc));
             if (opJugar.Habilitada) nav.Enfocar(opJugar);
 
+            // Una práctica no tiene noche que cambiar: se vuelve a TUTORIALES con "volver".
+            if (practica) return;
             var otra = PiezasUI.Boton(nav, "ELEGIR OTRA NOCHE", () => NightMenuUI.Instance?.ElegirOtraNoche());
             otra.style.marginBottom = 0;
             pie.Add(otra);
@@ -255,6 +282,29 @@ namespace Rediseno.Menus
                 PiezasUI.Info(lista, "Todavía no escaneaste ningún escenario. " +
                                      "El ritual necesita conocer tu espacio real antes de empezar.");
                 lista.Add(PiezasUI.Boton(nav, "ESCANEAR MI ESCENARIO", () => NightMenuUI.Instance?.EscanearNuevo()));
+                return;
+            }
+
+            // Práctica: hay escenarios con imagen pero ninguno le sirve (p.ej. SORKEN sin
+            // puertas ni ventanas marcadas). Se dice por qué y se ofrece editarlos.
+            string motivoPractica = null;
+            if (menu.TutorialPendiente != TutorialTipo.Ninguno)
+                foreach (var e in escenarios)
+                {
+                    string m = menu.MotivoNoJugable(e);
+                    if (m != null && !m.StartsWith("Sin imagen")) { motivoPractica = m; break; }
+                }
+            if (motivoPractica != null)
+            {
+                PiezasUI.Info(lista, $"Ninguno de tus escenarios sirve para esta práctica. {motivoPractica}. " +
+                                     "Abrí un escenario y agregalo.");
+                foreach (var e in escenarios)
+                {
+                    string nombre = e;
+                    lista.Add(PiezasUI.Boton(nav, $"EDITAR \"{nombre}\"",
+                                             () => NightMenuUI.Instance?.EditarEscenario(nombre)));
+                }
+                lista.Add(PiezasUI.Boton(nav, "ESCANEAR UNO NUEVO", () => NightMenuUI.Instance?.EscanearNuevo()));
                 return;
             }
 
@@ -283,38 +333,12 @@ namespace Rediseno.Menus
         protected override void Armar(VisualElement lista, MenuNavegable nav)
         {
             PiezasUI.Info(lista, "Cada jugador con su celular, en la misma red wifi y en la misma casa.");
-            lista.Add(Opcion(nav, IconosMenu.Otros, "CREAR SALA",
+            lista.Add(PiezasUI.Opcion(nav, IconosMenu.Otros, "CREAR SALA",
                 "Tu celular arma la sala y elegís la noche y el escenario",
                 () => NightMenuUI.Instance?.CrearSala()));
-            lista.Add(Opcion(nav, IconosMenu.Escenarios, "UNIRSE A UNA SALA",
+            lista.Add(PiezasUI.Opcion(nav, IconosMenu.Escenarios, "UNIRSE A UNA SALA",
                 "Buscá la sala de un amigo en tu red",
                 () => NightMenuUI.Instance?.Unirse()));
-        }
-
-        private static VisualElement Opcion(MenuNavegable nav, Texture2D icono, string titulo, string sub,
-                                            System.Action accion)
-        {
-            var b = PiezasUI.Tarjeta();
-            b.style.flexDirection = FlexDirection.Row;
-            b.style.alignItems = Align.Center;
-            b.style.paddingTop = 34; b.style.paddingBottom = 34;
-            var caja = PiezasUI.Ignorar(new VisualElement());
-            caja.style.width = 96; caja.style.height = 96;
-            TemaUI.Radio(caja, 26);
-            caja.style.backgroundColor = new Color(TemaUI.Tan.r, TemaUI.Tan.g, TemaUI.Tan.b, 0.14f);
-            caja.style.alignItems = Align.Center; caja.style.justifyContent = Justify.Center;
-            caja.style.marginRight = 30;
-            caja.Add(TemaUI.Icono(icono, 54, TemaUI.Tan));
-            b.Add(caja);
-            var textos = PiezasUI.Ignorar(new VisualElement());
-            textos.style.flexShrink = 1;
-            textos.Add(TemaUI.Texto(titulo, TemaUI.Bebas, 56, TemaUI.Cream, 5f));
-            var s = TemaUI.Texto(sub, TemaUI.Mono, 26, TemaUI.Muted);
-            s.style.marginTop = 4;
-            textos.Add(s);
-            b.Add(textos);
-            nav.Agregar(b, accion);
-            return b;
         }
     }
 }

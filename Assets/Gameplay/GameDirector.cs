@@ -419,7 +419,7 @@ namespace Gameplay
 
             // Repeler: iluminar el PUNTO del marcador (cara de la pared) lo ahuyenta.
             if (AnyIlluminating(_marker.transform.position)) _repel += dt; else _repel = 0f;
-            if (_repel >= _night.entryRepelSeconds) { Retreat(); return; }
+            if (_repel >= _night.entryRepelSeconds) { Retreat(ResultadoSorken.EchadoEnLaEntrada); return; }
 
             // Si NO se lo repele durante la ventana, entra a perseguir. Reservamos
             // el tramo final para la animacion de emergencia, para que no se ejecute
@@ -579,7 +579,7 @@ namespace Gameplay
             {
                 _repel += dt; // El gesto cuenta dentro del tiempo total comunicado.
                 _lightLostSeconds = 0f;
-                if (_repel >= _night.chaseRepelSeconds) { Retreat(); return; }
+                if (_repel >= _night.chaseRepelSeconds) { Retreat(ResultadoSorken.EchadoAdentro); return; }
                 BeginCoverStart();
                 return;
             }
@@ -719,7 +719,7 @@ namespace Gameplay
                 if (_sorken.State != SorkenState.CoverWalking)
                     _sorken.SetState(SorkenState.CoverWalking);
 
-                if (_repel >= _night.chaseRepelSeconds) { Retreat(); return; }
+                if (_repel >= _night.chaseRepelSeconds) { Retreat(ResultadoSorken.EchadoAdentro); return; }
             }
             else
             {
@@ -792,7 +792,7 @@ private void BeginCoverStart()
                 _night.sorkenAimToleranceSeconds, _night.sorkenRepelDecayPerSecond);
             _repel = defense.Progress;
             _lightLostSeconds = defense.LightLostSeconds;
-            if (_repel >= _night.chaseRepelSeconds) { Retreat(); return; }
+            if (_repel >= _night.chaseRepelSeconds) { Retreat(ResultadoSorken.EchadoAdentro); return; }
 
             // La animacion puede terminar durante una interrupcion corta, pero el Sorken
             // sigue quieto hasta recuperar el haz o agotar los dos segundos acordados.
@@ -921,9 +921,17 @@ private void BeginCoverStart()
         }
 
         // --- Retreat ---
-        private void Retreat()
+        // Cómo terminó un intento del Sorken, para quien quiera contarlo (la práctica del
+        // Sorken, Gameplay.TutorialSorken). Server-only, como todo el director. Las
+        // retiradas por perder al objetivo no se informan: nadie lo echó. Si atrapa, se
+        // muere como en cualquier noche (también en la práctica).
+        public enum ResultadoSorken { EchadoEnLaEntrada, EchadoAdentro }
+        public static event System.Action<ResultadoSorken> IntentoResuelto;
+
+        private void Retreat(ResultadoSorken? motivo = null)
         {
             if (_phase == Phase.Retreating) return;
+            if (motivo.HasValue) IntentoResuelto?.Invoke(motivo.Value);
 
             // La retirada es una reaccion localizada. Se conserva exactamente la pose
             // espacial actual y se detienen persecucion, navegacion y ataques al cambiar
@@ -998,6 +1006,8 @@ private void BeginCoverStart()
         // --- Muerte ---
         private void KillPlayer(uint clientId)
         {
+            // Práctica de dev (_practiceMode, sólo en las NightConfig de Nights/dev): el
+            // agarre se ve pero no mata. Las prácticas de TUTORIALES sí matan.
             if (_practiceMode) { Debug.Log($"[GameDirector] (practica) grab {clientId}, no muere."); return; }
             ServerDeaths.Kill(clientId, _sorken != null ? _sorken.transform : null);   // marca + avisa una sola vez
         }

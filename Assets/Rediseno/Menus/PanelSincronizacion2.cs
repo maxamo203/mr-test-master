@@ -159,14 +159,19 @@ namespace Rediseno.Menus
             }
             else if (s == ARLobbyManager.LobbyState.WaitingForClients)
             {
-                var iniciar = PiezasUI.Boton(Nav, "INICIAR NOCHE", () => _lobby.ServerStartGame(),
-                                             habilitado: _puedeArmado);
+                bool practica = Gameplay.GameSession.Instance != null && Gameplay.GameSession.Instance.EnTutorial;
+                var iniciar = PiezasUI.Boton(Nav, practica ? "EMPEZAR PRÁCTICA" : "INICIAR NOCHE",
+                                             () => _lobby.ServerStartGame(), habilitado: _puedeArmado);
                 iniciar.style.backgroundImage = TemaUI.DegradeRojo;
                 iniciar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
                 _botones.Add(iniciar);
-                _botones.Add(FilaDos(
-                    PiezasUI.Boton(Nav, "AJUSTAR ENTORNO", () => { _error = null; _lobby.AbrirAjusteOrigen(); }),
-                    PiezasUI.Boton(Nav, "BUSCAR IMAGEN", () => { _error = null; _lobby.RecalibrarConImagen(); })));
+                // Práctica armada en el momento: no hay imagen que buscar; se rehace el armado.
+                if (Gameplay.GameSession.Instance != null && Gameplay.GameSession.Instance.ArmadoRapido)
+                    _botones.Add(PiezasUI.Boton(Nav, "REHACER ARMADO", () => { _error = null; _lobby.RehacerArmado(); }));
+                else
+                    _botones.Add(FilaDos(
+                        PiezasUI.Boton(Nav, "AJUSTAR ENTORNO", () => { _error = null; _lobby.AbrirAjusteOrigen(); }),
+                        PiezasUI.Boton(Nav, "BUSCAR IMAGEN", () => { _error = null; _lobby.RecalibrarConImagen(); })));
             }
             else if (s == ARLobbyManager.LobbyState.AllReady)
             {
@@ -202,11 +207,15 @@ namespace Rediseno.Menus
             _contador.text = solo || net == null ? "" : $"LISTOS {net.LobbyListos}/{net.LobbyJugadores}";
             _contador.style.color = !solo && net != null && net.LobbyListos >= net.LobbyJugadores && net.LobbyJugadores > 0
                 ? TemaUI.Green : TemaUI.Muted;
-            _entorno.text = sesion != null && !string.IsNullOrEmpty(sesion.SelectedMap)
-                ? $"Escenario: {sesion.SelectedMap}" : "Escenario compartido por el host";
-            _instruccion.text = solo
-                ? "Apuntá a la imagen de referencia para ubicarte en tu escenario."
-                : "Todos apuntan a la imagen de referencia para compartir el mismo espacio.";
+            bool armado = sesion != null && sesion.ArmadoRapido;
+            _entorno.text = armado ? "Escenario: armado rápido"
+                : sesion != null && !string.IsNullOrEmpty(sesion.SelectedMap)
+                    ? $"Escenario: {sesion.SelectedMap}" : "Escenario compartido por el host";
+            _instruccion.text = armado
+                ? "Libro y entradas marcados. Empezá cuando quieras."
+                : solo
+                    ? "Apuntá a la imagen de referencia para ubicarte en tu escenario."
+                    : "Todos apuntan a la imagen de referencia para compartir el mismo espacio.";
 
             string aviso = null;
             if (cargando)
@@ -229,7 +238,8 @@ namespace Rediseno.Menus
                     break;
                 }
                 case ARLobbyManager.LobbyState.WaitingForClients:
-                    _estado.text = solo ? "Imagen detectada · listo para empezar" : "Imagen detectada";
+                    _estado.text = armado ? "Práctica armada · lista para empezar"
+                                 : solo ? "Imagen detectada · listo para empezar" : "Imagen detectada";
                     _estado.style.color = TemaUI.Green;
                     if (!_lobby.CanStartGame) aviso = _lobby.StartBlockReason;
                     break;

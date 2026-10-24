@@ -104,6 +104,9 @@ public class ARLobbyUI : MonoBehaviour
         // Rediseño 2.0: estas pantallas todavía no se dibujan en estéreo (se manejan
         // arrastrando con el dedo); con el visor puesto, se sale del visor para usarlas.
 
+        // ── ARMADO RÁPIDO de las prácticas: sólo lo dibuja Rediseno.Menus.PanelArmadoRapido2 ──
+        if (_lobby.State == ARLobbyManager.LobbyState.ArmadoRapido) { _nav.End(); return; }
+
         // ── COLOCACIÓN DE ANCLAS (pantalla propia, con retícula) ──────────────
         // Rediseño 2.0: la dibuja Rediseno.Menus.PanelAnclas2 (estéreo, con la ruedita).
         if (_lobby.State == ARLobbyManager.LobbyState.PlacingAnchors && Rediseno.Menus.PanelAnclas2.Mostrando)

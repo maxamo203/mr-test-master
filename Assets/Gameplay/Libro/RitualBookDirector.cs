@@ -208,6 +208,7 @@ namespace Gameplay
                 _bookTraceId = 0;
                 ReleaseReservation();
                 Debug.Log("[LibroRitual] El libro fue salvado con la linterna.");
+                IntentoResuelto?.Invoke(ResultadoLibro.Salvado);
             }
 
             _sendTimer -= Time.deltaTime;
@@ -222,8 +223,28 @@ namespace Gameplay
                 GameplayTelemetry.End(_bookTraceId, "book", "consumed", 0,
                                       view.PuntoDeLuz);
                 _bookTraceId = 0;
-                InvocarVeleth();
+                IntentoResuelto?.Invoke(ResultadoLibro.Consumido);
+                // Práctica LIBRO RITUAL Y VELETH, primera parte: perderlo todavía no invoca a
+                // Veleth; el libro vuelve limpio y el ciclo sigue para volver a intentarlo.
+                if (GameSession.Instance != null && GameSession.Instance.Tutorial == TutorialTipo.Libro &&
+                    (TutorialLibro.Instance == null || !TutorialLibro.Instance.VelethHabilitada))
+                    RestaurarSinVeleth(net);
+                else
+                    InvocarVeleth();
             }
+        }
+
+        // Cómo terminó un oscurecimiento del libro, para quien quiera contarlo (la práctica
+        // LIBRO RITUAL Y VELETH). Server-only, como todo el director.
+        public enum ResultadoLibro { Salvado, Consumido }
+        public static event System.Action<ResultadoLibro> IntentoResuelto;
+
+        private void RestaurarSinVeleth(NetworkManager net)
+        {
+            ReleaseReservation();
+            _flow.Restart();
+            AplicarVista(0f, silencioso: true);   // no es que lo salvaron
+            net.ServerSendRitualBook(0f);
         }
 
         private void InvocarVeleth()

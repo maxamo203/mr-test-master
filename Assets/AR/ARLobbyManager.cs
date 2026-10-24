@@ -12,6 +12,7 @@ public class ARLobbyManager : MonoBehaviour
         Idle,               // antes de conectar
         Scanning,           // buscando la imagen de referencia
         CalibrandoManual,   // sin imagen física: el jugador ubica el 0,0 a mano (ManualCalibration)
+        ArmadoRapido,       // práctica sin escaneo: el jugador marca el libro (y las entradas del Sorken)
         PlacingAnchors,     // imagen encontrada, colocando anchor points extra (opción por dispositivo)
         WaitingForClients,  // host encontró imagen, esperando clientes
         AllReady,           // cliente encontró imagen, esperando que host arranque
@@ -93,7 +94,8 @@ public class ARLobbyManager : MonoBehaviour
         // se sincroniza. Con la noche ya empezada NO, o un toque suelto movería el
         // mapa bajo los pies del jugador.
         var cal = ManualCalibration.Ensure();
-        cal.PuedeAbrirPorTap = () => _mapaListo && EnSincronizacion;
+        // En el armado rápido no: mover el libro a mano correría las entradas marcadas.
+        cal.PuedeAbrirPorTap = () => _mapaListo && EnSincronizacion && !EsArmadoRapido;
         cal.OnTapEnOrigen += AbrirAjusteOrigen;
     }
 
@@ -101,6 +103,9 @@ public class ARLobbyManager : MonoBehaviour
     private bool EnSincronizacion =>
         State == LobbyState.Scanning || State == LobbyState.WaitingForClients ||
         State == LobbyState.AllReady || State == LobbyState.CalibrandoManual;
+
+    private static bool EsArmadoRapido =>
+        Gameplay.GameSession.Instance != null && Gameplay.GameSession.Instance.ArmadoRapido;
 
     // Abre el ajuste del 0,0 sin recentrar nada: sirve con la imagen ya detectada,
     // cuando la pose que dio el tracking quedó corrida respecto del cuarto real.
@@ -118,6 +123,14 @@ public class ARLobbyManager : MonoBehaviour
     // clientes al conectarse. Al detectar la imagen física, WorldOrigin calibra.
     public void BeginHostFlow(string mapName)
     {
+        if (EsArmadoRapido)
+        {
+            SceneRegistry.Instance?.ClearAll();
+            _mapaListo = true;
+            State = LobbyState.ArmadoRapido;
+            return;   // sin mapa que compartir (un jugador) ni imagen que buscar
+        }
+
         State = LobbyState.Scanning;
 
         if (string.IsNullOrEmpty(mapName))
@@ -392,6 +405,23 @@ public class ARLobbyManager : MonoBehaviour
         if (State != LobbyState.CalibrandoManual) return;
         ManualCalibration.Instance?.Listo();
         ContinuarTrasCalibrar();
+    }
+
+    // ── Armado rápido de las prácticas (Gameplay.ArmadoRapido) ─────────────
+
+    // LISTO del armado: mismo camino que tras calibrar (anclas primero si están activadas).
+    public void ArmadoRapidoListo()
+    {
+        var s = Gameplay.GameSession.Instance;
+        if (State != LobbyState.ArmadoRapido || s == null || !Gameplay.ArmadoRapido.Completo(s.Tutorial)) return;
+        ContinuarTrasCalibrar();
+    }
+
+    // REHACER ARMADO desde la pantalla de listo para empezar.
+    public void RehacerArmado()
+    {
+        if (State != LobbyState.WaitingForClients || !EsArmadoRapido) return;
+        State = LobbyState.ArmadoRapido;
     }
 
     // ── Reinicio de noche sin cerrar la sesión (ver Gameplay.NightTransition) ──

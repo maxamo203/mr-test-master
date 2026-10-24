@@ -42,7 +42,7 @@ namespace Gameplay
                 ? _devNights
                 : _nights;
 
-        public enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control }
+        public enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control, Tutoriales }
 
         private Pantalla _pantallaActual = Pantalla.Menu;
 
@@ -74,6 +74,10 @@ namespace Gameplay
         private List<string> _scans = new();
         private readonly Dictionary<string, int>  _itemCount = new();
         private readonly Dictionary<string, bool> _hasImg    = new();
+        // Práctica elegida en TUTORIALES mientras se elige su escenario (Ninguno = noche
+        // normal) y, para esa práctica, los escaneos que no le sirven con su motivo.
+        private TutorialTipo _tutorialPendiente;
+        private readonly Dictionary<string, string> _noSirve = new();
         private string _confirmarBorrar;       // nombre del escaneo a borrar (overlay Escaneos)
         private Vector2 _scroll;
 
@@ -117,6 +121,28 @@ namespace Gameplay
 
             // Volvemos de una partida que se cortó sola (el host salió o se cayó la red).
             if (HayAvisoSalida) AudioManager.Sonar(c => c.uiAlerta);
+
+            // Volvemos de una práctica (terminada o abandonada desde la pausa): se suelta
+            // y se vuelve a la lista de TUTORIALES, que es de donde salió.
+            var sesion = GameSession.Instance;
+            if (sesion.EnTutorial)
+            {
+                sesion.Tutorial = TutorialTipo.Ninguno;
+                PantallaActual  = Pantalla.Tutoriales;
+            }
+
+            // Volvemos del escáner abierto desde una práctica (¿DÓNDE JUGÁS? / FALTA UN
+            // ESCENARIO): se retoma esa práctica en vez de caer en el menú principal, con el
+            // escenario recién guardado/editado ya elegido si le sirve.
+            var tutorial = _tutorialTrasEscaner;
+            _tutorialTrasEscaner = TutorialTipo.Ninguno;
+            if (tutorial != TutorialTipo.Ninguno)
+            {
+                IniciarTutorial(tutorial);
+                var escaneado = SaveLoadUI.NombreEdicion;
+                if (PantallaActual == Pantalla.Entorno && !string.IsNullOrEmpty(escaneado) && EsJugable(escaneado))
+                    _mapSel = escaneado;
+            }
         }
 
         private void OnEnable()  => Gamepad.ImguiGamepadMenu.PedidoVolver += Volver;
@@ -152,7 +178,13 @@ namespace Gameplay
         public int NocheElegida => _nocheSel;
         public string EscenarioElegido => _mapSel;
         public IReadOnlyList<string> Escenarios => _scans;
-        public bool EsJugable(string escena) => _hasImg.TryGetValue(escena, out var ok) && ok;
+        public bool EsJugable(string escena) =>
+            _hasImg.TryGetValue(escena, out var ok) && ok && !_noSirve.ContainsKey(escena);
+        // Por qué no se puede elegir ese escenario (null si se puede).
+        public string MotivoNoJugable(string escena) =>
+            !(_hasImg.TryGetValue(escena, out var ok) && ok) ? "Sin imagen de referencia: no se puede jugar"
+            : _noSirve.TryGetValue(escena, out var motivo) ? motivo : null;
+        public TutorialTipo TutorialPendiente => _tutorialPendiente;
         public int ElementosDe(string escena) => _itemCount.TryGetValue(escena, out var n) ? n : 0;
         public bool CreandoSala => _pendingMode == GameSession.SessionMode.MultiHost;
 
@@ -245,6 +277,44 @@ namespace Gameplay
         public void CerrarAviso() => Volver();
         public static void Salir() => SalirDelJuego();
         public void AbrirOpciones()      => PantallaActual = Pantalla.Opciones;
+        public void AbrirTutoriales()    { _tutorialPendiente = TutorialTipo.Ninguno; PantallaActual = Pantalla.Tutoriales; }
+
+        // Arranca una práctica: un jugador, fuera del catálogo (NightIndex = -1: no
+        // desbloquea noches ni toca récords). Todas se juegan en un escenario escaneado, que
+        // se elige en ¿DÓNDE JUGÁS?; sin escenario jugable caen en "falta". Sólo en
+        // development build SORKEN y VELETH ofrecen además ARMAR EN EL MOMENTO (sin escaneo,
+        // ArmadoRapido): entonces van a ¿DÓNDE JUGÁS? aunque no haya escenario.
+        public void IniciarTutorial(TutorialTipo tipo)
+        {
+            if (Tutoriales.Config(tipo) == null)
+            {
+                Debug.LogError($"[NightMenu] Falta la NightConfig del tutorial {tipo} en Resources/Tutoriales.");
+                return;
+            }
+            _pendingMode = GameSession.SessionMode.SinglePlayer;
+            _tutorialPendiente = tipo;
+            _nocheSel = -1;
+            RefrescarScans();
+            if (!PuedeArmarEnElMomento && !HayEntornoJugable())
+            {
+                AudioManager.Sonar(c => c.uiAlerta);
+                PantallaActual = Pantalla.SinEntorno;
+                return;
+            }
+            if (!string.IsNullOrEmpty(_mapSel) && !EsJugable(_mapSel)) _mapSel = null;
+            PreseleccionarEscenario();
+            PantallaActual = Pantalla.Entorno;
+        }
+
+        // ARMAR EN EL MOMENTO de ¿DÓNDE JUGÁS? (SORKEN / VELETH): la práctica sin escaneo.
+        // Herramienta de testeo, sólo en development build: sin escaneo la oclusión depende
+        // de la profundidad del celular (bien con LiDAR, floja en Android). En release las
+        // prácticas se juegan siempre en un escenario escaneado.
+        public bool PuedeArmarEnElMomento => Debug.isDebugBuild && ArmadoRapido.Usa(_tutorialPendiente);
+        public void ArmarEnElMomento()
+        {
+            if (PuedeArmarEnElMomento) ArrancarTutorial(_tutorialPendiente, null);
+        }
 
         private void Update()
         {
@@ -291,12 +361,14 @@ namespace Gameplay
                 case Pantalla.SinEntorno:
                 case Pantalla.Noches:      VolverDeSubflujo(); break;
                 case Pantalla.Entorno:
+                    if (_tutorialPendiente != TutorialTipo.Ninguno) { AbrirTutoriales(); break; }
                     PantallaActual = _entornoDesdeContinuar ? Pantalla.Menu : Pantalla.Noches;
                     _entornoDesdeContinuar = false;
                     break;
                 case Pantalla.Escaneos:    PantallaActual = Pantalla.Menu; break;
                 case Pantalla.Opciones:    PantallaActual = Pantalla.Menu; break;
                 case Pantalla.Control:     PantallaActual = Pantalla.Opciones; break;
+                case Pantalla.Tutoriales:  PantallaActual = Pantalla.Menu; break;
                 // Pantalla.Menu: pantalla raíz, sin destino — no forzamos salir de
                 // la app, dejamos que el SO maneje el back (minimizar).
             }
@@ -316,18 +388,31 @@ namespace Gameplay
                     (d.walls?.Count ?? 0) + (d.cubes?.Count ?? 0) + (d.markers?.Count ?? 0);
                 _hasImg[n] = ScanSerializer.HasRefImage(n);
             }
+            _noSirve.Clear();
+            if (_tutorialPendiente == TutorialTipo.Ninguno) return;
+            foreach (var n in _scans)
+            {
+                string motivo = Tutoriales.MotivoNoSirve(_tutorialPendiente, ScanSerializer.Load(n));
+                if (motivo != null) _noSirve[n] = motivo;
+            }
         }
 
-        // ¿Hay al menos un entorno jugable (con imagen de referencia)?
+        // ¿Hay al menos un entorno jugable (con imagen de referencia y, en una práctica,
+        // que le sirva a esa práctica)?
         private bool HayEntornoJugable()
         {
-            foreach (var n in _scans) if (_hasImg.TryGetValue(n, out var ok) && ok) return true;
+            foreach (var n in _scans) if (EsJugable(n)) return true;
             return false;
         }
+
+        // Práctica desde la que se fue al escáner (Ninguno si no). Estático: sobrevive al
+        // viaje ida y vuelta de escenas; lo consume Awake.
+        private static TutorialTipo _tutorialTrasEscaner;
 
         private void IrAlEscaner(string nombreEdicion)
         {
             ScannerLaunchParams.EditScanName = nombreEdicion;
+            _tutorialTrasEscaner = _tutorialPendiente;
             SceneFlow.GoTo(SceneFlow.EscenaEscaner);
         }
 
@@ -335,6 +420,7 @@ namespace Gameplay
         private void ConfigurarPartida(GameSession.SessionMode mode)
         {
             _pendingMode = mode;
+            _tutorialPendiente = TutorialTipo.Ninguno;
             RefrescarScans();
             // Falta un entorno escaneado: es un callejón sin salida, se avisa con el
             // sonido de alerta y no con el de confirmación que ya sonó al tocar el botón.
@@ -405,6 +491,8 @@ namespace Gameplay
                     case Pantalla.Escaneos:    DrawEscaneos(vw, vh);    break;
                     case Pantalla.Opciones:    DrawOpciones(vw, vh);    break;
                     case Pantalla.Control:     DrawControl(vw, vh);     break;
+                    // Sin IMGUI: sólo existe en el Rediseño 2.0 (MenuTutoriales2); con el flag apagado se vuelve al menú.
+                    case Pantalla.Tutoriales:  PantallaActual = Pantalla.Menu; break;
                 }
             }
 
@@ -518,6 +606,7 @@ namespace Gameplay
         // para host).
         private void VolverDeSubflujo()
         {
+            if (_tutorialPendiente != TutorialTipo.Ninguno) { AbrirTutoriales(); return; }
             PantallaActual = _pendingMode == GameSession.SessionMode.MultiHost
                 ? Pantalla.CrearUnirse : Pantalla.Menu;
         }
@@ -716,6 +805,11 @@ namespace Gameplay
         {
             if (string.IsNullOrEmpty(_mapSel)) return;
             var s = GameSession.Ensure();
+            if (_tutorialPendiente != TutorialTipo.Ninguno)
+            {
+                ArrancarTutorial(_tutorialPendiente, _mapSel);
+                return;
+            }
             s.Mode          = _pendingMode;
             s.SelectedNight = Nights[_nocheSel];
             s.SelectedMap   = _mapSel;
@@ -725,6 +819,20 @@ namespace Gameplay
             s.NightIndex    = _nocheSel;
             s.HostPort      = _pendingMode == GameSession.SessionMode.MultiHost
                 ? PuertoElegido() : NetworkConfig.DefaultPort;
+            SceneFlow.GoTo(_lobbyScene);
+        }
+
+        // Carga SampleScene con esa práctica. mapa null = armado rápido (sin escaneo).
+        private void ArrancarTutorial(TutorialTipo tipo, string mapa)
+        {
+            var s = GameSession.Ensure();
+            s.Mode          = GameSession.SessionMode.SinglePlayer;
+            s.Tutorial      = tipo;
+            s.SelectedNight = Tutoriales.Config(tipo);
+            s.SelectedMap   = mapa;
+            s.Nights        = null;
+            s.NightIndex    = -1;
+            s.HostPort      = NetworkConfig.DefaultPort;
             SceneFlow.GoTo(_lobbyScene);
         }
 

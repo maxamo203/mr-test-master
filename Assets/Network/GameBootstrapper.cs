@@ -229,7 +229,8 @@ public class GameBootstrapper : MonoBehaviour
         // nadie a quien compartírsela): solo el título de la noche.
         if (solo && _isHost)
         {
-            GUI.Label(new Rect(Pad, 14f, vw - Pad * 2f, 34f), "TU NOCHE",
+            bool practica = Gameplay.GameSession.Instance.EnTutorial;
+            GUI.Label(new Rect(Pad, 14f, vw - Pad * 2f, 34f), practica ? "PRÁCTICA" : "TU NOCHE",
                       T.Estilo(T.FBebas, 24, T.Cream));
         }
         else if (_isHost)

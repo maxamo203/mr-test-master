@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
+  m_Name: Sorken
+  m_EditorClassIdentifier:
+  displayName: 'Práctica: Sorken'
+  briefing: El Sorken entra por puertas y ventanas. Escuchá, mirá la puerta y alumbralo
+    con la luz intensa.
+  nightDurationSeconds: 0
+  sorkenActive: 1
+  attemptIntervalMin: 8
+  attemptIntervalMax: 12
+  entryRepelSeconds: 2
+  entryGraceSeconds: 14
+  entryAnimationSeconds: 3
+  entryTriggerDistance: 3.5
+  chaseRepelSeconds: 3
+  sorkenPostEntryPauseSeconds: 1
+  sorkenChaseSpeed: 0.4
+  sorkenIlluminatedSpeed: 0.1
+  sorkenAimToleranceSeconds: 2
+  sorkenRepelDecayPerSecond: 0.5
+  sorkenBlockedRepathSeconds: 0.4
+  sorkenCoverStartSeconds: 3
+  sorkenCoverWalkSpeedMultiplier: 1
+  sorkenRetreatSpeed: 2.8
+  grabRange: 1
+  flashlightMaxCharge: 200
+  flashlightDrainPerSecond: 0
+  flashlightBrightDrainPerSecond: 0
+  sanityMax: 100
+  arbmosActive: 0
+  bookActive: 0
+  flashlightConeAngleDeg: 32
+  flashlightRange: 9
+  initialAttemptDelay: 6
+  emergeTimeoutSeconds: 18
+  retreatSeconds: 2.5
+  grabHoldSeconds: 1.5
+  flickerAimAngle: 22
+  flickerDistance: 7
+  batterySpawnRateMultiplier: 1
+  batteryChanceMods: []
+  collectiblesActive: 0
+  collectibleInitialDelaySeconds: 5
+  collectibleIntervalMin: 40
+  collectibleIntervalMax: 80
+  collectibleMaxPerNight: 0

@@ -142,6 +142,12 @@ namespace Bateries
         // mirada para saber qué hay apuntado.
         public IContextAction AccionActual => _current;
 
+        // Un aviso modal en plena partida (la primera pila de la práctica, ver
+        // Rediseno.Menus.AvisoPrimeraPila2) usa el botón primario para cerrarse: mientras
+        // está abierto, el botón no recoge ni toca la linterna — igual que con la pausa.
+        public static bool AvisoAbierto { get; set; }
+        private static bool EnMenu => PauseMenuController.IsOpen || AvisoAbierto;
+
         private void Update()
         {
             // Muerto (con la pantalla de muerte o espectando): el botón primario no hace
@@ -158,11 +164,11 @@ namespace Bateries
             // Pausa abierta: el South/A navega la pausa, no prende la linterna ni recoge.
             // Y al cerrarla con A (REANUDAR) el botón sigue apretado: se ignora hasta que
             // se suelte, si no el release contaba como un tap de gameplay.
-            if (PauseMenuController.IsOpen) _esperarSoltarTrasPausa = true;
+            if (EnMenu) _esperarSoltarTrasPausa = true;
             if (_esperarSoltarTrasPausa)
             {
                 if (_primaryGesture.IsPressed) CancelPrimaryGesture();
-                if (PauseMenuController.IsOpen || PrimaryHeld()) return;
+                if (EnMenu || PrimaryHeld()) return;
                 _esperarSoltarTrasPausa = false;
             }
 
@@ -218,7 +224,7 @@ namespace Bateries
         {
             EnsureFlashlight();
 
-            if (PauseMenuController.IsOpen)
+            if (EnMenu)
             {
                 if (_primaryGesture.IsPressed) CancelPrimaryGesture();
                 _esperarSoltar = true;

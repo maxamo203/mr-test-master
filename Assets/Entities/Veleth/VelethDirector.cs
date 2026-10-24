@@ -15,6 +15,13 @@ public class VelethDirector : MonoBehaviour
     public uint CurrentTarget { get; private set; }
     public event Action<uint> OnPlayerCaught;
 
+    // Para quien quiera seguir la caza (la práctica LIBRO RITUAL Y VELETH, Gameplay.TutorialLibro).
+    // Server-only, como todo el director.
+    //   EmpiezaCaza: terminó de salir del libro y empieza a perseguir.
+    // Si atrapa, se muere como en cualquier noche (también en la práctica).
+    public enum ResultadoVeleth { EmpiezaCaza }
+    public static event Action<ResultadoVeleth> IntentoResuelto;
+
     private NightConfig _night;
     private VelethEntity _veleth;
     private uint _netId;
@@ -130,6 +137,7 @@ public class VelethDirector : MonoBehaviour
         CurrentTarget = 0;
         _running = true;
         Debug.Log("[Veleth] Emergencia finalizada: comienza la persecucion reptando.");
+        IntentoResuelto?.Invoke(ResultadoVeleth.EmpiezaCaza);
     }
     private void Update()
     {
@@ -211,6 +219,15 @@ public class VelethDirector : MonoBehaviour
         }
 
         if (!AnyAlivePlayer()) EndNightByVeleth();
+    }
+
+    // Saca a Veleth de la partida y frena la caza (StopRun sólo la frena: en una noche se
+    // queda donde está hasta que se cierra la noche). Lo usan las prácticas.
+    public void Retirar()
+    {
+        var net = NetworkManager.Instance;
+        if (_netId != 0 && net != null && net.IsServer) net.ServerDespawn(_netId);
+        StopRun();
     }
 
     private void EndNightByVeleth()

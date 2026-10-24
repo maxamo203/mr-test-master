@@ -104,6 +104,53 @@ namespace Rediseno.Menus
             espacio.style.height = 200;
             _cuerpo.Add(espacio);
 
+            // Práctica terminada: sin noches ni récords; repetirla o volver a la lista
+            // (NightMenuUI abre TUTORIALES al volver de una práctica).
+            var sesion = GameSession.Instance;
+            if (sobrevivio && sesion != null && sesion.EnTutorial)
+            {
+                _cuerpo.Add(TemaUI.Texto("PRÁCTICA COMPLETA", TemaUI.Bebas, 130, TemaUI.Green, 10f, TextAnchor.MiddleCenter));
+                var bien = TemaUI.Texto(sesion.Tutorial switch
+                                        {
+                                            TutorialTipo.Sorken => "Ya sabés echar al Sorken: en la puerta y cuando ya entró.",
+                                            TutorialTipo.Arbmos => "Ya sabés ocultarte del Arbmos: a oscuras se va, con luz se enoja.",
+                                            TutorialTipo.Libro  => "Ya sabés salvar el libro y conocés a Veleth: la luz no la frena, que el libro no se apague.",
+                                            _                   => "Ya sabés recargar la linterna y juntar reliquias.",
+                                        },
+                                        TemaUI.Elite, 38, TemaUI.Muted, 0f, TextAnchor.MiddleCenter);
+                bien.style.marginTop = 8; bien.style.marginBottom = 30;
+                _cuerpo.Add(bien);
+                var repetir = PiezasUI.Boton(Nav, "REPETIR PRÁCTICA", NightTransition.Reintentar);
+                repetir.style.backgroundImage = TemaUI.DegradeRojo;
+                repetir.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
+                _cuerpo.Add(repetir);
+                _cuerpo.Add(PiezasUI.Boton(Nav, "VOLVER A TUTORIALES", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
+                return;
+            }
+
+            // Práctica perdida: te atraparon. Se muere igual que en una noche (retrato del
+            // asesino y todo), pero acá sólo se ofrece reintentarla o volver a la lista.
+            if (!sobrevivio && sesion != null && sesion.EnTutorial)
+            {
+                _cuerpo.Add(TemaUI.Texto("MORISTE", TemaUI.Bebas, 150, TemaUI.Red, 10f, TextAnchor.MiddleCenter));
+                var mal = TemaUI.Texto(sesion.Tutorial switch
+                                       {
+                                           TutorialTipo.Sorken => "El Sorken te atrapó. Alumbralo con la luz intensa antes de que llegue.",
+                                           TutorialTipo.Arbmos => "Con la cordura en cero, el Arbmos mata. Apagá la luz para que se vaya.",
+                                           TutorialTipo.Libro  => "Veleth te alcanzó. La luz no la frena: poné paredes o muebles entre ustedes.",
+                                           _                   => "El ritual te reclamó… por ahora.",
+                                       },
+                                       TemaUI.Elite, 38, TemaUI.Muted, 0f, TextAnchor.MiddleCenter);
+                mal.style.marginTop = 8; mal.style.marginBottom = 30;
+                _cuerpo.Add(mal);
+                var reintentar = PiezasUI.Boton(Nav, "REINTENTAR PRÁCTICA", NightTransition.Reintentar);
+                reintentar.style.backgroundImage = TemaUI.DegradeRojo;
+                reintentar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
+                _cuerpo.Add(reintentar);
+                _cuerpo.Add(PiezasUI.Boton(Nav, "VOLVER A TUTORIALES", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
+                return;
+            }
+
             var tit = TemaUI.Texto(sobrevivio ? "SOBREVIVISTE" : "MORISTE", TemaUI.Bebas, 150,
                                    sobrevivio ? TemaUI.Green : TemaUI.Red, 10f, TextAnchor.MiddleCenter);
             _cuerpo.Add(tit);
