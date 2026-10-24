@@ -124,7 +124,7 @@ namespace Gameplay
                             CrearMarca();
                             Avisar("¡Bien! Ya sabés prenderla y apagarla.");
                         }
-                        else Avisar("Eso es. Una vez más: apagala y prendela.");
+                        else Avisar("Eso es. Una vez más: *apagala y prendela*.");
                     }
                     break;
 
@@ -314,14 +314,14 @@ namespace Gameplay
                     return "¡Listo! Ya manejás la linterna.";
                 case Fase.Apagar:
                     return Linterna != null && !Linterna.isOn
-                        ? $"Ahora prendela ({PistaTutorial.ComoPrender()})."
-                        : $"Apagá la linterna ({PistaTutorial.ComoApagar()}).";
+                        ? $"Ahora *prendela* ({PistaTutorial.ComoPrender()})."
+                        : $"*Apagá la linterna* ({PistaTutorial.ComoApagar()}).";
             }
-            if (!LuzPrendida) return $"Prendé la linterna ({PistaTutorial.ComoPrender()}).";
-            if (_alumbrando) return "¡Ahí! Sostené la luz encima…";
+            if (!LuzPrendida) return $"*Prendé la linterna* ({PistaTutorial.ComoPrender()}).";
+            if (_alumbrando) return "¡Ahí! *Sostené la luz encima*…";
             return _fase == Fase.Libro
-                ? $"Ahora concentrá la luz en el libro ({PistaTutorial.ComoLuzIntensa()})."
-                : $"Concentrá la luz en la marca ({PistaTutorial.ComoLuzIntensa()}).";
+                ? $"Ahora *concentrá la luz en el libro* ({PistaTutorial.ComoLuzIntensa()})."
+                : $"*Concentrá la luz en la marca* ({PistaTutorial.ComoLuzIntensa()}).";
         }
     }
 }

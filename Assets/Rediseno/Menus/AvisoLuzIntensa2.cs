@@ -16,7 +16,7 @@ namespace Rediseno.Menus
         protected override Color Acento => TemaUI.Tan;
         protected override string Titulo => "LUZ INTENSA";
         protected override string Cuerpo =>
-            $"Alumbrá el libro con la luz intensa ({PistaTutorial.ComoLuzIntensa()}) para salvarlo. " +
+            $"*Alumbrá el libro con la luz intensa* ({PistaTutorial.ComoLuzIntensa()}) para salvarlo. " +
             "Ojo: gasta la batería mucho más rápido que la luz normal. Usala sólo cuando haga falta.";
         protected override void Continuar() => T?.Continuar();
     }

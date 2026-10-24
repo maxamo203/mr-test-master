@@ -80,7 +80,7 @@ namespace Gameplay
                     }
                     else
                     {
-                        Avisar("Se fue sin que lo vieras. Encontralo con luz y recién ahí apagala.");
+                        Avisar("Se fue sin que lo vieras. *Encontralo con luz* y recién ahí *apagala*.");
                     }
                     break;
                 case ArbmosDirector.ResultadoArbmos.Provocado:
@@ -154,14 +154,14 @@ namespace Gameplay
         {
             if (Completa) return "¡Práctica completa!";
             if (ArbmosEntity.Active != null && ArbmosEntity.Active.Lethal)
-                return "Cordura en cero: viene a matarte. ¡Alejate!";
+                return "Cordura en cero: viene a matarte. *¡Alejate!*";
             if (ArbmosPresente)
                 return LuzPrendida
-                    ? $"No le alumbres la cabeza: apagá la linterna ({PistaTutorial.ComoApagar()})."
-                    : "Quedate a oscuras hasta que se vaya…";
+                    ? $"No le alumbres la cabeza: *apagá la linterna* ({PistaTutorial.ComoApagar()})."
+                    : "*Quedate a oscuras* hasta que se vaya…";
             return LuzPrendida
                 ? "Algo te observa. Ya va a aparecer cerca tuyo."
-                : $"Prendé la linterna ({PistaTutorial.ComoPrender()}).";
+                : $"*Prendé la linterna* ({PistaTutorial.ComoPrender()}).";
         }
     }
 }

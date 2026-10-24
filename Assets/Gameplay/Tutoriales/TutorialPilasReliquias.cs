@@ -330,16 +330,16 @@ namespace Gameplay
             {
                 case Fase.Gastar:
                     bool intensa = Linterna != null && Linterna.Mode == FlashlightMode.Bright;
-                    if (intensa) return "La intensa gasta 4 veces más. Seguí hasta vaciarla.";
+                    if (intensa) return "La intensa gasta 4 veces más. *Seguí hasta vaciarla*.";
                     return Rediseno.ControlMirada.Activo
-                        ? "Batería baja. Mirá el libro de frente para gastarla."
-                        : $"Gastá la batería con luz intensa ({PistaTutorial.ComoLuzIntensa()}).";
+                        ? "Batería baja. *Mirá el libro de frente* para gastarla."
+                        : $"*Gastá la batería con luz intensa* ({PistaTutorial.ComoLuzIntensa()}).";
                 case Fase.Reliquias:
                     if (SinLugar) return NoHayLugar("la reliquia");
-                    return "Seguí la flecha y recogé la reliquia.";
+                    return "*Seguí la flecha y recogé la reliquia*.";
             }
             if (SinLugar) return NoHayLugar("la pila");
-            return "Sin luz. Seguí la flecha y recogé la pila.";
+            return "Sin luz. *Seguí la flecha y recogé la pila*.";
         }
     }
 }

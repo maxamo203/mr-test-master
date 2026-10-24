@@ -54,7 +54,8 @@ namespace Rediseno.Menus
 
             _titulo = TemaUI.Texto(Titulo, TemaUI.Bebas, 84, Acento, 6f);
             tarjeta.Add(_titulo);
-            _cuerpo = TemaUI.Texto(Cuerpo, TemaUI.Mono, 28, TemaUI.Cream);
+            _cuerpo = TemaUI.Texto(Gameplay.PistaTutorial.Resaltar(Cuerpo), TemaUI.Mono, 28, TemaUI.Cream);
+            _cuerpo.enableRichText = true;
             _cuerpo.style.marginTop = 6; _cuerpo.style.marginBottom = 26;
             tarjeta.Add(_cuerpo);
 
@@ -70,7 +71,7 @@ namespace Rediseno.Menus
         // mientras se ve, sólo si cambió.
         protected override void Animar(float dt)
         {
-            string t = Titulo, c = Cuerpo;
+            string t = Titulo, c = Gameplay.PistaTutorial.Resaltar(Cuerpo);
             if (_titulo.text != t) _titulo.text = t;
             if (_cuerpo.text != c) _cuerpo.text = c;
         }

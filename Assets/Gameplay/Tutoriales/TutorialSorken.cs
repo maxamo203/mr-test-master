@@ -7,8 +7,10 @@ namespace Gameplay
 {
     // Práctica SORKEN: el Sorken entra por las puertas o ventanas que el jugador marcó en
     // el armado rápido (ArmadoRapido, sin escaneo). Hay que echarlo MetaEchar veces con la
-    // luz intensa; da lo mismo si fue en la entrada (alumbrando la puerta) o ya adentro
-    // (alumbrándolo a él). Si te atrapa, te morís como en una noche: pantalla de muerte con
+    // luz intensa, de las dos formas: el primero se puede echar en la entrada (alumbrando la
+    // puerta mientras aparece); después de echar uno ahí, la entrada ya no lo frena
+    // (GameDirector.SinRepelerEnEntrada): hay que esperar a que entre, verlo y echarlo
+    // adentro (alumbrándolo a él). Si te atrapa, te morís como en una noche: pantalla de muerte con
     // REINTENTAR PRÁCTICA. Al completar, la noche se gana (ServerNightSurvived) y
     // FinDeNoche2 la muestra como PRÁCTICA COMPLETA. Se crea sola en SampleScene sólo en
     // esta práctica.
@@ -39,6 +41,9 @@ namespace Gameplay
         public const int MetaEchar = 2;
 
         private int _echados;
+        // ¿Ya echó uno en la entrada? Desde ahí, los que siguen hay que echarlos adentro.
+        private bool _echadoEnEntrada;
+        private static bool DejarEntrar => Instance != null && Instance._echadoEnEntrada;
         private bool _enPartida;
         private float _finEn = -1f;
         private string _aviso;
@@ -57,6 +62,7 @@ namespace Gameplay
         {
             if (Instance != this) return;
             GameDirector.IntentoResuelto -= AlResolverIntento;
+            GameDirector.SinRepelerEnEntrada = false;
             Instance = null;
         }
 
@@ -64,8 +70,11 @@ namespace Gameplay
         {
             if (!_enPartida || Completa) return;
             _echados++;
-            string donde = r == GameDirector.ResultadoSorken.EchadoEnLaEntrada ? "en la entrada" : "adentro";
-            Avisar(Completa ? $"¡Bien! Lo echaste {donde}." : $"¡Bien! Lo echaste {donde}. Va a volver.");
+            bool enEntrada = r == GameDirector.ResultadoSorken.EchadoEnLaEntrada;
+            if (enEntrada) _echadoEnEntrada = true;
+            if (Completa) Avisar(enEntrada ? "¡Bien! Lo echaste en la entrada." : "¡Bien! Lo echaste adentro.");
+            else if (enEntrada) Avisar("¡Bien! Lo echaste en la entrada. Al próximo *dejalo entrar*.");
+            else Avisar("¡Bien! Lo echaste adentro. Va a volver.");
         }
 
         private void Avisar(string texto)
@@ -85,10 +94,12 @@ namespace Gameplay
             if (enPartida && !_enPartida)
             {
                 _echados = 0;
+                _echadoEnEntrada = false;
                 _finEn = -1f;
                 _aviso = null;
             }
             _enPartida = enPartida;
+            GameDirector.SinRepelerEnEntrada = enPartida && _echadoEnEntrada && !Completa;
             if (!enPartida || !net.IsServer) return;
 
             if (_finEn < 0f)
@@ -159,10 +170,14 @@ namespace Gameplay
             string luz = PistaTutorial.ComoLuzIntensa();
             var s = SorkenActivo();
             if (Entrando(out _))
-                return s != null && s.State == SorkenState.Idle
-                    ? $"Está apareciendo. Luz intensa a la entrada ({luz})."
-                    : $"¡Está entrando! Luz intensa a la entrada ({luz}).";
-            if (s != null) return $"¡Entró! Alumbralo a él ({luz}).";
+            {
+                bool humo = s != null && s.State == SorkenState.Idle;
+                if (DejarEntrar)
+                    return humo ? "Está apareciendo… *esperá a que entre*." : "Está entrando… *esperá*.";
+                return humo ? $"Está apareciendo. *Luz intensa a la entrada* ({luz})."
+                            : $"¡Está entrando! *Luz intensa a la entrada* ({luz}).";
+            }
+            if (s != null) return $"¡Entró! *Alumbralo a él* ({luz}).";
             return "Va a aparecer en una puerta o ventana.";
         }
     }

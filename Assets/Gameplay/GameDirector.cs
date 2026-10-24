@@ -417,8 +417,10 @@ namespace Gameplay
         {
             if (_sorken == null || _marker == null) { EndAttempt(); return; }
 
-            // Repeler: iluminar el PUNTO del marcador (cara de la pared) lo ahuyenta.
-            if (AnyIlluminating(_marker.transform.position)) _repel += dt; else _repel = 0f;
+            // Repeler: iluminar el PUNTO del marcador (cara de la pared) lo ahuyenta. Salvo en
+            // la práctica cuando le toca enseñar a echarlo ADENTRO (SinRepelerEnEntrada).
+            if (!SinRepelerEnEntrada && AnyIlluminating(_marker.transform.position)) _repel += dt;
+            else _repel = 0f;
             if (_repel >= _night.entryRepelSeconds) { Retreat(ResultadoSorken.EchadoEnLaEntrada); return; }
 
             // Si NO se lo repele durante la ventana, entra a perseguir. Reservamos
@@ -926,6 +928,10 @@ private void BeginCoverStart()
         // retiradas por perder al objetivo no se informan: nadie lo echó. Si atrapa, se
         // muere como en cualquier noche (también en la práctica).
         public enum ResultadoSorken { EchadoEnLaEntrada, EchadoAdentro }
+
+        // Práctica del Sorken: alumbrar la entrada no lo echa (entra sí o sí), para que el
+        // jugador lo vea y lo eche adentro. Lo prende y lo apaga TutorialSorken.
+        public static bool SinRepelerEnEntrada;
 
         // ¿Hay un Sorken entrando? Y el punto de la entrada: lo que hay que alumbrar para
         // echarlo ahí (el Sorken mismo está detrás de la pared hasta que la cruza). Lo usa la

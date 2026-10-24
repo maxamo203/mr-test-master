@@ -38,14 +38,47 @@ namespace Gameplay
             return "tocá la pantalla";
         }
 
+        // Lo que el jugador TIENE QUE HACER va entre asteriscos en los textos de las prácticas
+        // ("*apagala y prendela*") y se pinta en naranja fuerte, para leerlo de un vistazo.
+        // Sirve igual para IMGUI (estilo con richText) y para las etiquetas de UI Toolkit (los
+        // avisos con tarjeta), que entienden la misma etiqueta <color>.
+        public const string ColorAccion = "#FF8A1E";
+
+        public static string Resaltar(string texto)
+        {
+            if (string.IsNullOrEmpty(texto) || texto.IndexOf('*') < 0) return texto;
+            var sb = new System.Text.StringBuilder(texto.Length + 32);
+            bool abierto = false;
+            foreach (char ch in texto)
+            {
+                if (ch != '*') { sb.Append(ch); continue; }
+                sb.Append(abierto ? "</color>" : $"<color={ColorAccion}>");
+                abierto = !abierto;
+            }
+            if (abierto) sb.Append("</color>");
+            return sb.ToString();
+        }
+
+        // Copias con richText de los estilos del tema, por tamaño (no se toca el estilo
+        // compartido que cachea MortuoriumTheme.Estilo).
+        private static readonly System.Collections.Generic.Dictionary<int, GUIStyle> _estilos = new();
+
+        private static GUIStyle EstiloRico(int tamano)
+        {
+            if (_estilos.TryGetValue(tamano, out var e)) return e;
+            e = new GUIStyle(T.Estilo(T.FMono, tamano, T.Cream, TextAnchor.MiddleCenter, wrap: true)) { richText = true };
+            _estilos[tamano] = e;
+            return e;
+        }
+
         // La tarjeta crece en alto con el texto (mínimo una línea y media), así nada queda
         // cortado aunque el gesto del control sume palabras.
         public static void Dibujar(float vw, string texto)
         {
-            var contenido = new GUIContent(texto);
+            var contenido = new GUIContent(Resaltar(texto));
             if (!MRCardboardController.Activo)
             {
-                var estiloPantalla = T.Estilo(T.FMono, 14, T.Cream, TextAnchor.MiddleCenter, wrap: true);
+                var estiloPantalla = EstiloRico(14);
                 float ancho = vw - 56f;
                 float alto = Mathf.Max(52f, estiloPantalla.CalcHeight(contenido, ancho - 28f) + 18f);
                 var r = new Rect(28f, 64f, ancho, alto);
@@ -57,7 +90,7 @@ namespace Gameplay
             var prevM = GUI.matrix;
             GUI.matrix = Matrix4x4.identity;
             float s = Screen.height / 1080f;
-            var estilo = T.Estilo(T.FMono, Mathf.RoundToInt(20 * s), T.Cream, TextAnchor.MiddleCenter, wrap: true);
+            var estilo = EstiloRico(Mathf.RoundToInt(20 * s));
             float w = 360f * s;
             float h = Mathf.Max(76f * s, estilo.CalcHeight(contenido, w - 20f * s) + 22f * s);
             Rediseno.UI.OjosVisor.Centros(out var izq, out var der);

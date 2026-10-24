@@ -117,7 +117,7 @@ namespace Gameplay
                     if (_salvados >= MetaSalvar)
                     {
                         _fase = Fase.DejarApagar;
-                        Avisar("¡Lo salvaste! Ahora dejalo apagarse.");
+                        Avisar("¡Lo salvaste! Ahora *dejalo apagarse*.");
                     }
                     else
                     {
@@ -125,10 +125,10 @@ namespace Gameplay
                     }
                     break;
                 case Fase.Salvar:
-                    Avisar("Se apagó. En una noche, de ahí sale Veleth. Otra vez.");
+                    Avisar("Se apagó. En una noche, de ahí sale Veleth. *Otra vez*.");
                     break;
                 case Fase.DejarApagar when salvado:
-                    Avisar("Esta vez no lo alumbres: dejalo apagarse.");
+                    Avisar("Esta vez *no lo alumbres*: dejalo apagarse.");
                     break;
                 case Fase.DejarApagar:
                     _fase = Fase.Emergiendo;
@@ -253,16 +253,16 @@ namespace Gameplay
             switch (_fase)
             {
                 case Fase.Completa:   return "¡Práctica completa!";
-                case Fase.Cazando:    return "¡Te persigue! La luz no la frena: alejate.";
+                case Fase.Cazando:    return "¡Te persigue! La luz no la frena: *alejate*.";
                 case Fase.Emergiendo: return "Veleth está saliendo del libro…";
-                case Fase.DejarApagar:return "No lo alumbres: dejá que se apague.";
+                case Fase.DejarApagar:return "*No lo alumbres*: dejá que se apague.";
             }
             var libro = RitualBookDirector.Instance;
             if (libro != null && libro.Fase == RitualBookPhase.Consuming)
                 return libro.Alumbrando > 0
-                    ? "Seguí alumbrándolo…"
-                    : $"¡Se apaga! Luz intensa al libro ({PistaTutorial.ComoLuzIntensa()}).";
-            return "Cuando el libro se oscurezca, alumbralo.";
+                    ? "*Seguí alumbrándolo*…"
+                    : $"¡Se apaga! *Luz intensa al libro* ({PistaTutorial.ComoLuzIntensa()}).";
+            return "Cuando el libro se oscurezca, *alumbralo*.";
         }
     }
 }
