@@ -29,6 +29,12 @@ namespace Rediseno
         // dibujar su botón en pantalla (con el visor puesto no se puede tocar).
         public static bool Activo => Instance != null && Instance._activo;
 
+        // Objetivo extra de la luz intensa automática: la práctica LA LINTERNA lo usa para la
+        // marca y para el libro (que ahí no se oscurece, así que la regla del libro no
+        // alcanza). Null fuera de esa práctica.
+        public static Vector3? ObjetivoIntensa;
+        public static float RadioObjetivoIntensa;
+
         [Header("Recoger")]
         [SerializeField, Min(0.1f)] private float segundosRecoger      = 1.2f;
         [SerializeField, Min(0.1f)] private float segundosRecogerCerca = 0.45f;
@@ -231,6 +237,10 @@ namespace Rediseno
                 var libro = RitualBookView.Active;
                 if (libro != null && libro.Disponible && libro.Oscuridad01 > 0.02f &&
                     Centrado(cam, libro.PuntoDeLuz, libro.RadioAproximado, lim))
+                    quiere = true;
+
+                if (!quiere && ObjetivoIntensa.HasValue &&
+                    Centrado(cam, ObjetivoIntensa.Value, RadioObjetivoIntensa, lim))
                     quiere = true;
 
                 if (!quiere)

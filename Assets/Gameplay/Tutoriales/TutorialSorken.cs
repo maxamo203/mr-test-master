@@ -76,6 +76,9 @@ namespace Gameplay
 
         private void Update()
         {
+            // El TUTORIAL pasó al paso siguiente (o a la Noche 1) sin recargar la escena.
+            if (!Tutoriales.Vigente(TutorialTipo.Sorken)) { Destroy(gameObject); return; }
+
             var net = NetworkManager.Instance;
             bool enPartida = net != null && net.GameStarted;
             // Flanco de subida: arranque en frío y cada REPETIR (no recarga la escena).

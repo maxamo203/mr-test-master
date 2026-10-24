@@ -174,7 +174,11 @@ namespace Rediseno.Menus
             col.Add(bEsc);
             nav.Agregar(bEsc, () => Abrir(m => m.AbrirEscenarios()));
 
-            var bTuto = Secundario(IconosMenu.Libro, "TUTORIALES", "Practicá cada amenaza");
+            int pasoTuto = TutorialCamino.Progreso;
+            var bTuto = Secundario(IconosMenu.Libro, "TUTORIAL",
+                TutorialCamino.Completo ? "Completo · repetí cualquier paso"
+                : pasoTuto == 0 ? "Aprendé a sobrevivir"
+                : $"Seguí en el paso {pasoTuto + 1} de {TutorialCamino.Pasos.Length}");
             col.Add(bTuto);
             nav.Agregar(bTuto, () => Abrir(m => m.AbrirTutoriales()));
 

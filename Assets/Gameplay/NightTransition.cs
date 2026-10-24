@@ -150,6 +150,8 @@ namespace Gameplay
             // cliente que se unió por LAN no pasó por el menú de noches (NightIndex
             // queda en -1), así que ve la victoria pero no mueve ni récord ni progresión.
             var s = GameSession.Instance;
+            // Práctica superada: avanza el camino del TUTORIAL (si era el paso que tocaba).
+            if (s != null && s.EnTutorial) TutorialCamino.MarcarSuperado(s.Tutorial);
             CollectibleProgress.RegistrarIntento(s != null ? s.NightIndex : -1, NightLoot.Total);
             AudioManager.Musica(c => c.victoriaAmanecer, fade: 0.5f);
 

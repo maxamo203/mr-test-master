@@ -89,7 +89,9 @@ namespace Rediseno.Menus
         {
             var ld = LocalDeath.Instance;
             bool sobrevivio = NightResult.Sobrevivio;
+            var ses = GameSession.Instance;
             string firma = $"{_selector}|{sobrevivio}|{NightTransition.PuedeReiniciar}|" +
+                           $"{(ses != null ? ses.Tutorial : TutorialTipo.Ninguno)}|{(ses != null && ses.Camino)}|" +
                            $"{(ld != null && ld.PuedeEspectar)}|{EnVisor}|{NightResult.NocheDesbloqueada}|{_logCopiado}";
             if (firma == _firma) return;
             _firma = firma;
@@ -107,16 +109,16 @@ namespace Rediseno.Menus
             // Práctica terminada: sin noches ni récords; repetirla o volver a la lista
             // (NightMenuUI abre TUTORIALES al volver de una práctica).
             var sesion = GameSession.Instance;
+            // Paso del TUTORIAL superado: el siguiente (en la misma sesión) o la tarjeta final.
+            if (sobrevivio && sesion != null && sesion.EnTutorial && sesion.Camino)
+            {
+                ArmarPasoSuperado(sesion.Tutorial);
+                return;
+            }
             if (sobrevivio && sesion != null && sesion.EnTutorial)
             {
                 _cuerpo.Add(TemaUI.Texto("PRÁCTICA COMPLETA", TemaUI.Bebas, 130, TemaUI.Green, 10f, TextAnchor.MiddleCenter));
-                var bien = TemaUI.Texto(sesion.Tutorial switch
-                                        {
-                                            TutorialTipo.Sorken => "Ya sabés echar al Sorken: en la puerta y cuando ya entró.",
-                                            TutorialTipo.Arbmos => "Ya sabés ocultarte del Arbmos: a oscuras se va, con luz se enoja.",
-                                            TutorialTipo.Libro  => "Ya sabés salvar el libro y conocés a Veleth: la luz no la frena, que el libro no se apague.",
-                                            _                   => "Ya sabés recargar la linterna y juntar reliquias.",
-                                        },
+                var bien = TemaUI.Texto(QueAprendiste(sesion.Tutorial),
                                         TemaUI.Elite, 38, TemaUI.Muted, 0f, TextAnchor.MiddleCenter);
                 bien.style.marginTop = 8; bien.style.marginBottom = 30;
                 _cuerpo.Add(bien);
@@ -124,7 +126,7 @@ namespace Rediseno.Menus
                 repetir.style.backgroundImage = TemaUI.DegradeRojo;
                 repetir.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
                 _cuerpo.Add(repetir);
-                _cuerpo.Add(PiezasUI.Boton(Nav, "VOLVER A TUTORIALES", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
+                _cuerpo.Add(PiezasUI.Boton(Nav, "VOLVER AL TUTORIAL", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
                 return;
             }
 
@@ -143,11 +145,13 @@ namespace Rediseno.Menus
                                        TemaUI.Elite, 38, TemaUI.Muted, 0f, TextAnchor.MiddleCenter);
                 mal.style.marginTop = 8; mal.style.marginBottom = 30;
                 _cuerpo.Add(mal);
-                var reintentar = PiezasUI.Boton(Nav, "REINTENTAR PRÁCTICA", NightTransition.Reintentar);
+                var reintentar = PiezasUI.Boton(Nav, sesion.Camino ? "REINTENTAR PASO" : "REINTENTAR PRÁCTICA",
+                                                NightTransition.Reintentar);
                 reintentar.style.backgroundImage = TemaUI.DegradeRojo;
                 reintentar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
                 _cuerpo.Add(reintentar);
-                _cuerpo.Add(PiezasUI.Boton(Nav, "VOLVER A TUTORIALES", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
+                _cuerpo.Add(PiezasUI.Boton(Nav, sesion.Camino ? "SALIR DEL TUTORIAL" : "VOLVER AL TUTORIAL",
+                                           () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
                 return;
             }
 
@@ -204,6 +208,70 @@ namespace Rediseno.Menus
         }
 
         private int _logCopiado = -1;
+
+        private static string QueAprendiste(TutorialTipo tipo) => tipo switch
+        {
+            TutorialTipo.Linterna       => "Ya sabés prender, apagar y concentrar la luz.",
+            TutorialTipo.PilasReliquias => "Ya sabés recargar la linterna con pilas y conocés tu cordura.",
+            TutorialTipo.Sorken         => "Ya sabés echar al Sorken: en la puerta y cuando ya entró.",
+            TutorialTipo.Arbmos         => "Ya sabés ocultarte del Arbmos: a oscuras se va, con luz se enoja.",
+            TutorialTipo.Libro          => "Ya sabés salvar el libro y conocés a Veleth: la luz no la frena, que el libro no se apague.",
+            _                           => "",
+        };
+
+        // TUTORIAL: paso superado. Lo que sigue va en la misma sesión AR (TutorialCamino), sin
+        // volver al menú ni a sincronizar; tras el último, la tarjeta de "listo para la Noche 1".
+        private void ArmarPasoSuperado(TutorialTipo tipo)
+        {
+            var sig = TutorialCamino.Siguiente(tipo);
+            if (sig == TutorialTipo.Ninguno)
+            {
+                ArmarFinDelTutorial();
+                return;
+            }
+
+            int total = TutorialCamino.Pasos.Length;
+            int i = TutorialCamino.Indice(tipo);
+            var paso = TemaUI.Texto($"PASO {i + 1} DE {total}", TemaUI.Mono, 28, TemaUI.Tan, 4f, TextAnchor.MiddleCenter);
+            _cuerpo.Add(paso);
+            _cuerpo.Add(TemaUI.Texto("SUPERADO", TemaUI.Bebas, 130, TemaUI.Green, 10f, TextAnchor.MiddleCenter));
+            var bien = TemaUI.Texto(QueAprendiste(tipo), TemaUI.Elite, 38, TemaUI.Muted, 0f, TextAnchor.MiddleCenter);
+            bien.style.marginTop = 8; bien.style.marginBottom = 30;
+            _cuerpo.Add(bien);
+
+            var siguiente = PiezasUI.Tarjeta();
+            PiezasUI.Ignorar(siguiente);
+            siguiente.Add(TemaUI.Texto($"SIGUIENTE · PASO {i + 2}", TemaUI.Mono, 24, TemaUI.Tan, 4f));
+            siguiente.Add(TemaUI.Texto(Tutoriales.Titulo(sig), TemaUI.Bebas, 64, TemaUI.Cream, 5f));
+            var desc = TemaUI.Texto(Tutoriales.Descripcion(sig), TemaUI.Mono, 26, TemaUI.Muted);
+            desc.style.marginTop = 4;
+            siguiente.Add(desc);
+            _cuerpo.Add(siguiente);
+
+            var continuar = PiezasUI.Boton(Nav, "CONTINUAR", TutorialCamino.IrAlSiguiente,
+                                           habilitado: NightTransition.PuedeReiniciar);
+            continuar.style.backgroundImage = TemaUI.DegradeRojo;
+            continuar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
+            _cuerpo.Add(continuar);
+            _cuerpo.Add(PiezasUI.Boton(Nav, "REPETIR PASO", NightTransition.Reintentar));
+            _cuerpo.Add(PiezasUI.Boton(Nav, "SALIR DEL TUTORIAL", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
+        }
+
+        private void ArmarFinDelTutorial()
+        {
+            _cuerpo.Add(TemaUI.Texto("¡FINALIZASTE EL TUTORIAL!", TemaUI.Bebas, 110, TemaUI.Green, 8f, TextAnchor.MiddleCenter));
+            var sub = TemaUI.Texto("Ya estás listo para jugar la primera noche. Estate atento.",
+                                   TemaUI.Elite, 38, TemaUI.Cream, 0f, TextAnchor.MiddleCenter);
+            sub.style.marginTop = 8; sub.style.marginBottom = 30;
+            _cuerpo.Add(sub);
+
+            var jugar = PiezasUI.Boton(Nav, "JUGAR NOCHE 1", () => TutorialCamino.JugarNoche1(),
+                                       habilitado: NightTransition.HayCatalogoDeNoches);
+            jugar.style.backgroundImage = TemaUI.DegradeRojo;
+            jugar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
+            _cuerpo.Add(jugar);
+            _cuerpo.Add(PiezasUI.Boton(Nav, "VOLVER AL MENÚ", () => SceneFlow.GoTo(SceneFlow.EscenaMenu)));
+        }
 
         private void ArmarSelector()
         {

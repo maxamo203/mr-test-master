@@ -264,11 +264,18 @@ namespace Collectibles
             }
 
             if (scatterOnFloor && _candidates.Count < maxSpawnPoints && FloorPoint.Instance != null)
-                ScatterFloorGrid();
+                ScatterFloorGrid(FloorPoint.Instance.LocalPosition);
+
+            // Dev (OPCIONES → DESARROLLO): también alrededor del jugador (ver BatterySpawnManager).
+            string pisoAuto = null;
+            if (scatterOnFloor && Gameplay.Spawning.SpawnDev.PisoAutomatico && _candidates.Count < maxSpawnPoints &&
+                Gameplay.Spawning.SpawnDev.TryCentroPisoAutomatico(out var centroAuto, out pisoAuto))
+                ScatterFloorGrid(centroAuto);
 
             _status = _candidates.Count > 0
                 ? $"{_candidates.Count} puntos interiores; {_rejectedCount} rechazados."
                 : $"sin puntos interiores validos ({_lastRejection ?? "sin superficies candidatas"}); esperando.";
+            if (pisoAuto != null) _status += $" Piso automático: {pisoAuto}.";
         }
 
         // Valida interior, soporte e interaccion y reserva el volumen en el registro
@@ -288,7 +295,8 @@ namespace Collectibles
             _candidates.Add(new Candidate { relPos = relPos, surface = surface, support = support });
         }
 
-        private void ScatterFloorGrid()
+        // Grilla de piso alrededor de `c` (anchor-relativo, a la altura del piso).
+        private void ScatterFloorGrid(Vector3 c)
         {
             if (WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady) return;
 
@@ -298,7 +306,6 @@ namespace Collectibles
             // minDistanceFromBatteries las descarta casi todas — de ahí venía el bug de
             // repetir siempre el mismo (único) punto sobreviviente.
             float half = floorSpacing * 0.5f;
-            Vector3 c = FloorPoint.Instance.LocalPosition;
             for (float dx = -floorRadius + half; dx <= floorRadius; dx += floorSpacing)
             for (float dz = -floorRadius + half; dz <= floorRadius; dz += floorSpacing)
             {
@@ -390,6 +397,54 @@ namespace Collectibles
                 _timer = 5f;
             }
         }
+
+        // TUTORIAL: deja UNA reliquia ya mismo, sin esperar el intervalo, en el candidato
+        // válido que quede más cerca de DistanciaGuia del jugador. False si todavía no hay
+        // dónde: se vuelve a pedir más tarde. Retenidas sigue frenando las siguientes.
+        public bool ServerSpawnUnaAhora(Vector3 jugador, out uint netId)
+        {
+            netId = 0;
+            if (!_started || NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return false;
+            if (WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady) return false;
+            if (_hasActive) { netId = _activeNetId; return true; }
+            if (_variantTypeIds.Count == 0) return false;
+
+            int mejor = -1;
+            float mejorPuntaje = float.MaxValue;
+            for (int i = 0; i < _candidates.Count; i++)
+            {
+                var c = _candidates[i];
+                Vector3 d = WorldOrigin.Instance.ToWorld(c.relPos) - jugador;
+                d.y = 0f;
+                float puntaje = Mathf.Abs(d.magnitude - DistanciaGuia);
+                if (puntaje >= mejorPuntaje) continue;
+                if (!InteriorSpawnValidator.TryValidate(c.relPos, c.surface, c.support,
+                        EffectiveFootprintRadius, pickupMaxDistance, out _)) continue;
+                mejor = i;
+                mejorPuntaje = puntaje;
+            }
+            if (mejor < 0) return false;
+
+            Vector3 world = WorldOrigin.Instance.ToWorld(_candidates[mejor].relPos);
+            byte typeId = _variantTypeIds[UnityEngine.Random.Range(0, _variantTypeIds.Count)];
+            try
+            {
+                _activeNetId = NetworkManager.Instance.ServerSpawn(typeId, world, ownerClientId: 0);
+                _hasActive   = true;
+                _lastPointIndex = mejor;
+                _spawnedCount++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Reliquias] Falló el spawn de la reliquia TypeId={typeId}: {ex.Message}.");
+                return false;
+            }
+            netId = _activeNetId;
+            return true;
+        }
+
+        // Distancia ideal (metros) de la reliquia del tutorial al jugador.
+        private const float DistanciaGuia = 2.5f;
 
         // Evita repetir el mismo punto dos veces seguidas cuando hay mas de uno.
         private int PickPointIndex()

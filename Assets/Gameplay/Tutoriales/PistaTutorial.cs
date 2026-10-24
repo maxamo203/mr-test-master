@@ -8,17 +8,32 @@ namespace Gameplay
     // ojo por encima del centro (abajo van las barras de la noche y el cartel de recoger).
     public static class PistaTutorial
     {
-        // Cómo se hace cada gesto de la linterna con el control que se está usando.
+        // Cómo se hace cada gesto de la linterna con el control que se está usando. En el
+        // visor sin mando (Rediseno.ControlMirada) no hay botones: la intensa es automática
+        // al mirar de frente el objetivo y prender/apagar es cruzar la franja de arriba.
+        private static bool SinMando => Rediseno.ControlMirada.Activo;
+
         public static string ComoLuzIntensa()
         {
+            if (SinMando) return "mirala de frente: la luz se concentra sola";
             var gm = Gamepad.GamepadManager.Instance;
             return gm != null && gm.UsesMouseInput ? "palanca arriba" : "mantené apretado el botón";
         }
 
         public static string ComoApagar()
         {
+            if (SinMando) return "mirá arriba hasta cruzar la línea de la linterna y volvé";
             var gm = Gamepad.GamepadManager.Instance;
             if (gm != null && gm.UsesMouseInput) return "palanca abajo";
+            if (gm != null && gm.IsConnected) return "un toque al botón A";
+            return "un toque en la pantalla";
+        }
+
+        public static string ComoPrender()
+        {
+            if (SinMando) return "volvé a cruzar la línea de arriba";
+            var gm = Gamepad.GamepadManager.Instance;
+            if (gm != null && gm.UsesMouseInput) return "soltá la palanca o movela a la derecha";
             if (gm != null && gm.IsConnected) return "un toque al botón A";
             return "un toque en la pantalla";
         }
