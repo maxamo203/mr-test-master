@@ -559,7 +559,7 @@ public class AnchorPointManager : MonoBehaviour
         m == ScannerMode.Calibrating   || m == ScannerMode.Anchor_Place ||
         m == ScannerMode.Origin_Adjust ||
         m == ScannerMode.Wall_V1       || m == ScannerMode.Wall_Height  || m == ScannerMode.Wall_Vn ||
-        m == ScannerMode.DoorPickWall  || m == ScannerMode.Door_V1      || m == ScannerMode.Door_V2 ||
+        m == ScannerMode.Door_V1       || m == ScannerMode.Door_V2      ||
         m == ScannerMode.Cube_V1       || m == ScannerMode.Cube_V2      || m == ScannerMode.Cube_V3 ||
         m == ScannerMode.Marker_Place  || m == ScannerMode.EditMoveTarget;
 

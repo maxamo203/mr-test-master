@@ -5,12 +5,13 @@ namespace Scanner
     // Fantasma en vivo de lo que se va a colocar. Cada frame, segun el modo de la
     // FSM y la posicion de la reticula (centro de pantalla), posiciona/dibuja un
     // preview semitransparente ANTES de tocar COLOCAR:
-    //   - Wall_V1 / Cube_V1 / Floor_Place / Door_V1 : marcador (esfera) donde caeria.
+    //   - Wall_V1 / Cube_V1 / Floor_Place : marcador (esfera) donde caeria.
+    //   - Door_V1     : esfera sobre la arista de abajo de la pared apuntada.
     //   - Wall_Height : pilar vertical desde el 1er punto hasta la altura apuntada.
     //   - Wall_Vn     : el segmento de pared (caja 3D) formandose desde el ult. vertice.
     //   - Cube_V2     : el cubo axis-aligned formandose desde la 1ra esquina.
     //   - Cube_V3     : el cubo ya con su rotacion (yaw) tomada del 3er punto.
-    //   - Door_V2     : el hueco de la puerta sobre la cara de la pared.
+    //   - Door_V2     : el hueco de la puerta sobre la pared de V1 (esquina libre).
     //   - EditMoveTarget : el objeto seleccionado donde quedaria al moverlo.
     //
     // Todos los ghosts son hijos de WorldOrigin (coordenadas anchor-locales, igual
@@ -52,6 +53,11 @@ namespace Scanner
             var rr  = RaycastResolver.Instance;
             if (fsm == null || wo == null || !wo.IsReady || rr == null) return;
             if (!IsPreviewMode(fsm.Current)) return;
+
+            // Puertas: igual que los marcadores, el punto sale del raycast sobre la pared
+            // (DoorBuilder), no del hit AR — no hace falta que RaycastResolver encuentre nada.
+            if (fsm.Current == ScannerMode.Door_V1) { ShowDoorFloorCorner(); return; }
+            if (fsm.Current == ScannerMode.Door_V2) { ShowDoorGhost();       return; }
 
             var hit = rr.ResolveFromScreenCenter();
             if (!hit.Hit) return;
@@ -108,14 +114,6 @@ namespace Scanner
                     }
                     break;
 
-                case ScannerMode.Door_V1:
-                    ShowDoorMarker(hit.Position, local);
-                    break;
-
-                case ScannerMode.Door_V2:
-                    ShowDoorGhost(hit.Position);
-                    break;
-
                 case ScannerMode.EditMoveTarget:
                     ShowMoveGhost(fsm.CurrentSelection, local);
                     break;
@@ -152,33 +150,27 @@ namespace Scanner
             ShowBox(center, Quaternion.identity, scale);
         }
 
-        private void ShowDoorMarker(Vector3 worldPoint, Vector3 fallbackLocal)
+        // Door_V1: esquina de piso sobre la arista de abajo de la pared apuntada.
+        private void ShowDoorFloorCorner()
         {
-            var wall = _door != null ? _door.Target : null;
-            if (wall != null && wall.WorldPointToWallUV(worldPoint, out var u, out var v))
-            {
-                u = Mathf.Clamp(u, 0f, wall.Length);
-                v = Mathf.Max(0f, v);
-                var lp = wall.ALocal + u * wall.BaseHat + v * Vector3.up;
-                ShowMarker(lp, 0.06f, DoorColor);
-            }
-            else ShowMarker(fallbackLocal, 0.06f, DoorColor);
+            if (_door == null || !_door.TryResolveFloorCorner(out var wall, out var u)) return;
+            ShowMarker(wall.ALocal + u * wall.BaseHat, 0.08f, DoorColor);
         }
 
-        private void ShowDoorGhost(Vector3 worldPoint)
+        // Door_V2: el hueco desde la esquina de piso hasta la esquina libre, mas una
+        // esfera en la esquina libre (la que se esta moviendo).
+        private void ShowDoorGhost()
         {
             var wall = _door != null ? _door.Target : null;
-            var uv1  = _door != null ? _door.Uv1 : null;
-            if (wall == null || !uv1.HasValue) return;
-            if (!wall.WorldPointToWallUV(worldPoint, out var u, out var v)) return;
+            if (wall == null || !_door.TryResolveFreeCorner(out var u, out var v)) return;
 
-            float uMin = Mathf.Clamp(Mathf.Min(uv1.Value.x, u), 0f, wall.Length);
-            float uMax = Mathf.Clamp(Mathf.Max(uv1.Value.x, u), 0f, wall.Length);
-            float vMax = Mathf.Clamp(Mathf.Max(uv1.Value.y, v), 0f, wall.Height);
-            float vMin = 0f; // las puertas arrancan del piso (igual que DoorBuilder)
-            if (uMax - uMin < 0.02f || vMax - vMin < 0.02f) return;
+            float uMin = Mathf.Min(_door.U1, u);
+            float uMax = Mathf.Max(_door.U1, u);
+            ShowMarker(wall.ALocal + u * wall.BaseHat + v * Vector3.up, 0.06f, DoorColor);
+            if (uMax - uMin < 0.02f || v < 0.02f) return;
 
-            ShowMesh(BuildWallQuad(wall, uMin, uMax, vMin, vMax));
+            // vMin = 0: las puertas arrancan del piso (igual que DoorBuilder).
+            ShowMesh(BuildWallQuad(wall, uMin, uMax, 0f, v));
         }
 
         private void ShowMoveGhost(ISelectable sel, Vector3 local)

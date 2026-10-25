@@ -12,9 +12,8 @@ namespace Scanner
         Wall_V1,          // esperando primer vertice de pared (piso)
         Wall_Height,      // esperando vertice de altura (segundo punto para definir H)
         Wall_Vn,          // esperando proximo vertice de piso (encadenado)
-        DoorPickWall,     // esperando tap sobre pared para asociar puerta
-        Door_V1,          // esperando esquina inferior de puerta
-        Door_V2,          // esperando esquina superior opuesta
+        Door_V1,          // esperando esquina de piso de puerta (corre por la base de la pared apuntada)
+        Door_V2,          // esperando esquina opuesta, libre dentro de la pared de Door_V1
         Cube_V1,          // esperando primer vertice de la diagonal del cubo
         Cube_V2,          // esperando segundo vertice de la diagonal del cubo (esquina opuesta)
         Cube_V3,          // esperando tercer punto de referencia para la rotacion (yaw) del cubo

@@ -163,7 +163,7 @@ namespace Rediseno.Escaner
                 Paso.Piso or Paso.Alinear => m == ScannerMode.Floor_Place,
                 Paso.Paredes     => m is ScannerMode.Wall_V1 or ScannerMode.Wall_Height or ScannerMode.Wall_Vn,
                 Paso.Identificar => m == ScannerMode.Marker_Place,
-                Paso.Huecos      => m is ScannerMode.DoorPickWall or ScannerMode.Door_V1 or ScannerMode.Door_V2,
+                Paso.Huecos      => m is ScannerMode.Door_V1 or ScannerMode.Door_V2,
                 Paso.Muebles     => m is ScannerMode.Cube_V1 or ScannerMode.Cube_V2 or ScannerMode.Cube_V3,
                 _ => false,
             };
@@ -434,7 +434,6 @@ namespace Rediseno.Escaner
                     _guiaCuenta = Huecos > 0 ? $"HUECOS: {Huecos}" : "";
                     switch (m)
                     {
-                        case ScannerMode.DoorPickWall: Guia("Tocá la pared donde está la puerta."); break;
                         case ScannerMode.Door_V1:
                             Guia("Apuntá a la esquina de abajo de la puerta y tocá COLOCAR.", "colocar"); break;
                         case ScannerMode.Door_V2:

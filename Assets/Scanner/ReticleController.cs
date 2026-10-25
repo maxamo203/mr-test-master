@@ -285,7 +285,7 @@ namespace Scanner
 
             bool enPared  = modo == ScannerMode.Wall_V1 || modo == ScannerMode.Wall_Height || modo == ScannerMode.Wall_Vn;
             bool enCubo   = modo == ScannerMode.Cube_V1 || modo == ScannerMode.Cube_V2 || modo == ScannerMode.Cube_V3;
-            bool enPuerta = modo == ScannerMode.DoorPickWall || modo == ScannerMode.Door_V1 || modo == ScannerMode.Door_V2;
+            bool enPuerta = modo == ScannerMode.Door_V1 || modo == ScannerMode.Door_V2;
             bool enMarker = modo == ScannerMode.Marker_Place;
             bool enPiso   = modo == ScannerMode.Floor_Place;
             bool enAncla  = modo == ScannerMode.Anchor_Place;
@@ -532,9 +532,8 @@ namespace Scanner
                 ScannerMode.Wall_V1        => "Apuntá al primer vértice de la pared (piso) y tocá COLOCAR",
                 ScannerMode.Wall_Height    => "Apuntá arriba (cielorraso) y tocá COLOCAR para fijar la altura",
                 ScannerMode.Wall_Vn        => $"altura de la polilínea: {(_wallBuilder != null ? _wallBuilder.CurrentPolylineHeight : 0f):F2} m — siguiente vértice y COLOCAR",
-                ScannerMode.DoorPickWall   => "Tocá la pared donde va el agujero de la puerta",
-                ScannerMode.Door_V1        => "Apuntá a la esquina inferior de la puerta y tocá COLOCAR",
-                ScannerMode.Door_V2        => "Apuntá a la esquina superior opuesta y tocá COLOCAR",
+                ScannerMode.Door_V1        => "Apuntá a la PARED, a la esquina de abajo de la puerta, y tocá COLOCAR",
+                ScannerMode.Door_V2        => "Apuntá a la esquina de arriba, del lado opuesto, y tocá COLOCAR",
                 ScannerMode.Cube_V1        => "Apuntá a la 1ra esquina del cubo y tocá COLOCAR",
                 ScannerMode.Cube_V2        => "Apuntá a la esquina opuesta (diagonal) y tocá COLOCAR",
                 ScannerMode.Cube_V3        => "Apuntá a un 3er punto para fijar la rotación y tocá COLOCAR",

@@ -16,7 +16,6 @@ namespace Scanner
     public class SelectionController : MonoBehaviour
     {
         [SerializeField] private Camera _camera;
-        [SerializeField] private DoorBuilder _doorBuilder;
         [SerializeField] private AutoWallBuilder _autoWallBuilder;
         [Tooltip("Mostrar HUD de diagnostico (input state) en pantalla.")]
         [SerializeField] private bool _showDebugHud = false;
@@ -34,7 +33,6 @@ namespace Scanner
         private void Awake()
         {
             if (_camera == null) _camera = Camera.main;
-            if (_doorBuilder == null) _doorBuilder = FindFirstObjectByType<DoorBuilder>();
             if (_autoWallBuilder == null) _autoWallBuilder = FindFirstObjectByType<AutoWallBuilder>();
 
             int placedLayer = LayerMask.NameToLayer("Placed");
@@ -268,13 +266,6 @@ namespace Scanner
             bool inPolyline = fsm.Current == ScannerMode.Wall_V1
                            || fsm.Current == ScannerMode.Wall_Height
                            || fsm.Current == ScannerMode.Wall_Vn;
-
-            if (fsm.Current == ScannerMode.DoorPickWall && picked is WallObject wall)
-            {
-                _doorBuilder?.OnWallPicked(wall);
-                _lastPickResult = "door pickwall";
-                return;
-            }
 
             if (inPolyline)
             {
