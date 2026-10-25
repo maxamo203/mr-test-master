@@ -6,22 +6,14 @@ using UnityEngine.XR.ARSubsystems;
 
 namespace Gameplay.Spawning
 {
-    // Interruptores de desarrollo para la aparición de pilas, reliquias y Arbmos (menú
-    // principal → OPCIONES → DESARROLLO). En release valen siempre los de fábrica, que son el
-    // comportamiento de siempre: cuarto cerrado obligatorio y sin piso automático.
+    // Interruptores de desarrollo para la aparición de pilas y reliquias (menú principal →
+    // OPCIONES → DESARROLLO). En release valen siempre los de fábrica: sin piso automático.
+    // (El viejo "exigir cuarto cerrado" ya no existe: sin recintos se usa un radio de
+    // respaldo, ver SpawnSampler.)
     public static class SpawnDev
     {
-        // ¿Exigir que las paredes formen un cuarto cerrado? (InteriorSpawnValidator). Apagado,
-        // si no cierran se sigue sin el chequeo de "adentro del cuarto"; si cierran, se sigue
-        // usando igual.
-        public static bool ExigirCuartoCerrado
-        {
-            get => !Debug.isDebugBuild || PlayerPrefs.GetInt("dev_spawn_cuarto_cerrado", 1) == 1;
-            set { if (Debug.isDebugBuild) PlayerPrefs.SetInt("dev_spawn_cuarto_cerrado", value ? 1 : 0); }
-        }
-
-        // ¿Agregar una grilla de piso alrededor del jugador al empezar la noche? Complementa la
-        // del PISO del escáner (o la reemplaza si el escaneo no tiene).
+        // ¿Sortear también alrededor del jugador al empezar la noche? Se suma al área de los
+        // recintos (o al radio de respaldo). También estima la altura del piso (ver abajo).
         public static bool PisoAutomatico
         {
             get => Debug.isDebugBuild && PlayerPrefs.GetInt("dev_spawn_piso_auto", 0) == 1;

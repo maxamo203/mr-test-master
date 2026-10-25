@@ -64,6 +64,9 @@ private readonly List<uint> _scratchRemove = new();
     private bool _running;
     private string _lastSpawnRejection = "-";
     private int _rejectedSpawnAttempts;
+    // Última vez que el presupuesto de amenazas (ThreatCoordinator) frenó una aparición.
+    private bool _postponeLethal, _postponeSorken, _postponeBook;
+    private int _postponedAttempts;
 
     public static ArbmosDirector Ensure()
     {
@@ -104,6 +107,9 @@ private readonly List<uint> _scratchRemove = new();
         _running = true;
         _lastSpawnRejection = "-";
         _rejectedSpawnAttempts = 0;
+        _postponeLethal = _postponeSorken = _postponeBook = false;
+        _postponedAttempts = 0;
+        _floorGeometry = int.MinValue;
     }
 
     public void StopRun()
@@ -233,6 +239,13 @@ private readonly List<uint> _scratchRemove = new();
 
         if (!ThreatCoordinator.TryBeginNormalArbmos(clientId))
         {
+            // Lo más común en solitario: con 1 jugador entra UNA amenaza a la vez, así que
+            // mientras el Sorken o el libro están activos el Arbmos espera.
+            // (El texto lo arma DebugSnapshot: acá solo se guarda el estado.)
+            _postponeLethal = ThreatCoordinator.LethalConsequenceActive;
+            _postponeSorken = ThreatCoordinator.SorkenActive;
+            _postponeBook   = ThreatCoordinator.BookActive;
+            _postponedAttempts++;
             GameplayTelemetry.Postponed("arbmos", "team_capacity", clientId);
             haunt.cooldown = 2f;
             return;
@@ -685,6 +698,13 @@ private readonly List<uint> _scratchRemove = new();
              distance <= desiredDistance + 1.5f;
              distance += distanceStep)
             distances.Add(distance);
+        // Último recurso para cuartos chicos: parado en el medio de un cuarto de 3×3 m no
+        // hay ningún punto a 2 m que deje el cuerpo lejos de las paredes, y el Arbmos no
+        // aparecía nunca mientras el jugador no se moviera hacia un costado.
+        for (float distance = ArbmosSpawnGeometry.MinimumDistance - distanceStep;
+             distance >= ArbmosSpawnGeometry.FallbackMinimumDistance - 0.001f;
+             distance -= distanceStep)
+            distances.Add(distance);
 
         string lastReason = "no se encontro una posicion interior valida";
         for (int distanceSample = 0; distanceSample < distances.Count; distanceSample++)
@@ -842,12 +862,24 @@ private readonly List<uint> _scratchRemove = new();
         return null;
     }
 
-    private static float FloorWorldY(float fallback)
+    // Altura del piso en world. Sin PISO en el escaneo antes devolvía la altura de la
+    // cámara: el Arbmos aparecía flotando a la altura de los ojos y su cápsula física se
+    // evaluaba ahí. Ahora sale de la misma regla que pilas y reliquias (PISO → base de las
+    // paredes → piso del AR), cacheada por geometría porque la última opción raycastea.
+    private float _floorRelY;
+    private int _floorGeometry = int.MinValue;
+
+    private float FloorWorldY(float fallback)
     {
         var worldOrigin = WorldOrigin.Instance;
-        if (FloorPoint.Instance != null && worldOrigin != null)
-            return worldOrigin.ToWorld(FloorPoint.Instance.LocalPosition).y;
-        return fallback;
+        if (worldOrigin == null || !worldOrigin.IsReady) return fallback;
+        int geometry = InteriorSpawnValidator.GeometryVersion;
+        if (geometry != _floorGeometry || FloorPoint.Instance != null)
+        {
+            SpawnSampler.AlturaPisoRel(out _floorRelY);
+            _floorGeometry = geometry;
+        }
+        return worldOrigin.ToWorld(new Vector3(0f, _floorRelY, 0f)).y;
     }
 
     private static float HorizontalDistance(Vector3 a, Vector3 b)
@@ -876,7 +908,12 @@ private readonly List<uint> _scratchRemove = new();
 
         var text = new System.Text.StringBuilder();
         text.Append($"[Arbmos V2] noche='{_night.displayName}' jugadores={_haunts.Count} " +
-                    $"spawnRechazados={_rejectedSpawnAttempts} ultimo='{_lastSpawnRejection}'\n");
+                    $"spawnRechazados={_rejectedSpawnAttempts} ultimo='{_lastSpawnRejection}'\n" +
+                    $" postergados={_postponedAttempts} ultimo='" +
+                    (_postponedAttempts == 0 ? "-"
+                        : _postponeLethal ? "hay un Arbmos letal activo"
+                        : $"presupuesto de amenazas: sorken={(_postponeSorken ? "SI" : "no")} " +
+                          $"libro={(_postponeBook ? "SI" : "no")} (o linterna sin carga)") + "'\n");
         foreach (var pair in _haunts)
         {
             Haunt haunt = pair.Value;

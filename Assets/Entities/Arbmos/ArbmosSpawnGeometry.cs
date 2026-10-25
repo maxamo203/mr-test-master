@@ -3,6 +3,8 @@ using UnityEngine;
 public static class ArbmosSpawnGeometry
 {
     public const float MinimumDistance = 2f;
+    // Distancia mínima de último recurso, solo si a MinimumDistance no entra en el cuarto.
+    public const float FallbackMinimumDistance = 1.25f;
     public const float BodyRadius = 0.35f;
     public const float BodyHeight = 1.85f;
 

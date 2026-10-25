@@ -2,25 +2,29 @@ using System.Collections.Generic;
 using Gameplay.Spawning;
 using Scanner;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Bateries
 {
-    // Gestor de pilas: SOLO actua en el servidor (host). Deriva los puntos de spawn
-    // del escaneo del mapa, spawnea pilas por rareza (via NetworkManager.ServerSpawn,
-    // que las replica a todos los clientes en coordenadas anchor-relativas) y maneja la
-    // reaparicion respetando la posicion de los jugadores.
+    // Gestor de pilas: SOLO actua en el servidor (host). Sortea los puntos de spawn al
+    // azar sobre el escaneo (SpawnSampler: cualquier recinto cerrado, arriba de los cubos,
+    // o un radio de respaldo si no hay recintos — distintos en cada noche), spawnea pilas
+    // por rareza (via NetworkManager.ServerSpawn, que las replica a todos los clientes en
+    // coordenadas anchor-relativas) y maneja la reaparicion respetando la posicion de los
+    // jugadores.
     //
     // Reglas de reaparicion (post-pickup): la pila no reaparece dentro de respawnSeconds
     // y el temporizador solo corre cuando NINGUN jugador esta dentro de playerBlockRadius
-    // del punto — si un jugador se queda cerca, el timer se congela.
+    // del punto — si un jugador se queda cerca, el timer se congela. Con
+    // relocateOnRespawn, al cumplirse sale en otro lugar al azar (lejos de los jugadores).
     //
     // Wiring: poner este componente en un GameObject de la escena multijugador y
     // asignarle el BatteryRaritySet. No requiere nada en los clientes.
     //
     // Orden de ejecución ANTES que CollectibleSpawnManager (orden 0 por defecto): las
-    // reliquias evitan los puntos de pilas ya derivados (ver IsNear más abajo), así que
-    // esta lista tiene que existir cuando Collectibles.CollectibleSpawnManager arma la
-    // suya en el mismo evento OnGameStarted.
+    // reliquias evitan los lugares de pilas vía SpawnReservationRegistry, así que las
+    // reservas de las pilas tienen que existir cuando Collectibles.CollectibleSpawnManager
+    // arranca en el mismo evento OnGameStarted.
     [DefaultExecutionOrder(-10)]
     public class BatterySpawnManager : MonoBehaviour
     {
@@ -47,23 +51,27 @@ namespace Bateries
         [SerializeField] private float pickupMaxDistance = 2.5f;
 
         [Header("Derivacion de puntos desde el escaneo")]
-        [Tooltip("Colocar pilas sobre la cara superior de los muebles (cubos) escaneados.")]
+        [Tooltip("Admitir pilas sobre la cara superior de los muebles (cubos): un punto " +
+                 "sorteado que cae sobre un cubo va arriba del cubo.")]
         [SerializeField] private bool  useFurnitureTops = true;
-        [Tooltip("Area minima (m^2) de la cara superior del mueble para admitir una pila.")]
+        [Tooltip("Area minima (m^2) de la cara superior del mueble para admitir una pila. " +
+                 "Un cubo mas chico es solo un obstaculo.")]
         [SerializeField] private float minFurnitureTopArea = 0.05f;
         [Tooltip("Altura (m) a la que flota la pila sobre la superficie.")]
         [SerializeField] private float surfaceOffset = 0.06f;
-        [Tooltip("Ademas de los muebles, esparcir puntos por el piso en una grilla.")]
-        [SerializeField] private bool  scatterOnFloor = false;
-        [Tooltip("Solo poner pilas en piso DESPEJADO: descarta los puntos que tengan un " +
-                 "mueble (cubo) directamente encima.")]
-        [SerializeField] private bool  floorOnlyIfClearAbove = true;
-        [Tooltip("Separacion (m) de la grilla del piso.")]
+        [Tooltip("Admitir pilas en el piso. Apagado: solo sobre muebles.")]
+        [SerializeField] private bool  scatterOnFloor = true;
+        [Tooltip("Separacion media (m) entre puntos: se arma un punto cada floorSpacing² m² " +
+                 "de area jugable (hasta maxSpawnPoints), sorteados al azar en cada noche.")]
         [SerializeField] private float floorSpacing = 1.5f;
-        [Tooltip("Radio (m) alrededor del punto de piso para la grilla.")]
-        [SerializeField] private float floorRadius = 3f;
+        [Tooltip("Si las paredes no forman ningun recinto (o no hay paredes): radio (m) " +
+                 "alrededor del PISO (o del 0,0 del mapa) donde se sortean las pilas.")]
+        [FormerlySerializedAs("floorRadius")]
+        [SerializeField] private float fallbackRadius = 3f;
         [Tooltip("Tope de puntos de spawn.")]
         [SerializeField] private int   maxSpawnPoints = 12;
+        [Tooltip("Al reaparecer tras un pickup, la pila sale en OTRO lugar al azar.")]
+        [SerializeField] private bool  relocateOnRespawn = true;
         [Tooltip("Radio de la huella reservada por una pila, incluyendo su volumen.")]
         [SerializeField] private float objectFootprintRadius = 0.10f;
 
@@ -87,9 +95,13 @@ namespace Bateries
             public byte    rarityIndex;
             public SpawnSurfaceKind surface;
             public CubeObject support;
+            public string   key;            // clave en SpawnReservationRegistry
+            public bool     relocate;       // al reaparecer, sortear otro lugar
         }
 
         private readonly List<SpawnPoint>          _points  = new();
+        private SpawnSampler _sampler;
+        private int _nextKey;
         private readonly Dictionary<uint, SpawnPoint> _byNetId = new();
         private readonly List<Vector3> _rejectedPoints = new();
         private bool _started;
@@ -232,44 +244,31 @@ namespace Bateries
             _rejectedCount = 0;
             _lastRejection = null;
 
-            if (!InteriorSpawnValidator.TryEnsureReady(out var topologyReason))
+            _geometryVersion = InteriorSpawnValidator.GeometryVersion;
+            _sampler = new SpawnSampler(fallbackRadius, useFurnitureTops, scatterOnFloor,
+                                        minFurnitureTopArea, surfaceOffset);
+            if (!_sampler.Preparar())
             {
-                _geometryVersion = InteriorSpawnValidator.GeometryVersion;
-                _status = $"esperando contorno interior cerrado: {topologyReason}.";
-                Debug.LogWarning($"[Bateries] {_status} No se usa fallback exterior.");
+                _status = $"sin area para pilas: {_sampler.Detalle}; esperando.";
+                Debug.LogWarning($"[Bateries] {_status}");
                 return;
             }
 
-            _geometryVersion = InteriorSpawnValidator.GeometryVersion;
             SpawnReservationRegistry.BeginGeometry(_geometryVersion);
             SpawnReservationRegistry.ClearOwner("battery");
 
-            if (useFurnitureTops && SceneRegistry.Instance != null)
+            // Puntos al azar (distintos cada noche) repartidos por TODA el area jugable: un
+            // punto cada floorSpacing² m², como la vieja grilla, pero sin posiciones fijas.
+            float areaPorPunto = Mathf.Max(0.25f, floorSpacing * floorSpacing);
+            int objetivo = Mathf.Clamp(Mathf.RoundToInt(_sampler.AreaTotal / areaPorPunto), 1, maxSpawnPoints);
+            for (int intentos = objetivo * 12; _points.Count < objetivo && intentos > 0; intentos--)
             {
-                foreach (var cube in SceneRegistry.Instance.Cubes)
-                {
-                    if (cube == null) continue;
-                    var t     = cube.transform;
-                    var scale = t.lossyScale;
-                    if (scale.x * scale.z < minFurnitureTopArea) continue; // mueble muy chico
-
-                    // Centro de la cara superior en world, con un pequeño offset arriba.
-                    Vector3 topWorld = t.position + t.up * (scale.y * 0.5f + surfaceOffset);
-                    AddPoint(topWorld, SpawnSurfaceKind.FurnitureTop, cube);
-                    if (_points.Count >= maxSpawnPoints) break;
-                }
+                if (!_sampler.TrySample(_effectiveFootprintRadius, out var rel, out var surface, out var support))
+                    continue;
+                var key = (_nextKey++).ToString();
+                if (!TryClaim(key, rel, surface, support, null)) continue;
+                _points.Add(new SpawnPoint { relPos = rel, surface = surface, support = support, key = key });
             }
-
-            if (scatterOnFloor && _points.Count < maxSpawnPoints && FloorPoint.Instance != null)
-                ScatterFloorGrid(FloorPoint.Instance.LocalPosition);
-
-            // Dev (OPCIONES → DESARROLLO): grilla de piso también alrededor del jugador, a la
-            // altura del PISO si hay o del piso detectado. Complementa la del PISO; los puntos
-            // que caen encima de otros los descarta la reserva común.
-            string pisoAuto = null;
-            if (scatterOnFloor && Gameplay.Spawning.SpawnDev.PisoAutomatico && _points.Count < maxSpawnPoints &&
-                Gameplay.Spawning.SpawnDev.TryCentroPisoAutomatico(out var centroAuto, out pisoAuto))
-                ScatterFloorGrid(centroAuto);
 
             // Arrancar todos vacios: se llenan tras initialSpawnDelay, sin exigir que el
             // jugador se aleje (la regla de proximidad solo aplica a la reaparicion).
@@ -281,81 +280,52 @@ namespace Bateries
             }
 
             _status = _points.Count > 0
-                ? $"{_points.Count} puntos interiores; {_rejectedCount} rechazados."
-                : $"sin puntos interiores validos ({_lastRejection ?? "sin superficies candidatas"}); esperando.";
-            if (pisoAuto != null) _status += $" Piso automático: {pisoAuto}.";
+                ? $"{_points.Count}/{objetivo} puntos al azar; {_rejectedCount} rechazados. {_sampler.Detalle}."
+                : $"sin puntos validos ({_lastRejection ?? "sin superficies candidatas"}). {_sampler.Detalle}; esperando.";
         }
 
-        // Grilla de piso alrededor de `c` (anchor-relativo, a la altura del piso).
-        private void ScatterFloorGrid(Vector3 c)
+        // Separacion extra entre lugares de pilas (ademas de las huellas): que no salgan
+        // amontonadas aunque el sorteo sea libre.
+        private float SeparacionEntrePilas => Mathf.Max(0.05f, floorSpacing * 0.4f);
+
+        // Valida el lugar y lo reserva bajo `key`. `players` (world) != null: ademas no
+        // puede caer cerca de un jugador (reaparicion).
+        private bool TryClaim(string key, Vector3 relPos, SpawnSurfaceKind surface, CubeObject support,
+                              IReadOnlyList<Vector3> players)
         {
-            if (WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady) return;
-
-            for (float dx = -floorRadius; dx <= floorRadius; dx += floorSpacing)
-            for (float dz = -floorRadius; dz <= floorRadius; dz += floorSpacing)
-            {
-                if (_points.Count >= maxSpawnPoints) return;
-                if (dx * dx + dz * dz > floorRadius * floorRadius) continue;
-
-                var rel = new Vector3(c.x + dx, c.y + surfaceOffset, c.z + dz);
-
-                // Requisito: pilas en piso SOLO donde no haya un mueble encima.
-                if (floorOnlyIfClearAbove &&
-                    HasFurnitureAbove(WorldOrigin.Instance.ToWorld(rel)))
-                    continue;
-
-                AddPointRel(rel, SpawnSurfaceKind.Floor, null);
-            }
-        }
-
-        // ¿Hay un mueble (cubo escaneado) directamente encima de este punto? Chequeo
-        // geometrico: si el punto cae dentro de la huella XZ de algun cubo, tiene algo
-        // arriba. Usa el espacio local del cubo (InverseTransformPoint contempla la
-        // rotacion/escala), asi no depende de colliders ni de Physics.autoSyncTransforms.
-        private bool HasFurnitureAbove(Vector3 worldPoint)
-        {
-            if (SceneRegistry.Instance == null) return false;
-            foreach (var cube in SceneRegistry.Instance.Cubes)
-            {
-                if (cube == null) continue;
-                Vector3 local = cube.transform.InverseTransformPoint(worldPoint);
-                // El cubo primitivo mide 1 unidad => media-extension 0.5 en cada eje local.
-                if (Mathf.Abs(local.x) <= 0.5f && Mathf.Abs(local.z) <= 0.5f)
-                    return true;
-            }
+            string reason = null;
+            bool ok = (players == null || !AnyPlayerNear(relPos, players, out reason)) &&
+                      InteriorSpawnValidator.TryValidate(relPos, surface, support,
+                          _effectiveFootprintRadius, pickupMaxDistance, out reason) &&
+                      SpawnReservationRegistry.TryReserve("battery", key, relPos,
+                          _effectiveFootprintRadius, SeparacionEntrePilas, out reason);
+            if (ok) return true;
+            _rejectedCount++;
+            _lastRejection = reason;
+            if (_rejectedPoints.Count < 64) _rejectedPoints.Add(relPos);
             return false;
         }
 
-        private void AddPoint(Vector3 worldPos, SpawnSurfaceKind surface, CubeObject support)
+        // Reaparicion en otro lugar: sortea uno nuevo lejos de los jugadores. Si no
+        // encuentra, vuelve a reservar el de antes (la pila sale donde estaba).
+        private void Relocate(SpawnPoint p, IReadOnlyList<Vector3> players)
         {
-            if (WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady) return;
-            AddPointRel(WorldOrigin.Instance.ToRelative(worldPos), surface, support);
-        }
-
-        private void AddPointRel(Vector3 relPos, SpawnSurfaceKind surface, CubeObject support)
-        {
-            if (!InteriorSpawnValidator.TryValidate(relPos, surface, support,
-                    _effectiveFootprintRadius, pickupMaxDistance, out var reason) ||
-                !SpawnReservationRegistry.TryReserve("battery", _points.Count.ToString(), relPos,
-                    _effectiveFootprintRadius, 0.05f, out reason))
+            p.relocate = false;
+            SpawnReservationRegistry.Release("battery", p.key);
+            if (_sampler != null)
             {
-                _rejectedCount++;
-                _lastRejection = reason;
-                _rejectedPoints.Add(relPos);
-                return;
+                for (int i = 0; i < 12; i++)
+                {
+                    if (!_sampler.TrySample(EffectiveFootprintRadius, out var rel, out var surface, out var support))
+                        continue;
+                    if (!TryClaim(p.key, rel, surface, support, players)) continue;
+                    p.relPos  = rel;
+                    p.surface = surface;
+                    p.support = support;
+                    return;
+                }
             }
-            _points.Add(new SpawnPoint { relPos = relPos, surface = surface, support = support });
-        }
-
-        // ¿Hay un punto de spawn de PILA a menos de minDist de relPos (anchor-relative)?
-        // Lo usa Collectibles.CollectibleSpawnManager para que las reliquias tengan sus
-        // propios lugares y no compartan literalmente el mismo punto que una pila.
-        public bool IsNear(Vector3 relPos, float minDist)
-        {
-            float d2 = minDist * minDist;
-            foreach (var p in _points)
-                if ((p.relPos - relPos).sqrMagnitude <= d2) return true;
-            return false;
+            SpawnReservationRegistry.TryReserve("battery", p.key, p.relPos, EffectiveFootprintRadius, 0f, out _);
         }
 
         // ── Loop de reaparicion (server) ──────────────────────────────────────
@@ -389,21 +359,31 @@ namespace Bateries
                 if (p.blockUntilClear && AnyPlayerNear(p, players)) continue;
 
                 p.timer -= dt;
-                if (p.timer <= 0f) Spawn(p);
+                if (p.timer <= 0f) Spawn(p, players);
             }
         }
 
-        private bool AnyPlayerNear(SpawnPoint p, IReadOnlyList<Vector3> players)
+        private bool AnyPlayerNear(SpawnPoint p, IReadOnlyList<Vector3> players) =>
+            AnyPlayerNear(p.relPos, players, out _);
+
+        private bool AnyPlayerNear(Vector3 relPos, IReadOnlyList<Vector3> players, out string reason)
         {
-            Vector3 world = WorldOrigin.Instance.ToWorld(p.relPos);
+            Vector3 world = WorldOrigin.Instance.ToWorld(relPos);
             float r2 = playerBlockRadius * playerBlockRadius;
             for (int i = 0; i < players.Count; i++)
-                if ((players[i] - world).sqrMagnitude <= r2) return true;
+            {
+                if ((players[i] - world).sqrMagnitude > r2) continue;
+                reason = "demasiado cerca de un jugador";
+                return true;
+            }
+            reason = null;
             return false;
         }
 
-        private void Spawn(SpawnPoint p)
+        private void Spawn(SpawnPoint p, IReadOnlyList<Vector3> players)
         {
+            if (p.relocate) Relocate(p, players);
+
             if (!InteriorSpawnValidator.TryValidate(p.relPos, p.surface, p.support,
                     _effectiveFootprintRadius, pickupMaxDistance, out var invalidReason))
             {
@@ -465,9 +445,12 @@ namespace Bateries
             _ordenGuia.Clear();
             _ordenGuia.AddRange(_points);
             _ordenGuia.Sort((a, b) => PuntajeGuia(a, jugador).CompareTo(PuntajeGuia(b, jugador)));
+            var players = NetworkManager.Instance.ServerPlayerWorldPositions();
             foreach (var p in _ordenGuia)
             {
-                Spawn(p);
+                // El tutorial elige el punto por distancia: no reubicarlo al sacarlo.
+                p.relocate = false;
+                Spawn(p, players);
                 if (p.occupied) { netId = p.netId; return true; }
             }
             return false;
@@ -523,6 +506,7 @@ namespace Bateries
             point.occupied        = false;
             point.timer           = RespawnDeLaNoche();
             point.blockUntilClear = true;
+            point.relocate        = relocateOnRespawn;
 
             // Acreditar la carga: el host la aplica local; al cliente se le avisa.
             if (clientId == 0)
@@ -551,6 +535,7 @@ namespace Bateries
                 $"WorldOrigin ready: {woReady}   Camera.main: {(Camera.main != null)}\n" +
                 $"RaritySet: {(rarities != null ? "OK" : "FALTA")}   Puntos: {_points.Count}   Activas: {_byNetId.Count}\n" +
                 $"Geometría: {_geometryVersion}   Rechazados: {_rejectedCount}   Último: {_lastRejection ?? "-"}\n" +
+                $"Área: {(_sampler != null ? _sampler.Detalle : "-")}\n" +
                 $"Estado: {_status}";
         }
 
@@ -575,6 +560,12 @@ namespace Bateries
                     Vector3 b = WorldOrigin.Instance.ToWorld(new Vector3(edge.B.x, y, edge.B.y));
                     Gizmos.DrawLine(a, b);
                 }
+                // Recintos (incluye las paredes de cierre interno de las cadenas abiertas).
+                Gizmos.color = Color.cyan;
+                foreach (var room in InteriorSpawnValidator.Topology.Rooms)
+                    for (int i = 0, j = room.Count - 1; i < room.Count; j = i++)
+                        Gizmos.DrawLine(WorldOrigin.Instance.ToWorld(new Vector3(room[j].x, y, room[j].y)),
+                                        WorldOrigin.Instance.ToWorld(new Vector3(room[i].x, y, room[i].y)));
             }
             Gizmos.color = Color.green;
             foreach (var point in _points)

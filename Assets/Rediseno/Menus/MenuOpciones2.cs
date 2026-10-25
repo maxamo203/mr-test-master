@@ -130,11 +130,6 @@ namespace Rediseno.Menus
                     v => { if (NightMenuUI.Instance != null) NightMenuUI.Instance.UsarNochesProd(v);
                            else PlayDataProfile.UseProduction = v;
                            Refrescar(); }));
-                lista.Add(PiezasUI.Interruptor(nav, "EXIGIR CUARTO CERRADO",
-                    "Pilas, reliquias y Arbmos sólo aparecen si las paredes cierran el cuarto. " +
-                    "Apagado: aparecen igual (pueden caer del otro lado de una pared)",
-                    () => Gameplay.Spawning.SpawnDev.ExigirCuartoCerrado,
-                    v => Gameplay.Spawning.SpawnDev.ExigirCuartoCerrado = v));
                 lista.Add(PiezasUI.Interruptor(nav, "PISO AUTOMÁTICO",
                     "Además del PISO del escáner, reparte pilas y reliquias alrededor tuyo al empezar " +
                     "la noche (altura del PISO, o la detectada si no hay)",

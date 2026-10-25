@@ -27,24 +27,22 @@ namespace Gameplay.Spawning
 
         public static InteriorTopology Topology => _topology;
         public static int GeometryVersion => ComputeGeometrySignature();
-        public static string FailureReason => _failureReason;
+        // Resumen de la ultima evaluacion (recintos armados / descartados) para el HUD de debug.
+        public static string Detalle => _failureReason;
 
-        // Listo para validar. Con SpawnDev.ExigirCuartoCerrado apagado (dev), si las paredes no
-        // cierran igual se sigue: sin topología, los chequeos de "adentro del cuarto" se omiten.
+        // ¿Hay al menos un recinto cerrado (o cerrado internamente)? Si no, los sistemas de
+        // spawn usan un radio alrededor del PISO / 0,0 (ver SpawnSampler) y aca solo se
+        // exige no pisar paredes ni muebles.
+        public static bool HasRooms => _topology != null && _topology.HasRooms;
+
+        // Listo para validar: solo falla si todavia no hay escaneo (SceneRegistry). Que las
+        // paredes no formen ningun recinto ya no frena nada, cambia de modo (HasRooms).
         public static bool TryEnsureReady(out string reason)
-        {
-            bool listo = TryEnsureTopology(out reason);
-            if (listo || SpawnDev.ExigirCuartoCerrado) return listo;
-            reason = null;
-            return true;
-        }
-
-        private static bool TryEnsureTopology(out string reason)
         {
             int signature = ComputeGeometrySignature();
             if (signature == _cachedSignature)
             {
-                reason = _failureReason;
+                reason = _topology != null ? null : _failureReason;
                 return _topology != null;
             }
 
@@ -64,16 +62,12 @@ namespace Gameplay.Spawning
                 if (wall == null) continue;
                 segments.Add(new InteriorTopology.Segment(
                     new Vector2(wall.ALocal.x, wall.ALocal.z),
-                    new Vector2(wall.BLocal.x, wall.BLocal.z)));
+                    new Vector2(wall.BLocal.x, wall.BLocal.z),
+                    wall.PolylineId));
             }
 
-            if (!InteriorTopology.TryBuild(segments, DefaultSnapTolerance, out _topology, out _failureReason))
-            {
-                reason = _failureReason;
-                return false;
-            }
-
-            _failureReason = null;
+            _topology = InteriorTopology.Build(segments, DefaultSnapTolerance);
+            _failureReason = _topology.Detalle;
             reason = null;
             return true;
         }
@@ -86,11 +80,16 @@ namespace Gameplay.Spawning
 
             Vector2 point = Xz(relativePosition);
             float footprint = Mathf.Max(0.02f, objectRadius);
-            // Sin topología (cuarto cerrado no exigido, dev): sólo los chequeos de muebles.
-            bool conCuarto = _topology != null;
+            // Sin recintos (modo radio): no hay "adentro" que exigir, solo no pisar paredes.
+            bool conCuarto = HasRooms;
             if (conCuarto && !_topology.ContainsDisc(point, footprint + DefaultWallMargin))
             {
                 reason = "la huella cruza una pared o queda fuera del interior";
+                return false;
+            }
+            if (!conCuarto && !_topology.ClearOfWalls(point, footprint + DefaultWallMargin))
+            {
+                reason = "la huella cruza una pared";
                 return false;
             }
 
@@ -165,7 +164,6 @@ namespace Gameplay.Spawning
         {
             roomIndex = -1;
             if (!TryEnsureReady(out reason)) return false;
-            if (_topology == null) { reason = null; return true; }   // cuarto cerrado no exigido (dev)
             if (WorldOrigin.Instance == null || !WorldOrigin.Instance.IsReady)
             {
                 reason = "WorldOrigin no esta listo";
@@ -177,15 +175,32 @@ namespace Gameplay.Spawning
             Vector2 player = Xz(playerRelative);
             Vector2 candidate = Xz(candidateRelative);
 
-            if (!_topology.TryGetRoomIndex(player, out roomIndex))
+            float clearance = Mathf.Max(0.02f, actorRadius) + DefaultWallMargin;
+
+            // Con el jugador dentro de uno o varios recintos (pueden superponerse), el
+            // cuerpo tiene que entrar en alguno de ELLOS.
+            bool playerInRoom = false;
+            if (HasRooms)
             {
-                reason = "el jugador no esta dentro de un ambiente cerrado";
-                return false;
+                for (int i = 0; i < _topology.Rooms.Count && roomIndex < 0; i++)
+                {
+                    if (!InteriorTopology.PointInPolygon(player, _topology.Rooms[i])) continue;
+                    playerInRoom = true;
+                    if (_topology.ContainsDiscInRoom(i, candidate, clearance)) roomIndex = i;
+                }
+                if (playerInRoom && roomIndex < 0)
+                {
+                    reason = "el cuerpo no entra en el mismo ambiente que el jugador";
+                    return false;
+                }
             }
-            if (!_topology.ContainsDiscInRoom(roomIndex, candidate,
-                    Mathf.Max(0.02f, actorRadius) + DefaultWallMargin))
+
+            // Sin recintos, o con el jugador fuera de todos (pasillo, escaneo un poco
+            // corrido): antes esto lo bloqueaba la noche entera. Basta con no pisar una
+            // pared ni tener una de por medio.
+            if (!playerInRoom && !_topology.ClearOfWalls(candidate, clearance))
             {
-                reason = "el cuerpo no entra en el mismo ambiente que el jugador";
+                reason = "el cuerpo cruza una pared";
                 return false;
             }
             if (!_topology.HasClearSegment(player, candidate))

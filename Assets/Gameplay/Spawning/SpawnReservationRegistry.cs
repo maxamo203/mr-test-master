@@ -31,8 +31,15 @@ namespace Gameplay.Spawning
             Items.RemoveAll(item => item.owner == owner);
         }
 
-        public static bool TryReserve(string owner, string key, Vector3 position,
-                                      float radius, float extraSeparation, out string reason)
+        // Libera una reserva puntual (p. ej. el lugar de una pila recogida que va a
+        // reaparecer en otro lado).
+        public static void Release(string owner, string key)
+        {
+            Items.RemoveAll(item => item.owner == owner && item.key == key);
+        }
+
+        // Mismo chequeo que TryReserve, sin reservar.
+        public static bool IsFree(Vector3 position, float radius, float extraSeparation, out string reason)
         {
             float ownRadius = Mathf.Max(0f, radius);
             for (int i = 0; i < Items.Count; i++)
@@ -46,6 +53,15 @@ namespace Gameplay.Spawning
                     return false;
                 }
             }
+            reason = null;
+            return true;
+        }
+
+        public static bool TryReserve(string owner, string key, Vector3 position,
+                                      float radius, float extraSeparation, out string reason)
+        {
+            float ownRadius = Mathf.Max(0f, radius);
+            if (!IsFree(position, ownRadius, extraSeparation, out reason)) return false;
 
             Items.Add(new Reservation
             {

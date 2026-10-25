@@ -149,7 +149,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Collectibles.CollectibleSpawnManager
   pickupMaxDistance: 1
-  useFurnitureTops: 0
+  useFurnitureTops: 1
   minFurnitureTopArea: 0.05
   surfaceOffset: 0.06
   scatterOnFloor: 1

@@ -1,12 +1,14 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace Gameplay.Spawning
 {
     /// <summary>
-    /// Geometria 2D pura del interior escaneado. Solo acepta ciclos cerrados: ante un
-    /// contorno abierto o ambiguo no inventa un area jugable.
+    /// Geometria 2D pura del interior escaneado. Cada conjunto de paredes conectadas es un
+    /// recinto: si ya cierra (la ultima toca la primera) se usa tal cual; si es una cadena
+    /// abierta se cierra INTERNAMENTE uniendo sus dos extremos (esa pared de cierre no
+    /// existe: cuenta para el borde del recinto pero no tapa la linea de vision). Una pared
+    /// suelta no encierra nada y no forma recinto, aunque sigue siendo pared.
     /// </summary>
     public sealed class InteriorTopology
     {
@@ -14,47 +16,73 @@ namespace Gameplay.Spawning
         {
             public readonly Vector2 A;
             public readonly Vector2 B;
+            // Polilinea del escaner a la que pertenece (WallObject.PolylineId); null = suelta.
+            // Solo se usa para separar recintos que se tocan en una esquina.
+            public readonly string Group;
 
-            public Segment(Vector2 a, Vector2 b)
+            public Segment(Vector2 a, Vector2 b, string group = null)
             {
                 A = a;
                 B = b;
+                Group = group;
             }
         }
 
         private sealed class Node
         {
             public Vector2 position;
-            public readonly List<int> edges = new();
         }
 
+        private readonly struct Edge
+        {
+            public readonly int a;
+            public readonly int b;
+            public readonly string group;
+
+            public Edge(int a, int b, string group)
+            {
+                this.a = a;
+                this.b = b;
+                this.group = group;
+            }
+        }
+
+        private const float MinRoomArea = 0.05f;
+
         private readonly List<List<Vector2>> _rooms;
+        private readonly List<float> _areas;
         private readonly List<Segment> _boundaries;
 
-        private InteriorTopology(List<List<Vector2>> rooms, List<Segment> boundaries)
+        private InteriorTopology(List<List<Vector2>> rooms, List<float> areas,
+                                 List<Segment> boundaries, string detalle)
         {
             _rooms = rooms;
+            _areas = areas;
             _boundaries = boundaries;
+            Detalle = detalle;
         }
 
         public IReadOnlyList<List<Vector2>> Rooms => _rooms;
+        // Solo paredes REALES (las de cierre interno no estan aca).
         public IReadOnlyList<Segment> Boundaries => _boundaries;
+        public bool HasRooms => _rooms.Count > 0;
+        // Resumen legible para el HUD de debug: cuantos recintos y que se descarto.
+        public string Detalle { get; }
 
-        public static bool TryBuild(IReadOnlyList<Segment> segments, float snapTolerance,
-                                    out InteriorTopology topology, out string reason)
+        public float RoomArea(int roomIndex) => _areas[roomIndex];
+
+        public static InteriorTopology Build(IReadOnlyList<Segment> segments, float snapTolerance)
         {
-            topology = null;
-            reason = null;
-            if (segments == null || segments.Count < 3)
-            {
-                reason = "se necesitan al menos tres paredes";
-                return false;
-            }
+            var rooms = new List<List<Vector2>>();
+            var areas = new List<float>();
+            var boundaries = new List<Segment>();
+            if (segments == null || segments.Count == 0)
+                return new InteriorTopology(rooms, areas, boundaries, "no hay paredes");
 
             float tolerance = Mathf.Max(0.001f, snapTolerance);
             float tolerance2 = tolerance * tolerance;
             var nodes = new List<Node>();
-            var edgeNodes = new List<(int a, int b)>();
+            var edges = new List<Edge>();
 
             int FindOrAdd(Vector2 point)
             {
@@ -81,107 +109,174 @@ namespace Gameplay.Spawning
                 if (a == b) continue;
 
                 bool duplicate = false;
-                for (int e = 0; e < edgeNodes.Count; e++)
+                for (int e = 0; e < edges.Count; e++)
                 {
-                    var existing = edgeNodes[e];
-                    if ((existing.a == a && existing.b == b) ||
-                        (existing.a == b && existing.b == a))
+                    if ((edges[e].a == a && edges[e].b == b) ||
+                        (edges[e].a == b && edges[e].b == a))
                     {
                         duplicate = true;
                         break;
                     }
                 }
-                if (duplicate) continue;
-
-                int edgeIndex = edgeNodes.Count;
-                edgeNodes.Add((a, b));
-                nodes[a].edges.Add(edgeIndex);
-                nodes[b].edges.Add(edgeIndex);
+                if (!duplicate) edges.Add(new Edge(a, b, segments[i].Group));
             }
 
-            if (edgeNodes.Count < 3)
+            foreach (var edge in edges)
+                boundaries.Add(new Segment(nodes[edge.a].position, nodes[edge.b].position, edge.group));
+
+            int sueltas = 0, bifurcadas = 0, sinArea = 0;
+
+            void Agregar(List<int> cadena)
             {
-                reason = "no hay suficientes paredes validas";
-                return false;
+                switch (TryChainPolygon(cadena, edges, nodes, out var polygon))
+                {
+                    case ChainResult.Ok:
+                        float area = Mathf.Abs(SignedArea(polygon));
+                        if (area < MinRoomArea) { sinArea++; return; }
+                        rooms.Add(polygon);
+                        areas.Add(area);
+                        break;
+                    case ChainResult.SingleWall: sueltas++; break;
+                    case ChainResult.Branched:   bifurcadas++; break;
+                }
             }
 
-            // En esta primera version conservadora cada componente debe ser un ciclo.
-            // Un extremo abierto o una bifurcacion no permite afirmar que lado es interior.
-            for (int i = 0; i < nodes.Count; i++)
+            var todas = new List<int>(edges.Count);
+            for (int i = 0; i < edges.Count; i++) todas.Add(i);
+
+            foreach (var component in Components(todas, edges))
             {
-                if (nodes[i].edges.Count != 2)
+                if (!IsBranched(component, edges))
                 {
-                    reason = $"contorno abierto o ambiguo en ({nodes[i].position.x:0.00}, {nodes[i].position.y:0.00})";
-                    return false;
+                    Agregar(component);
+                    continue;
                 }
+
+                // Dos recintos que se tocan en una esquina quedan en una misma componente
+                // con nodos de 3+ paredes: se separan por la polilinea en que se dibujaron.
+                var porGrupo = new Dictionary<string, List<int>>();
+                var sinGrupo = new List<int>();
+                foreach (int e in component)
+                {
+                    string g = edges[e].group;
+                    if (string.IsNullOrEmpty(g)) { sinGrupo.Add(e); continue; }
+                    if (!porGrupo.TryGetValue(g, out var lista)) porGrupo[g] = lista = new List<int>();
+                    lista.Add(e);
+                }
+                if (sinGrupo.Count > 0) porGrupo[string.Empty] = sinGrupo;
+                foreach (var grupo in porGrupo.Values)
+                foreach (var sub in Components(grupo, edges))
+                    Agregar(sub);
             }
 
-            // Cruces sin vertice explicito son ambiguos y no se corrigen automaticamente.
-            for (int i = 0; i < edgeNodes.Count; i++)
-            for (int j = i + 1; j < edgeNodes.Count; j++)
-            {
-                var e1 = edgeNodes[i];
-                var e2 = edgeNodes[j];
-                if (e1.a == e2.a || e1.a == e2.b || e1.b == e2.a || e1.b == e2.b) continue;
-                if (SegmentsIntersect(nodes[e1.a].position, nodes[e1.b].position,
-                                      nodes[e2.a].position, nodes[e2.b].position))
-                {
-                    reason = "hay paredes cruzadas sin una esquina comun";
-                    return false;
-                }
-            }
-
-            var visitedEdges = new bool[edgeNodes.Count];
-            var rooms = new List<List<Vector2>>();
-            for (int startEdge = 0; startEdge < edgeNodes.Count; startEdge++)
-            {
-                if (visitedEdges[startEdge]) continue;
-                var first = edgeNodes[startEdge];
-                int startNode = first.a;
-                int currentNode = first.b;
-                int currentEdge = startEdge;
-                var polygon = new List<Vector2> { nodes[startNode].position };
-
-                int guard = edgeNodes.Count + 1;
-                while (guard-- > 0)
-                {
-                    visitedEdges[currentEdge] = true;
-                    polygon.Add(nodes[currentNode].position);
-                    if (currentNode == startNode) break;
-
-                    var incident = nodes[currentNode].edges;
-                    int nextEdge = incident[0] == currentEdge ? incident[1] : incident[0];
-                    var next = edgeNodes[nextEdge];
-                    currentNode = next.a == currentNode ? next.b : next.a;
-                    currentEdge = nextEdge;
-                }
-
-                if (polygon.Count < 4 || polygon[polygon.Count - 1] != polygon[0])
-                {
-                    reason = "no se pudo cerrar un contorno";
-                    return false;
-                }
-                polygon.RemoveAt(polygon.Count - 1);
-                if (Mathf.Abs(SignedArea(polygon)) < 0.05f)
-                {
-                    reason = "un recinto tiene area insuficiente";
-                    return false;
-                }
-                rooms.Add(polygon);
-            }
-
-            var boundaries = new List<Segment>(edgeNodes.Count);
-            foreach (var edge in edgeNodes)
-                boundaries.Add(new Segment(nodes[edge.a].position, nodes[edge.b].position));
-
-            topology = new InteriorTopology(rooms, boundaries);
-            return true;
+            string detalle = $"{rooms.Count} recinto(s)";
+            if (sueltas > 0)    detalle += $", {sueltas} pared(es) suelta(s) ignorada(s)";
+            if (bifurcadas > 0) detalle += $", {bifurcadas} conjunto(s) ambiguo(s) ignorado(s)";
+            if (sinArea > 0)    detalle += $", {sinArea} sin area";
+            return new InteriorTopology(rooms, areas, boundaries, detalle);
         }
 
+        private enum ChainResult { Ok, SingleWall, Branched }
+
+        // Una cadena conexa de paredes → poligono. Ciclo: se recorre tal cual. Camino
+        // abierto: se recorre de un extremo al otro y el poligono queda cerrado
+        // implicitamente (ultimo vertice → primero).
+        private static ChainResult TryChainPolygon(List<int> chain, List<Edge> edges, List<Node> nodes,
+                                                   out List<Vector2> polygon)
+        {
+            polygon = null;
+            if (chain.Count < 2) return ChainResult.SingleWall;
+
+            var incident = new Dictionary<int, List<int>>();
+            void Link(int node, int edge)
+            {
+                if (!incident.TryGetValue(node, out var list)) incident[node] = list = new List<int>(2);
+                list.Add(edge);
+            }
+            foreach (int e in chain)
+            {
+                Link(edges[e].a, e);
+                Link(edges[e].b, e);
+            }
+
+            int start = edges[chain[0]].a;
+            foreach (var kv in incident)
+            {
+                if (kv.Value.Count > 2) return ChainResult.Branched;
+                if (kv.Value.Count == 1) start = kv.Key; // extremo de una cadena abierta
+            }
+
+            polygon = new List<Vector2> { nodes[start].position };
+            int previous = -1, current = start;
+            for (int step = 0; step < chain.Count; step++)
+            {
+                var list = incident[current];
+                int next = list[0] != previous ? list[0] : (list.Count > 1 ? list[1] : -1);
+                if (next < 0) break;
+                current = edges[next].a == current ? edges[next].b : edges[next].a;
+                previous = next;
+                if (current == start) break;
+                polygon.Add(nodes[current].position);
+            }
+            return polygon.Count >= 3 ? ChainResult.Ok : ChainResult.SingleWall;
+        }
+
+        private static bool IsBranched(List<int> component, List<Edge> edges)
+        {
+            var degree = new Dictionary<int, int>();
+            foreach (int e in component)
+            {
+                degree.TryGetValue(edges[e].a, out int da);
+                degree.TryGetValue(edges[e].b, out int db);
+                degree[edges[e].a] = da + 1;
+                degree[edges[e].b] = db + 1;
+            }
+            foreach (int d in degree.Values)
+                if (d > 2) return true;
+            return false;
+        }
+
+        // Componentes conexas del subconjunto de paredes `subset`.
+        private static List<List<int>> Components(List<int> subset, List<Edge> edges)
+        {
+            var result = new List<List<int>>();
+            var pending = new HashSet<int>(subset);
+            var byNode = new Dictionary<int, List<int>>();
+            foreach (int e in subset)
+            {
+                foreach (int n in new[] { edges[e].a, edges[e].b })
+                {
+                    if (!byNode.TryGetValue(n, out var list)) byNode[n] = list = new List<int>();
+                    list.Add(e);
+                }
+            }
+
+            var stack = new Stack<int>();
+            foreach (int seed in subset)
+            {
+                if (!pending.Remove(seed)) continue;
+                var component = new List<int>();
+                stack.Push(seed);
+                while (stack.Count > 0)
+                {
+                    int e = stack.Pop();
+                    component.Add(e);
+                    foreach (int n in new[] { edges[e].a, edges[e].b })
+                    foreach (int other in byNode[n])
+                        if (pending.Remove(other)) stack.Push(other);
+                }
+                result.Add(component);
+            }
+            return result;
+        }
+
+        // ¿Hay un disco de radio `clearance` dentro de ALGUN recinto, sin tocar paredes?
+        // Con recintos superpuestos alcanza con que entre en uno.
         public bool ContainsDisc(Vector2 center, float clearance)
         {
-            if (!TryGetRoomIndex(center, out int roomIndex)) return false;
-            return ContainsDiscInRoom(roomIndex, center, clearance);
+            for (int i = 0; i < _rooms.Count; i++)
+                if (ContainsDiscInRoom(i, center, clearance)) return true;
+            return false;
         }
 
         public bool TryGetRoomIndex(Vector2 point, out int roomIndex)
@@ -198,9 +293,23 @@ namespace Gameplay.Spawning
 
         public bool ContainsDiscInRoom(int roomIndex, Vector2 center, float clearance)
         {
-            if (roomIndex < 0 || roomIndex >= _rooms.Count ||
-                !PointInPolygon(center, _rooms[roomIndex])) return false;
+            if (roomIndex < 0 || roomIndex >= _rooms.Count) return false;
+            var room = _rooms[roomIndex];
+            if (!PointInPolygon(center, room)) return false;
 
+            // Borde propio del recinto (incluye la pared de cierre interno) + todas las
+            // paredes reales (de otros recintos o sueltas).
+            float required = Mathf.Max(0f, clearance);
+            float required2 = required * required;
+            for (int i = 0, j = room.Count - 1; i < room.Count; j = i++)
+                if (DistanceToSegmentSquared(center, room[j], room[i]) < required2)
+                    return false;
+            return ClearOfWalls(center, clearance);
+        }
+
+        // ¿Esta el disco libre de toda pared real? (sin importar recintos)
+        public bool ClearOfWalls(Vector2 center, float clearance)
+        {
             float required = Mathf.Max(0f, clearance);
             float required2 = required * required;
             for (int i = 0; i < _boundaries.Count; i++)
