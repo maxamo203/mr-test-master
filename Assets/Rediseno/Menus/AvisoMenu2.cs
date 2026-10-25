@@ -5,10 +5,11 @@ using UnityEngine.UIElements;
 
 namespace Rediseno.Menus
 {
-    // Avisos modales del menú principal (Rediseño 2.0): versión no compatible (bloquea, sólo
-    // SALIR), la partida multijugador se cortó, no se pudo verificar la versión y "mejor en
-    // iOS" (el primero que ve cualquiera que instala en Android). Qué aviso toca y cerrarlo
-    // sigue en NightMenuUI; acá sólo se dibuja, usable con el visor.
+    // Avisos modales del menú principal (Rediseño 2.0): la partida multijugador se cortó,
+    // el celular no tiene ARCore/ARKit (no bloquea; con INSTALAR si sólo faltan los
+    // Servicios de Google Play para RA) y "mejor en iOS" (el primero que ve cualquiera que
+    // instala en Android). Qué aviso toca y cerrarlo sigue en NightMenuUI; acá sólo se
+    // dibuja, usable con el visor.
     public class AvisoMenu2 : PantallaUI
     {
         private static AvisoMenu2 _instancia;
@@ -67,8 +68,9 @@ namespace Rediseno.Menus
         private void Armar(NightMenuUI menu, NightMenuUI.AvisoMenu aviso)
         {
             string titulo, texto;
-            bool bloquea = aviso == NightMenuUI.AvisoMenu.VersionIncompatible;
+            bool alerta = aviso == NightMenuUI.AvisoMenu.SinAR;
             bool escanear = aviso == NightMenuUI.AvisoMenu.EscanearSinVisor;
+            bool instalar = alerta && menu.ARInstalable;
             switch (aviso)
             {
                 case NightMenuUI.AvisoMenu.EscanearSinVisor:
@@ -76,20 +78,21 @@ namespace Rediseno.Menus
                     texto = "Sacá el celular del visor: se escanea con el celular en la mano, tocando la " +
                             "pantalla. Cuando guardes el escaneo volvés al menú y te ponés el visor de nuevo.";
                     break;
-                case NightMenuUI.AvisoMenu.VersionIncompatible:
-                    titulo = "VERSIÓN NO COMPATIBLE";
-                    texto = "La versión de tu dispositivo no es compatible con el juego. " +
-                            "Hace falta Android 14 o iOS 17, o más nuevos.";
+                case NightMenuUI.AvisoMenu.SinAR when instalar:
+                    titulo = "FALTA ARCORE";
+                    texto = "Para escanear tu cuarto y jugar las noches hace falta \"Servicios de Google " +
+                            "Play para RA\" (ARCore). Instalalo desde Play Store; sin eso el juego abre, " +
+                            "pero el escaneo y las noches no van a funcionar.";
+                    break;
+                case NightMenuUI.AvisoMenu.SinAR:
+                    titulo = "TU CELULAR NO TIENE ARCORE";
+                    texto = "Este dispositivo no es compatible con la realidad aumentada (ARCore / ARKit). " +
+                            "Podés recorrer el menú, pero el escaneo y las noches no van a funcionar.";
                     break;
                 case NightMenuUI.AvisoMenu.Salida:
                     titulo = (menu.TextoAvisoSalida ?? "LA PARTIDA TERMINÓ").ToUpperInvariant();
                     texto = "La partida terminó porque el host salió o se cortó la red. " +
                             "Podés volver a unirte cuando abra una sala nueva.";
-                    break;
-                case NightMenuUI.AvisoMenu.VersionDesconocida:
-                    titulo = "NO PUDIMOS VERIFICAR TU VERSIÓN";
-                    texto = "Puede haber inestabilidad o problemas de rendimiento. Para la mejor " +
-                            "experiencia recomendamos Android 14 o iOS 17, o más nuevos.";
                     break;
                 default:
                     titulo = "MEJOR EXPERIENCIA EN iOS";
@@ -100,10 +103,10 @@ namespace Rediseno.Menus
             }
 
             var t = PiezasUI.Ignorar(PiezasUI.Tarjeta());
-            TemaUI.Borde(t, 2, bloquea ? TemaUI.Red : TemaUI.Linea);
+            TemaUI.Borde(t, 2, alerta ? TemaUI.Red : TemaUI.Linea);
             TemaUI.Relleno(t, 44, 44);
             t.style.backgroundColor = new Color(0.047f, 0.039f, 0.035f, 0.94f);
-            var kicker = TemaUI.Texto("AVISO", TemaUI.Mono, 26, bloquea ? TemaUI.Red : TemaUI.Tan, 6f);
+            var kicker = TemaUI.Texto("AVISO", TemaUI.Mono, 26, alerta ? TemaUI.Red : TemaUI.Tan, 6f);
             kicker.style.marginBottom = 10;
             t.Add(kicker);
             t.Add(TemaUI.Texto(titulo, TemaUI.Bebas, 72, TemaUI.Cream, 5f));
@@ -123,10 +126,15 @@ namespace Rediseno.Menus
                 boton = PiezasUI.Boton(Nav, "VOLVER", () => NightMenuUI.Instance?.CerrarAviso());
                 Nav.Volver = () => NightMenuUI.Instance?.CerrarAviso();
             }
-            else if (bloquea)
+            else if (instalar)
             {
-                boton = PiezasUI.Boton(Nav, "SALIR", NightMenuUI.Salir, peligro: true);
-                Nav.Volver = null;   // no se puede omitir
+                boton = PiezasUI.Boton(Nav, "INSTALAR ARCORE", () => NightMenuUI.Instance?.InstalarAR());
+                boton.style.backgroundImage = TemaUI.DegradeRojo;
+                boton.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
+                boton.style.marginTop = 8;
+                _cuerpo.Add(boton);
+                boton = PiezasUI.Boton(Nav, "SEGUIR SIN ARCORE", () => NightMenuUI.Instance?.CerrarAviso());
+                Nav.Volver = () => NightMenuUI.Instance?.CerrarAviso();
             }
             else
             {

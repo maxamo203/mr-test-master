@@ -20,7 +20,6 @@ public static class GameOptions
     // ya lo habian apagado cuando la opcion solo mencionaba los menus.
     private const string KeyVhsMenusLegacy = "opt_vhs_menus";
     private const string KeyMenusCuarto = "opt_menus_en_el_cuarto";
-    private const string KeyAvisoVerDesc = "opt_aviso_version_desconocida_visto";
 
     // Volumen maestro 0..1 (AudioListener.volume). Persiste entre sesiones.
     public static float Volumen
@@ -202,20 +201,6 @@ public static class GameOptions
     {
         get => VhsActivo;
         set => VhsActivo = value;
-    }
-
-    // US-1.1: ¿ya se le mostró al jugador el aviso de que no se pudo determinar la
-    // versión de su sistema operativo (DeviceCompatibility.CompatResult.Unknown)?
-    // A diferencia del bloqueo por versión no soportada (que no se persiste, se
-    // re-evalúa siempre), este es un aviso no bloqueante y se muestra una sola vez.
-    public static bool AvisoVersionDesconocidaVisto
-    {
-        get => PlayerPrefs.GetInt(KeyAvisoVerDesc, 0) == 1;
-        set
-        {
-            PlayerPrefs.SetInt(KeyAvisoVerDesc, value ? 1 : 0);
-            PlayerPrefs.Save();
-        }
     }
 
     // Aplica lo persistido al arrancar la app (cualquier escena).

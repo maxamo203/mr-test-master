@@ -1,6 +1,8 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.XR.ARFoundation;
 using Scanner;   // UIScale, UIBlocker, ScanSerializer, ScannerLaunchParams
 using T = MortuoriumTheme;
 
@@ -65,13 +67,13 @@ namespace Gameplay
         private bool _caminoPendiente;
         private readonly Dictionary<string, string> _noSirve = new();
 
-        // US-1.1: chequeo de versión mínima de SO (Android 14 / iOS 17). A diferencia
-        // de los avisos de abajo, éste se re-evalúa en cada Awake, no se persiste.
-        private bool _versionIncompatible;
-
-        // US-1.1: aviso (una sola vez) de que no se pudo determinar la versión del SO
-        // (DeviceCompatibility.CompatResult.Unknown). No bloquea, solo recomienda.
-        private bool _mostrarAvisoVersionDesconocida;
+        // Aviso de que el dispositivo no tiene ARCore/ARKit (no soportado, o en Android
+        // faltan los Servicios de Google Play para RA). Reemplaza al viejo bloqueo por
+        // versión de SO de US-1.1: no bloquea, solo advierte. Se evalúa en cada arranque
+        // de la app y, cerrado, no vuelve a salir hasta el próximo (no se persiste).
+        private bool _mostrarAvisoSinAR;
+        private static bool _avisoSinARCerrado;
+        private bool _instalandoAR;
 
         // US-1.5: aviso (una sola vez) de que iOS trackea con mucho menos drift que
         // Android. Ver Riesgos Identificados en la documentación.
@@ -88,13 +90,6 @@ namespace Gameplay
         {
             Instance = this;
             GameSession.Ensure();
-
-            var compat = DeviceCompatibility.Check();
-            _versionIncompatible = compat == DeviceCompatibility.CompatResult.Unsupported;
-            _mostrarAvisoVersionDesconocida = compat == DeviceCompatibility.CompatResult.Unknown &&
-                                               !GameOptions.AvisoVersionDesconocidaVisto;
-            //_versionIncompatible = true;
-            //_mostrarAvisoVersionDesconocida = true;
 
             _mostrarAvisoIos = Application.platform == RuntimePlatform.Android && !GameOptions.AvisoIosVisto;
             //_mostrarAvisoIos = true;
@@ -128,6 +123,52 @@ namespace Gameplay
             }
         }
 
+        // ¿Hay ARCore/ARKit? ARSession.CheckAvailability funciona sin ARSession en escena
+        // porque el loader XR arranca con la app (Initialize XR on Startup). El resultado
+        // queda en el estático ARSession.state, así que volver al menú no lo repite. En el
+        // editor no hay subsistema (todo está stubbeado) y daría "no soportado".
+        private IEnumerator Start()
+        {
+#if UNITY_EDITOR
+            yield break;
+#else
+            if (_avisoSinARCerrado) yield break;
+            if (ARSession.state is ARSessionState.None or ARSessionState.CheckingAvailability)
+                yield return ARSession.CheckAvailability();
+            _mostrarAvisoSinAR = !_avisoSinARCerrado &&
+                (ARSession.state is ARSessionState.Unsupported or ARSessionState.NeedsInstall);
+            //_mostrarAvisoSinAR = true;
+            if (_mostrarAvisoSinAR) AudioManager.Sonar(c => c.uiAlerta);
+#endif
+        }
+
+        // Sin AR: ¿se puede instalar (Android, faltan los Servicios de Google Play para RA)?
+        public bool ARInstalable => ARSession.state == ARSessionState.NeedsInstall;
+
+        // INSTALAR del aviso: abre la instalación de ARCore (Play Store) y, al volver,
+        // cierra el aviso si quedó lista.
+        public void InstalarAR()
+        {
+            if (_instalandoAR || !ARInstalable) return;
+            StartCoroutine(InstalarARRutina());
+        }
+
+        private IEnumerator InstalarARRutina()
+        {
+            _instalandoAR = true;
+            yield return ARSession.Install();
+            _instalandoAR = false;
+            if (ARSession.state != ARSessionState.NeedsInstall &&
+                ARSession.state != ARSessionState.Unsupported)
+                CerrarAvisoSinAR();
+        }
+
+        private void CerrarAvisoSinAR()
+        {
+            _mostrarAvisoSinAR = false;
+            _avisoSinARCerrado = true;
+        }
+
         private void OnEnable()  => Gamepad.ImguiGamepadMenu.PedidoVolver += Volver;
         private void OnDisable() => Gamepad.ImguiGamepadMenu.PedidoVolver -= Volver;
 
@@ -140,8 +181,7 @@ namespace Gameplay
         // ¿Qué pantalla se ve, sin ningún aviso encima? Cada pantalla nueva se muestra
         // cuando coincide con la suya.
         public bool SinAvisos =>
-            !_versionIncompatible && !HayAvisoSalida &&
-            !_mostrarAvisoVersionDesconocida && !_mostrarAvisoIos && !_confirmarEscaner;
+            !HayAvisoSalida && !_mostrarAvisoSinAR && !_mostrarAvisoIos && !_confirmarEscaner;
         public bool MostrandoPrincipal => SinAvisos && PantallaActual == Pantalla.Menu;
         public bool Mostrando(Pantalla p) => SinAvisos && PantallaActual == p;
         public void VolverPantalla()     => Volver();
@@ -258,15 +298,13 @@ namespace Gameplay
 
         // Avisos modales del menú, en orden de precedencia (el mismo que Volver). Los dibuja
         // Rediseno.Menus.AvisoMenu2.
-        public enum AvisoMenu { Ninguno, VersionIncompatible, Salida, VersionDesconocida, Ios, EscanearSinVisor }
+        public enum AvisoMenu { Ninguno, Salida, SinAR, Ios, EscanearSinVisor }
         public AvisoMenu AvisoActual =>
-            _versionIncompatible            ? AvisoMenu.VersionIncompatible :
-            HayAvisoSalida                  ? AvisoMenu.Salida :
-            _mostrarAvisoVersionDesconocida ? AvisoMenu.VersionDesconocida :
-            _mostrarAvisoIos                ? AvisoMenu.Ios :
-            _confirmarEscaner               ? AvisoMenu.EscanearSinVisor : AvisoMenu.Ninguno;
+            HayAvisoSalida      ? AvisoMenu.Salida :
+            _mostrarAvisoSinAR  ? AvisoMenu.SinAR :
+            _mostrarAvisoIos    ? AvisoMenu.Ios :
+            _confirmarEscaner   ? AvisoMenu.EscanearSinVisor : AvisoMenu.Ninguno;
         public string TextoAvisoSalida => GameSession.Instance != null ? GameSession.Instance.AvisoSalida : null;
-        // El bloqueo por versión no se cierra (Volver tampoco lo hace): sólo SALIR.
         public void CerrarAviso() => Volver();
         public static void Salir() => SalirDelJuego();
         public void AbrirOpciones()      => PantallaActual = Pantalla.Opciones;
@@ -355,11 +393,8 @@ namespace Gameplay
         // de Android, el ← del mando (ImguiGamepadMenu.PedidoVolver) y las pantallas nuevas.
         private void Volver()
         {
-            // Bloqueo por versión no compatible: a propósito no tiene botón de
-            // volver (no se puede omitir), así que el back tampoco hace nada acá.
-            if (_versionIncompatible) return;
             if (HayAvisoSalida) { CerrarAvisoSalida(); return; }
-            if (_mostrarAvisoVersionDesconocida) { CerrarAvisoVersionDesconocida(); return; }
+            if (_mostrarAvisoSinAR) { CerrarAvisoSinAR(); return; }
             if (_mostrarAvisoIos) { CerrarAvisoIos(); return; }
             if (_confirmarEscaner) { _confirmarEscaner = false; return; }
 
@@ -551,12 +586,6 @@ namespace Gameplay
 #else
             Application.Quit();
 #endif
-        }
-
-        private void CerrarAvisoVersionDesconocida()
-        {
-            _mostrarAvisoVersionDesconocida = false;
-            GameOptions.AvisoVersionDesconocidaVisto = true;
         }
 
         private void CerrarAvisoIos()
