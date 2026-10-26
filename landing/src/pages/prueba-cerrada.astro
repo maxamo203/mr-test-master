@@ -4,16 +4,14 @@
  *
  * El sitio es estático salvo `/api/registro` (función serverless de Vercel):
  * valida el reCAPTCHA de Google con nuestra secret key y reenvía el alta a
- * Web3Forms (plan gratis: 250 envíos/mes), que la manda por mail. Se envía por
+ * mail (Gmail por SMTP desde la función). Se envía por
  * fetch (AJAX) para no sacar al visitante del sitio.
  *
  * Capas contra el abuso (ninguna alcanza sola; juntas sí para este volumen):
  *  1. Honeypot `botcheck`: checkbox invisible que una persona nunca marca. Si
  *     llega marcado, la función lo descarta.
- *  2. reCAPTCHA v2: verificado del lado del servidor. El captcha de Web3Forms
- *     tiene que estar DESACTIVADO en su panel (ya no se le manda token).
- *  3. El filtro de spam que Web3Forms aplica siempre.
- *  4. Del lado del navegador: botón deshabilitado mientras envía y recuerdo
+ *  2. reCAPTCHA v2: verificado del lado del servidor antes de mandar el mail.
+ *  3. Del lado del navegador: botón deshabilitado mientras envía y recuerdo
  *     local de "ya te anotaste", para que nadie dispare el mismo alta diez veces
  *     sin querer. Es comodidad, no seguridad: un bot no pasa por acá.
  */
@@ -23,7 +21,7 @@ import { betaItems } from "../nav";
 
 /** Site key (pública) de reCAPTCHA v2 casilla, de la consola de reCAPTCHA. Vacía = sin captcha. */
 const RECAPTCHA_SITEKEY = import.meta.env.PUBLIC_RECAPTCHA_SITEKEY ?? "";
-/** Función serverless que valida el captcha y reenvía a Web3Forms (src/pages/api/registro.ts). */
+/** Función serverless que valida el captcha y manda el mail (src/pages/api/registro.ts). */
 const endpoint = "/api/registro";
 ---
 

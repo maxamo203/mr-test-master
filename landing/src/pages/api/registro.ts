@@ -1,14 +1,18 @@
 /**
  * Alta a la prueba cerrada. Corre como función serverless en Vercel (el resto
  * del sitio sigue siendo estático). Valida el reCAPTCHA de Google con nuestra
- * secret key y recién entonces reenvía a Web3Forms, que queda sólo como servicio
- * de mail (sin captcha: hay que desactivarlo en su panel).
+ * secret key y recién entonces manda el alta por mail desde una cuenta de Gmail
+ * (SMTP con nodemailer).
  *
  * Variables de entorno (Vercel → Settings → Environment Variables):
  *  - RECAPTCHA_SECRET: secret key de reCAPTCHA v2 casilla.
- *  - WEB3FORMS_ACCESS_KEY: access key de Web3Forms (ya no viaja en el HTML).
+ *  - GMAIL_USER / GMAIL_APP_PASSWORD: cuenta Gmail que envía y su contraseña de
+ *    aplicación (Cuenta de Google → Seguridad → Verificación en 2 pasos →
+ *    Contraseñas de aplicaciones). No es la contraseña normal.
+ *  - MAIL_DESTINO (opcional): a dónde llegan las altas; por defecto GMAIL_USER.
  */
 import type { APIRoute } from "astro";
+import nodemailer from "nodemailer";
 
 export const prerender = false;
 
@@ -20,8 +24,10 @@ const json = (body: Record<string, unknown>, status = 200) =>
 
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   const secret = import.meta.env.RECAPTCHA_SECRET;
-  const accessKey = import.meta.env.WEB3FORMS_ACCESS_KEY;
-  if (!secret || !accessKey)
+  const gmailUser = import.meta.env.GMAIL_USER;
+  const gmailPass = import.meta.env.GMAIL_APP_PASSWORD;
+  const destino = import.meta.env.MAIL_DESTINO;
+  if (!secret || !gmailUser || !gmailPass)
     return json({ success: false, message: "Servidor sin configurar." }, 500);
 
   const datos = await request.json().catch(() => null);
@@ -56,19 +62,23 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
   if (!verif?.success)
     return json({ success: false, message: "Captcha inválido." }, 400);
 
-  const res = await fetch("https://api.web3forms.com/submit", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      access_key: accessKey,
+  try {
+    const transporte = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: gmailUser, pass: gmailPass },
+    });
+    await transporte.sendMail({
+      from: `"Mortuorium — prueba cerrada" <${gmailUser}>`,
+      to: destino || gmailUser,
+      replyTo: email,
       subject: "Mortuorium — nuevo tester de la prueba cerrada",
-      from_name: "Mortuorium — prueba cerrada",
-      nombre,
-      email,
-    }),
-  });
-  const data = await res.json().catch(() => null);
-
-  if (res.ok && data?.success) return json({ success: true });
-  return json({ success: false, message: "No se pudo registrar." }, 502);
+      text: `Nombre: ${nombre}
+Email: ${email}`,
+    });
+    return json({ success: true });
+  } catch (err) {
+    // Queda en los logs de Vercel (Deployments → Functions) para diagnosticar.
+    console.error("No se pudo enviar el mail del alta", err);
+    return json({ success: false, message: "No se pudo registrar." }, 502);
+  }
 };
