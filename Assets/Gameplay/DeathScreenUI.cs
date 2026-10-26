@@ -24,6 +24,17 @@ namespace Gameplay
                    !BuildVariant.NocheHabilitada(sig);
         }
 
+        // ¿La noche recién superada era la ÚLTIMA del catálogo? Entonces no hay "Noche N+1
+        // desbloqueada" que anunciar: se terminó el juego (FinDeNoche2 muestra el cierre del
+        // ritual). Las prácticas del tutorial no cuentan.
+        internal static bool FinDelJuego()
+        {
+            var s = GameSession.Instance;
+            if (s == null || s.EnTutorial || s.NightIndex < 0 || s.Nights == null) return false;
+            int sig = s.NightIndex + 1;
+            return sig >= s.Nights.Length || s.Nights[sig] == null;
+        }
+
         // ¿La noche recién superada dejó desbloqueada una siguiente que existe?
         internal static bool SiguienteDesbloqueada(out int index)
         {

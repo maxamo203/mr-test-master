@@ -158,6 +158,12 @@ namespace Rediseno.Menus
                 return;
             }
 
+            if (sobrevivio && DeathScreenUI.FinDelJuego())
+            {
+                ArmarFinDelJuego();
+                return;
+            }
+
             var tit = TemaUI.Texto(sobrevivio ? "SOBREVIVISTE" : "MORISTE", TemaUI.Bebas, 150,
                                    sobrevivio ? TemaUI.Green : TemaUI.Red, 10f, TextAnchor.MiddleCenter);
             _cuerpo.Add(tit);
@@ -211,6 +217,37 @@ namespace Rediseno.Menus
         }
 
         private int _logCopiado = -1;
+
+        // Última noche del catálogo superada: en vez de "Noche N desbloqueada" (que no
+        // existe), el cierre del ritual. Se puede volver a cualquier noche o al menú.
+        private void ArmarFinDelJuego()
+        {
+            _cuerpo.Add(TemaUI.Texto("ÚLTIMA NOCHE · AMANECER", TemaUI.Mono, 28, TemaUI.Tan, 4f, TextAnchor.MiddleCenter));
+            _cuerpo.Add(TemaUI.Texto("EL RITUAL SE CERRÓ", TemaUI.Bebas, 120, TemaUI.Green, 10f, TextAnchor.MiddleCenter));
+            var relato = TemaUI.Texto("Sobreviviste a todas las noches. La última vela se apagó con la primera luz " +
+                                      "y el libro se cerró solo: sus páginas quedaron en blanco. Veleth ya no tiene " +
+                                      "a quién llamar, el Sorken perdió la puerta y el Arbmos se deshizo en la claridad.",
+                                      TemaUI.Elite, 36, TemaUI.Cream, 0f, TextAnchor.MiddleCenter);
+            relato.style.marginTop = 8;
+            _cuerpo.Add(relato);
+            var cierre = TemaUI.Texto("Lo que el ritual abrió, vos lo cerraste. Tu casa vuelve a ser sólo tu casa… " +
+                                      "mientras nadie vuelva a leer el libro.",
+                                      TemaUI.Elite, 32, TemaUI.Muted, 0f, TextAnchor.MiddleCenter);
+            cierre.style.marginTop = 16; cierre.style.marginBottom = 30;
+            _cuerpo.Add(cierre);
+            PiezasUI.Info(_cuerpo, "MORTUORIUM COMPLETADO");
+
+            var menu = PiezasUI.Boton(Nav, "VOLVER AL MENÚ", () => SceneFlow.GoTo(SceneFlow.EscenaMenu));
+            menu.style.backgroundImage = TemaUI.DegradeRojo;
+            menu.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
+            _cuerpo.Add(menu);
+            if (NightTransition.PuedeReiniciar)
+            {
+                _cuerpo.Add(PiezasUI.Boton(Nav, "REPETIR ÚLTIMA NOCHE", NightTransition.Reintentar));
+                _cuerpo.Add(PiezasUI.Boton(Nav, "ELEGIR NOCHE", () => { _selector = true; _firma = null; },
+                                           habilitado: NightTransition.HayCatalogoDeNoches));
+            }
+        }
 
         private static string QueAprendiste(TutorialTipo tipo) => tipo switch
         {

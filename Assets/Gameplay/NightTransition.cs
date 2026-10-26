@@ -155,8 +155,11 @@ namespace Gameplay
             CollectibleProgress.RegistrarIntento(s != null ? s.NightIndex : -1, NightLoot.Total);
             AudioManager.Musica(c => c.victoriaAmanecer, fade: 0.5f);
 
+            // Tras la última noche no hay siguiente que anunciar (ni su sonido): ahí la
+            // pantalla final es el cierre del ritual (DeathScreenUI.FinDelJuego).
             if (s != null && s.NightIndex >= 0 &&
-                NightProgress.RegistrarNocheSuperada(s.NightIndex))
+                NightProgress.RegistrarNocheSuperada(s.NightIndex) &&
+                !DeathScreenUI.FinDelJuego())
                 NightResult.MarcarDesbloqueo(s.NightIndex + 2);   // la siguiente, en base 1
         }
 
