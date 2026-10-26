@@ -60,7 +60,8 @@ namespace Bateries
         }
     }
 
-    // Hub del BOTÓN PRIMARIO (A del joystick / dos dedos en pantalla / tecla E en editor).
+    // Hub del BOTÓN PRIMARIO (A del joystick / un dedo en pantalla fuera de los botones —dos
+    // con el visor— / tecla E en editor).
     // Cada frame elige, entre las acciones registradas, la disponible de mayor Priority.
     // Un toque se ejecuta al soltar; mantener activa la luz intensa. Así el mismo botón:
     // si estás apuntando una pila la recoge; si no, prende/apaga la linterna; y se puede
@@ -337,9 +338,9 @@ namespace Bateries
             // que el botón de siempre. ↑ intensa, ↓ apagada y ← (mantener) pausa van aparte.
             held |= PalancaDerecha();
 
-            // Mobile sin mando: dos dedos apoyados = el mismo botón (es el gesto que en main
-            // prendía/apagaba la linterna). Toque corto prende/apaga, mantener concentra.
-            held |= DosDedosApoyados();
+            // Mobile: un dedo apoyado fuera de los botones = el mismo botón. Toque corto
+            // prende/apaga (o recoge lo apuntado), mantener concentra.
+            held |= DedoEnPantalla();
 
 #if UNITY_EDITOR
             if (Keyboard.current != null) held |= Keyboard.current.eKey.isPressed;
@@ -395,15 +396,52 @@ namespace Bateries
             GUI.matrix = prevM;
         }
 
-        private static bool DosDedosApoyados()
+        // touchId → si ese dedo cuenta como botón primario. Se decide UNA vez, al apoyarlo:
+        // un dedo que arrancó sobre un botón (pausa, RECOGER) o un panel no prende la
+        // linterna aunque después se deslice afuera, y uno que arrancó afuera sigue contando
+        // aunque pase por encima de un botón.
+        private readonly Dictionary<int, bool> _dedos = new();
+        private readonly List<int> _dedosSueltos = new();
+
+        private bool DedoEnPantalla()
         {
             var ts = Touchscreen.current;
-            if (ts == null) return false;
+            if (ts == null) { _dedos.Clear(); return false; }
+
+            // Con el visor (Cardboard / mirada) o el VR BOX en modo mouse —cuyo clic puede
+            // llegar como un toque de un dedo— un toque suelto no es intencional: ahí sigue
+            // el gesto de antes, dos dedos apoyados.
+            var gm = GamepadManager.Instance;
+            bool enMano = !MRCardboardController.Activo && !Rediseno.ControlMirada.Activo &&
+                          !(gm != null && gm.UsesMouseInput);
+
+            bool held = false;
             int dedos = 0;
+            _dedosSueltos.Clear();
+            foreach (var id in _dedos.Keys) _dedosSueltos.Add(id);
+
             var touches = ts.touches;
             for (int i = 0; i < touches.Count; i++)
-                if (touches[i].press.isPressed && ++dedos >= 2) return true;
-            return false;
+            {
+                var t = touches[i];
+                if (!t.press.isPressed) continue;
+                dedos++;
+                int id = t.touchId.ReadValue();
+                _dedosSueltos.Remove(id);
+                if (!_dedos.TryGetValue(id, out bool cuenta))
+                {
+                    // Sólo en plena noche (no en la sincronización ni el briefing), sin
+                    // ninguna pantalla UI Toolkit encima y fuera de los botones IMGUI.
+                    cuenta = NetworkManager.Instance != null && NetworkManager.Instance.GameStarted &&
+                             !Rediseno.UI.PantallaUI.AlgunaVisible &&
+                             !Scanner.UIBlocker.IsPointerOver(t.position.ReadValue());
+                    _dedos[id] = cuenta;
+                }
+                held |= cuenta;
+            }
+            foreach (var id in _dedosSueltos) _dedos.Remove(id);
+
+            return enMano ? held : dedos >= 2;
         }
 
         // ── Carga de pila recibida del server (cliente) ───────────────────────
@@ -461,6 +499,7 @@ namespace Bateries
             // mantiene apretado, borde dorado (el foco/acción del rediseño).
             const float w = 340f, h = 84f;
             var btn = new Rect(vw * 0.5f - w * 0.5f, vh * 0.62f, w, h);
+            Scanner.UIBlocker.AddVirtualRect(btn);   // un dedo acá lo maneja el botón, no DedoEnPantalla
             bool held = GUI.RepeatButton(btn, GUIContent.none, GUIStyle.none);
             if (Event.current.type == EventType.Repaint)
             {

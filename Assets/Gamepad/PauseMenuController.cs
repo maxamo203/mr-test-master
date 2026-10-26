@@ -903,7 +903,7 @@ namespace Gamepad
                 // La A del VR BOX abre la pausa en plena partida (además de mantener la
                 // ruedita ←, ver arriba). El puntero está capturado en todo el juego, así que
                 // la A llega como CLIC de mouse donde está el cursor escondido, no como toque.
-                // Sólo eso abre la pausa; los dedos no (soltar los dos dedos de concentrar la
+                // Sólo eso abre la pausa; los dedos no (soltar el dedo de concentrar la
                 // linterna la abría por error). Y fuera de cualquier UI — si no, también la
                 // abría cada clic en los menús y pantallas de la app.
                 bool aDelVRBox = !_open && vrBoxMouse && tapDeMouse && !VRBoxInput.AConsumida &&
