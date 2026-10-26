@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
+import vercel from '@astrojs/vercel';
 
 // Sitio 100% estático: `npm run build` deja el HTML listo en dist/ para subir a
 // cualquier hosting (Netlify, Vercel, GitHub Pages, un bucket…). No hay servidor.
@@ -14,4 +15,8 @@ export default defineConfig({
   // se sube a Google Search Console para que rastree el sitio — sin esto, un
   // dominio nuevo puede tardar semanas en que Google lo indexe por su cuenta.
   integrations: [sitemap()],
+
+  // Las páginas siguen estáticas; sólo src/pages/api/* (prerender = false) corre
+  // como función serverless en Vercel (validación del captcha del formulario).
+  adapter: vercel(),
 });

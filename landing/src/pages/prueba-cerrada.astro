@@ -2,21 +2,17 @@
 /**
  * Registro a la prueba cerrada de Google Play.
  *
- * El sitio es 100% estático (no hay servidor), así que el formulario lo recibe
- * Web3Forms (plan gratis: 250 envíos/mes): reenvía cada alta por mail al
- * correo dueño de la access key. Se envía por fetch (AJAX) para no sacar al
- * visitante del sitio hacia la página de gracias genérica de Web3Forms.
+ * El sitio es estático salvo `/api/registro` (función serverless de Vercel):
+ * valida el reCAPTCHA de Google con nuestra secret key y reenvía el alta a
+ * Web3Forms (plan gratis: 250 envíos/mes), que la manda por mail. Se envía por
+ * fetch (AJAX) para no sacar al visitante del sitio.
  *
  * Capas contra el abuso (ninguna alcanza sola; juntas sí para este volumen):
  *  1. Honeypot `botcheck`: checkbox invisible que una persona nunca marca. Si
- *     llega marcado, Web3Forms descarta el envío.
- *  2. hCaptcha: el único freno real contra un bot que pega directo a la API.
- *     En el plan gratis Web3Forms NO acepta claves propias: se usa su site key
- *     compartida (HCAPTCHA_SITEKEY) y el captcha se activa en el panel de
- *     Web3Forms, en la configuración del formulario. Si el panel lo exige y la
- *     página no lo muestra, todos los envíos fallan — van juntos.
- *  3. El filtro de spam del lado del servidor que Web3Forms aplica siempre.
- *     ("Restrict to domain" es Pro: en el plan gratis no hay.)
+ *     llega marcado, la función lo descarta.
+ *  2. reCAPTCHA v2: verificado del lado del servidor. El captcha de Web3Forms
+ *     tiene que estar DESACTIVADO en su panel (ya no se le manda token).
+ *  3. El filtro de spam que Web3Forms aplica siempre.
  *  4. Del lado del navegador: botón deshabilitado mientras envía y recuerdo
  *     local de "ya te anotaste", para que nadie dispare el mismo alta diez veces
  *     sin querer. Es comodidad, no seguridad: un bot no pasa por acá.
@@ -25,12 +21,10 @@ import Base from "../layouts/Base.astro";
 import SiteFooter from "../components/SiteFooter.astro";
 import { betaItems } from "../nav";
 
-/** Access key de Web3Forms (web3forms.com → mail → llega la key). Es pública por diseño: sólo sirve para enviar a ese mail. */
-const WEB3FORMS_ACCESS_KEY = "8dd5115e-1a55-42d0-bd5d-b5e624fd458c";
-/** Site key de hCaptcha COMPARTIDA de Web3Forms (la única que acepta el plan gratis). Vacía = sin captcha. */
-const HCAPTCHA_SITEKEY = "50b2fe65-b00b-4b9e-ad62-3ba471098be2";
-
-const endpoint = WEB3FORMS_ACCESS_KEY ? "https://api.web3forms.com/submit" : "";
+/** Site key (pública) de reCAPTCHA v2 casilla, de la consola de reCAPTCHA. Vacía = sin captcha. */
+const RECAPTCHA_SITEKEY = import.meta.env.PUBLIC_RECAPTCHA_SITEKEY ?? "";
+/** Función serverless que valida el captcha y reenvía a Web3Forms (src/pages/api/registro.ts). */
+const endpoint = "/api/registro";
 ---
 
 <Base
@@ -40,10 +34,10 @@ const endpoint = WEB3FORMS_ACCESS_KEY ? "https://api.web3forms.com/submit" : "";
   back={{ href: "/#descargar", label: "Volver" }}
 >
   {
-    HCAPTCHA_SITEKEY && (
+    RECAPTCHA_SITEKEY && (
       <script
         is:inline
-        src="https://js.hcaptcha.com/1/api.js?hl=es&recaptchacompat=off"
+        src="https://www.google.com/recaptcha/api.js?hl=es"
         async
         defer
       />
@@ -67,22 +61,11 @@ const endpoint = WEB3FORMS_ACCESS_KEY ? "https://api.web3forms.com/submit" : "";
       <div class="beta__panel" data-reveal>
         <form
           class="form"
-          action={endpoint || undefined}
+          action={endpoint}
           method="POST"
           novalidate
           data-beta-form
         >
-          <input type="hidden" name="access_key" value={WEB3FORMS_ACCESS_KEY} />
-          <input
-            type="hidden"
-            name="subject"
-            value="Mortuorium — nuevo tester de la prueba cerrada"
-          />
-          <input
-            type="hidden"
-            name="from_name"
-            value="Mortuorium — prueba cerrada"
-          />
 
           <div class="field">
             <label for="beta-nombre">Nombre completo</label>
@@ -144,10 +127,10 @@ const endpoint = WEB3FORMS_ACCESS_KEY ? "https://api.web3forms.com/submit" : "";
           </div>
 
           {
-            HCAPTCHA_SITEKEY && (
+            RECAPTCHA_SITEKEY && (
               <div
-                class="h-captcha"
-                data-sitekey={HCAPTCHA_SITEKEY}
+                class="g-recaptcha"
+                data-sitekey={RECAPTCHA_SITEKEY}
                 data-theme="dark"
               />
             )
@@ -239,14 +222,14 @@ const endpoint = WEB3FORMS_ACCESS_KEY ? "https://api.web3forms.com/submit" : "";
     const nombre = form.elements.namedItem("nombre") as HTMLInputElement;
     const email = form.elements.namedItem("email") as HTMLInputElement;
 
-    // hCaptcha sólo existe si se configuró HCAPTCHA_SITEKEY.
+    // reCAPTCHA sólo existe si se configuró PUBLIC_RECAPTCHA_SITEKEY.
     const captcha = () =>
       (
         window as unknown as {
-          hcaptcha?: { reset(): void; getResponse(): string };
+          grecaptcha?: { reset(): void; getResponse(): string };
         }
-      ).hcaptcha;
-    const conCaptcha = !!form.querySelector(".h-captcha");
+      ).grecaptcha;
+    const conCaptcha = !!form.querySelector(".g-recaptcha");
 
     // localStorage puede tirar (modo privado, datos bloqueados): nunca debe
     // romper el formulario, sólo pierde el recuerdo de "ya te anotaste".
@@ -352,15 +335,12 @@ const endpoint = WEB3FORMS_ACCESS_KEY ? "https://api.web3forms.com/submit" : "";
       enviando(true);
 
       try {
-        // JSON y no FormData: es lo que muestra el ejemplo AJAX oficial de
-        // Web3Forms. El checkbox `botcheck` sin marcar ni viaja (FormData lo
-        // omite), que es justo lo que Web3Forms espera de una persona.
-        //
-        // Sin `g-recaptcha-response`: hCaptcha lo agrega por compatibilidad con
-        // reCAPTCHA (duplicando su token), y Web3Forms lo interpreta como
-        // reCAPTCHA — que es Pro — y rechaza el envío con 400. El script ya se
-        // carga con recaptchacompat=off; esto es por si igual aparece.
-        const datos = Object.fromEntries(new FormData(form));
+        // El token del captcha viaja como `captcha`; lo valida /api/registro.
+        // El checkbox `botcheck` sin marcar ni viaja (FormData lo omite).
+        const datos: Record<string, unknown> = Object.fromEntries(
+          new FormData(form),
+        );
+        datos.captcha = datos["g-recaptcha-response"] ?? "";
         delete datos["g-recaptcha-response"];
         const res = await fetch(form.action, {
           method: "POST",
@@ -371,7 +351,7 @@ const endpoint = WEB3FORMS_ACCESS_KEY ? "https://api.web3forms.com/submit" : "";
           },
         });
 
-        // Web3Forms responde { success: boolean, message: string }.
+        // /api/registro responde { success: boolean, message?: string }.
         const data = await res.json().catch(() => null);
 
         if (res.ok && data?.success) {

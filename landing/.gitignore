@@ -13,3 +13,6 @@ pnpm-debug.log*
 .env
 .env.production
 .DS_Store
+
+# Salida del adapter de Vercel
+.vercel/
