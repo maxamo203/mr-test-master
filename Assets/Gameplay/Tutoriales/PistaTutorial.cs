@@ -33,7 +33,7 @@ namespace Gameplay
         {
             if (SinMando) return "cruzá la línea de arriba";
             var gm = Gamepad.GamepadManager.Instance;
-            if (gm != null && gm.UsesMouseInput) return "palanca a la derecha";
+            if (gm != null && gm.UsesMouseInput) return "botón A";
             if (gm != null && gm.IsConnected) return "botón A";
             return "tocá la pantalla";
         }
@@ -44,15 +44,21 @@ namespace Gameplay
         // avisos con tarjeta), que entienden la misma etiqueta <color>.
         public const string ColorAccion = "#FF8A1E";
 
-        public static string Resaltar(string texto)
+        public static string Resaltar(string texto) => Resaltar(texto, 1f);
+
+        // alfa < 1: la etiqueta <color> pisa el color de GUI.color, así que el fundido del
+        // naranja va en el propio color (#RRGGBBAA).
+        private static string Resaltar(string texto, float alfa)
         {
             if (string.IsNullOrEmpty(texto) || texto.IndexOf('*') < 0) return texto;
+            string abre = alfa >= 1f ? $"<color={ColorAccion}>"
+                : $"<color={ColorAccion}{Mathf.RoundToInt(Mathf.Clamp01(alfa) * 255f):X2}>";
             var sb = new System.Text.StringBuilder(texto.Length + 32);
             bool abierto = false;
             foreach (char ch in texto)
             {
                 if (ch != '*') { sb.Append(ch); continue; }
-                sb.Append(abierto ? "</color>" : $"<color={ColorAccion}>");
+                sb.Append(abierto ? "</color>" : abre);
                 abierto = !abierto;
             }
             if (abierto) sb.Append("</color>");
@@ -71,19 +77,62 @@ namespace Gameplay
             return e;
         }
 
+        // Aviso pasajero ("¡Bien! …", "+50% de batería") que tapa la pista unos segundos.
+        public sealed class Aviso
+        {
+            internal string Texto;
+            internal float Desde, Hasta;
+
+            public void Mostrar(string texto, float segundos)
+            {
+                Texto = texto;
+                Desde = Time.time;
+                Hasta = Time.time + segundos;
+            }
+
+            public void Limpiar() => Texto = null;
+        }
+
+        // Lo que tarda el aviso en entrar (sube desde abajo mientras aparece) y en irse
+        // (se desvanece y vuelve la pista).
+        private const float SegundosFundido = 0.25f;
+        // Desde cuánto más abajo sube al entrar (px virtuales en pantalla; en el visor,
+        // escalados al alto de la pantalla).
+        private const float SubidaEntrada = 14f;
+
+        // La pista, o el aviso encima mientras dure, fundiéndose entre los dos.
+        public static void Dibujar(float vw, string pista, Aviso aviso)
+        {
+            float a = 0f, dy = 0f;
+            if (aviso != null && aviso.Texto != null && Time.time < aviso.Hasta)
+            {
+                float entrada = Mathf.SmoothStep(0f, 1f, (Time.time - aviso.Desde) / SegundosFundido);
+                float salida = Mathf.SmoothStep(0f, 1f, (aviso.Hasta - Time.time) / SegundosFundido);
+                a = Mathf.Min(entrada, salida);
+                dy = (1f - entrada) * SubidaEntrada;
+            }
+            if (a < 0.999f) Dibujar(vw, pista, 1f - a, 0f);
+            if (a > 0.001f) Dibujar(vw, aviso.Texto, a, dy);
+        }
+
+        public static void Dibujar(float vw, string texto) => Dibujar(vw, texto, 1f, 0f);
+
         // La tarjeta crece en alto con el texto (mínimo una línea y media), así nada queda
         // cortado aunque el gesto del control sume palabras.
-        public static void Dibujar(float vw, string texto)
+        private static void Dibujar(float vw, string texto, float alfa, float dy)
         {
-            var contenido = new GUIContent(Resaltar(texto));
+            var contenido = new GUIContent(Resaltar(texto, alfa));
+            var prevC = GUI.color;
+            GUI.color = new Color(prevC.r, prevC.g, prevC.b, prevC.a * alfa);
             if (!MRCardboardController.Activo)
             {
                 var estiloPantalla = EstiloRico(14);
                 float ancho = vw - 56f;
                 float alto = Mathf.Max(52f, estiloPantalla.CalcHeight(contenido, ancho - 28f) + 18f);
-                var r = new Rect(28f, 64f, ancho, alto);
+                var r = new Rect(28f, 64f + dy, ancho, alto);
                 T.Tarjeta2(r, T.Hoja2, null, 14f);
                 GUI.Label(new Rect(r.x + 14f, r.y, r.width - 28f, r.height), contenido, estiloPantalla);
+                GUI.color = prevC;
                 return;
             }
 
@@ -98,11 +147,12 @@ namespace Gameplay
             {
                 var c = i == 0 ? izq : der;
                 // Crece hacia arriba: el borde de abajo queda siempre a la misma distancia de la mira.
-                var r = new Rect(c.x - w * 0.5f, c.y - 200f * s - h, w, h);
+                var r = new Rect(c.x - w * 0.5f, c.y - 200f * s - h + dy * s, w, h);
                 T.Tarjeta2(r, T.Hoja2, null, 18f * s);
                 GUI.Label(new Rect(r.x + 10f * s, r.y, w - 20f * s, h), contenido, estilo);
             }
             GUI.matrix = prevM;
+            GUI.color = prevC;
         }
     }
 }

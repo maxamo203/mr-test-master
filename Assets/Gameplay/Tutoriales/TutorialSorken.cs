@@ -46,8 +46,7 @@ namespace Gameplay
         private static bool DejarEntrar => Instance != null && Instance._echadoEnEntrada;
         private bool _enPartida;
         private float _finEn = -1f;
-        private string _aviso;
-        private float _avisoHasta;
+        private readonly PistaTutorial.Aviso _aviso = new();
 
         private bool Completa => _echados >= MetaEchar;
 
@@ -79,8 +78,7 @@ namespace Gameplay
 
         private void Avisar(string texto)
         {
-            _aviso = texto;
-            _avisoHasta = Time.time + SegundosAviso;
+            _aviso.Mostrar(texto, SegundosAviso);
         }
 
         private void Update()
@@ -96,7 +94,7 @@ namespace Gameplay
                 _echados = 0;
                 _echadoEnEntrada = false;
                 _finEn = -1f;
-                _aviso = null;
+                _aviso.Limpiar();
             }
             _enPartida = enPartida;
             GameDirector.SinRepelerEnEntrada = enPartida && _echadoEnEntrada && !Completa;
@@ -122,17 +120,50 @@ namespace Gameplay
             float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
             // Fila 1 (la de la cordura, que acá no se usa).
             int n = Mathf.Min(_echados, MetaEchar);
-            T.HudBarra(vw, vh, 1, (float)n / MetaEchar, n >= MetaEchar ? T.Green : T.Tan, "ECHARLO", $"{n}/{MetaEchar}");
-            PistaTutorial.Dibujar(vw, Time.time < _avisoHasta && _aviso != null ? _aviso : Texto());
+            T.HudObjetivos(vw, vh, 1, n, MetaEchar, "SORKEN");
+            PistaTutorial.Dibujar(vw, Texto(), _aviso);
             // Mientras entra, la flecha va al punto de la entrada (es lo que hay que alumbrar);
-            // una vez adentro, a él.
+            // una vez adentro, a él; antes de que aparezca, a la entrada marcada más cercana.
             if (Entrando(out var entrada)) GuiaTutorial.Dibujar(entrada, "ENTRADA");
             else
             {
                 var s = SorkenActivo();
                 if (s != null) GuiaTutorial.Dibujar(s.Position + Vector3.up, "SORKEN");
+                else if (EntradaMasCercana(out var cercana)) GuiaTutorial.Dibujar(cercana, "ENTRADA");
             }
         }
+
+        // La puerta o ventana marcada más cercana al jugador: por donde va a entrar (con una
+        // sola marcada, es ésa). Se recalcula cada medio segundo, no por frame.
+        private bool EntradaMasCercana(out Vector3 pos)
+        {
+            if (Time.unscaledTime >= _buscarEntradaEn)
+            {
+                _buscarEntradaEn = Time.unscaledTime + 0.5f;
+                _hayEntrada = false;
+                var reg = Scanner.SceneRegistry.Instance;
+                var cam = Camera.main;
+                if (reg != null && cam != null)
+                {
+                    float mejor = float.MaxValue;
+                    foreach (var m in reg.Markers)
+                    {
+                        if (m == null) continue;
+                        float d = (m.transform.position - cam.transform.position).sqrMagnitude;
+                        if (d >= mejor) continue;
+                        mejor = d;
+                        _entrada = m.transform;
+                        _hayEntrada = true;
+                    }
+                }
+            }
+            pos = _hayEntrada && _entrada != null ? _entrada.position : default;
+            return _hayEntrada && _entrada != null;
+        }
+
+        private Transform _entrada;
+        private bool _hayEntrada;
+        private float _buscarEntradaEn;
 
         // El Sorken del intento en curso (null si no hay): existe desde que empieza a salir el
         // humo en la entrada (GameDirector lo crea quieto ahí) hasta que se va. El registro de
@@ -178,7 +209,7 @@ namespace Gameplay
                             : $"¡Está entrando! *Luz intensa a la entrada* ({luz}).";
             }
             if (s != null) return $"¡Entró! *Alumbralo a él* ({luz}).";
-            return "Va a aparecer en una puerta o ventana.";
+            return "Va a entrar por la entrada que marca la flecha.";
         }
     }
 }

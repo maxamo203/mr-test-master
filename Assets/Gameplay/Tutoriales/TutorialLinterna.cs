@@ -56,8 +56,7 @@ namespace Gameplay
         private bool _alumbrando;
         private bool _enPartida;
         private float _finEn = -1f;
-        private string _aviso;
-        private float _avisoHasta;
+        private readonly PistaTutorial.Aviso _aviso = new();
         private Flashlight _linterna;
 
         private GameObject _marca, _halo;
@@ -86,8 +85,7 @@ namespace Gameplay
 
         private void Avisar(string texto)
         {
-            _aviso = texto;
-            _avisoHasta = Time.time + SegundosAviso;
+            _aviso.Mostrar(texto, SegundosAviso);
         }
 
         private void Update()
@@ -147,11 +145,7 @@ namespace Gameplay
                     var libro = RitualBookView.Active;
                     if (libro == null) { _fase = Fase.Completa; break; }
                     Sostener(libro.PuntoDeLuz, libro.RadioAproximado, dt);
-                    if (_avance >= SegundosSostener)
-                    {
-                        _fase = Fase.Completa;
-                        Avisar("Así se cuida el libro.");
-                    }
+                    if (_avance >= SegundosSostener) _fase = Fase.Completa;
                     break;
             }
 
@@ -193,7 +187,7 @@ namespace Gameplay
             _avance = 0f;
             _alumbrando = false;
             _finEn = -1f;
-            _aviso = null;
+            _aviso.Limpiar();
             BorrarMarca();
             Bateries.BatterySpawnManager.Retenidas = true;
         }
@@ -286,8 +280,7 @@ namespace Gameplay
             switch (_fase)
             {
                 case Fase.Apagar:
-                    int n = Mathf.Min(_ciclos, MetaCiclos);
-                    T.HudBarra(vw, vh, 1, (float)n / MetaCiclos, T.Tan, "APAGAR Y PRENDER", $"{n}/{MetaCiclos}");
+                    T.HudObjetivos(vw, vh, 1, Mathf.Min(_ciclos, MetaCiclos), MetaCiclos, "APAGAR Y PRENDER");
                     break;
                 case Fase.Concentrar:
                 case Fase.Libro:
@@ -299,7 +292,7 @@ namespace Gameplay
                     T.HudBarra(vw, vh, 1, 1f, T.Green, "LINTERNA", "LISTO");
                     break;
             }
-            PistaTutorial.Dibujar(vw, Time.time < _avisoHasta && _aviso != null ? _aviso : Texto());
+            PistaTutorial.Dibujar(vw, Texto(), _aviso);
             if (_fase == Fase.Concentrar && _marca != null)
                 GuiaTutorial.Dibujar(_marca.transform.position, "MARCA");
             else if (_fase == Fase.Libro && RitualBookView.Active != null)

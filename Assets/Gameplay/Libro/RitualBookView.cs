@@ -487,6 +487,10 @@ namespace Gameplay
             go.name = "LibroRitual";
             go.transform.localPosition = Vector3.zero;
             go.transform.localRotation = Quaternion.identity;
+            // Flota, gira hacia el jugador y respira (libro encantado).
+            go.AddComponent<RitualBookAnimacion>();
+            // Le salen tentáculos a medida que la oscuridad lo consume.
+            go.AddComponent<RitualBookTentaculos>();
             return go;
         }
 

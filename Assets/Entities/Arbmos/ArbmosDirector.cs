@@ -567,7 +567,7 @@ private readonly List<uint> _scratchRemove = new();
         {
             // Con geometría escaneada nunca aparece al otro lado de una pared. Si no hay
             // suficiente espacio en el mismo ambiente que el jugador, reintenta más adelante.
-            haunt.cooldown = 2f;
+            haunt.cooldown = Mathf.Max(0.1f, _night.arbmosSpawnRetrySeconds);
             return false;
         }
 

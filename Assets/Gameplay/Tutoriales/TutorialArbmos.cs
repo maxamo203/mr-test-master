@@ -8,8 +8,8 @@ namespace Gameplay
     // Práctica ARBMOS: la lección de la Noche 4 — "apagá la luz para ocultarte; iluminarlo
     // lo provoca". El Arbmos aparece quieto cerca tuyo; si apagás la linterna unos segundos
     // se va, y si le alumbrás la cabeza te ataca y te saca cordura. Hay que hacerlo irse a
-    // oscuras MetaOcultarse veces, habiéndolo visto con la luz prendida (si nunca prendiste
-    // la luz, se fue sin que te enteres: eso no enseña nada y no cuenta).
+    // oscuras MetaOcultarse veces (la flecha lo marca aunque estés a oscuras, así que no se
+    // va sin que te enteres).
     //
     // La cordura sí importa acá, así que su barra queda en la fila 1 y el objetivo va en la
     // 2. Si con la cordura en cero te atrapa la versión letal, te morís como en una noche:
@@ -20,6 +20,9 @@ namespace Gameplay
         public const int MetaOcultarse = 2;
         private const float DemoraFin = 2f;
         private const float SegundosAviso = 4f;
+        // La primera vez que baja la cordura se presenta (es el único paso donde algo la baja):
+        // la barra se resalta y la pista lo explica, sin frenar el juego.
+        private const float SegundosPresentarCordura = 6f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -41,11 +44,8 @@ namespace Gameplay
 
         private int _ocultas;
         private bool _enPartida;
-        // ¿Lo tuvo a la vista con la luz prendida durante esta aparición?
-        private bool _loVioConLuz;
         private float _finEn = -1f;
-        private string _aviso;
-        private float _avisoHasta;
+        private readonly PistaTutorial.Aviso _aviso = new();
         private Flashlight _linterna;
 
         private bool Completa => _ocultas >= MetaOcultarse;
@@ -73,29 +73,41 @@ namespace Gameplay
             switch (r)
             {
                 case ArbmosDirector.ResultadoArbmos.SeFueAOscuras:
-                    if (_loVioConLuz)
-                    {
-                        _ocultas++;
-                        Avisar("¡Bien! A oscuras, se fue.");
-                    }
-                    else
-                    {
-                        Avisar("Se fue sin que lo vieras. *Encontralo con luz* y recién ahí *apagala*.");
-                    }
+                    _ocultas++;
+                    Avisar("¡Bien! A oscuras, se fue.");
                     break;
                 case ArbmosDirector.ResultadoArbmos.Provocado:
                     Avisar("Le alumbraste la cabeza: ¡viene! Ya no lo frena la oscuridad.");
                     break;
                 case ArbmosDirector.ResultadoArbmos.Golpe:
-                    Avisar("Te sacó cordura. Si llega a cero, el Arbmos mata.");
+                    // La primera baja la presenta Update (barra resaltada + explicación).
+                    if (_corduraPresentada) Avisar("Te sacó cordura. Si llega a cero, el Arbmos mata.");
                     break;
             }
         }
 
-        private void Avisar(string texto)
+        private void Avisar(string texto, float segundos = SegundosAviso)
         {
-            _aviso = texto;
-            _avisoHasta = Time.time + SegundosAviso;
+            _aviso.Mostrar(texto, segundos);
+        }
+
+        private bool _corduraPresentada;
+        private float _corduraAnterior = 1f;
+
+        // La primera vez que la cordura baja en la práctica: barra resaltada y explicación.
+        private void PresentarCorduraSiBaja()
+        {
+            var ls = LocalSanity.Instance;
+            if (ls == null) return;
+            float c = ls.Value01;
+            if (!_corduraPresentada && c < _corduraAnterior - 0.001f)
+            {
+                _corduraPresentada = true;
+                SanityHUD.ResaltarHasta = Time.unscaledTime + SegundosPresentarCordura;
+                Avisar("Bajó tu *cordura*: con el Arbmos cerca, la luz te la saca. En cero, te mata.",
+                       SegundosPresentarCordura);
+            }
+            _corduraAnterior = c;
         }
 
         private void Update()
@@ -109,17 +121,14 @@ namespace Gameplay
             if (enPartida && !_enPartida)
             {
                 _ocultas = 0;
-                _loVioConLuz = false;
                 _finEn = -1f;
-                _aviso = null;
+                _aviso.Limpiar();
+                _corduraPresentada = false;
+                _corduraAnterior = LocalSanity.Instance != null ? LocalSanity.Instance.Value01 : 1f;
             }
             _enPartida = enPartida;
             if (!enPartida) return;
-
-            // El evento de la retirada llega antes del despawn, así que la marca todavía
-            // vale cuando se cuenta; recién sin Arbmos se borra para la próxima aparición.
-            if (ArbmosPresente) { if (LuzPrendida) _loVioConLuz = true; }
-            else _loVioConLuz = false;
+            PresentarCorduraSiBaja();
 
             if (!net.IsServer) return;
             if (_finEn < 0f)
@@ -143,9 +152,8 @@ namespace Gameplay
             // Fila 1 es la cordura (SanityHUD); el objetivo va en la 2 (la del amanecer,
             // que en una práctica no existe).
             int n = Mathf.Min(_ocultas, MetaOcultarse);
-            T.HudBarra(vw, vh, 2, (float)n / MetaOcultarse, n >= MetaOcultarse ? T.Green : T.Tan,
-                       "OCULTARTE", $"{n}/{MetaOcultarse}");
-            PistaTutorial.Dibujar(vw, Time.time < _avisoHasta && _aviso != null ? _aviso : Texto());
+            T.HudObjetivos(vw, vh, 2, n, MetaOcultarse, "ARBMOS");
+            PistaTutorial.Dibujar(vw, Texto(), _aviso);
             var arbmos = ArbmosEntity.Active;
             if (arbmos != null) GuiaTutorial.Dibujar(arbmos.transform.position + Vector3.up * 1.2f, "ARBMOS");
         }
@@ -157,11 +165,10 @@ namespace Gameplay
                 return "Cordura en cero: viene a matarte. *¡Alejate!*";
             if (ArbmosPresente)
                 return LuzPrendida
-                    ? $"No le alumbres la cabeza: *apagá la linterna* ({PistaTutorial.ComoApagar()})."
-                    : "*Quedate a oscuras* hasta que se vaya…";
-            return LuzPrendida
-                ? "Algo te observa. Ya va a aparecer cerca tuyo."
-                : $"*Prendé la linterna* ({PistaTutorial.ComoPrender()}).";
+                    ? $"No soporta la luz: *apagá la linterna* para que se vaya ({PistaTutorial.ComoApagar()})."
+                    : "¡Bien! *Mantené la luz apagada* hasta que se vaya.";
+            // Aparece solo al terminar la espera; la flecha lo marca, no hace falta buscarlo.
+            return "Está por aparecer cerca tuyo…";
         }
     }
 }

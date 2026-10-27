@@ -2,6 +2,10 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 // Local visual cue for each replicated Sorken: black mist grows at the entry point.
+// Mientras espera en la entrada (estado Idle, antes de empezar a cruzar) el cuerpo queda
+// escondido: sólo se ve la niebla. Antes el modelo ya estaba ahí parado, del otro lado de la
+// puerta, y sólo lo tapaba la pared escaneada: desde atrás de esa pared, o con el escaneo
+// corrido, se lo veía quieto sin sentido. Aparece cuando empieza a cruzar.
 [RequireComponent(typeof(SorkenEntity))]
 public sealed class SorkenDarknessCue : MonoBehaviour
 {
@@ -19,11 +23,16 @@ public sealed class SorkenDarknessCue : MonoBehaviour
     private Material _material;
     private float _amount;
     private float _createdAt;
+    private Renderer[] _cuerpo;
+    private bool _cuerpoOculto, _aparecio;
 
     private void Awake()
     {
         _sorken = GetComponent<SorkenEntity>();
         _createdAt = Time.time;
+        // Antes de crear la niebla: sus partículas no son parte del cuerpo.
+        _cuerpo = GetComponentsInChildren<Renderer>(true);
+        ActualizarCuerpo();
         CreateMist();
 
         // La masa negra ya es evidente en el primer fotograma: avisa enseguida por donde
@@ -36,6 +45,8 @@ public sealed class SorkenDarknessCue : MonoBehaviour
 
     private void Update()
     {
+        ActualizarCuerpo();
+
         // La niebla conserva casi toda su densidad durante el cruce y solo comienza a
         // abrirse durante el aterrizaje. Asi se percibe la silueta, no el traspaso.
         float target = _sorken != null ? TargetAmount(_sorken.State) : 0f;
@@ -49,6 +60,30 @@ public sealed class SorkenDarknessCue : MonoBehaviour
 
         if (target <= 0f && _amount <= 0.001f && Time.time > _createdAt + 0.2f)
             Destroy(this);
+    }
+
+    // Escondido hasta la primera vez que deja de esperar en la entrada (empieza a cruzar).
+    // Si lo echan antes de cruzar, nunca llegó a verse.
+    private void ActualizarCuerpo()
+    {
+        if (_aparecio) return;
+        bool esperando = _sorken == null || _sorken.State == SorkenState.Idle ||
+                         (_sorken.State == SorkenState.Retreating && _cuerpoOculto);
+        if (!esperando)
+        {
+            _aparecio = true;
+            if (_cuerpoOculto) MostrarCuerpo(true);
+            return;
+        }
+        if (!_cuerpoOculto) MostrarCuerpo(false);
+    }
+
+    private void MostrarCuerpo(bool visible)
+    {
+        _cuerpoOculto = !visible;
+        if (_cuerpo == null) return;
+        foreach (var r in _cuerpo)
+            if (r != null && !(r is ParticleSystemRenderer)) r.enabled = visible;
     }
 
     public static float TargetAmount(SorkenState state)
@@ -167,6 +202,7 @@ public sealed class SorkenDarknessCue : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (_cuerpoOculto) MostrarCuerpo(true);   // nunca dejarlo invisible si el efecto se va antes
         if (_mist != null) Destroy(_mist.gameObject);
         if (_material != null) Destroy(_material);
     }

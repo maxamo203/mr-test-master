@@ -18,9 +18,6 @@ namespace Gameplay
     //     nadie queda trabado si Veleth no llega.
     // Al completar, Veleth se retira, la noche se gana (ServerNightSurvived) y FinDeNoche2 la
     // muestra como PRÁCTICA COMPLETA.
-    // La primera vez que el libro empieza a oscurecerse aparece un aviso sobre la barra de
-    // la linterna (Rediseno.Menus.AvisoLuzIntensa2) con la práctica en pausa
-    // (Time.timeScale = 0: congela el libro, el humo y las animaciones) hasta CONTINUAR.
     public class TutorialLibro : MonoBehaviour
     {
         public const int MetaSalvar = 1;
@@ -53,13 +50,7 @@ namespace Gameplay
         private float _escapado;
         private bool _enPartida;
         private float _finEn = -1f;
-        private string _aviso;
-        private float _avisoHasta;
-        // Una vez por entrada a la práctica: REPETIR (no recarga la escena) no lo repite.
-        private bool _avisoLuzMostrado;
-
-        public bool AvisoAbierto { get; private set; }
-
+        private readonly PistaTutorial.Aviso _aviso = new();
         // ¿Terminó porque Veleth atrapó al jugador? (la demostración se cumplió igual).
         public bool CompletadaPorVeleth { get; private set; }
 
@@ -73,7 +64,6 @@ namespace Gameplay
             Instance = this;
             RitualBookDirector.IntentoResuelto += AlResolverLibro;
             VelethDirector.IntentoResuelto += AlResolverVeleth;
-            new GameObject("AvisoLuzIntensa2").AddComponent<Rediseno.Menus.AvisoLuzIntensa2>();
         }
 
         private void OnDestroy()
@@ -81,29 +71,7 @@ namespace Gameplay
             if (Instance != this) return;
             RitualBookDirector.IntentoResuelto -= AlResolverLibro;
             VelethDirector.IntentoResuelto -= AlResolverVeleth;
-            // Salir con el aviso abierto (pausa → menú) no puede dejar el juego congelado.
-            CerrarAviso();
             Instance = null;
-        }
-
-        private void AbrirAviso()
-        {
-            _avisoLuzMostrado = true;
-            AvisoAbierto = true;
-            Bateries.ContextActionController.AvisoAbierto = true;
-            Time.timeScale = 0f;
-        }
-
-        // CONTINUAR del aviso.
-        public void Continuar() => CerrarAviso();
-
-        // Sólo despausa si la pausa era suya: no pisa el timeScale = 0 de LocalDeath.
-        private void CerrarAviso()
-        {
-            if (!AvisoAbierto) return;
-            AvisoAbierto = false;
-            Bateries.ContextActionController.AvisoAbierto = false;
-            Time.timeScale = 1f;
         }
 
         private void AlResolverLibro(RitualBookDirector.ResultadoLibro r)
@@ -117,7 +85,7 @@ namespace Gameplay
                     if (_salvados >= MetaSalvar)
                     {
                         _fase = Fase.DejarApagar;
-                        Avisar("¡Lo salvaste! Ahora *dejalo apagarse*.");
+                        Avisar("¡Lo salvaste! Ahora *dejá que la oscuridad lo consuma*.");
                     }
                     else
                     {
@@ -125,10 +93,10 @@ namespace Gameplay
                     }
                     break;
                 case Fase.Salvar:
-                    Avisar("Se apagó. En una noche, de ahí sale Veleth. *Otra vez*.");
+                    Avisar("La oscuridad lo consumió. En una noche, sale Veleth. *Otra vez*.");
                     break;
                 case Fase.DejarApagar when salvado:
-                    Avisar("Esta vez *no lo alumbres*: dejalo apagarse.");
+                    Avisar("Esta vez *no lo alumbres*: dejá que la oscuridad lo consuma.");
                     break;
                 case Fase.DejarApagar:
                     _fase = Fase.Emergiendo;
@@ -146,8 +114,7 @@ namespace Gameplay
 
         private void Avisar(string texto)
         {
-            _aviso = texto;
-            _avisoHasta = Time.time + SegundosAviso;
+            _aviso.Mostrar(texto, SegundosAviso);
         }
 
         private void Update()
@@ -173,10 +140,9 @@ namespace Gameplay
                 }
                 _escapado = 0f;
                 _finEn = -1f;
-                _aviso = null;
+                _aviso.Limpiar();
                 CompletadaPorVeleth = false;
             }
-            if (!enPartida) CerrarAviso();
             _enPartida = enPartida;
             if (!enPartida || !net.IsServer) return;
             // Te atrapó Veleth: era la demostración, el paso queda superado igual. Muerto, el
@@ -191,10 +157,6 @@ namespace Gameplay
                 }
                 return;
             }
-
-            var libro = RitualBookDirector.Instance;
-            if (!_avisoLuzMostrado && libro != null && libro.Fase == RitualBookPhase.Consuming)
-                AbrirAviso();
 
             if (_fase == Fase.Cazando)
             {
@@ -223,18 +185,13 @@ namespace Gameplay
             // Fila 1: la de la cordura, que en esta práctica no se usa (SanityHUD la oculta).
             if (_fase == Fase.Salvar)
             {
-                int n = Mathf.Min(_salvados, MetaSalvar);
-                T.HudBarra(vw, vh, 1, (float)n / MetaSalvar, T.Tan, "LIBRO SALVADO", $"{n}/{MetaSalvar}");
+                T.HudObjetivos(vw, vh, 1, Mathf.Min(_salvados, MetaSalvar), MetaSalvar, "LIBRO");
             }
             else
             {
-                float t = Mathf.Min(_escapado, SegundosEscapar);
-                bool listo = _fase == Fase.Completa;
-                T.HudBarra(vw, vh, 1, listo ? 1f : t / SegundosEscapar, listo ? T.Green : T.Tan,
-                           "ESCAPAR", listo ? "LISTO" : $"{Mathf.FloorToInt(t)}/{SegundosEscapar:0} s");
+                T.HudObjetivos(vw, vh, 1, _fase == Fase.Completa ? 1 : 0, 1, "VELETH");
             }
-            if (AvisoAbierto) return;
-            PistaTutorial.Dibujar(vw, Time.time < _avisoHasta && _aviso != null ? _aviso : Texto());
+            PistaTutorial.Dibujar(vw, Texto(), _aviso);
             var veleth = VelethEntity.Active;
             var libro = RitualBookView.Active;
             bool seApaga = RitualBookDirector.Instance != null &&
@@ -255,13 +212,13 @@ namespace Gameplay
                 case Fase.Completa:   return "¡Práctica completa!";
                 case Fase.Cazando:    return "¡Te persigue! La luz no la frena: *alejate*.";
                 case Fase.Emergiendo: return "Veleth está saliendo del libro…";
-                case Fase.DejarApagar:return "*No lo alumbres*: dejá que se apague.";
+                case Fase.DejarApagar:return "*No lo alumbres*: dejá que la oscuridad lo consuma.";
             }
             var libro = RitualBookDirector.Instance;
             if (libro != null && libro.Fase == RitualBookPhase.Consuming)
                 return libro.Alumbrando > 0
                     ? "*Seguí alumbrándolo*…"
-                    : $"¡Se apaga! *Luz intensa al libro* ({PistaTutorial.ComoLuzIntensa()}).";
+                    : $"¡La oscuridad lo consume! *Luz intensa al libro* ({PistaTutorial.ComoLuzIntensa()}).";
             return "Cuando el libro se oscurezca, *alumbralo*.";
         }
     }

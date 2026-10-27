@@ -13,8 +13,7 @@ MonoBehaviour:
   m_Name: Libro
   m_EditorClassIdentifier:
   displayName: 'Práctica: libro ritual y Veleth'
-  briefing: El libro ritual se apaga cada tanto. Alumbralo con la luz intensa para
-    que vuelva a brillar. Después, dejalo apagarse y escapale a Veleth.
+  briefing: Salvá el libro con luz intensa. Si la oscuridad lo consume, sale Veleth.
   nightDurationSeconds: 0
   sorkenActive: 0
   flashlightMaxCharge: 200

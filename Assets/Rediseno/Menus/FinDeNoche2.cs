@@ -252,10 +252,10 @@ namespace Rediseno.Menus
         private static string QueAprendiste(TutorialTipo tipo) => tipo switch
         {
             TutorialTipo.Linterna       => "Ya sabés prender, apagar y concentrar la luz.",
-            TutorialTipo.PilasReliquias => "Ya sabés recargar la linterna con pilas y conocés tu cordura.",
+            TutorialTipo.PilasReliquias => "Ya sabés recargar la linterna con pilas y juntar reliquias.",
             TutorialTipo.Sorken         => "Ya sabés echar al Sorken: en la puerta y cuando ya entró.",
             TutorialTipo.Arbmos         => "Ya sabés ocultarte del Arbmos: a oscuras se va, con luz se enoja.",
-            TutorialTipo.Libro          => "Ya sabés salvar el libro y conocés a Veleth: la luz no la frena, que el libro no se apague.",
+            TutorialTipo.Libro          => "Ya sabés salvar el libro. Si la oscuridad lo consume, sale Veleth.",
             _                           => "",
         };
 
@@ -302,8 +302,7 @@ namespace Rediseno.Menus
         private void ArmarAtrapadoPorVeleth(GameSession sesion)
         {
             _cuerpo.Add(TemaUI.Texto("TE ATRAPÓ VELETH", TemaUI.Bebas, 120, TemaUI.Red, 10f, TextAnchor.MiddleCenter));
-            var leccion = TemaUI.Texto("Si el libro se apaga, Veleth no perdona: la luz no la frena y no se cansa. " +
-                                       "La única defensa es que el libro nunca se apague.",
+            var leccion = TemaUI.Texto("La luz no la frena. Que la oscuridad no consuma el libro.",
                                        TemaUI.Elite, 36, TemaUI.Muted, 0f, TextAnchor.MiddleCenter);
             leccion.style.marginTop = 8; leccion.style.marginBottom = 30;
             _cuerpo.Add(leccion);

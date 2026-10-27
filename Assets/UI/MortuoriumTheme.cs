@@ -281,7 +281,9 @@ public static class MortuoriumTheme
     // coords VIRTUALES (tras UIScale.Begin). fila 0 = la de más abajo (batería),
     // fila 1 = encima (cordura). Así ambos componentes quedan alineados sin
     // conocerse entre sí.
-    public const float HudBarW = 240f, HudBarH = 26f, HudBarGap = 8f, HudMargin = 20f;
+    // Cada fila: ícono redondo a la izquierda, nombre y valor arriba, barra fina abajo
+    // (HudFila). El alto de la fila es el del ícono.
+    public const float HudBarW = 260f, HudBarH = 34f, HudBarGap = 10f, HudMargin = 44f;
 
     public static Rect HudBarRect(float vw, float vh, int fila)
     {
@@ -295,9 +297,9 @@ public static class MortuoriumTheme
     // W*0.25 / W*0.75 — y un poco por debajo de la mitad, dentro del campo cómodo.
     // Las dos copias quedan en la misma posición relativa a su ojo (disparidad 0), así
     // que se fusionan en una sola barra.
-    public const float HudBarWCardboard = 170f;
+    public const float HudBarWCardboard = 200f;
     // Borde inferior de la fila 0 en Cardboard, como fracción del alto de pantalla.
-    public const float HudCardboardBaseY = 0.70f;
+    public const float HudCardboardBaseY = 0.66f;
 
     // Devuelve cuántos rects hay que dibujar para la fila: 1 fuera de Cardboard (abajo-izq,
     // como siempre) o 2 en Cardboard (uno por ojo). Coords virtuales, tras UIScale.Begin.
@@ -327,14 +329,160 @@ public static class MortuoriumTheme
         return 2;
     }
 
-    // Atajo: dibuja la barra en su fila, una o dos veces según el modo. Las barras del
-    // HUD de la noche (linterna, cordura, amanecer) van con el estilo 2.0 (Barra2).
+    // Atajo sin ícono (los objetivos de las prácticas del tutorial): mismo estilo de fila.
     public static void HudBarra(float vw, float vh, int fila, float pct01, Color fill,
-                                string etiqueta, string valor)
+                                string etiqueta, string valor) =>
+        HudFila(vw, vh, fila, pct01, fill, default, etiqueta, valor);
+
+    // Fila de OBJETIVOS de las prácticas: el nombre a la izquierda y un casillero por
+    // objetivo a la derecha, que se completa (check verde) al lograrlo. Mismo lugar y placa
+    // que HudFila.
+    public static void HudObjetivos(float vw, float vh, int fila, int logrados, int total, string etiqueta)
     {
         int n = HudBarRects(vw, vh, fila, out var a, out var b);
-        Barra2(a, pct01, fill, etiqueta, valor);
-        if (n > 1) Barra2(b, pct01, fill, etiqueta, valor);
+        HudObjetivos(a, logrados, total, etiqueta);
+        if (n > 1) HudObjetivos(b, logrados, total, etiqueta);
+    }
+
+    public static void HudObjetivos(Rect r, int logrados, int total, string etiqueta)
+    {
+        float h = r.height;
+        if (Event.current.type == EventType.Repaint)
+        {
+            FillR(new Rect(r.x - 4f, r.y - 4f, r.width + 8f, r.height + 8f), HudPlaca, (h + 8f) * 0.5f);
+            float lado = h - 8f, sep = 6f;
+            float x = r.xMax - 6f - total * lado - (total - 1) * sep;
+            var prev = GUI.color;
+            for (int i = 0; i < total; i++)
+            {
+                bool hecho = i < logrados;
+                GUI.color = prev * (hecho ? Green : new Color(CreamDim.r, CreamDim.g, CreamDim.b, 0.55f));
+                GUI.DrawTexture(new Rect(x + i * (lado + sep), r.y + 4f, lado, lado),
+                                hecho ? Rediseno.IconosHud.CasillaHecha : Rediseno.IconosHud.Casilla);
+            }
+            GUI.color = prev;
+        }
+        if (!string.IsNullOrEmpty(etiqueta))
+            GUI.Label(new Rect(r.x + 12f, r.y, r.width - 24f, h), etiqueta,
+                      Estilo(FBebas, 18, logrados >= total ? Green : CreamDim, TextAnchor.MiddleLeft));
+    }
+
+    // Ícono de una fila del HUD. tex = el ícono (blanco con alfa, se tiñe con color);
+    // capa = una segunda textura con su propio color (las grietas del cerebro); nivel >= 0
+    // = la pila: se rellena por dentro hasta ese nivel; rayo = la luz intensa (se dibuja
+    // sobre el nivel). sacudir = píxeles de temblor (el cerebro al empeorar de etapa).
+    public struct IconoHud
+    {
+        public Texture2D tex, capa;
+        public Color color, colorCapa;
+        public float nivel, sacudir;
+        public bool rayo;
+        public Texture2D texRayo;
+    }
+
+    // Fila del HUD de la noche (Rediseño de las barras, opción A): ícono redondo, nombre y
+    // valor ARRIBA de la barra (nunca sobre el relleno, que con poca carga dejaba el texto
+    // blanco ilegible), barra fina abajo y, si hay, una etiqueta chica al lado del nombre
+    // ("INTENSA ×3"). fantasma01 > pct01 dibuja en rojo lo recién perdido (un golpe).
+    // Una vez por ojo con el visor (HudBarRects).
+    public static void HudFila(float vw, float vh, int fila, float pct01, Color color, IconoHud icono,
+                               string etiqueta, string valor, string etiqueta2 = null,
+                               Color? colorEtiqueta2 = null, float fantasma01 = -1f, bool resaltar = false)
+    {
+        int n = HudBarRects(vw, vh, fila, out var a, out var b);
+        HudFila(a, pct01, color, icono, etiqueta, valor, etiqueta2, colorEtiqueta2, fantasma01, resaltar);
+        if (n > 1) HudFila(b, pct01, color, icono, etiqueta, valor, etiqueta2, colorEtiqueta2, fantasma01, resaltar);
+    }
+
+    private static readonly Color HudPlaca = new(0.024f, 0.02f, 0.016f, 0.62f);
+    private static readonly Color HudChip  = new(0.08f, 0.063f, 0.055f, 0.94f);
+    private static readonly Color HudPista = new(0.914f, 0.89f, 0.84f, 0.12f);
+    private static readonly Color HudGolpe = new(0.784f, 0.196f, 0.243f, 0.75f);
+
+    public static void HudFila(Rect r, float pct01, Color color, IconoHud icono, string etiqueta, string valor,
+                               string etiqueta2 = null, Color? colorEtiqueta2 = null, float fantasma01 = -1f,
+                               bool resaltar = false)
+    {
+        bool conIcono = icono.tex != null;
+        float h = r.height;
+        float x0 = conIcono ? r.x + h + 8f : r.x + 10f;
+        float wTexto = r.xMax - x0 - (conIcono ? 4f : 10f);
+
+        if (Event.current.type == EventType.Repaint)
+        {
+            // Placa oscura detrás de toda la fila: el texto se lee sobre cualquier fondo.
+            var placa = new Rect(r.x - 4f, r.y - 4f, r.width + 8f, r.height + 8f);
+            FillR(placa, HudPlaca, (h + 8f) * 0.5f);
+            // Resaltada (la presentación de la cordura en el tutorial): borde dorado que late.
+            if (resaltar)
+                BordeR(placa, new Color(Tan.r, Tan.g, Tan.b, 0.5f + 0.5f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 5f))),
+                       (h + 8f) * 0.5f, 2.5f);
+
+            if (conIcono)
+            {
+                var chip = new Rect(r.x, r.y, h, h);
+                FillR(chip, HudChip, h * 0.5f);
+                BordeR(chip, new Color(Linea2.r, Linea2.g, Linea2.b, 0.18f), h * 0.5f, 1f);
+                Vector2 temblor = icono.sacudir > 0f
+                    ? new Vector2(Mathf.PerlinNoise(Time.unscaledTime * 40f, 0.1f) - 0.5f,
+                                  Mathf.PerlinNoise(0.7f, Time.unscaledTime * 40f) - 0.5f) * 2f * icono.sacudir
+                    : Vector2.zero;
+                var ir = new Rect(chip.x + 5f + temblor.x, chip.y + 5f + temblor.y, h - 10f, h - 10f);
+                var prev = GUI.color;
+                GUI.color = prev * icono.color;
+                GUI.DrawTexture(ir, icono.tex);
+                if (icono.nivel >= 0f)
+                {
+                    // Interior de la pila (coords normalizadas del ícono → píxeles).
+                    float nx0 = Rediseno.IconosHud.PilaXMin, nx1 = Rediseno.IconosHud.PilaXMax;
+                    float nh = Rediseno.IconosHud.PilaMedioAlto;
+                    float px0 = ir.x + (nx0 + 1f) * 0.5f * ir.width;
+                    float pw = (nx1 - nx0) * 0.5f * ir.width * Mathf.Clamp01(icono.nivel);
+                    float py = ir.y + (1f - nh) * 0.5f * ir.height;
+                    float ph = nh * ir.height;
+                    if (pw > 0.5f) GUI.DrawTexture(new Rect(px0, py, pw, ph), White());
+                }
+                if (icono.rayo && icono.texRayo != null)
+                {
+                    GUI.color = prev * new Color(Bg.r, Bg.g, Bg.b, 0.9f);
+                    GUI.DrawTexture(ir, icono.texRayo);
+                }
+                if (icono.capa != null)
+                {
+                    GUI.color = prev * icono.colorCapa;
+                    GUI.DrawTexture(ir, icono.capa);
+                }
+                GUI.color = prev;
+            }
+
+            // Barra fina abajo, con lo recién perdido en rojo.
+            var pista = new Rect(x0, r.yMax - 8f, wTexto, 6f);
+            FillR(pista, HudPista, 3f);
+            float p = Mathf.Clamp01(pct01);
+            if (fantasma01 > p + 0.002f)
+            {
+                float f = Mathf.Clamp01(fantasma01);
+                FillR(new Rect(pista.x, pista.y, pista.width * f, pista.height), HudGolpe, 3f);
+            }
+            if (p > 0.002f)
+                FillR(new Rect(pista.x, pista.y, Mathf.Max(pista.width * p, pista.height), pista.height), color, 3f);
+        }
+
+        // Nombre y valor arriba de la barra.
+        var linea = new Rect(x0, r.y - 1f, wTexto, 20f);
+        var stNombre = Estilo(FBebas, 16, CreamDim, TextAnchor.MiddleLeft);
+        if (!string.IsNullOrEmpty(etiqueta)) GUI.Label(linea, etiqueta, stNombre);
+        if (!string.IsNullOrEmpty(valor))
+            GUI.Label(linea, valor, Estilo(FMono, 12, Cream, TextAnchor.MiddleRight));
+        if (!string.IsNullOrEmpty(etiqueta2) && Event.current.type == EventType.Repaint)
+        {
+            float wNombre = string.IsNullOrEmpty(etiqueta) ? 0f : stNombre.CalcSize(new GUIContent(etiqueta)).x;
+            var stTag = Estilo(FMono, 9, Bg, TextAnchor.MiddleCenter);
+            float wTag = stTag.CalcSize(new GUIContent(etiqueta2)).x + 10f;
+            var tag = new Rect(x0 + wNombre + 6f, linea.y + 3f, wTag, 14f);
+            FillR(tag, colorEtiqueta2 ?? color, 7f);
+            GUI.Label(tag, etiqueta2, stTag);
+        }
     }
 
     // Barra 2.0: píldora oscura con borde fino y el relleno redondeado adentro. Etiqueta

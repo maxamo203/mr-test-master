@@ -75,8 +75,16 @@ namespace Gamepad
         // A diferencia de la B, la palanca SÍ informa que se mantiene: mientras está empujada
         // manda un delta cada ~46 ms (máx. 62 ms medido) y al soltarla deja de mandar.
         // SmoothedStick cubre esos huecos con HoldTime, así que "mantener arriba" se puede leer.
-        public static bool PalancaArriba => ModoMouse && SmoothedStick.y >  0.5f && SmoothedStick.y >  Mathf.Abs(SmoothedStick.x);
-        public static bool PalancaAbajo  => ModoMouse && SmoothedStick.y < -0.5f && -SmoothedStick.y > Mathf.Abs(SmoothedStick.x);
+        // En la noche: TODO el hemisferio norte = luz intensa y todo el sur = apagada (con una
+        // franja muerta a la altura del horizonte), así no hay que apuntar justo arriba o abajo.
+        private const float FranjaMuerta = 0.3f;
+        public static bool PalancaArriba => ModoMouse && SmoothedStick.y >  FranjaMuerta;
+        public static bool PalancaAbajo  => ModoMouse && SmoothedStick.y < -FranjaMuerta;
+
+        // La A mantenida (el botón izquierdo del mouse que manda el VR BOX). A diferencia de la
+        // B, la A sí informa cuándo se suelta. En la noche es el botón de acción: un toque
+        // recoge lo apuntado (o prende/apaga la linterna) y mantenerla concentra.
+        public static bool AHeld => ModoMouse && _botonA != null && _botonA.IsPressed();
 
         private static bool ModoMouse => GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput;
 

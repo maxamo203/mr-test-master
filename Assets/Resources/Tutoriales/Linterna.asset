@@ -13,8 +13,7 @@ MonoBehaviour:
   m_Name: Linterna
   m_EditorClassIdentifier:
   displayName: 'Tutorial: la linterna'
-  briefing: Prendé y apagá la linterna, y concentrá la luz en una marca y en el
-    libro ritual.
+  briefing: Prendela, apagala y concentrá la luz.
   nightDurationSeconds: 0
   sorkenActive: 0
   attemptIntervalMin: 30

@@ -900,16 +900,11 @@ namespace Gamepad
                 var pv = new Vector2((tapPx.x - sg.x) / f,
                                      (Screen.height - tapPx.y - sg.y) / f); // a virtual
 
-                // La A del VR BOX abre la pausa en plena partida (además de mantener la
-                // ruedita ←, ver arriba). El puntero está capturado en todo el juego, así que
-                // la A llega como CLIC de mouse donde está el cursor escondido, no como toque.
-                // Sólo eso abre la pausa; los dedos no (soltar el dedo de concentrar la
-                // linterna la abría por error). Y fuera de cualquier UI — si no, también la
-                // abría cada clic en los menús y pantallas de la app.
-                bool aDelVRBox = !_open && vrBoxMouse && tapDeMouse && !VRBoxInput.AConsumida &&
-                                 NetworkManager.Instance != null && NetworkManager.Instance.GameStarted &&
-                                 !UIBlocker.IsPointerOver(tapPx);
-                if (_pauseBtnRect.Contains(pv) || aDelVRBox)
+                // La A del VR BOX ya NO abre la pausa: en la noche es el botón de acción
+                // (recoger, prender/apagar). La pausa la abre la B. Con el puntero capturado, la A llega como clic de mouse donde está el
+                // cursor escondido: no puede contar como tocar el botón de pausa.
+                bool tocoPausa = _pauseBtnRect.Contains(pv) && !(vrBoxMouse && tapDeMouse);
+                if (tocoPausa)
                 {
                     Toggle();
                 }

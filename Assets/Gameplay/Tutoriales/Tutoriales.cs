@@ -22,7 +22,7 @@ namespace Gameplay
         public static string Titulo(TutorialTipo tipo) => tipo switch
         {
             TutorialTipo.Linterna       => "LA LINTERNA",
-            TutorialTipo.PilasReliquias => "PILAS Y CORDURA",
+            TutorialTipo.PilasReliquias => "PILAS Y RELIQUIAS",
             TutorialTipo.Sorken         => "SORKEN",
             TutorialTipo.Arbmos         => "ARBMOS",
             TutorialTipo.Libro          => "LIBRO Y VELETH",
@@ -32,11 +32,11 @@ namespace Gameplay
         // Qué se aprende en cada paso (el mapa del TUTORIAL y la tarjeta de "siguiente").
         public static string Descripcion(TutorialTipo tipo) => tipo switch
         {
-            TutorialTipo.Linterna       => "Prenderla, apagarla y concentrar la luz",
-            TutorialTipo.PilasReliquias => "La batería se gasta: recargala con pilas y conocé tu cordura",
-            TutorialTipo.Sorken         => "Entra por puertas y ventanas. La luz intensa lo echa",
-            TutorialTipo.Arbmos         => "Con éste es al revés: apagá la luz para que se vaya",
-            TutorialTipo.Libro          => "Salvá el libro con luz. Si se apaga, sale Veleth",
+            TutorialTipo.Linterna       => "Prender, apagar y concentrar la luz",
+            TutorialTipo.PilasReliquias => "Recargar la linterna y juntar reliquias",
+            TutorialTipo.Sorken         => "La luz intensa lo echa",
+            TutorialTipo.Arbmos         => "Apagá la luz para que se vaya",
+            TutorialTipo.Libro          => "Si la oscuridad consume el libro, sale Veleth",
             _                           => "",
         };
 

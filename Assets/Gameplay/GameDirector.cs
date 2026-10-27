@@ -167,6 +167,7 @@ namespace Gameplay
             ArbmosDirector.Ensure().StartRun();      // alucinacion de cordura (individual por jugador)
             RitualBookDirector.Ensure().StartRun();  // libro sobre la imagen: eventos de oscuridad
             _running = true;
+            _suspendidoPorVeleth = false;
         }
 
         // El reloj local (host) + el broadcast a los clientes, que no conocen la
@@ -192,6 +193,7 @@ namespace Gameplay
             }
             ReleaseSorkenReservation();
             _running      = false;
+            _suspendidoPorVeleth = false;
             _phase        = Phase.Idle;
             _sorken       = null;
             _sorkenNetId  = 0;
@@ -205,10 +207,19 @@ namespace Gameplay
 
         // Veleth es una consecuencia global y tiene prioridad sobre las amenazas
         // normales. A diferencia del reset de noche, acá sí despawneamos el Sorken.
+        // Veleth salió: el Sorken se va y no vuelve a intentar entrar, pero el reloj de la
+        // noche SIGUE (decisión de diseño: si se llega al amanecer con Veleth persiguiendo, se
+        // gana igual). Antes se frenaba todo el director, y con eso se congelaba el reloj:
+        // si además Veleth se trababa, la noche quedaba colgada para siempre.
+        private bool _suspendidoPorVeleth;
+
         public void SuspendForVeleth()
         {
+            bool corriendo = _running;
             if (_sorken != null || _sorkenNetId != 0) DespawnSorken();
             StopRun();
+            _running = corriendo;
+            _suspendidoPorVeleth = true;
         }
 
         private void Update()
@@ -234,6 +245,9 @@ namespace Gameplay
                     return;
                 }
             }
+
+            // Con Veleth afuera sólo corre el reloj: el Sorken ya no intenta entrar.
+            if (_suspendidoPorVeleth) return;
 
             // El reloj de la noche continúa, pero ninguna amenaza avanza ni daña si
             // todos los jugadores perdieron tracking fiable. Al relocalizar hay 2 s

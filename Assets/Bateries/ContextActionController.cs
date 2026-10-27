@@ -143,11 +143,7 @@ namespace Bateries
         // mirada para saber qué hay apuntado.
         public IContextAction AccionActual => _current;
 
-        // Un aviso modal en plena partida (la primera pila de la práctica, ver
-        // Rediseno.Menus.AvisoPrimeraPila2) usa el botón primario para cerrarse: mientras
-        // está abierto, el botón no recoge ni toca la linterna — igual que con la pausa.
-        public static bool AvisoAbierto { get; set; }
-        private static bool EnMenu => PauseMenuController.IsOpen || AvisoAbierto;
+        private static bool EnMenu => PauseMenuController.IsOpen;
 
         private void Update()
         {
@@ -333,10 +329,10 @@ namespace Bateries
             bool held = g != null && (g.buttonSouth.isPressed || g.buttonEast.isPressed ||
                                       g.buttonNorth.isPressed || g.buttonWest.isPressed);
 
-            // VR Box en modo mouse: sólo cuenta la ruedita. La acción del momento (recoger lo
-            // apuntado; si no, prender/apagar) es la ruedita → — mantenida concentra, igual
-            // que el botón de siempre. ↑ intensa, ↓ apagada y ← (mantener) pausa van aparte.
-            held |= PalancaDerecha();
+            // VR Box en modo mouse: la A es el botón de acción (recoger lo apuntado; si no,
+            // prender/apagar; mantenida concentra, igual que el botón de siempre). La palanca va
+            // aparte: hemisferio norte = intensa, sur = apagada. La B abre la pausa.
+            held |= VRBoxInput.AHeld;
 
             // Mobile: un dedo apoyado fuera de los botones = el mismo botón. Toque corto
             // prende/apaga (o recoge lo apuntado), mantener concentra.
@@ -348,19 +344,7 @@ namespace Bateries
             return held || _screenPrimaryHeld;
         }
 
-        // Ruedita del VR BOX hacia la derecha = el botón primario. Respeta el bloqueo de los
-        // menús (Rediseno.BloqueoNav): la → que eligió REANUDAR en la pausa no tiene que
-        // terminar recogiendo o apagando la linterna al volver a la partida.
-        private static bool PalancaDerecha()
-        {
-            var gm = GamepadManager.Instance;
-            if (gm == null || !gm.UsesMouseInput) return false;
-            Vector2 st = VRBoxInput.SmoothedStick;
-            if (!Rediseno.BloqueoNav.Libre(st.x, st.y)) return false;
-            return st.x > 0.6f && st.x > Mathf.Abs(st.y);
-        }
-
-        // "RECOGER · palanca →" en cada ojo (píxeles de pantalla, centros calibrados del
+        // "RECOGER · botón A" en cada ojo (píxeles de pantalla, centros calibrados del
         // visor: ver Rediseno.UI.OjosVisor), un poco por debajo del centro de la vista.
         private static void CartelEnOjos(string accion)
         {
@@ -368,7 +352,7 @@ namespace Bateries
             GUI.matrix = Matrix4x4.identity;
             float s = Screen.height / 1080f;
             bool vrBox = GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput;
-            string como = vrBox ? "palanca a la derecha" : "botón A";
+            string como = "botón A";
             var stTit = MortuoriumTheme.Estilo(MortuoriumTheme.FBebas, Mathf.RoundToInt(40 * s),
                                                MortuoriumTheme.Cream, TextAnchor.MiddleCenter);
             var stSub = MortuoriumTheme.Estilo(MortuoriumTheme.FMono, Mathf.RoundToInt(20 * s),
@@ -490,7 +474,7 @@ namespace Bateries
 
             string holdTime = brightHoldSeconds.ToString("0.#");
             string como = vrBox
-                ? "palanca a la derecha · arriba: intensa · abajo: apagada"
+                ? "botón A · palanca arriba: intensa · abajo: apagada"
                 : pad
                 ? $"botón A · mantener {holdTime} s: luz intensa"
                 : $"mantener {holdTime} s: luz intensa";

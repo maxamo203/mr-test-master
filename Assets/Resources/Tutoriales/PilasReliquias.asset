@@ -13,8 +13,7 @@ MonoBehaviour:
   m_Name: PilasReliquias
   m_EditorClassIdentifier:
   displayName: 'Práctica: pilas y reliquias'
-  briefing: La linterna se gasta rápido. Juntá pilas del piso para recargarla y
-    encontrá las reliquias del ritual.
+  briefing: Recargá la linterna con pilas y juntá reliquias.
   nightDurationSeconds: 0
   sorkenActive: 0
   attemptIntervalMin: 30

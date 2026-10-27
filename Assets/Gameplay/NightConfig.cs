@@ -90,6 +90,8 @@ namespace Gameplay
         public float arbmosSpawnDistance = 2.5f;
         [Tooltip("Probabilidad base [0..1] de aparicion al terminar el cooldown.")]
         public float arbmosSpawnChancePerAttempt = 0.6f;
+        [Tooltip("Segundos hasta volver a buscar lugar cuando no encontró ninguno valido.")]
+        [Min(0.1f)] public float arbmosSpawnRetrySeconds = 2f;
         [Tooltip("Segundos continuos con la linterna apagada para ocultar una aparicion normal.")]
         [Min(0.1f)] public float arbmosHideSeconds = 3f;
         [Tooltip("Segundos de luz directa sobre la cabeza necesarios para comprometer el ataque.")]

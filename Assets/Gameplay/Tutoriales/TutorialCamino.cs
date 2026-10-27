@@ -205,21 +205,29 @@ namespace Gameplay
                 {
                     float s = Screen.height / 1080f;
                     var estilo = MortuoriumTheme.Estilo(MortuoriumTheme.FBebas, Mathf.RoundToInt(64 * s),
-                                                        MortuoriumTheme.Cream, TextAnchor.MiddleCenter);
+                                                        MortuoriumTheme.Cream, TextAnchor.MiddleCenter, wrap: true);
                     if (MRCardboardController.Activo)
                     {
                         Rediseno.UI.OjosVisor.Centros(out var izq, out var der);
-                        Titulo(izq, s, estilo);
-                        Titulo(der, s, estilo);
+                        float anchoOjo = Screen.width * 0.5f - 60f * s;
+                        Titulo(izq, anchoOjo, estilo);
+                        Titulo(der, anchoOjo, estilo);
                     }
-                    else Titulo(new Vector2(Screen.width * 0.5f, Screen.height * 0.5f), s * 1.2f, estilo);
+                    else Titulo(new Vector2(Screen.width * 0.5f, Screen.height * 0.5f),
+                                Screen.width - 64f * s, estilo);
                 }
                 GUI.color = prevC;
                 GUI.matrix = prevM;
             }
 
-            private void Titulo(Vector2 c, float s, GUIStyle estilo) =>
-                GUI.Label(new Rect(c.x - 400f * s, c.y - 50f * s, 800f * s, 100f * s), _titulo, estilo);
+            // Con salto de línea y nunca más ancho que la pantalla (o que el ojo, con el visor):
+            // "PASO 2 · PILAS Y RELIQUIAS" no entraba en una línea en un celular vertical.
+            private void Titulo(Vector2 c, float ancho, GUIStyle estilo)
+            {
+                var contenido = new GUIContent(_titulo);
+                float alto = estilo.CalcHeight(contenido, ancho);
+                GUI.Label(new Rect(c.x - ancho * 0.5f, c.y - alto * 0.5f, ancho, alto), contenido, estilo);
+            }
         }
     }
 }

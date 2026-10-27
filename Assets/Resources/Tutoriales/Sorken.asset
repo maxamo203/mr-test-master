@@ -13,14 +13,13 @@ MonoBehaviour:
   m_Name: Sorken
   m_EditorClassIdentifier:
   displayName: 'Práctica: Sorken'
-  briefing: El Sorken entra por puertas y ventanas. Escuchá, mirá la puerta y alumbralo
-    con la luz intensa.
+  briefing: Entra por puertas y ventanas. Echalo con luz intensa.
   nightDurationSeconds: 0
   sorkenActive: 1
   attemptIntervalMin: 0.5
   attemptIntervalMax: 1
   entryRepelSeconds: 2
-  entryGraceSeconds: 14
+  entryGraceSeconds: 6
   entryAnimationSeconds: 3
   entryTriggerDistance: 3.5
   chaseRepelSeconds: 3
@@ -42,7 +41,7 @@ MonoBehaviour:
   bookActive: 0
   flashlightConeAngleDeg: 32
   flashlightRange: 9
-  initialAttemptDelay: 1.5
+  initialAttemptDelay: 6
   emergeTimeoutSeconds: 18
   retreatSeconds: 2.5
   grabHoldSeconds: 1.5

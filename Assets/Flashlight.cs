@@ -195,7 +195,6 @@ public float VisualInnerAngleDeg
         _brightHeld       = false;
         _avisoBateriaBaja = false;
         _flickerTimer     = 0f;
-        DrenajePausado    = false;
         _cargaAnimada     = 0f;
     }
 
@@ -206,8 +205,8 @@ public float VisualInnerAngleDeg
     // que el sonido de "pila recogida" va aca y no se duplica.
     public void AddCharge(float amount)
     {
-        // Práctica de pilas: la primera carga se retiene hasta que el jugador lee el aviso
-        // (Gameplay.TutorialPilasReliquias); después llega por CargarAnimado.
+        // Práctica de pilas: la primera carga la toma Gameplay.TutorialPilasReliquias, que la
+        // aplica por CargarAnimado.
         if (RetenerCarga != null && RetenerCarga(amount))
         {
             AudioManager.Sonar(c => c.pilaRecogida);
@@ -225,11 +224,8 @@ public float VisualInnerAngleDeg
     public static event System.Action PilaRecogida;
 
     // Devuelve true para quedarse con esa carga en vez de aplicarla ya (la práctica de
-    // pilas la muestra primero en un aviso). Null fuera de esa práctica.
+    // pilas la aplica animada). Null fuera de esa práctica.
     public static System.Func<float, bool> RetenerCarga;
-
-    // Congela el drenaje (el aviso de la primera pila de la práctica). ResetNoche lo suelta.
-    [System.NonSerialized] public bool DrenajePausado;
 
     // Suma `amount` de a poco, en `segundos`, para que la barra se vea llenar.
     public void CargarAnimado(float amount, float segundos)
@@ -387,7 +383,7 @@ static readonly int ID_COS_INNER = Shader.PropertyToID("_FlashlightCosInner");
         }
 
         // Drenar la batería mientras está encendida; apagar al agotarse.
-        if (Mode != FlashlightMode.Off && !LocalMuerto && !DrenajePausado)
+        if (Mode != FlashlightMode.Off && !LocalMuerto)
         {
             if (currentCharge > 0f)
             {

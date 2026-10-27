@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Arbmos
   m_EditorClassIdentifier:
   displayName: 'Práctica: Arbmos'
-  briefing: El Arbmos te observa. Apagá la luz para ocultarte; iluminarlo lo provoca.
+  briefing: No soporta la luz: apagala para que se vaya.
   nightDurationSeconds: 0
   sorkenActive: 0
   attemptIntervalMin: 30
@@ -43,6 +43,7 @@ MonoBehaviour:
   arbmosCooldownMax: 3
   arbmosSpawnDistance: 2
   arbmosSpawnChancePerAttempt: 1
+  arbmosSpawnRetrySeconds: 0.5
   arbmosHideSeconds: 3
   arbmosExposureSeconds: 0.8
   arbmosExposureGraceSeconds: 0.5

@@ -182,7 +182,11 @@ public class VelethDirector : MonoBehaviour
         }
 
         bool hasPath = _pathIndex < _path.Count;
-        bool directIsSafe = SorkerNav.Instance == null || !SorkerNav.Instance.HasObstacleGrid;
+        // Sin camino en la grilla (p.ej. el jugador pegado a una pared o a la mesa del libro:
+        // su celda queda bloqueada por el margen del agente), igual avanza derecho si no hay
+        // nada físico en el medio. Antes sólo lo miraba y quedaba trabado para siempre.
+        bool directIsSafe = SorkerNav.Instance == null || !SorkerNav.Instance.HasObstacleGrid ||
+                            PlayerLights.HasLineOfSight(_veleth.Position + Vector3.up * 0.6f, targetPos, 0.2f);
         if (!hasPath && !directIsSafe)
         {
             FaceTarget(targetPos);
@@ -298,13 +302,12 @@ public class VelethDirector : MonoBehaviour
                                             bool hasClearLine) =>
         distance <= range && hasClearLine;
 
-    private static bool HasCaptureLine(Vector3 entity, Vector3 player)
-    {
-        var nav = SorkerNav.Instance;
-        return (nav == null || nav.HasClearLine(entity, player)) &&
-               PlayerLights.HasLineOfSight(entity + Vector3.up * 0.6f,
-                                            player, 0.2f);
-    }
+    // Para atrapar alcanza con que no haya una pared o un mueble en el medio (línea de
+    // visión física). No se usa la línea de la grilla de navegación: falla cuando la celda del
+    // jugador queda bloqueada por el margen del agente (pegado a una pared o a la mesa del
+    // libro), y Veleth se quedaba al lado sin poder atraparlo.
+    private static bool HasCaptureLine(Vector3 entity, Vector3 player) =>
+        PlayerLights.HasLineOfSight(entity + Vector3.up * 0.6f, player, 0.2f);
 
     private static float FloorWorldY(float fallback)
     {
