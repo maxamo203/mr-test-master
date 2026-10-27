@@ -8,6 +8,7 @@ public static class GameOptions
     private const string KeyVolumen     = "opt_volumen";
     private const string KeyVolMusica   = "opt_volumen_musica";
     private const string KeyVolEfectos  = "opt_volumen_efectos";
+    private const string KeyMusicaMenu  = "opt_musica_menu";
     private const string KeyPuntosAncla = "opt_puntos_ancla";
     private const string KeyEscaneoAutoBeta = "opt_escaneo_auto_beta";
     private const string KeyVozMic      = "opt_voz_mic";
@@ -57,6 +58,22 @@ public static class GameOptions
     {
         get => PlayerPrefs.GetFloat(KeyVolEfectos, 1f);
         set => PlayerPrefs.SetFloat(KeyVolEfectos, Mathf.Clamp01(value));
+    }
+
+    // ¿Suena la música de fondo del menú principal? Default: apagada. A diferencia de los
+    // volúmenes, prenderla o apagarla tiene que arrancar o cortar la pista en el acto:
+    // AudioEventWatcher escucha MusicaMenuCambio.
+    public static event System.Action MusicaMenuCambio;
+
+    public static bool MusicaMenu
+    {
+        get => PlayerPrefs.GetInt(KeyMusicaMenu, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeyMusicaMenu, value ? 1 : 0);
+            PlayerPrefs.Save();
+            MusicaMenuCambio?.Invoke();
+        }
     }
 
     // ¿Este dispositivo coloca anchor points extra antes de empezar la partida?

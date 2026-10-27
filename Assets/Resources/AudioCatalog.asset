@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::AudioCatalog
   musicaMenu:
     clips:
-    - {fileID: 8300000, guid: 5323d8d5612c5fe79e0d30a9d3de058f, type: 3}
+    - {fileID: 8300000, guid: 4ad0c924a38c4b0d8334a97dc569ed3e, type: 3}
     volumen: 0.7
     variacionTono: 0
     variacionIntensidad: 0

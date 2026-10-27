@@ -57,11 +57,16 @@ public class AudioEventWatcher : MonoBehaviour
     private void OnEnable()
     {
         SceneManager.sceneLoaded += AlCargarEscena;
+        GameOptions.MusicaMenuCambio += AplicarMusicaDeEscena;
         _escenaActual = SceneManager.GetActiveScene().name;
         AplicarMusicaDeEscena();
     }
 
-    private void OnDisable() => SceneManager.sceneLoaded -= AlCargarEscena;
+    private void OnDisable()
+    {
+        SceneManager.sceneLoaded -= AlCargarEscena;
+        GameOptions.MusicaMenuCambio -= AplicarMusicaDeEscena;
+    }
 
     private void AlCargarEscena(Scene s, LoadSceneMode modo)
     {
@@ -72,13 +77,18 @@ public class AudioEventWatcher : MonoBehaviour
     }
 
     // Musica de fondo segun donde estemos. En la escena de juego la musica de partida la
-    // decide ActualizarMusicaPartida (depende de si arranco la noche), no esto.
+    // decide ActualizarMusicaPartida (depende de si arranco la noche), no esto. La del menu
+    // es opcional (GameOptions.MusicaMenu): tambien se llama al cambiar esa opcion.
     private void AplicarMusicaDeEscena()
     {
         if (_escenaActual != SceneFlow.EscenaJuego)
             AudioManager.CancelarPresentacionMuerte();
 
-        if (_escenaActual == SceneFlow.EscenaMenu) AudioManager.Musica(c => c.musicaMenu);
+        if (_escenaActual == SceneFlow.EscenaMenu)
+        {
+            if (GameOptions.MusicaMenu) AudioManager.Musica(c => c.musicaMenu);
+            else AudioManager.PararMusica();
+        }
         else if (_escenaActual == SceneFlow.EscenaEscaner) AudioManager.PararMusica();
     }
 

@@ -79,6 +79,9 @@ namespace Rediseno.Menus
             lista.Add(PiezasUI.Deslizador(nav, "VOLUMEN", () => GameOptions.Volumen, v => GameOptions.Volumen = v));
             lista.Add(PiezasUI.Deslizador(nav, "MÚSICA", () => GameOptions.VolumenMusica, v => GameOptions.VolumenMusica = v));
             lista.Add(PiezasUI.Deslizador(nav, "EFECTOS", () => GameOptions.VolumenEfectos, v => GameOptions.VolumenEfectos = v));
+            lista.Add(PiezasUI.Interruptor(nav, "MÚSICA DE FONDO",
+                "Suena en el menú principal",
+                () => GameOptions.MusicaMenu, v => GameOptions.MusicaMenu = v));
 
             lista.Add(PiezasUI.Seccion("JUEGO"));
             lista.Add(PiezasUI.Interruptor(nav, "PUNTOS DE ANCLAJE",
