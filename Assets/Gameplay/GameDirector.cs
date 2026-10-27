@@ -770,6 +770,7 @@ namespace Gameplay
                 : _night.sorkenChaseSpeed;
             _sorken.MoveTo(step, speed * EntitySpeedSettings.Multiplier *
                            _sorken.MovementMultiplier, dt);
+            _sorken.SetPositionDirectly(SorkerNav.AlPiso(_sorken.Position));   // siempre a nivel del piso
             if (_pathIndex < _path.Count && HorizDist(_sorken.Position, _path[_pathIndex]) <= 0.2f) _pathIndex++;
         }
 

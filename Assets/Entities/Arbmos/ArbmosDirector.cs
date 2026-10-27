@@ -370,6 +370,7 @@ private readonly List<uint> _scratchRemove = new();
         haunt.ent.MoveTo(step,
             AnimationMatchedChaseSpeed(haunt.ent, _night.arbmosAttackChaseSpeed) *
             EntitySpeedSettings.Multiplier * haunt.ent.ChaseMovementMultiplier, dt);
+        haunt.ent.SetPositionDirectly(SorkerNav.AlPiso(haunt.ent.Position));   // siempre a nivel del piso
         if (hasPath &&
             HorizontalDistance(haunt.ent.Position, haunt.path[haunt.pathIndex]) <= 0.2f)
             haunt.pathIndex++;
@@ -507,6 +508,7 @@ private readonly List<uint> _scratchRemove = new();
         haunt.ent.MoveTo(step,
             AnimationMatchedChaseSpeed(haunt.ent, _night.arbmosLethalChaseSpeed) *
             EntitySpeedSettings.Multiplier * haunt.ent.ChaseMovementMultiplier, dt);
+        haunt.ent.SetPositionDirectly(SorkerNav.AlPiso(haunt.ent.Position));   // siempre a nivel del piso
         if (hasPath &&
             HorizontalDistance(haunt.ent.Position, haunt.path[haunt.pathIndex]) <= 0.2f)
             haunt.pathIndex++;

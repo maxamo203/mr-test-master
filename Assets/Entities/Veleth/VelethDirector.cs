@@ -193,6 +193,7 @@ public class VelethDirector : MonoBehaviour
         _veleth.MoveTo(waypoint,
             _night.velethChaseSpeed * EntitySpeedSettings.Multiplier *
             _veleth.MovementMultiplier, dt);
+        _veleth.SetPositionDirectly(SorkerNav.AlPiso(_veleth.Position));   // siempre a nivel del piso
         if (_pathIndex < _path.Count &&
             HorizontalDistance(_veleth.Position, _path[_pathIndex]) <= 0.2f)
             _pathIndex++;
