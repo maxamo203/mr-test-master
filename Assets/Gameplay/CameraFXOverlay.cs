@@ -103,13 +103,30 @@ namespace Gameplay
             _quad.transform.localRotation = Quaternion.identity;
             _quad.transform.localScale = new Vector3(w, h, 1f);
 
+            // Muerte: el filtro sigue sobre el retrato del asesino (el shader va en una cola
+            // posterior) y se pone mas fuerte mientras se presenta. Tiempo sin escala: si
+            // cayo el ultimo jugador, timeScale es 0 y el grano/jitter quedaban congelados.
+            var ld = LocalDeath.Instance;
+            bool presentandoMuerte = LocalDeath.MostrandoRetrato ||
+                                     (ld != null && ld.IsDead && !ld.PresentationReady);
+            _muerte = Mathf.MoveTowards(_muerte, presentandoMuerte ? 1f : 0f,
+                                        Time.unscaledDeltaTime / (presentandoMuerte ? SubidaMuerte : BajadaMuerte));
+            Shader.SetGlobalFloat(ID_TIME, Time.unscaledTime);
+            Shader.SetGlobalFloat(ID_MUERTE, _muerte);
+
             // El interruptor VHS desactiva el pase completo, incluida la deformacion de
             // tension que comparte este shader. DarknessOverlay es otro renderer y sigue
             // funcionando, por lo que apagar VHS no aclara la noche.
             _renderer.enabled = ShouldRender(
-                EnPartida, GameOptions.VhsActivo, VHSSettings.Activo,
-                Tension, _minVisible);
+                EnPartida || LocalDeath.MostrandoRetrato, GameOptions.VhsActivo, VHSSettings.Activo,
+                Mathf.Max(Tension, _muerte), _minVisible);
         }
+
+        private static readonly int ID_TIME   = Shader.PropertyToID("_FxTime");
+        private static readonly int ID_MUERTE = Shader.PropertyToID("_FxMuerte");
+        private const float SubidaMuerte = 0.6f;   // s hasta el maximo al morir
+        private const float BajadaMuerte = 1.0f;   // s de vuelta a lo normal
+        private float _muerte;
 
         public static bool ShouldRender(
             bool enPartida, bool vhsActivo, bool vhsTieneIngredientes,
@@ -131,6 +148,7 @@ namespace Gameplay
         {
             if (_quad != null) Destroy(_quad);
             if (_mat  != null) Destroy(_mat);
+            Shader.SetGlobalFloat(ID_MUERTE, 0f);
             if (Instance == this) Instance = null;
         }
     }

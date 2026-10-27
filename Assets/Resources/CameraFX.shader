@@ -18,9 +18,11 @@ Shader "AR/CameraFX"
     Properties { }
     SubShader
     {
-        // Transparent+150: despues de DarknessOverlay (Transparent+100), asi el efecto
-        // tambien deforma la oscuridad/cono de linterna ya compuestos.
-        Tags { "Queue"="Transparent+150" "RenderType"="Transparent" "IgnoreProjector"="True" }
+        // Overlay+10: despues de DarknessOverlay (Transparent+100), asi el efecto tambien
+        // deforma la oscuridad/cono de linterna ya compuestos, y despues del retrato del
+        // asesino al morir (LocalDeath, cola Overlay): antes iba en Transparent+150 y el
+        // retrato quedaba pintado encima, limpio, sin VHS ni distorsion.
+        Tags { "Queue"="Overlay+10" "RenderType"="Transparent" "IgnoreProjector"="True" }
         GrabPass { "_CameraFXGrab" }
         Pass
         {
@@ -41,6 +43,10 @@ Shader "AR/CameraFX"
             // x = viñeta, y = tinte/desaturacion, z = refuerzo por tension, w = libre
             uniform float4 _VhsColor;
             uniform float4 _VhsTintColor;     // rgb del tinte (cinta vieja)
+            // Publicados por CameraFXOverlay cada frame:
+            uniform float  _FxTime;    // tiempo SIN escala: al caer el ultimo jugador
+                                       // timeScale es 0 y con _Time el grano se congelaba
+            uniform float  _FxMuerte;  // 0..1 mientras se presenta la muerte (retrato)
 
             // Cantidad de lineas del barrido. Fija: atarla a la resolucion real hace
             // aliasing feo en pantallas densas.
@@ -72,11 +78,14 @@ Shader "AR/CameraFX"
             fixed4 frag (v2f i) : SV_Target
             {
                 float2 uv   = i.uvgrab.xy / i.uvgrab.w;
-                float  t    = _TensionDistort;
-                float  time = _Time.y;
+                // Al morir el filtro se pone peor que nunca: tension minima de 0.6 (lente
+                // y aberracion) y la cinta "se rompe" mas, encima del refuerzo por tension.
+                float  muerte = saturate(_FxMuerte);
+                float  t    = max(_TensionDistort, muerte * 0.6);
+                float  time = _FxTime;
 
                 // Los ingredientes VHS suben con la tension sobre su base constante.
-                float peak = 1.0 + t * _VhsColor.z;
+                float peak = 1.0 + t * _VhsColor.z + muerte;
 
                 // ── Banda de tracking: franja que sube lentamente por la imagen. La
                 //    distancia es toroidal (frac) para que entre por abajo sin salto.
@@ -111,14 +120,14 @@ Shader "AR/CameraFX"
 
                 // ── Scanlines: barrido horizontal que oscurece una de cada dos lineas.
                 float sl = sin(uv.y * VHS_SCANLINES * 3.14159265) * 0.5 + 0.5;
-                col *= 1.0 - sl * _VhsAmount.x * 0.22;
+                col *= 1.0 - sl * _VhsAmount.x * 0.22 * (1.0 + muerte * 0.6);
 
                 // ── Grano de cinta: ruido blanco animado, sin textura.
                 float n = hash21(uv * 1024.0 + frac(time) * 137.0);
                 col += (n - 0.5) * _VhsAmount.y * 0.28 * peak;
 
                 // ── Viñeta: bordes comidos, como una lente vieja.
-                col *= 1.0 - saturate(r2 * 1.7) * _VhsColor.x * 0.85;
+                col *= 1.0 - saturate(r2 * 1.7 * (1.0 + muerte * 0.8)) * _VhsColor.x * 0.85;
 
                 // La banda de tracking ademas aclara (la cinta "quema" ahi).
                 col += band * 0.10 * peak;

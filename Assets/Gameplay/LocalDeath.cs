@@ -705,19 +705,45 @@ namespace Gameplay
         // todo (Resources/RetratoAsesino.shader) — sin eso la profundidad real de ARKit, las
         // paredes escaneadas o un plano AR más cerca que la copia la tapaban. Si el shader
         // no está, quedan los originales.
-        private static Shader _shaderRetrato;
+        //
+        // Dos variantes. La iluminada (RetratoAsesino) copia las propiedades del shader de las
+        // entidades (_MainTex, _BumpMap…). Un original SIN _MainTex pero con _BaseMap es una
+        // entidad sin luz, como Veleth (AR/VelethReveal): va a RetratoAsesinoUnlit — su
+        // textura tal cual más las luces del retrato encima —, con la textura pasada a mano.
+        // Con la iluminada Veleth salía blanca en el celular (en el build Unity descarta del
+        // material las propiedades que su shader no usa, así que el _MainTex guardado en
+        // Veleth.mat no llegaba) y negra en el editor (ahí sí llegaba, junto con un _BumpMap
+        // que no está importado como normal map).
+        private static Shader _shaderRetrato, _shaderRetratoSinLuz;
         private readonly List<Material> _materialesRetrato = new();
 
         private Material[] MaterialesRetrato(Material[] originales)
         {
             if (_shaderRetrato == null) _shaderRetrato = Resources.Load<Shader>("RetratoAsesino");
+            if (_shaderRetratoSinLuz == null) _shaderRetratoSinLuz = Resources.Load<Shader>("RetratoAsesinoUnlit");
             if (_shaderRetrato == null || !_shaderRetrato.isSupported) return originales;
+            bool haySinLuz = _shaderRetratoSinLuz != null && _shaderRetratoSinLuz.isSupported;
 
             var copia = new Material[originales.Length];
             for (int i = 0; i < originales.Length; i++)
             {
-                var m = new Material(_shaderRetrato);
-                if (originales[i] != null) m.CopyPropertiesFromMaterial(originales[i]);
+                var o = originales[i];
+                Material m;
+                if (o != null && haySinLuz && !o.HasProperty("_MainTex") && o.HasProperty("_BaseMap"))
+                {
+                    m = new Material(_shaderRetratoSinLuz);
+                    m.SetTexture("_MainTex", o.GetTexture("_BaseMap"));
+                    m.SetTextureScale("_MainTex", o.GetTextureScale("_BaseMap"));
+                    m.SetTextureOffset("_MainTex", o.GetTextureOffset("_BaseMap"));
+                    m.SetColor("_Color", o.HasProperty("_BaseColor") ? o.GetColor("_BaseColor")
+                                       : o.HasProperty("_Color") ? o.GetColor("_Color")
+                                       : Color.white);
+                }
+                else
+                {
+                    m = new Material(_shaderRetrato);
+                    if (o != null) m.CopyPropertiesFromMaterial(o);
+                }
                 m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Overlay;
                 _materialesRetrato.Add(m);
                 copia[i] = m;
