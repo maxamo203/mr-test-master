@@ -87,6 +87,7 @@ namespace Rediseno.Menus
         // no tape lo que se apunta; el cartel de confirmar, debajo de la vista previa.
         protected override Vector2 PosicionVisor =>
             !ModoMirada ? new(0f, -12f) : _confirmando ? new(0f, -24f) : new(0f, -30f);
+        protected override VisualElement TarjetaVisor => _tarjeta;
 
         // Visor sin joystick: menús quietos en el cuarto y nada de mando (se elige mirando).
         private bool ModoMirada =>

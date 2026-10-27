@@ -39,6 +39,12 @@ namespace Rediseno.Menus
         private VisualElement _iconoVisor;
         private float _t;
         private int _idxContinuar;
+        private VisualElement _ultimaOpcion;
+
+        // Visor fijo a la cabeza: el menú queda alto (mirar arriba cansa menos que abajo) y
+        // enfocar la fila de arriba no lo baja. Además cabecear mira arriba/abajo sobre el menú.
+        protected override VisualElement PisoVisor => _ultimaOpcion;
+        protected override bool CabeceoVisor => true;
 
         protected override void Awake()
         {
@@ -187,6 +193,7 @@ namespace Rediseno.Menus
                 : $"Seguí en el paso {pasoTuto + 1} de {TutorialCamino.Pasos.Length}");
             col.Add(bTuto);
             nav.Agregar(bTuto, () => Abrir(m => m.AbrirTutoriales()));
+            _ultimaOpcion = bTuto;
 
             var pie = TemaUI.Texto(BuildVariant.EsDemo ? "DEMO · equipo 112" : "Build interna · equipo 112",
                                    TemaUI.Mono, 24, TemaUI.Dim, 2f, TextAnchor.MiddleCenter);
