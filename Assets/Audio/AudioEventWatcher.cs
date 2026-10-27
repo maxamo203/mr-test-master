@@ -57,7 +57,7 @@ public class AudioEventWatcher : MonoBehaviour
     private void OnEnable()
     {
         SceneManager.sceneLoaded += AlCargarEscena;
-        GameOptions.MusicaMenuCambio += AplicarMusicaDeEscena;
+        GameOptions.MusicaMenuCambio += AlCambiarMusicaMenu;
         _escenaActual = SceneManager.GetActiveScene().name;
         AplicarMusicaDeEscena();
     }
@@ -65,7 +65,7 @@ public class AudioEventWatcher : MonoBehaviour
     private void OnDisable()
     {
         SceneManager.sceneLoaded -= AlCargarEscena;
-        GameOptions.MusicaMenuCambio -= AplicarMusicaDeEscena;
+        GameOptions.MusicaMenuCambio -= AlCambiarMusicaMenu;
     }
 
     private void AlCargarEscena(Scene s, LoadSceneMode modo)
@@ -76,20 +76,26 @@ public class AudioEventWatcher : MonoBehaviour
         AplicarMusicaDeEscena();
     }
 
-    // Musica de fondo segun donde estemos. En la escena de juego la musica de partida la
-    // decide ActualizarMusicaPartida (depende de si arranco la noche), no esto. La del menu
-    // es opcional (GameOptions.MusicaMenu): tambien se llama al cambiar esa opcion.
+    // Musica de fondo segun donde estemos. La del menu (opcional, GameOptions.MusicaMenu)
+    // suena SOLO en el menu: al entrar a cualquier otra escena se corta. En la de juego la
+    // musica de partida la arranca despues ActualizarMusicaPartida, cuando empieza la noche;
+    // sin este corte la del menu seguia en la sincronizacion y el briefing.
     private void AplicarMusicaDeEscena()
     {
         if (_escenaActual != SceneFlow.EscenaJuego)
             AudioManager.CancelarPresentacionMuerte();
 
-        if (_escenaActual == SceneFlow.EscenaMenu)
-        {
-            if (GameOptions.MusicaMenu) AudioManager.Musica(c => c.musicaMenu);
-            else AudioManager.PararMusica();
-        }
-        else if (_escenaActual == SceneFlow.EscenaEscaner) AudioManager.PararMusica();
+        if (_escenaActual == SceneFlow.EscenaMenu && GameOptions.MusicaMenu)
+            AudioManager.Musica(c => c.musicaMenu);
+        else
+            AudioManager.PararMusica();
+    }
+
+    // La opcion se cambia desde OPCIONES del menu; fuera de el no hay nada que arrancar ni
+    // cortar (y no se pisa la musica de una noche en curso).
+    private void AlCambiarMusicaMenu()
+    {
+        if (_escenaActual == SceneFlow.EscenaMenu) AplicarMusicaDeEscena();
     }
 
     private Camera Cam
