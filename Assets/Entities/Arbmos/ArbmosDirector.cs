@@ -394,6 +394,14 @@ private readonly List<uint> _scratchRemove = new();
                             SanitySystem.Instance.IsAtZero(clientId)))
         {
             BeginLethal(clientId, haunt, playerPosition);
+            // Ya está encima (llegó a agarrarlo): el acecho letal (arbmosLethalStalkSeconds,
+            // pensado para cuando la cordura cae con el Arbmos lejos) lo dejaba congelado
+            // frente a la cara unos segundos antes de matar. Mata en el acto, igual de
+            // inmediato que el golpe no letal.
+            if (haunt.phase == Phase.LethalStalk && haunt.ent != null &&
+                HorizontalDistance(haunt.ent.Position, playerPosition) <= _night.arbmosGrabRange &&
+                HasCaptureLine(haunt.ent.Position, playerPosition))
+                CompleteLethal(clientId, haunt);
             return;
         }
         EndNormalHaunt(haunt);

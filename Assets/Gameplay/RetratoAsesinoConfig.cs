@@ -43,9 +43,9 @@ namespace Gameplay
             [Range(20f, 150f)] public float campoVisualReferencia = 60f;
 
             [Header("Pose")]
-            [Tooltip("Clip (Generic) del que se toma la pose del retrato. Vacío = la pose que tenía al matar " +
-                     "(Veleth: reptando). Con uno, el retrato sale en ese cuadro del clip, sin importar qué " +
-                     "estaba haciendo la entidad.")]
+            [Tooltip("Clip (Generic) del que se toma la pose del retrato. Vacío = el primer cuadro del estado " +
+                     "inicial de su Animator (Veleth: reptando), igual en la muerte que en el previsualizador. " +
+                     "Con uno, el retrato sale en ese cuadro del clip.")]
             public AnimationClip poseClip;
             [Tooltip("Momento del clip, 0 = principio, 1 = final.")]
             [Range(0f, 1f)] public float poseMomento = 1f;

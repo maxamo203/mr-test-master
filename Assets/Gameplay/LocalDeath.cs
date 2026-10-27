@@ -31,8 +31,8 @@ namespace Gameplay
         private readonly List<Renderer> _hiddenKillerRenderers = new();
         private uint _killerNetworkId;
 
-        // Retrato del asesino: copia SÓLO visual (mallas en la pose del momento de la
-        // muerte, sin scripts ni colliders) colgada de la cámara, para que el jugador vea
+        // Retrato del asesino: copia SÓLO visual (mallas de su prefab en la pose del ajuste,
+        // la misma que muestra el previsualizador; sin scripts ni colliders) colgada de la cámara, para que el jugador vea
         // en primera persona qué lo mató aunque mueva la cabeza. El asesino real sigue
         // su simulación (el Sorken va por otro jugador, Veleth se va): sin la copia se
         // escapaba del cuadro y a veces no se llegaba a ver qué había pasado.
@@ -280,9 +280,55 @@ namespace Gameplay
                 return false;
             }
 
-            if (!ArmarRetrato(killer.transform, cam, killer.EntityTypeId)) return false;
+            // Del prefab, igual que el previsualizador; si no hay prefab registrado, del
+            // asesino vivo (en la pose del momento).
+            var prefab = PrefabDe(killer.EntityTypeId);
+            bool ok = prefab != null
+                ? ArmarRetratoDePrefab(prefab, killer.transform.position, killer.transform.rotation,
+                                       cam, killer.EntityTypeId)
+                : ArmarRetrato(killer.transform, cam, killer.EntityTypeId);
+            if (!ok) return false;
             HideKiller();
             return true;
+        }
+
+        private static GameObject PrefabDe(byte tipo)
+        {
+            var registro = NetworkManager.Instance != null ? NetworkManager.Instance.PrefabRegistry : null;
+            if (registro == null) return null;
+            try { return registro.Get(tipo); }
+            catch (System.Exception) { return null; }   // tipo sin prefab registrado
+        }
+
+        // Retrato desde una instancia descartable de 'prefab' en (pos, rot), en el primer
+        // cuadro del estado inicial de su Animator. Lo usan la muerte y la prueba del editor,
+        // así lo que se tunea en el previsualizador es lo que sale al morir: copiando al
+        // asesino vivo salía en la pose del momento (ataque, agarre, más los giros procedurales
+        // de columna y cabeza del SorkenAnimator), con otra caja de mallas y por lo tanto otro
+        // encuadre. Los scripts de la instancia se apagan antes de activarla: sin OnEnable ni
+        // Update (VelethEntity.OnEnable se adueñaba de VelethEntity.Active y al destruirse lo
+        // dejaba en null con la Veleth real todavía en juego).
+        private bool ArmarRetratoDePrefab(GameObject prefab, Vector3 pos, Quaternion rot, Camera cam, byte tipo)
+        {
+            var fuente = new GameObject("RetratoFuente");
+            fuente.SetActive(false);
+            try
+            {
+                var inst = Instantiate(prefab, pos, rot, fuente.transform);
+                foreach (var script in inst.GetComponentsInChildren<MonoBehaviour>(true))
+                    script.enabled = false;
+                fuente.SetActive(true);
+                // Sin esto se copiaba la pose de reposo del rig (recién instanciado, el Animator
+                // todavía no corrió): Veleth salía tirada, no en el reptado con el que mata.
+                foreach (var animator in inst.GetComponentsInChildren<Animator>())
+                    if (animator.runtimeAnimatorController != null) animator.Update(0f);
+                return ArmarRetrato(inst.transform, cam, tipo);
+            }
+            finally
+            {
+                fuente.SetActive(false);   // que no llegue a dibujarse este frame
+                Destroy(fuente);
+            }
         }
 
         // Arma la copia visual de 'origen' colgada de 'cam' (la usan la muerte y la prueba
@@ -519,19 +565,13 @@ namespace Gameplay
             if (prefab == null || cam == null || IsDead) return false;
             CerrarPrueba();
 
-            // Instancia descartable de donde copiar las mallas: unos metros delante, de
-            // frente, para que el deslizamiento se vea como en la muerte de verdad.
+            // Unos metros delante, de frente, para que el deslizamiento se vea como en la
+            // muerte de verdad.
             var adelante = Vector3.ProjectOnPlane(cam.transform.forward, Vector3.up);
             if (adelante.sqrMagnitude < 1e-4f) adelante = Vector3.forward;
             adelante.Normalize();
-            var inst = Instantiate(prefab, cam.transform.position + adelante * 3f - Vector3.up * 1.5f,
-                                   Quaternion.LookRotation(-adelante, Vector3.up));
-            // Sin esto se copiaba la pose de reposo del rig (recién instanciado, el Animator
-            // todavía no corrió): Veleth salía tirada, no en el reptado con el que mata.
-            foreach (var animator in inst.GetComponentsInChildren<Animator>())
-                if (animator.runtimeAnimatorController != null) animator.Update(0f);
-            bool ok = ArmarRetrato(inst.transform, cam, tipo);
-            Destroy(inst);
+            bool ok = ArmarRetratoDePrefab(prefab, cam.transform.position + adelante * 3f - Vector3.up * 1.5f,
+                                           Quaternion.LookRotation(-adelante, Vector3.up), cam, tipo);
             if (ok && sinEntrada) _sequenceStartedAt = Time.unscaledTime - 1000f;
             EnPrueba = ok;
             return ok;

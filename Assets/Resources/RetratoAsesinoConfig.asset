@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9ad2fc919df694e3b93086f813248b80, type: 3}
   m_Name: RetratoAsesinoConfig
   m_EditorClassIdentifier: Assembly-CSharp::Gameplay.RetratoAsesinoConfig
-  revelar: 0.64
+  revelar: 0.31
   sostener: 1
   general:
     encuadreAlto: 0.158
@@ -44,7 +44,7 @@ MonoBehaviour:
   - entidad: 3
     ajuste:
       encuadreAlto: 0.158
-      margen: 1.61
+      margen: 1.77
       corrimientoVertical: -0.08
       corrimientoLateral: 0
       campoVisualReferencia: 60
@@ -70,14 +70,14 @@ MonoBehaviour:
       parpadeoApagonDuracion: 0.06
   - entidad: 4
     ajuste:
-      encuadreAlto: 0.299
-      margen: 0.45
-      corrimientoVertical: -0.52
+      encuadreAlto: 0.411
+      margen: 0.33
+      corrimientoVertical: -0.54
       corrimientoLateral: 0
       campoVisualReferencia: 65.1
       poseClip: {fileID: 0}
       poseMomento: 1
-      rotacion: {x: 0, y: 0, z: 0}
+      rotacion: {x: 3.81, y: 0, z: 0}
       distanciaMin: 0.32
       distanciaMax: 3.44
       evitarCorte: 1
@@ -110,7 +110,7 @@ MonoBehaviour:
       evitarCorte: 1
       margenCorte: 0.108
       temblorGrados: 5
-      luzIntensidad: 2.83
+      luzIntensidad: 2.36
       luzRojaActiva: 1
       luzRojaColor: {r: 1, g: 0.21404596, b: 0, a: 1}
       luzRojaIntensidad: 7
