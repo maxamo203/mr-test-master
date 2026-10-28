@@ -91,6 +91,23 @@ namespace Rediseno.UI
         // cada ojo sin rozar el borde de la lente.
         protected virtual float AnguloPanel => 44f;
         protected virtual Vector2 PosicionVisor => Vector2.zero;
+        // Tarjeta de una pantalla sobre la cámara. En el visor fijo a la cabeza se sube lo justo
+        // para que su borde inferior quede en la zona nítida, y NO se centra en el foco: traer el
+        // botón al centro taparía la mira / la guía de la imagen. null = menú: centra el foco.
+        protected virtual VisualElement TarjetaVisor => null;
+        // Última opción de un menú que conviene ver hacia arriba (mirar arriba en el visor cansa
+        // menos que bajar la vista). En el visor fijo a la cabeza el menú se mantiene alto: esa
+        // opción no baja de -ZonaNitida.PisoMenu. null = centrar siempre el foco.
+        protected virtual VisualElement PisoVisor => null;
+        // Visor fijo a la cabeza: cabecear mira arriba/abajo sobre la pantalla 1:1 (vertical quieto
+        // en el cuarto, de costado sigue fija a la cabeza; sin elegir con la mirada, se elige con
+        // el joystick). Así lo de abajo se lee inclinando la cabeza, con el ojo en el eje de la lente.
+        protected virtual bool CabeceoVisor => false;
+
+        // Deslizamiento vertical aplicado en el visor fijo a la cabeza (grados, + arriba): trae
+        // lo de abajo a la zona nítida de la lente (ver ZonaNitida).
+        private float _ajusteY;
+        private bool  _ajusteSinSuavizar;
         // Para dibujar algo fijo a la vista en cada ojo (IMGUI, píxeles relativos al ojo),
         // antes de la pantalla flotante. c = centro del ojo, ppd = píxeles por grado.
         protected virtual void DibujarEnOjo(Vector2 c, float ppd) { }
@@ -135,6 +152,7 @@ namespace Rediseno.UI
 
         protected virtual void OnDestroy()
         {
+            if (_visible && CabeceoVisor && !EnElCuarto && !CabezaPorCamara) Cabeza.Habilitar(false);
             if (_visible) { _visible = false; _visibles--; }
             if (_rt != null) { _rt.Release(); Destroy(_rt); }
             if (_ps != null) Destroy(_ps);
@@ -159,7 +177,9 @@ namespace Rediseno.UI
                 BloqueoNav.TrasAccion();
                 _toquesDesde = Time.unscaledTime + 0.35f;
                 _dwell = 0f; _dwellOpcion = null;
+                _ajusteY = 0f; _ajusteSinSuavizar = true;
             }
+            else if (CabeceoVisor && !EnElCuarto && !CabezaPorCamara) Cabeza.Habilitar(false);
             if (Raiz != null) Raiz.style.display = v ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
@@ -200,6 +220,7 @@ namespace Rediseno.UI
                 Cabeza.Habilitar(false);
             }
             _dwell = 0f; _dwellOpcion = null;
+            _ajusteY = 0f; _ajusteSinSuavizar = true;
             if (Raiz != null) { MargenesSeguros(visor); AlCambiarVisor(visor); }
         }
 
@@ -264,7 +285,51 @@ namespace Rediseno.UI
             }
 
             Nav.PintarFoco();
+            ActualizarAjusteVisor(dt);
         }
+
+        // Con el visor fijo a la cabeza lo de abajo no se puede mirar de frente: cae fuera de
+        // la zona nítida de la lente. Las tarjetas sobre la cámara suben hasta que su borde
+        // inferior entra; los menús se deslizan para que la opción enfocada quede en el centro
+        // de la lente. El objetivo se calcula desde la posición base (sin _ajusteY): no se realimenta.
+        private void ActualizarAjusteVisor(float dt)
+        {
+            if (!EnVisor || EnElCuarto) { _ajusteY = 0f; return; }
+            float w = Raiz.layout.width, h = Raiz.layout.height;
+            if (w <= 0f || h <= 0f || float.IsNaN(w) || float.IsNaN(h)) return;
+            float upg = w / AnguloPanel;   // unidades de panel por grado
+            float baseY = PosicionVisor.y;
+
+            float objetivo;
+            var tarjeta = TarjetaVisor;
+            if (tarjeta != null)
+            {
+                if (!TieneMedidas(tarjeta)) return;
+                float borde = baseY + (h * 0.5f - tarjeta.worldBound.yMax) / upg;
+                objetivo = ZonaNitida.SubirTarjeta(borde);
+            }
+            else
+            {
+                var foco = Nav.Enfocada?.Elemento;
+                if (foco == null || !TieneMedidas(foco)) return;
+                float centro = baseY + (h * 0.5f - foco.worldBound.center.y) / upg;
+                objetivo = -centro;
+                // Menú que prefiere quedar arriba: su última opción nunca cae más abajo de
+                // -ZonaNitida.PisoMenu, y el foco sólo lo desliza hacia arriba de ahí (enfocar
+                // lo de arriba no baja el menú dejando todo bajo la vista).
+                var piso = PisoVisor;
+                if (piso != null && TieneMedidas(piso))
+                {
+                    float centroPiso = baseY + (h * 0.5f - piso.worldBound.center.y) / upg;
+                    objetivo = Mathf.Max(objetivo, -ZonaNitida.PisoMenu - centroPiso);
+                }
+            }
+
+            if (_ajusteSinSuavizar) { _ajusteY = objetivo; _ajusteSinSuavizar = false; }
+            else _ajusteY = Mathf.Lerp(_ajusteY, objetivo, 1f - Mathf.Exp(-ZonaNitida.Velocidad * dt));
+        }
+
+        private static bool TieneMedidas(VisualElement e) => e.layout.height > 0f && !float.IsNaN(e.layout.height);
 
         // Toque soltado sobre una opción = elegirla. Se resuelve a mano (panel.Pick) para
         // que funcione igual en todas las pantallas y no depender del sistema de eventos.
@@ -467,7 +532,15 @@ namespace Rediseno.UI
             // Fija delante de cada ojo: sin cabeza ni anillo; se usa con el joystick.
             if (!EnElCuarto)
             {
-                _yaw = _pitch = 0f;
+                _yaw = 0f;
+                _pitch = 0f;
+                if (CabeceoVisor && !CabezaPorCamara)
+                {
+                    if (!Cabeza.EnUso) { Cabeza.Recentrar(); Cabeza.Habilitar(true); }
+                    LimitesArrastre(out float limPos, out float limNeg);
+                    Cabeza.Tick(dt, limPos, limNeg);
+                    _pitch = Cabeza.Pitch;
+                }
                 _dwell = 0f; _dwellOpcion = null;
                 return;
             }
@@ -490,7 +563,7 @@ namespace Rediseno.UI
             // píxel de pantalla = w / ancho dibujado.
             float ppdM = PpdMundo(), ppdB = PpdBase;
             float uPorPx = w / (AnguloPanel * ppdB);
-            Vector2 off = PosicionVisor;
+            Vector2 off = PosicionVisor + new Vector2(0f, _ajusteY);
             Vector2 p = new(w * 0.5f + (_yaw * ppdM - off.x * ppdB) * uPorPx,
                             h * 0.5f - (_pitch * ppdM - off.y * ppdB) * uPorPx);
             _puntoMirada = p;
@@ -569,7 +642,7 @@ namespace Rediseno.UI
                 // Pantalla flotante. La convergencia ya va en los centros de OjosVisor.
                 float pw = AnguloPanel * ppdB, ph = pw * _rt.height / _rt.width;
                 const float disp = 0f;
-                Vector2 off = PosicionVisor;
+                Vector2 off = PosicionVisor + new Vector2(0f, _ajusteY);
                 var pc = c + new Vector2(-_yaw * ppd + off.x * ppdB + disp, _pitch * ppd - off.y * ppdB);
                 GUI.color = Color.white;
                 var rp = new Rect(pc.x - pw * 0.5f, pc.y - ph * 0.5f, pw, ph);

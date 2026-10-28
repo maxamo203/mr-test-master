@@ -56,6 +56,7 @@ namespace Rediseno.Menus
         protected override Color VeloVisor => Color.clear;   // se espectea mirando el cuarto
         protected override float AnguloPanel => 30f;
         protected override Vector2 PosicionVisor => new(0f, -18f);
+        protected override VisualElement TarjetaVisor => _tarjeta;
 
         protected override void AlCambiarVisor(bool visor)
         {

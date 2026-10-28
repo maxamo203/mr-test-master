@@ -298,8 +298,10 @@ public static class MortuoriumTheme
     // Las dos copias quedan en la misma posición relativa a su ojo (disparidad 0), así
     // que se fusionan en una sola barra.
     public const float HudBarWCardboard = 200f;
-    // Borde inferior de la fila 0 en Cardboard, como fracción del alto de pantalla.
-    public const float HudCardboardBaseY = 0.66f;
+    // Borde inferior de la fila 0 en Cardboard: grados por debajo del centro de cada ojo,
+    // dentro de Rediseno.UI.ZonaNitida.Radio. En píxeles (0.66 del alto) caía a ~13° en un
+    // 20:9 pero a ~16° en un 16:9, cerca del borde de lo nítido.
+    public const float HudCardboardBaseGrados = 13f;
 
     // Devuelve cuántos rects hay que dibujar para la fila: 1 fuera de Cardboard (abajo-izq,
     // como siempre) o 2 en Cardboard (uno por ojo). Coords virtuales, tras UIScale.Begin.
@@ -316,12 +318,12 @@ public static class MortuoriumTheme
         var   sg = Scanner.UIScale.SafeGui;
         float s  = Scanner.UIScale.Factor;
         float w  = HudBarWCardboard;
-        float y  = (Screen.height * HudCardboardBaseY - sg.y) / s
-                 - HudBarH - fila * (HudBarH + HudBarGap);
         // El centro de cada ojo según la calibración del visor (zoom + distancia de cada
         // ojo). Con el centro de cada mitad, las dos copias de la barra no caían en el
         // mismo lugar y no se fusionaban.
         Rediseno.UI.OjosVisor.Centros(out var izq, out var der);
+        float y = (izq.y + HudCardboardBaseGrados * Rediseno.UI.ZonaNitida.PixelesPorGrado - sg.y) / s
+                - HudBarH - fila * (HudBarH + HudBarGap);
         float cxL = (izq.x - sg.x) / s;
         float cxR = (der.x - sg.x) / s;
         a = new Rect(cxL - w * 0.5f, y, w, HudBarH);

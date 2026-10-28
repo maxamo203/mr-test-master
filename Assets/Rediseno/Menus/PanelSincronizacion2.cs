@@ -81,6 +81,7 @@ namespace Rediseno.Menus
         // del lienzo y bajado 24°, y su borde inferior caía fuera de lo que ve cada ojo.
         protected override float AnguloPanel => 32f;
         protected override Vector2 PosicionVisor => new(0f, -12f);
+        protected override VisualElement TarjetaVisor => _tarjeta;
 
         protected override void AlCambiarVisor(bool visor)
         {

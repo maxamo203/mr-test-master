@@ -55,6 +55,8 @@ namespace Rediseno.Menus
         }
 
         protected override Texture FondoVisor => _arte;
+        // Visor fijo a la cabeza: cabecear mira arriba/abajo sobre la lista (ver PantallaUI).
+        protected override bool CabeceoVisor => true;
 
         private VisualElement _fondo;
         protected override void AlCambiarVisor(bool visor)
