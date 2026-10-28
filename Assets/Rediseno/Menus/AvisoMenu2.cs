@@ -37,6 +37,9 @@ namespace Rediseno.Menus
         }
 
         protected override Texture FondoVisor => TarjetasNoche.Arte(0);
+        // Visor fijo a la cabeza: cabecear mira arriba/abajo sobre el aviso, como en los
+        // demás menús (ver PantallaUI.CabeceoVisor).
+        protected override bool CabeceoVisor => true;
 
         protected override void AlCambiarVisor(bool visor)
         {
