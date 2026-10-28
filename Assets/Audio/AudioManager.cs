@@ -16,9 +16,10 @@ using UnityEngine;
 // de streaming del chat de voz (Voice/VoiceStream), dejandolo mudo sin forma de recuperarse.
 //
 // Reparto de voces (m_RealVoiceCount = 48 en ProjectSettings/AudioManager.asset):
-//   2 musica (crossfade) + 1 capa de tension + 8 loops + 23 one-shots +
-//   1 evento ambiental dedicado + 3 del chat de voz.
-// Musica y loops NUNCA se roban; si los 24 one-shots estan ocupados se reusa el mas viejo.
+//   2 musica + 1 tension + 8 loops + 22 one-shots + 1 ambiente + 3 muerte +
+//   3 resonancia + 4 fases + 1 aviso de linterna + 3 chat de voz.
+// Musica, loops y aviso de linterna no se roban; si los 22 one-shots estan ocupados
+// se reusa el mas viejo.
 // Asi ningun sonido corta a otro en la practica.
 //
 // Espacializacion: todas las fuentes 3D nacen con spatialize = true aunque hoy no haya
@@ -29,7 +30,7 @@ public class AudioManager : MonoBehaviour
 {
     public static AudioManager Instance { get; private set; }
 
-    private const int CantOneShots = 23;
+    private const int CantOneShots = 22;
     private const int CantBucles   = 8;
     private const int CantTransitorios = 4;
 
@@ -104,6 +105,8 @@ public class AudioManager : MonoBehaviour
     // Fuente exclusiva para golpes/manija. Permite impedir solapamientos y cortar con
     // fade una falsa alarma si empieza una amenaza real.
     private AudioSource _ambienteEvento;
+    private AudioSource _linternaAviso;
+    private bool _linternaAvisoPausado;
     private float _ambienteEventoObjetivo;
     private float _ambienteEventoFade = 0.12f;
 
@@ -158,6 +161,7 @@ public class AudioManager : MonoBehaviour
         _musB = NuevaFuente("Musica B", loop: true);
         _tension = NuevaFuente("Capa Tension", loop: true);
         _ambienteEvento = NuevaFuente("Evento ambiental", loop: false);
+        _linternaAviso = NuevaFuente("Aviso linterna", loop: false);
         _deathVoice = NuevaFuente("Captura local", loop: false);
         _deathStinger = NuevaFuente("Stinger derrota", loop: false);
         _deathHits = NuevaFuente("Golpes graves derrota", loop: true);
@@ -203,6 +207,53 @@ public class AudioManager : MonoBehaviour
     // One-shot plano (UI, avisos que no tienen lugar en el cuarto).
     public static void Sonar(Func<AudioCatalog, AudioCatalog.Pista> sel) =>
         Reproducir(sel, Vector3.zero, false, 1f);
+
+    // Una voz exclusiva permite leer el tiempo real de la muestra y sincronizar la luz.
+    public static bool IniciarAvisoLinterna(bool agotamiento)
+    {
+        var m = Instance;
+        if (m == null || m._cat == null || m._linternaAviso == null) return false;
+        var pista = agotamiento ? m._cat.linternaSeAgota : m._cat.bateriaBaja;
+        var clip = pista?.Elegir();
+        if (clip == null) return false;
+        m._linternaAviso.Stop();
+        m._linternaAvisoPausado = false;
+        m._linternaAviso.clip = clip;
+        m.Configurar(m._linternaAviso, pista, Vector3.zero, false, GameOptions.VolumenEfectos);
+        m._linternaAviso.Play();
+        return true;
+    }
+
+    public static float TiempoAvisoLinterna
+    {
+        get
+        {
+            var src = Instance != null ? Instance._linternaAviso : null;
+            return src != null && src.clip != null &&
+                   (src.isPlaying || Instance._linternaAvisoPausado)
+                ? src.timeSamples / (float)src.clip.frequency : -1f;
+        }
+    }
+
+    public static void PausarAvisoLinterna(bool pausa)
+    {
+        var src = Instance != null ? Instance._linternaAviso : null;
+        if (src == null || src.clip == null) return;
+        if (!src.isPlaying && !Instance._linternaAvisoPausado) return;
+        if (Instance._linternaAvisoPausado == pausa) return;
+        Instance._linternaAvisoPausado = pausa;
+        if (pausa) src.Pause();
+        else src.UnPause();
+    }
+
+    public static void DetenerAvisoLinterna()
+    {
+        var src = Instance != null ? Instance._linternaAviso : null;
+        if (src == null) return;
+        src.Stop();
+        src.clip = null;
+        Instance._linternaAvisoPausado = false;
+    }
 
     // One-shot posicionado: el jugador puede ubicar de donde viene.
     public static void Sonar(Func<AudioCatalog, AudioCatalog.Pista> sel, Vector3 pos) =>

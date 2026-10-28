@@ -81,7 +81,7 @@ public class DarknessOverlay : MonoBehaviour
                                   // de la linterna solo aparece cuando arranca la partida
         else if (Gameplay.LocalDeath.MostrandoRetrato)
             effectiveDark = 0f;   // muerte: el asesino fijo delante de la cara tiene que verse entero
-        else if (flashlight != null && !flashlight.isOn)
+        else if (flashlight != null && (!flashlight.isOn || flashlight.CorteAvisoActivo))
             effectiveDark = darkWhenFlashlightOff ? darknessWhenOff : 0f;
         else
             effectiveDark = darkness;

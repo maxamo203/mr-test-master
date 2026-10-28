@@ -445,7 +445,7 @@ MonoBehaviour:
     apertura: 0
   linternaSeAgota:
     clips:
-    - {fileID: 8300000, guid: b90bdd32267511b11f00d1da0d4d8edd, type: 3}
+    - {fileID: 8300000, guid: 297ba94e25d64a29ac81274ce31677f9, type: 3}
     volumen: 1
     variacionTono: 0
     variacionIntensidad: 0
@@ -455,7 +455,7 @@ MonoBehaviour:
     apertura: 0
   bateriaBaja:
     clips:
-    - {fileID: 8300000, guid: ee0d9f831f15032f316fac2f12a00240, type: 3}
+    - {fileID: 8300000, guid: 86a8c0f50c8c460da8783b543fe2ec31, type: 3}
     volumen: 1
     variacionTono: 0
     variacionIntensidad: 0

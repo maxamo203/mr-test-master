@@ -257,6 +257,10 @@ El juego se desarrolla en el entorno físico real del jugador. Antes de iniciar 
 
 - La linterna cuenta con una batería limitada que se agota con el uso continuo.
 
+- Al llegar al aviso del 20 %, suenan juntas las ondas 02 y 03 de «Dying Light Bulb» y el haz se corta en la subida de cada onda y se recupera en la bajada. El aviso se rearma sólo después de recargar por encima del 30 %.
+
+- El mismo sonido completo anticipa visualmente el agotamiento durante la última fracción de carga: las primeras ondas cortan y recuperan el haz y la última lo deja apagado al llegar a cero. Los pulsos son visuales y no alteran el modo lógico de defensa de la linterna. El audio se pausa junto con la partida y se cancela al apagar manualmente, recargar, morir o reiniciar.
+
 - El jugador debe localizar baterías de repuesto dispersas por el entorno.
 
 - Las baterías respetan las siguientes reglas de reaparición:

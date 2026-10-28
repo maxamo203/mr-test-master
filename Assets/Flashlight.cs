@@ -170,6 +170,7 @@ public float VisualInnerAngleDeg
     // Fraccion de carga restante (0..1), para HUD.
     public float Charge01 => maxCharge > 0f ? Mathf.Clamp01(currentCharge / maxCharge) : 0f;
     public bool  IsEmpty  => currentCharge <= 0f;
+    public bool CorteAvisoActivo { get; private set; }
 
     // Estado de arranque de noche: pila llena y encendida.
     //
@@ -181,6 +182,7 @@ public float VisualInnerAngleDeg
     // se habia agotado, ademas apagada, lo que arrancaba drenando cordura de una.
     public void ResetNoche()
     {
+        CancelarAvisoLinterna();
         var night = Gameplay.GameDirector.Instance != null
             ? Gameplay.GameDirector.Instance.NocheActual
             : (Gameplay.GameSession.Instance != null ? Gameplay.GameSession.Instance.SelectedNight : null);
@@ -215,6 +217,7 @@ public float VisualInnerAngleDeg
         }
         float antes = currentCharge;
         currentCharge = Mathf.Clamp(currentCharge + amount, 0f, maxCharge);
+        if (currentCharge > antes) CancelarAvisoLinterna();
         if (currentCharge > antes) AudioManager.Sonar(c => c.pilaRecogida);
         PilaRecogida?.Invoke();
     }
@@ -230,6 +233,7 @@ public float VisualInnerAngleDeg
     // Suma `amount` de a poco, en `segundos`, para que la barra se vea llenar.
     public void CargarAnimado(float amount, float segundos)
     {
+        if (amount > 0f) CancelarAvisoLinterna();
         _cargaAnimada   += Mathf.Max(0f, amount);
         _velCargaAnimada = _cargaAnimada / Mathf.Max(0.05f, segundos);
         if (isOn || !IsEmpty) return;
@@ -250,6 +254,7 @@ public float VisualInnerAngleDeg
 
         isOn = !isOn;
         if (!isOn) _brightHeld = false;
+        if (!isOn) CancelarAvisoLinterna();
         if (isOn) AudioManager.Sonar(c => c.linternaOn);
         else      AudioManager.Sonar(c => c.linternaOff);
     }
@@ -303,6 +308,47 @@ static readonly int ID_COS_INNER = Shader.PropertyToID("_FlashlightCosInner");
     private const float AvisoBateriaBaja  = 0.20f;
     private const float RearmeBateriaBaja = 0.30f;
     private bool _avisoBateriaBaja;
+
+    private enum AvisoLinterna { Ninguno, BateriaBaja, Agotamiento }
+    private AvisoLinterna _avisoLinterna;
+    private float _drenajeInicioAgotamiento;
+    private const float CorteFinalAgotamiento = 0.690f;
+
+    private void CancelarAvisoLinterna()
+    {
+        _avisoLinterna = AvisoLinterna.Ninguno;
+        _drenajeInicioAgotamiento = 0f;
+        CorteAvisoActivo = false;
+        AudioManager.DetenerAvisoLinterna();
+    }
+
+    private void IniciarAvisoLinterna(AvisoLinterna tipo, float drenaje = 0f)
+    {
+        if (!AudioManager.IniciarAvisoLinterna(tipo == AvisoLinterna.Agotamiento)) return;
+        _avisoLinterna = tipo;
+        _drenajeInicioAgotamiento = drenaje;
+        _flickerTimer = 0f;
+    }
+
+    // Los tiempos siguen la muestra que está reproduciendo AudioManager, no un timer
+    // independiente que pueda desviarse por latencia o por una pausa.
+    private float ParpadeoSincronizado()
+    {
+        if (_avisoLinterna == AvisoLinterna.Ninguno) return UpdateFlicker(Time.deltaTime);
+        float t = AudioManager.TiempoAvisoLinterna;
+        if (t < 0f)
+        {
+            CancelarAvisoLinterna();
+            return UpdateFlicker(Time.deltaTime);
+        }
+        if (_avisoLinterna == AvisoLinterna.BateriaBaja)
+            return (t >= 0.025f && t < 0.080f) ||
+                   (t >= 0.170f && t < 0.230f) ? 0f : 1f;
+        return (t >= 0.015f && t < 0.125f) ||
+               (t >= 0.405f && t < 0.460f) ||
+               (t >= 0.550f && t < 0.610f) ||
+               t >= CorteFinalAgotamiento ? 0f : 1f;
+    }
 
     // Estado del titileo actual (si _flickerTimer > 0, hay uno en curso).
     private float _flickerTimer;
@@ -366,12 +412,17 @@ static readonly int ID_COS_INNER = Shader.PropertyToID("_FlashlightCosInner");
         // bloqueado por CanOperate, y no se drena bateria aca.
         if (!CanOperate)
         {
+            if (_avisoLinterna != AvisoLinterna.Ninguno) CancelarAvisoLinterna();
             Shader.SetGlobalFloat(ID_INTENSITY, 0f);
             Shader.SetGlobalFloat(ID_FLICKER, 0f);
             Shader.SetGlobalFloat(ID_DARKNESS, 1f);
             if (_light != null) _light.enabled = false;
             return;
         }
+
+        if (LocalMuerto && _avisoLinterna != AvisoLinterna.Ninguno)
+            CancelarAvisoLinterna();
+        AudioManager.PausarAvisoLinterna(Time.timeScale <= 0f);
 
         // Carga animada (ver CargarAnimado): antes del drenaje, para que una linterna que
         // estaba agotada no se vuelva a apagar en el mismo frame en que se prende.
@@ -385,19 +436,32 @@ static readonly int ID_COS_INNER = Shader.PropertyToID("_FlashlightCosInner");
         // Drenar la batería mientras está encendida; apagar al agotarse.
         if (Mode != FlashlightMode.Off && !LocalMuerto)
         {
+            float drenaje = CurrentDrainPerSecond * MultiplicadorDrenaje;
+            // Ante un cambio de modo/drenaje se recalcula el momento final desde la
+            // carga real. Una secuencia anterior no puede apagar una batería con carga.
+            if (_avisoLinterna == AvisoLinterna.Agotamiento &&
+                !Mathf.Approximately(drenaje, _drenajeInicioAgotamiento))
+                CancelarAvisoLinterna();
+            if (Time.timeScale > 0f &&
+                _avisoLinterna != AvisoLinterna.Agotamiento && drenaje > 0f &&
+                currentCharge <= drenaje * CorteFinalAgotamiento &&
+                currentCharge > drenaje * Time.deltaTime)
+                IniciarAvisoLinterna(AvisoLinterna.Agotamiento, drenaje);
             if (currentCharge > 0f)
             {
                 // CurrentDrainPerSecond ya distingue tenue/intensa; el multiplicador es el
                 // slider dev "Drenaje batería" de la pausa.
                 currentCharge = Mathf.Max(0f,
-                    currentCharge - CurrentDrainPerSecond * MultiplicadorDrenaje * Time.deltaTime);
+                    currentCharge - drenaje * Time.deltaTime);
             }
 
             // Aviso de batería baja, una sola vez por bajada (se rearma al recargar por
             // encima del umbral alto, para no repetirlo titilando en el borde).
-            if (!_avisoBateriaBaja && !IsEmpty && Charge01 <= AvisoBateriaBaja)
+            if (Time.timeScale > 0f && !_avisoBateriaBaja && !IsEmpty &&
+                Charge01 <= AvisoBateriaBaja)
             {
-                AudioManager.Sonar(c => c.bateriaBaja);
+                if (_avisoLinterna != AvisoLinterna.Agotamiento)
+                    IniciarAvisoLinterna(AvisoLinterna.BateriaBaja);
                 _avisoBateriaBaja = true;
             }
 
@@ -406,7 +470,8 @@ static readonly int ID_COS_INNER = Shader.PropertyToID("_FlashlightCosInner");
             {
                 isOn = false;
                 _brightHeld = false;
-                AudioManager.Sonar(c => c.linternaSeAgota);
+                if (_avisoLinterna != AvisoLinterna.Agotamiento)
+                    IniciarAvisoLinterna(AvisoLinterna.Agotamiento);
             }
         }
         if (_avisoBateriaBaja && Charge01 > RearmeBateriaBaja) _avisoBateriaBaja = false;
@@ -416,7 +481,9 @@ static readonly int ID_COS_INNER = Shader.PropertyToID("_FlashlightCosInner");
 
         // El titileo solo afecta la salida visual. El modo reportado a gameplay/red no
         // cambia, por lo que Dim y Bright conservan sus reglas aunque la luz titile.
-        float flicker = UpdateFlicker(Time.deltaTime);
+        float flicker = ParpadeoSincronizado();
+        CorteAvisoActivo = _avisoLinterna != AvisoLinterna.Ninguno &&
+                           flicker <= 0f && Mode != FlashlightMode.Off;
         float modeIntensity = Mode switch
         {
             FlashlightMode.Bright => intensity * brightIntensityMultiplier,
@@ -464,6 +531,7 @@ Shader.SetGlobalFloat(ID_COS_INNER, Mathf.Cos(visualInnerAngle * Mathf.Deg2Rad))
 
     void OnDisable()
     {
+        CancelarAvisoLinterna();
         Shader.SetGlobalFloat(ID_INTENSITY, 0f);
         Shader.SetGlobalFloat(ID_FLICKER, 0f);
         if (_suscritoAPartida && NetworkManager.Instance != null)

@@ -8,6 +8,12 @@ los assets de fuente, demostraciones y alternativas de revisión no forman parte
 
 ### Créditos obligatorios
 
+- **Dying Light Bulb — Mike Koenig**, SoundBible,
+  [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/),
+  [fuente](https://soundbible.com/1295-Dying-Light-Bulb.html). Usado en
+  `Linterna/bateria_baja_ondas_02_03.wav` y `Linterna/agotamiento_dying_light_bulb.wav`;
+  recorte de ondas 02+03 para el aviso, conversión mono, remuestreo y fades.
+
 - **Monster Growls — MeijstroAudio**, Freesound,
   [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
   [fuente](https://freesound.org/people/MeijstroAudio/sounds/410523/). Usado en
