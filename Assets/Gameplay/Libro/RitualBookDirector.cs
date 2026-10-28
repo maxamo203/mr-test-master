@@ -142,6 +142,10 @@ namespace Gameplay
             if (view == null) return;
             if (!ThreatCoordinator.HasAnyCapablePlayer) return;
 
+            // La última parte de esta práctica espera a que el jugador encuentre la pila.
+            var tutorialLibro = TutorialLibro.Instance;
+            if (tutorialLibro != null && tutorialLibro.EsperandoPila) return;
+
             if (_flow.Phase == RitualBookPhase.Consuming)
             {
                 if (_bookReserved && !ThreatCoordinator.CanKeepBook())
@@ -172,6 +176,15 @@ namespace Gameplay
             int crudo = PlayerLights.CountIlluminating(
                 view.PuntoDeLuz, ang, range, view.RadioAproximado,
                 FlashlightMode.Bright, requireLineOfSight: true);
+            if (tutorialLibro != null && tutorialLibro.VelethHabilitada && crudo > 0)
+                tutorialLibro.IntentarDefenderLibro();
+            if (tutorialLibro != null && tutorialLibro.FalloActivo)
+            {
+                // En este cierre la falla también interrumpe la defensa lógica. El aviso
+                // sincronizado sigue gobernando los cortes visibles y su audio.
+                crudo = 0;
+                _alumbradoHasta = 0f;
+            }
             if (crudo > 0)
             {
                 _ultimoAlumbrando = crudo;
@@ -187,7 +200,9 @@ namespace Gameplay
             bool allowStart = _bookReserved || ThreatCoordinator.CanBeginBook();
 
             var result = _flow.Tick(Time.deltaTime, Alumbrando, jugadoresVivos,
-                                    _night.bookConsumeSeconds, _night.bookDefenseSeconds,
+                                    tutorialLibro != null && tutorialLibro.FalloActivo
+                                        ? tutorialLibro.ConsumoFinalSegundos : _night.bookConsumeSeconds,
+                                    _night.bookDefenseSeconds,
                                     allowStart);
             if ((result & RitualBookTickResult.ConsumptionStarted) != 0)
             {

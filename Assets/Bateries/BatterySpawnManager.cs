@@ -456,6 +456,22 @@ namespace Bateries
             return false;
         }
 
+        // Al comenzar el cierre del tutorial del libro, retirar las pilas normales para
+        // dejar solamente la pila guiada. No altera el ciclo de las noches.
+        public void ServerPrepararPilaTutorialLibro()
+        {
+            if (Gameplay.GameSession.Instance == null ||
+                Gameplay.GameSession.Instance.Tutorial != Gameplay.TutorialTipo.Libro ||
+                NetworkManager.Instance == null || !NetworkManager.Instance.IsServer) return;
+            DespawnTrackedObjects();
+            _byNetId.Clear();
+            foreach (var p in _points)
+            {
+                p.occupied = false;
+                p.netId = 0;
+            }
+        }
+
         // Distancia ideal (metros) de la pila del tutorial al jugador.
         private const float DistanciaGuia = 2.5f;
         private readonly List<SpawnPoint> _ordenGuia = new();

@@ -10,7 +10,8 @@ namespace Gameplay
     //     con la luz intensa unos segundos lo salva. Hay que salvarlo MetaSalvar veces. Si se
     //     apaga del todo, todavía no sale Veleth: RitualBookDirector lo restaura
     //     (VelethHabilitada es false) y se vuelve a intentar hasta lograrlo.
-    //  2. VELETH: ahora hay que DEJAR que el libro se apague. Sale Veleth, que no se echa con
+    //  2. VELETH: la linterna se agota, una pila guiada permite volver al libro y la luz
+    //     falla al intentar defenderlo. Sale Veleth, que no se echa con
     //     la luz ni se puede escapar de ella (en una noche persigue hasta atrapar a todos): esta
     //     parte es una demostración. Si te atrapa, te morís como en una noche (retrato y todo)
     //     pero el paso cuenta como superado (CompletadaPorVeleth) y FinDeNoche2 lo muestra así.
@@ -43,20 +44,46 @@ namespace Gameplay
 
         public static TutorialLibro Instance { get; private set; }
 
-        private enum Fase { Salvar, DejarApagar, Emergiendo, Cazando, Completa }
+        private enum Fase { Salvar, BuscarPila, BuscarLibro, Fallando, Emergiendo, Cazando, Completa }
 
         private Fase _fase;
         private int _salvados;
         private float _escapado;
         private bool _enPartida;
         private float _finEn = -1f;
+        private Flashlight _linterna;
+        private uint _pila;
+        private bool _hayPila;
+        private float _reintentoPila;
+        private float _sinLugarDesde = -1f;
+        private float _proximoFallo;
         private readonly PistaTutorial.Aviso _aviso = new();
+        private Flashlight Linterna => _linterna != null ? _linterna : _linterna = FindFirstObjectByType<Flashlight>();
+        public bool BuscandoPila => _enPartida && _fase == Fase.BuscarPila;
+        public bool FalloActivo => _enPartida && _fase == Fase.Fallando;
+        public bool EsperandoPila => _enPartida && _fase == Fase.BuscarPila;
+        public float ConsumoFinalSegundos => 6f;
+
+        public bool DebeSonarFallo(float ahora)
+        {
+            if (!FalloActivo || ahora < _proximoFallo) return false;
+            _proximoFallo = ahora + Random.Range(0.65f, 1.15f);
+            return true;
+        }
+
+        public void IntentarDefenderLibro()
+        {
+            if (_fase != Fase.BuscarLibro) return;
+            _fase = Fase.Fallando;
+            _proximoFallo = 0f;
+            Avisar("La linterna falla. *Intentá mantener la luz sobre el libro*.");
+        }
         // ¿Terminó porque Veleth atrapó al jugador? (la demostración se cumplió igual).
         public bool CompletadaPorVeleth { get; private set; }
 
         // ¿Perder el libro invoca a Veleth? Sólo en la segunda parte; antes, el director lo
         // restaura para volver a intentarlo.
-        public bool VelethHabilitada => _fase >= Fase.DejarApagar;
+        public bool VelethHabilitada => _fase >= Fase.BuscarPila;
 
         private void Awake()
         {
@@ -64,6 +91,7 @@ namespace Gameplay
             Instance = this;
             RitualBookDirector.IntentoResuelto += AlResolverLibro;
             VelethDirector.IntentoResuelto += AlResolverVeleth;
+            Flashlight.PilaRecogida += AlRecogerPila;
         }
 
         private void OnDestroy()
@@ -71,7 +99,17 @@ namespace Gameplay
             if (Instance != this) return;
             RitualBookDirector.IntentoResuelto -= AlResolverLibro;
             VelethDirector.IntentoResuelto -= AlResolverVeleth;
+            Flashlight.PilaRecogida -= AlRecogerPila;
+            Bateries.BatterySpawnManager.Retenidas = false;
             Instance = null;
+        }
+
+        private void AlRecogerPila()
+        {
+            if (!_enPartida || _fase != Fase.BuscarPila) return;
+            _fase = Fase.BuscarLibro;
+            _hayPila = false;
+            Avisar("Tenés luz otra vez. *Volvé al libro y alúmbralo*.");
         }
 
         private void AlResolverLibro(RitualBookDirector.ResultadoLibro r)
@@ -84,8 +122,14 @@ namespace Gameplay
                     _salvados++;
                     if (_salvados >= MetaSalvar)
                     {
-                        _fase = Fase.DejarApagar;
-                        Avisar("¡Lo salvaste! Ahora *dejá que la oscuridad lo consuma*.");
+                        _fase = Fase.BuscarPila;
+                        _hayPila = false;
+                        _reintentoPila = 0f;
+                        _sinLugarDesde = -1f;
+                        Bateries.BatterySpawnManager.Retenidas = true;
+                        Bateries.BatterySpawnManager.Instance?.ServerPrepararPilaTutorialLibro();
+                        Linterna?.AgotarParaTutorialLibro();
+                        Avisar("¡Lo salvaste! La linterna se agotó. *Buscá una pila*.");
                     }
                     else
                     {
@@ -95,10 +139,7 @@ namespace Gameplay
                 case Fase.Salvar:
                     Avisar("La oscuridad lo consumió. En una noche, sale Veleth. *Otra vez*.");
                     break;
-                case Fase.DejarApagar when salvado:
-                    Avisar("Esta vez *no lo alumbres*: dejá que la oscuridad lo consuma.");
-                    break;
-                case Fase.DejarApagar:
+                case Fase.Fallando:
                     _fase = Fase.Emergiendo;
                     break;
             }
@@ -133,10 +174,16 @@ namespace Gameplay
                 {
                     _fase = Fase.Salvar;
                     _salvados = 0;
+                    Bateries.BatterySpawnManager.Retenidas = false;
                 }
                 else
                 {
-                    _fase = Fase.DejarApagar;
+                    _fase = Fase.BuscarPila;
+                    Bateries.BatterySpawnManager.Retenidas = true;
+                    _hayPila = false;
+                    _reintentoPila = 0f;
+                    _sinLugarDesde = -1f;
+                    Linterna?.AgotarParaTutorialLibro();
                 }
                 _escapado = 0f;
                 _finEn = -1f;
@@ -145,6 +192,17 @@ namespace Gameplay
             }
             _enPartida = enPartida;
             if (!enPartida || !net.IsServer) return;
+            if (_fase == Fase.BuscarPila && Linterna != null && !Linterna.IsEmpty)
+                Linterna.AgotarParaTutorialLibro();
+            if (_fase == Fase.BuscarPila && !_hayPila && Time.time >= _reintentoPila)
+            {
+                if (_sinLugarDesde < 0f) _sinLugarDesde = Time.time;
+                var cam = Camera.main;
+                var manager = Bateries.BatterySpawnManager.Instance;
+                if (cam != null && manager != null)
+                    _hayPila = manager.ServerSpawnUnaAhora(cam.transform.position, out _pila);
+                _reintentoPila = Time.time + 0.5f;
+            }
             // Te atrapó Veleth: era la demostración, el paso queda superado igual. Muerto, el
             // reloj de escape ya no corre (es de un jugador: cualquier muerte es la suya).
             if (ServerDeaths.Count > 0)
@@ -201,7 +259,10 @@ namespace Gameplay
             // Veleth todavía no salió: la flecha va al libro, que es de donde va a salir.
             else if (_fase == Fase.Emergiendo && libro != null)
                 GuiaTutorial.Dibujar(libro.PuntoDeLuz, "VELETH");
-            else if ((_fase == Fase.Salvar || _fase == Fase.DejarApagar) && seApaga && libro != null)
+            else if (_fase == Fase.BuscarPila && _hayPila && EntityRegistry.Instance != null &&
+                     EntityRegistry.Instance.TryGet(_pila, out var pila) && pila != null)
+                GuiaTutorial.Dibujar(pila.transform.position, "PILA");
+            else if ((_fase == Fase.Salvar && seApaga || _fase == Fase.BuscarLibro || _fase == Fase.Fallando) && libro != null)
                 GuiaTutorial.Dibujar(libro.PuntoDeLuz, "LIBRO");
         }
 
@@ -212,7 +273,11 @@ namespace Gameplay
                 case Fase.Completa:   return "¡Práctica completa!";
                 case Fase.Cazando:    return "¡Te persigue! La luz no la frena: *alejate*.";
                 case Fase.Emergiendo: return "Veleth está saliendo del libro…";
-                case Fase.DejarApagar:return "*No lo alumbres*: dejá que la oscuridad lo consuma.";
+                case Fase.BuscarPila: return !_hayPila && _sinLugarDesde >= 0f && Time.time - _sinLugarDesde > 4f
+                    ? "No hay dónde dejar la pila: faltan piso o paredes que cierren el cuarto."
+                    : "Sin luz. *Seguí la flecha y recogé la pila*.";
+                case Fase.BuscarLibro: return $"*Volvé al libro y alumbralo* ({PistaTutorial.ComoLuzIntensa()}).";
+                case Fase.Fallando: return "La linterna titila. *Intentá mantener la luz sobre el libro*.";
             }
             var libro = RitualBookDirector.Instance;
             if (libro != null && libro.Fase == RitualBookPhase.Consuming)

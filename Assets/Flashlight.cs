@@ -172,6 +172,16 @@ public float VisualInnerAngleDeg
     public bool  IsEmpty  => currentCharge <= 0f;
     public bool CorteAvisoActivo { get; private set; }
 
+    // Cierre de la práctica de Veleth: agotamiento inmediato con el audio existente.
+    public void AgotarParaTutorialLibro()
+    {
+        if (Gameplay.TutorialLibro.Instance == null || !Gameplay.TutorialLibro.Instance.BuscandoPila) return;
+        currentCharge = 0f;
+        isOn = false;
+        _brightHeld = false;
+        IniciarAvisoLinterna(AvisoLinterna.Agotamiento);
+    }
+
     // Estado de arranque de noche: pila llena y encendida.
     //
     // Se engancha a NetworkManager.OnGameStarted (ver Update/OnDisable), que es el unico
@@ -481,6 +491,11 @@ static readonly int ID_COS_INNER = Shader.PropertyToID("_FlashlightCosInner");
 
         // El titileo solo afecta la salida visual. El modo reportado a gameplay/red no
         // cambia, por lo que Dim y Bright conservan sus reglas aunque la luz titile.
+        var tutorialLibro = Gameplay.TutorialLibro.Instance;
+        if (Time.timeScale > 0f && tutorialLibro != null && tutorialLibro.FalloActivo &&
+            Mode != FlashlightMode.Off && _avisoLinterna == AvisoLinterna.Ninguno &&
+            tutorialLibro.DebeSonarFallo(Time.time))
+            IniciarAvisoLinterna(AvisoLinterna.BateriaBaja);
         float flicker = ParpadeoSincronizado();
         CorteAvisoActivo = _avisoLinterna != AvisoLinterna.Ninguno &&
                            flicker <= 0f && Mode != FlashlightMode.Off;
