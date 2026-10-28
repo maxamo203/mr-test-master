@@ -56,6 +56,9 @@ namespace Rediseno.Menus
         }
 
         protected override Texture FondoVisor => ArteFondo;
+        // Visor fijo a la cabeza: cabecear mira arriba/abajo sobre la lista, como en el menú
+        // principal y OPCIONES (ver PantallaUI.CabeceoVisor).
+        protected override bool CabeceoVisor => true;
 
         protected override void AlCambiarVisor(bool visor)
         {
