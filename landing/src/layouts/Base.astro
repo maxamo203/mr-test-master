@@ -62,9 +62,16 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
 
     {/* Marca que hay JS ANTES del primer pintado: sólo entonces globals.css
         esconde los bloques con [data-reveal] para animarlos. Sin esto, un
-        visitante sin JS (o un error temprano) vería la página en blanco. */}
+        visitante sin JS (o un error temprano) vería la página en blanco.
+        Red de seguridad: si el script de aparición (abajo) no llegó a correr
+        —un Chrome viejo que no parsea el bundle, por ejemplo— se saca la marca
+        y los bloques quedan visibles sin animar. Pasó en un LG G6: el
+        formulario quedaba en opacity:0, invisible pero tocable. */}
     <script is:inline>
       document.documentElement.classList.add('js');
+      setTimeout(function () {
+        if (!window.__revealListo) document.documentElement.classList.remove('js');
+      }, 3000);
     </script>
   </head>
 
@@ -99,6 +106,8 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
 
     <script>
       // --- 1) Aparición de bloques al entrar en pantalla -------------------
+      // Avisa a la red de seguridad del <head> que la aparición está a cargo.
+      (window as unknown as { __revealListo?: boolean }).__revealListo = true;
       const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const revealables = document.querySelectorAll<HTMLElement>('[data-reveal]');
 

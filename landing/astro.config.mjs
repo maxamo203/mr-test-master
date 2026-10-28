@@ -19,4 +19,12 @@ export default defineConfig({
   // Las páginas siguen estáticas; sólo src/pages/api/* (prerender = false) corre
   // como función serverless en Vercel (validación del captcha del formulario).
   adapter: vercel(),
+
+  // JS de las páginas compilado para navegadores viejos: el target por defecto
+  // de Vite (chrome87) deja `?.` / `??` tal cual, y un Chrome anterior al 80
+  // (celulares Android sin actualizar, ej. LG G6) tira SyntaxError y no corre
+  // ningún script de la página.
+  vite: {
+    build: { target: ['es2017', 'chrome61', 'safari12'] },
+  },
 });
