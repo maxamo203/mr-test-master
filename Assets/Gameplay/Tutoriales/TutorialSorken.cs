@@ -8,7 +8,7 @@ namespace Gameplay
     // Práctica SORKEN: el Sorken entra por las puertas o ventanas que el jugador marcó en
     // el armado rápido (ArmadoRapido, sin escaneo). Hay que echarlo MetaEchar veces con la
     // luz intensa, de las dos formas: el primero se puede echar en la entrada (alumbrando la
-    // puerta mientras aparece); después de echar uno ahí, la entrada ya no lo frena
+    // puerta mientras aparece); después de echar el primero, la entrada ya no lo frena
     // (GameDirector.SinRepelerEnEntrada): hay que esperar a que entre, verlo y echarlo
     // adentro (alumbrándolo a él). Si te atrapa, te morís como en una noche: pantalla de muerte con
     // REINTENTAR PRÁCTICA. Al completar, la noche se gana (ServerNightSurvived) y
@@ -17,6 +17,7 @@ namespace Gameplay
     public class TutorialSorken : MonoBehaviour
     {
         private const float DemoraFin = 2f;
+        public const float IntervaloSegundoIngreso = 2.5f;
         // Cuánto queda a la vista el aviso de un resultado (lo echaste / te atrapó).
         private const float SegundosAviso = 2.5f;
 
@@ -41,9 +42,16 @@ namespace Gameplay
         public const int MetaEchar = 2;
 
         private int _echados;
-        // ¿Ya echó uno en la entrada? Desde ahí, los que siguen hay que echarlos adentro.
-        private bool _echadoEnEntrada;
-        private static bool DejarEntrar => Instance != null && Instance._echadoEnEntrada;
+        // El segundo ingreso empieza con el clip de entrada y se resuelve adentro.
+        private bool _segundoIngresoPendiente;
+        private static bool DejarEntrar => Instance != null && Instance._echados >= 1;
+        public bool SegundoIngresoPendiente => _enPartida && _segundoIngresoPendiente;
+        public bool TomarSegundoIngresoInmediato()
+        {
+            if (!SegundoIngresoPendiente) return false;
+            _segundoIngresoPendiente = false;
+            return true;
+        }
         private bool _enPartida;
         private float _finEn = -1f;
         private readonly PistaTutorial.Aviso _aviso = new();
@@ -69,11 +77,11 @@ namespace Gameplay
         {
             if (!_enPartida || Completa) return;
             _echados++;
+            if (_echados == 1) _segundoIngresoPendiente = true;
             bool enEntrada = r == GameDirector.ResultadoSorken.EchadoEnLaEntrada;
-            if (enEntrada) _echadoEnEntrada = true;
             if (Completa) Avisar(enEntrada ? "¡Bien! Lo echaste en la entrada." : "¡Bien! Lo echaste adentro.");
             else if (enEntrada) Avisar("¡Bien! Lo echaste en la entrada. Al próximo *dejalo entrar*.");
-            else Avisar("¡Bien! Lo echaste adentro. Va a volver.");
+            else Avisar("¡Bien! Lo echaste adentro. Al próximo *dejalo entrar*.");
         }
 
         private void Avisar(string texto)
@@ -92,12 +100,12 @@ namespace Gameplay
             if (enPartida && !_enPartida)
             {
                 _echados = 0;
-                _echadoEnEntrada = false;
+                _segundoIngresoPendiente = false;
                 _finEn = -1f;
                 _aviso.Limpiar();
             }
             _enPartida = enPartida;
-            GameDirector.SinRepelerEnEntrada = enPartida && _echadoEnEntrada && !Completa;
+            GameDirector.SinRepelerEnEntrada = enPartida && _echados >= 1 && !Completa;
             if (!enPartida || !net.IsServer) return;
 
             if (_finEn < 0f)

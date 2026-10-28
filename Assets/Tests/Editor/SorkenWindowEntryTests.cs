@@ -43,6 +43,18 @@ public class SorkenWindowEntryTests
     }
 
     [Test]
+    public void SegundoIngresoDelTutorialUsaOtraEntradaSiExiste()
+    {
+        for (int sample = 0; sample <= 100; sample++)
+            Assert.That(GameDirector.SelectEntryIndex(
+                new[] { 0, 2, 3 }, 0, 1, sample / 100f, forzarOtroIngreso: true),
+                Is.Not.EqualTo(0));
+
+        Assert.That(GameDirector.SelectEntryIndex(
+            new[] { 0 }, 0, 1, 0.5f, forzarOtroIngreso: true), Is.Zero);
+    }
+
+    [Test]
     public void DefensaConservaProgresoYPosicionHastaDosSegundos()
     {
         var atHalfSecond = GameDirector.StepDefense(

@@ -78,6 +78,7 @@ namespace Gameplay
         private float _attemptTimer;   // Idle: cuenta al proximo intento
         private float _repel;          // segundos continuos de iluminacion sobre el objetivo
         private float _grace;          // Entering: cuenta a la entrada
+        private bool _entradaInmediataTutorial;
         private float _phaseTimer;     // Grabbed / Retreating
         private bool  _coverStartPlayedThisAttempt;
         private bool  _retreatDespawnIssued;
@@ -323,6 +324,8 @@ namespace Gameplay
                 return;
             }
             RegisterEntryUse(_marker);
+            _entradaInmediataTutorial = TutorialSorken.Instance != null &&
+                TutorialSorken.Instance.TomarSegundoIngresoInmediato();
             _sorkenTraceId = GameplayTelemetry.BeginThreat(
                 "sorken", 0, _sorken.Position,
                 $"marker={_marker.KindId};entry={_night.entryGraceSeconds:F2}");
@@ -340,7 +343,8 @@ namespace Gameplay
             // La entrada tiene dos etapas: primero se mantiene en el punto para
             // que el jugador pueda detectarlo y repelerlo; la animacion de emergencia
             // solo arranca en el tramo final configurado de la ventana.
-            _sorken.SetState(SorkenState.Idle);
+            _sorken.SetState(_entradaInmediataTutorial
+                ? EmergingStateForMarker() : SorkenState.Idle);
             _coverStartPlayedThisAttempt = false;
 
             _repel = 0f; _grace = 0f; _windowLandingDuration = 0f;
@@ -369,7 +373,8 @@ namespace Gameplay
 
             int selectedIndex = SelectEntryIndex(
                 _entryCandidateDroughts, lastIndex, _sameEntryStreak,
-                UnityEngine.Random.value);
+                UnityEngine.Random.value,
+                TutorialSorken.Instance != null && TutorialSorken.Instance.SegundoIngresoPendiente);
             return selectedIndex >= 0 ? _entryCandidates[selectedIndex] : null;
         }
 
@@ -398,13 +403,14 @@ namespace Gameplay
         // del estado global de UnityEngine.Random. Un ingreso gana un punto de peso por
         // cada intento exitoso en el que no fue usado (hasta 12).
         public static int SelectEntryIndex(
-            IReadOnlyList<int> droughts, int lastIndex, int sameEntryStreak, float random01)
+            IReadOnlyList<int> droughts, int lastIndex, int sameEntryStreak, float random01,
+            bool forzarOtroIngreso = false)
         {
             if (droughts == null || droughts.Count == 0) return -1;
 
             bool excludeLast = droughts.Count > 1 &&
                                lastIndex >= 0 && lastIndex < droughts.Count &&
-                               sameEntryStreak >= 2;
+                               (sameEntryStreak >= 2 || forzarOtroIngreso);
             float totalWeight = 0f;
             for (int i = 0; i < droughts.Count; i++)
             {
@@ -445,8 +451,11 @@ namespace Gameplay
             float animationDuration = window
                 ? Mathf.Max(0.2f, _sorken.WindowEntryDuration)
                 : Mathf.Max(0.2f, _night.entryAnimationSeconds);
+            float entryGrace = _entradaInmediataTutorial
+                ? animationDuration : _night.entryGraceSeconds;
             float animationStart = EntryAnimationStart(
-                window, _night.entryGraceSeconds, animationDuration, _windowCueLeadSeconds);
+                window, entryGrace, animationDuration,
+                _entradaInmediataTutorial ? 0f : _windowCueLeadSeconds);
             if (_grace >= animationStart &&
                 _sorken.State != SorkenState.EmergingDoor &&
                 _sorken.State != SorkenState.EmergingWindow)
@@ -484,7 +493,7 @@ namespace Gameplay
             // No iniciamos la caida hasta que termino el traspaso y el segundo pie esta
             // apoyado; asi el cambio de clip no lo despega del marco a mitad de gesto.
             float entryEnd = EntryEnd(
-                window, _night.entryGraceSeconds, animationStart, animationDuration);
+                window, entryGrace, animationStart, animationDuration);
             if (_grace >= entryEnd) EnterChase();
         }
 
@@ -1013,7 +1022,11 @@ private void BeginCoverStart()
             _sorkenTraceId = 0;
             DespawnSorken();
             ReleaseSorkenReservation();
-            _attemptTimer = UnityEngine.Random.Range(_night.attemptIntervalMin, _night.attemptIntervalMax);
+            _attemptTimer = TutorialSorken.Instance != null &&
+                TutorialSorken.Instance.SegundoIngresoPendiente
+                ? TutorialSorken.IntervaloSegundoIngreso
+                : UnityEngine.Random.Range(_night.attemptIntervalMin, _night.attemptIntervalMax);
+            _entradaInmediataTutorial = false;
             _phase = Phase.Idle;
             Debug.Log($"[GameDirector] Fin del intento. Proximo en {_attemptTimer:F1}s.");
         }
