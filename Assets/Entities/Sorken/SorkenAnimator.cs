@@ -102,6 +102,10 @@ public class SorkenAnimator : MonoBehaviour
     private readonly SorkenFootstepClock _footstepClock = new();
     private Transform _leftFoot;
     private Transform _rightFoot;
+    private Transform _leftToe;
+    private Transform _rightToe;
+    private float _toeSoleHeight;   // altura del dedo sobre el piso en reposo (coords de la raiz)
+    private float _groundOffset;    // correccion vertical actual de la cadera (coords de la raiz)
     private bool _pendingFootstep;
     private Vector3 _pendingFootstepPosition;
     private float _pendingFootstepIntensity;
@@ -313,6 +317,9 @@ public class SorkenAnimator : MonoBehaviour
         _leftForeArm = FindDescendant(transform, "LeftForeArm");
         _rightForeArm = FindDescendant(transform, "RightForeArm");
         if (_hips != null) _neutralHipsLocalPosition = _hips.localPosition;
+        _leftToe = FindDescendant(transform, "LeftToeBase") ?? _leftFoot;
+        _rightToe = FindDescendant(transform, "RightToeBase") ?? _rightFoot;
+        _toeSoleHeight = MeasureToeSoleHeight();
         _activeWindowLandingDuration = Mathf.Max(0.2f, _windowLandingDuration);
         animator.applyRootMotion = false; // el codigo controla pos/rot, no la animacion
 
@@ -571,6 +578,7 @@ public class SorkenAnimator : MonoBehaviour
         if (_sorken != null && _sorken.State == SorkenState.Retreating)
         {
             ApplyRetreatPainPose();
+            ApplyGrounding();
             return;
         }
 
@@ -617,6 +625,60 @@ public class SorkenAnimator : MonoBehaviour
         if (_postWindowDepthOffsetActive && KeepsPostWindowDepthOffset(_sorken.State))
             _hips.localPosition = ApplyPostWindowDepthOffset(
                 _hips.localPosition, _postWindowHipsDepthOffset);
+
+        ApplyGrounding();
+    }
+
+    // Apoya los pies en el piso. La raiz ya esta a la altura del piso (GameDirector), pero
+    // la altura de los pies la decide la cadera de cada clip, y no todos estan a la escala
+    // del modelo: el FBX principal se importa con globalScale 1.35 y los clips separados
+    // (caminata cubierta, entradas por puerta y ventana) vienen de FBX a escala 1, asi que
+    // el Sorken quedaba flotando unos centimetros. Con los estados de pie se baja (o sube)
+    // la cadera hasta que el dedo mas bajo quede a su altura de reposo sobre la suela. Va en
+    // coords de la raiz: SorkenEntity la restaura despues y la correccion la acompaña.
+    private void ApplyGrounding()
+    {
+        if (_hips == null || _leftToe == null || _rightToe == null || _weights == null) return;
+
+        float totalWeight = 0f, groundedWeight = 0f;
+        for (int i = 0; i < _weights.Length; i++)
+        {
+            totalWeight += _weights[i];
+            if (IsGroundedState((SorkenState)i)) groundedWeight += _weights[i];
+        }
+        if (totalWeight <= 1e-4f) return;
+        groundedWeight = Mathf.Clamp01(groundedWeight / totalWeight);
+        if (!IsGroundedState(_sorken.State)) groundedWeight = 0f;
+
+        float lowestToe = Mathf.Min(transform.InverseTransformPoint(_leftToe.position).y,
+                                    transform.InverseTransformPoint(_rightToe.position).y);
+        float target = Mathf.Clamp(_toeSoleHeight - lowestToe, -MaxGroundCorrection, MaxGroundCorrection) *
+                       groundedWeight;
+        // Suavizado: en la carrera hay instantes con los dos pies en el aire y seguir el
+        // dedo cuadro a cuadro aplastaria ese salto contra el piso.
+        _groundOffset = Mathf.Lerp(_groundOffset, target, 1f - Mathf.Exp(-GroundingRate * Time.deltaTime));
+        if (Mathf.Abs(_groundOffset) > 1e-5f)
+            _hips.position += transform.TransformVector(Vector3.up * _groundOffset);
+    }
+
+    private const float MaxGroundCorrection = 0.5f;
+    private const float GroundingRate = 6f;
+
+    private static bool IsGroundedState(SorkenState state) =>
+        state == SorkenState.Chasing ||
+        state == SorkenState.Grabbing ||
+        state == SorkenState.Retreating ||
+        state == SorkenState.CoverStarting ||
+        state == SorkenState.CoverWalking;
+
+    // En la pose de reposo (antes de que corra el Animator) el modelo esta parado sobre su
+    // pivote, a la escala del import: la altura del dedo ahi es el grosor del pie.
+    private float MeasureToeSoleHeight()
+    {
+        if (_leftToe == null || _rightToe == null) return 0f;
+        float toe = Mathf.Min(transform.InverseTransformPoint(_leftToe.position).y,
+                              transform.InverseTransformPoint(_rightToe.position).y);
+        return Mathf.Clamp(toe, 0f, 0.3f);
     }
 
     public static Vector3 CorrectLandingHipsPosition(

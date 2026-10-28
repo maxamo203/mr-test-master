@@ -317,7 +317,16 @@ namespace Gameplay
                 var inst = Instantiate(prefab, pos, rot, fuente.transform);
                 foreach (var script in inst.GetComponentsInChildren<MonoBehaviour>(true))
                     script.enabled = false;
+                // Awake corre igual con el script apagado, y alguno toca los renderers:
+                // SorkenDarknessCue esconde el cuerpo mientras está en Idle (recién
+                // instanciado lo está), así que sin restaurarlos no quedaba malla visible
+                // que copiar y el Sorken moría sin retrato. Manda lo que dice el prefab.
+                var renderers = inst.GetComponentsInChildren<Renderer>(true);
+                var visibles = new bool[renderers.Length];
+                for (int i = 0; i < renderers.Length; i++) visibles[i] = renderers[i].enabled;
                 fuente.SetActive(true);
+                for (int i = 0; i < renderers.Length; i++)
+                    if (renderers[i] != null) renderers[i].enabled = visibles[i];
                 // Sin esto se copiaba la pose de reposo del rig (recién instanciado, el Animator
                 // todavía no corrió): Veleth salía tirada, no en el reptado con el que mata.
                 foreach (var animator in inst.GetComponentsInChildren<Animator>())
