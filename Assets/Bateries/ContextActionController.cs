@@ -330,9 +330,12 @@ namespace Bateries
                                       g.buttonNorth.isPressed || g.buttonWest.isPressed);
 
             // VR Box en modo mouse: la A es el botón de acción (recoger lo apuntado; si no,
-            // prender/apagar; mantenida concentra, igual que el botón de siempre). La palanca va
-            // aparte: hemisferio norte = intensa, sur = apagada. La B abre la pausa.
-            held |= VRBoxInput.AHeld;
+            // prender/apagar). La palanca va aparte: hemisferio norte = intensa, sur = apagada.
+            // La B abre la pausa. Como la B, la A puede llegar con bajada y subida casi juntas:
+            // leer sólo si está apretada (polling) perdía la mayoría de las pulsaciones y había
+            // que insistir para recoger una pila. La pulsación vista por la acción
+            // (APressedThisFrame, que ve cada evento) cuenta como un frame apretado = un toque.
+            held |= VRBoxInput.AHeld || VRBoxInput.APressedThisFrame;
 
             // Mobile: un dedo apoyado fuera de los botones = el mismo botón. Toque corto
             // prende/apaga (o recoge lo apuntado), mantener concentra.

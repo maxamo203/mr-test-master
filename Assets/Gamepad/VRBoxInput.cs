@@ -81,9 +81,10 @@ namespace Gamepad
         public static bool PalancaArriba => ModoMouse && SmoothedStick.y >  FranjaMuerta;
         public static bool PalancaAbajo  => ModoMouse && SmoothedStick.y < -FranjaMuerta;
 
-        // La A mantenida (el botón izquierdo del mouse que manda el VR BOX). A diferencia de la
-        // B, la A sí informa cuándo se suelta. En la noche es el botón de acción: un toque
-        // recoge lo apuntado (o prende/apaga la linterna) y mantenerla concentra.
+        // La A apretada en este momento (el botón izquierdo del mouse que manda el VR BOX).
+        // OJO: igual que la B, puede llegar con bajada y subida casi juntas y entonces nunca
+        // se ve apretada entre dos frames; para no perder toques, quien la use como botón de
+        // acción tiene que sumar APressedThisFrame (ver ContextActionController.PrimaryHeld).
         public static bool AHeld => ModoMouse && _botonA != null && _botonA.IsPressed();
 
         private static bool ModoMouse => GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput;
