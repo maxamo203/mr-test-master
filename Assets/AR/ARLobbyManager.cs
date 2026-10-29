@@ -359,10 +359,17 @@ public class ARLobbyManager : MonoBehaviour
         //
         // Si ya están colocadas (reinicio de noche en la MISMA sesión AR) se saltea:
         // los ARAnchor siguen vivos, así que sólo hacía falta recalibrar la imagen.
+        //
+        // En el TUTORIAL tampoco se abre sola: el camino corto va directo a EMPEZAR
+        // PRÁCTICA, y las anclas quedan a mano con el botón ANCLAS (AbrirAnclas).
         if (GameOptions.PuntosAncla)
         {
             var anclas = AnchorPointManager.Ensure();
-            if (!anclas.Listo)
+            if (!anclas.Listo && EnTutorial)
+            {
+                anclas.Omitir();
+            }
+            else if (!anclas.Listo)
             {
                 anclas.AbrirColocacion();
                 State = LobbyState.PlacingAnchors;
@@ -495,6 +502,24 @@ public class ARLobbyManager : MonoBehaviour
         // también el arranque "en frío" (menú → partida), no sólo los reinicios.
         Gameplay.NightResult.LimpiarResultado();
         State = LobbyState.GameStarted;
+    }
+
+    private static bool EnTutorial =>
+        Gameplay.GameSession.Instance != null && Gameplay.GameSession.Instance.EnTutorial;
+
+    // ¿Se ofrece el botón ANCLAS? En el tutorial la colocación no se abre sola tras
+    // sincronizar (ver ContinuarTrasCalibrar): se abre desde el menú de EMPEZAR PRÁCTICA.
+    // Sólo el host (el tutorial es de un jugador) y con la opción activada.
+    public bool PuedeAbrirAnclas => GameOptions.PuntosAncla && EnTutorial &&
+                                    State == LobbyState.WaitingForClients;
+
+    // ANCLAS: abre la colocación (colocar u omitir); LISTO / OMITIR vuelven a este menú
+    // por AnchorPlacementDone.
+    public void AbrirAnclas()
+    {
+        if (!PuedeAbrirAnclas) return;
+        AnchorPointManager.Ensure().AbrirColocacion();
+        State = LobbyState.PlacingAnchors;
     }
 
     // El jugador cerró la colocación de anclas (LISTO u OMITIR).

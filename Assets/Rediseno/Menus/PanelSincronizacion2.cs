@@ -165,6 +165,9 @@ namespace Rediseno.Menus
                 iniciar.style.backgroundImage = TemaUI.DegradeRojo;
                 iniciar.style.backgroundSize = new BackgroundSize(Length.Percent(100), Length.Percent(100));
                 _botones.Add(iniciar);
+                // Tutorial: las anclas no se piden solas al sincronizar; quedan a mano acá.
+                if (_lobby.PuedeAbrirAnclas)
+                    _botones.Add(PiezasUI.Boton(Nav, "ANCLAS", () => { _error = null; _lobby.AbrirAnclas(); }));
                 // Práctica armada en el momento: no hay imagen que buscar; se rehace el armado.
                 if (Gameplay.GameSession.Instance != null && Gameplay.GameSession.Instance.ArmadoRapido)
                     _botones.Add(PiezasUI.Boton(Nav, "REHACER ARMADO", () => { _error = null; _lobby.RehacerArmado(); }));
