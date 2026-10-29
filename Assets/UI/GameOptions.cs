@@ -21,6 +21,7 @@ public static class GameOptions
     // ya lo habian apagado cuando la opcion solo mencionaba los menus.
     private const string KeyVhsMenusLegacy = "opt_vhs_menus";
     private const string KeyMenusCuarto = "opt_menus_en_el_cuarto";
+    private const string KeySinImagen   = "opt_ofrecer_sin_imagen";
 
     // Volumen maestro 0..1 (AudioListener.volume). Persiste entre sesiones.
     public static float Volumen
@@ -85,6 +86,21 @@ public static class GameOptions
         set
         {
             PlayerPrefs.SetInt(KeyPuntosAncla, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    // ¿Se ofrece "NO TENGO LA IMAGEN" (calibración manual, ver ManualCalibration)?
+    // Apagada, el jugador declara que siempre tiene la imagen física a mano: el botón
+    // no aparece ni en la sincronización del lobby ni en el escáner, y la única vía
+    // para ubicar el mapa es detectar la imagen. AJUSTAR ENTORNO / AJUSTAR ORIGEN
+    // siguen disponibles (corrigen una pose ya detectada). Por dispositivo. Default: prendida.
+    public static bool OfrecerSinImagen
+    {
+        get => PlayerPrefs.GetInt(KeySinImagen, 1) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(KeySinImagen, value ? 1 : 0);
             PlayerPrefs.Save();
         }
     }

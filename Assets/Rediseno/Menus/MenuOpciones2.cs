@@ -89,6 +89,9 @@ namespace Rediseno.Menus
             lista.Add(PiezasUI.Interruptor(nav, "PUNTOS DE ANCLAJE",
                 "Colocá anclas en tu cuarto antes de empezar (menos deriva)",
                 () => GameOptions.PuntosAncla, v => GameOptions.PuntosAncla = v));
+            lista.Add(PiezasUI.Interruptor(nav, "OFRECER «NO TENGO LA IMAGEN»",
+                "Apagado: siempre vas a tener la imagen de referencia, y el mapa sólo se ubica detectándola",
+                () => GameOptions.OfrecerSinImagen, v => GameOptions.OfrecerSinImagen = v));
             if (GameOptions.AutoWallScanBetaEnabled)
                 lista.Add(PiezasUI.Interruptor(nav, "PARED AUTOMÁTICA (BETA)",
                     "En el escáner, sugiere paredes detectadas por la cámara",

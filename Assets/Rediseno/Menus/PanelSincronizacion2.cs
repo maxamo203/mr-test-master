@@ -152,7 +152,7 @@ namespace Rediseno.Menus
                 return;
             }
 
-            if (s == ARLobbyManager.LobbyState.Scanning)
+            if (s == ARLobbyManager.LobbyState.Scanning && GameOptions.OfrecerSinImagen)
             {
                 _botones.Add(PiezasUI.Boton(Nav, "NO TENGO LA IMAGEN",
                     () => _error = _lobby.CalibrarSinImagen(), habilitado: _lobby.PuedeCalibrarManual));

@@ -355,8 +355,10 @@ namespace Scanner
         private string _errorSinImagen;
 
         // Sólo tiene sentido con un escaneo guardado que ubicar: en uno nuevo no hay
-        // mapa que centrar y justamente se está por capturar la imagen.
-        private static bool OfreceSinImagen => !string.IsNullOrEmpty(SaveLoadUI.NombreEdicion);
+        // mapa que centrar y justamente se está por capturar la imagen. El jugador
+        // puede apagarlo en OPCIONES (GameOptions.OfrecerSinImagen).
+        private static bool OfreceSinImagen => GameOptions.OfrecerSinImagen &&
+                                               !string.IsNullOrEmpty(SaveLoadUI.NombreEdicion);
 
         private void CalibrarSinImagen()
         {
