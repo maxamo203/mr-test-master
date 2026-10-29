@@ -24,7 +24,8 @@ namespace Rediseno
     //     llegar hay que cruzar la franja de la linterna: si en esa misma subida la prendió o
     //     apagó, al abrir la pausa se deshace (subiste a pausar, no a tocar la luz).
     //   - Luz intensa: sola, mientras el libro que se está oscureciendo (o un Sorken) quede
-    //     centrado en el haz. El libro y el Sorken sólo cuentan la luz en modo intenso.
+    //     centrado en el haz, hasta que no le quede nada de oscuridad. El libro y el
+    //     Sorken sólo cuentan la luz en modo intenso.
     //
     // Sólo actúa en partida, en Cardboard y SIN mando
     // conectado (con joystick manda el joystick). Lo agrega ContextActionController a su
@@ -292,8 +293,13 @@ namespace Rediseno
             {
                 float lim = _intensaPorMirada ? intensaSalirGrados : intensaEntrarGrados;
 
+                // Cualquier oscuridad cuenta, hasta que vuelva a 0 (salvado). Con un umbral
+                // (era 2%) la intensa se soltaba justo antes de terminar: el libro sólo cuenta
+                // la luz intensa, así que la defensa se cortaba, el resto volvía a crecer hasta
+                // pasar el umbral y quedaba clavado en "un poquito" de oscuridad; había que
+                // dejar de mirarlo y volver para que se fuera del todo.
                 var libro = RitualBookView.Active;
-                if (libro != null && libro.Disponible && libro.Oscuridad01 > 0.02f &&
+                if (libro != null && libro.Disponible && libro.Oscuridad01 > 1e-4f &&
                     Centrado(cam, libro.PuntoDeLuz, libro.RadioAproximado, lim))
                     quiere = true;
 

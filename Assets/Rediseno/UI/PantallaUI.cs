@@ -460,34 +460,58 @@ namespace Rediseno.UI
 
         private bool EnCuentaRegresiva => EnElCuarto && !CabezaPorCamara && Cabeza.EnCuentaRegresiva;
 
-        // Margen extra (grados) antes de que la pantalla empiece a seguirte: el borde de lo que
-        // se ve por las lentes no es exacto, y así nunca se la ve "arrastrarse".
-        private const float MargenArrastre = 8f;
+        // Cuánto de la pantalla (grados) queda SIEMPRE a la vista cuando la dejás atrás: en vez de
+        // irse entera fuera del campo visual, se queda asomada por el borde, así nunca se pierde
+        // de vista que hay un menú ahí. Medido hacia adentro desde el borde de la mitad de
+        // pantalla del ojo que menos ve (lo que tapa la lente es poco y varía con el visor;
+        // con esto alcanza para que se note en los dos ojos).
+        private const float AsomadoGrados = 12f;
+        // Tope del asomado en pantallas chicas: nunca más que esta fracción de su tamaño.
+        private const float AsomadoMaxFraccion = 0.4f;
 
-        // Hasta qué yaw la pantalla todavía se ve, para cada lado. Cada ojo se dibuja recortado
-        // a su mitad de pantalla, pero su centro (calibración, OjosVisor) no siempre cae en el
-        // medio de esa mitad: hacia un costado se ve más de 45°. Se toma lo más que se vea en
-        // cualquiera de los dos ojos, más media pantalla y el margen.
-        private void LimitesArrastre(out float limitePos, out float limiteNeg)
+        // Hasta qué giro la pantalla todavía se ve asomada, para cada lado (grados, positivos).
+        // Pasado eso empieza a seguirte, pegada a ese borde. Cada ojo se dibuja recortado a su
+        // mitad de pantalla, y su centro (calibración, OjosVisor) no siempre cae en el medio de
+        // esa mitad: se toma lo que se ve en el ojo que menos ve de ese lado, para que el asomado
+        // esté en los dos.
+        //   limitePos / limiteNeg: yaw > 0 (miraste a la derecha, la pantalla queda a la izquierda) / yaw < 0.
+        //   limiteArriba / limiteAbajo: pitch > 0 (miraste arriba, la pantalla queda abajo) / pitch < 0.
+        private void LimitesArrastre(out float limitePos, out float limiteNeg,
+                                     out float limiteArriba, out float limiteAbajo)
         {
             OjosVisor.Centros(out var izq, out var der);
-            float ojoW = Screen.width * 0.5f;
-            float ppd = PpdMundo();
-            float haciaIzq = Mathf.Max(izq.x, der.x - ojoW) / ppd;
-            float haciaDer = Mathf.Max(ojoW - izq.x, Screen.width - der.x) / ppd;
-            // Media pantalla en grados del mundo (su tamaño en pantalla va en la escala base).
-            float medio = AnguloPanel * PpdBase / ppd * 0.5f + MargenArrastre;
-            limitePos = haciaIzq + medio;   // yaw > 0: la pantalla queda a la izquierda
-            limiteNeg = haciaDer + medio;
+            float ojoW = Screen.width * 0.5f, ojoH = Screen.height;
+            float ppd = PpdMundo(), ppdB = PpdBase;
+            float haciaIzq    = Mathf.Min(izq.x, der.x - ojoW) / ppd;
+            float haciaDer    = Mathf.Min(ojoW - izq.x, Screen.width - der.x) / ppd;
+            float haciaArriba = Mathf.Min(izq.y, der.y) / ppd;
+            float haciaAbajo  = Mathf.Min(ojoH - izq.y, ojoH - der.y) / ppd;
+
+            // Medidas de la pantalla flotante en grados del mundo (su tamaño en pantalla y su
+            // corrimiento fijo van en la escala base, ver OnGUI).
+            float ancho = AnguloPanel * ppdB / ppd;
+            float alto  = ancho * AltoVisor / AnchoRef;
+            Vector2 off = (PosicionVisor + new Vector2(0f, _ajusteY)) * (ppdB / ppd);
+            float asomaX = Mathf.Min(AsomadoGrados, ancho * AsomadoMaxFraccion);
+            float asomaY = Mathf.Min(AsomadoGrados, alto * AsomadoMaxFraccion);
+
+            limitePos    = Mathf.Max(0f, haciaIzq    + ancho * 0.5f + off.x - asomaX);
+            limiteNeg    = Mathf.Max(0f, haciaDer    + ancho * 0.5f - off.x - asomaX);
+            limiteArriba = Mathf.Max(0f, haciaAbajo  + alto  * 0.5f + off.y - asomaY);
+            limiteAbajo  = Mathf.Max(0f, haciaArriba + alto  * 0.5f - off.y - asomaY);
         }
 
         private void LeerCabeza(float dt)
         {
-            LimitesArrastre(out float limPos, out float limNeg);
+            LimitesArrastre(out float limPos, out float limNeg, out float limArriba, out float limAbajo);
             if (!CabezaPorCamara)
             {
                 Cabeza.Tick(dt, limPos, limNeg);
-                _yaw = Cabeza.Yaw; _pitch = Cabeza.Pitch;
+                _yaw = Cabeza.Yaw;
+                // La altura no tiene referencia que correr: es contra el horizonte, y ahí es
+                // donde la pantalla tiene que volver. Mirando muy arriba/abajo sólo se la frena
+                // asomada en el borde; al volver la vista, regresa sola a la altura de los ojos.
+                _pitch = Mathf.Clamp(Cabeza.Pitch, -limAbajo, limArriba);
                 return;
             }
             var cam = Camera.main;
@@ -500,9 +524,9 @@ namespace Rediseno.UI
             // mirando el piso.
             if (!_tieneRefCamara) { _refYaw = yaw; _refPitch = 0f; _tieneRefCamara = true; }
             _yaw = Mathf.DeltaAngle(_refYaw, yaw);
-            _pitch = pitch - _refPitch;
-            // Quieta mientras se ve; entera fuera de la vista, pegada al borde de afuera (antes
-            // saltaba de golpe adelante al darse vuelta). Ver Cabeza.ArrastrarAlBorde.
+            _pitch = Mathf.Clamp(pitch - _refPitch, -limAbajo, limArriba);
+            // Quieta mientras se ve; al dejarla atrás se queda asomada por el borde y te
+            // acompaña (antes saltaba de golpe adelante al darse vuelta). Ver Cabeza.ArrastrarAlBorde.
             _yaw = Cabeza.ArrastrarAlBorde(_yaw, limPos, limNeg, ref _refYaw);
         }
 
@@ -537,9 +561,10 @@ namespace Rediseno.UI
                 if (CabeceoVisor && !CabezaPorCamara)
                 {
                     if (!Cabeza.EnUso) { Cabeza.Recentrar(); Cabeza.Habilitar(true); }
-                    LimitesArrastre(out float limPos, out float limNeg);
+                    LimitesArrastre(out float limPos, out float limNeg, out float limArriba, out float limAbajo);
                     Cabeza.Tick(dt, limPos, limNeg);
-                    _pitch = Cabeza.Pitch;
+                    // Igual que en el cuarto: cabeceando de más, la pantalla queda asomada.
+                    _pitch = Mathf.Clamp(Cabeza.Pitch, -limAbajo, limArriba);
                 }
                 _dwell = 0f; _dwellOpcion = null;
                 return;

@@ -69,7 +69,7 @@ namespace Rediseno.UI
 #endif
         }
 
-        // limitePos / limiteNeg: hasta qué yaw la pantalla todavía se ve (ver ArrastrarAlBorde).
+        // limitePos / limiteNeg: hasta qué yaw la pantalla todavía se ve asomada (ver ArrastrarAlBorde).
         public static void Tick(float dt, float limitePos, float limiteNeg)
         {
             if (CuentaRegresiva > 0f)
@@ -91,18 +91,18 @@ namespace Rediseno.UI
             Pitch = Mathf.Asin(Mathf.Clamp(v.z, -1f, 1f)) * Mathf.Rad2Deg;
             Yaw = Mathf.DeltaAngle(_rumboRef, Rumbo(v, _rumboRef + Yaw));
 
-            // Mientras alguna parte de la pantalla esté a la vista, queda quieta en el cuarto. Si
-            // girás hasta dejarla entera afuera, no salta: se queda pegada al borde de afuera
-            // del campo visual y te acompaña, así al girar de vuelta aparece enseguida (antes
-            // se recentraba de golpe cada 1,5 s). Mirando casi vertical el rumbo no está
-            // definido: no se arrastra.
+            // Mientras se vea más que un borde de la pantalla, queda quieta en el cuarto. Si
+            // girás hasta dejarla atrás, no salta ni se pierde: se queda ASOMADA por el borde
+            // del campo visual y te acompaña, así siempre se ve que hay un menú y al girar de
+            // vuelta aparece enseguida (antes se recentraba de golpe cada 1,5 s; después se
+            // iba entera afuera). Mirando casi vertical el rumbo no está definido: no se arrastra.
             if (Mathf.Abs(v.z) <= 0.97f) Yaw = ArrastrarAlBorde(Yaw, limitePos, limiteNeg, ref _rumboRef);
         }
 
         // Pantalla "a la rastra": `yaw` es hacia dónde mirás respecto de la pantalla (+ = miraste
-        // a su derecha, la pantalla queda a tu izquierda). Pasado el límite de ese lado (la
-        // pantalla ya está entera fuera de la vista), se corre la referencia para dejarla justo
-        // ahí, pegada al borde de afuera. Devuelve el yaw corregido. También lo usa PantallaUI
+        // a su derecha, la pantalla queda a tu izquierda). Pasado el límite de ese lado (de la
+        // pantalla ya sólo se ve un borde), se corre la referencia para dejarla justo ahí,
+        // asomada por el borde de la vista. Devuelve el yaw corregido. También lo usa PantallaUI
         // con la cámara AR; los límites los calcula PantallaUI.LimitesArrastre.
         public static float ArrastrarAlBorde(float yaw, float limitePos, float limiteNeg, ref float referencia)
         {
