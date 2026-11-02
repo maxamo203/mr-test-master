@@ -29,6 +29,7 @@ namespace Rediseno.Menus
             if (Object.FindAnyObjectByType<MenuCrearUnirse2>() == null) new GameObject("MenuCrearUnirse2").AddComponent<MenuCrearUnirse2>();
             if (Object.FindAnyObjectByType<MenuEscenarios2>() == null) new GameObject("MenuEscenarios2").AddComponent<MenuEscenarios2>();
             if (Object.FindAnyObjectByType<MenuTutoriales2>() == null) new GameObject("MenuTutoriales2").AddComponent<MenuTutoriales2>();
+            if (Object.FindAnyObjectByType<MenuCreditos2>() == null) new GameObject("MenuCreditos2").AddComponent<MenuCreditos2>();
             if (Object.FindAnyObjectByType<AvisoMenu2>() == null) new GameObject("AvisoMenu2").AddComponent<AvisoMenu2>();
         }
     }

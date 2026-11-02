@@ -48,7 +48,7 @@ namespace Gameplay
                 ? _devNights
                 : _nights;
 
-        public enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control, Tutoriales }
+        public enum Pantalla { Menu, CrearUnirse, SinEntorno, Noches, Entorno, Escaneos, Opciones, Control, Tutoriales, Creditos }
 
         public Pantalla PantallaActual { get; private set; } = Pantalla.Menu;
 
@@ -186,6 +186,7 @@ namespace Gameplay
         public bool Mostrando(Pantalla p) => SinAvisos && PantallaActual == p;
         public void VolverPantalla()     => Volver();
         public void AbrirControl()       => PantallaActual = Pantalla.Control;
+        public void AbrirCreditos()      => PantallaActual = Pantalla.Creditos;
 
         // Catálogo de noches dev/prod (sólo dev build). Al cambiarlo se suelta la noche
         // elegida: su índice es del catálogo anterior.
@@ -411,6 +412,7 @@ namespace Gameplay
                 case Pantalla.Escaneos:    PantallaActual = Pantalla.Menu; break;
                 case Pantalla.Opciones:    PantallaActual = Pantalla.Menu; break;
                 case Pantalla.Control:     PantallaActual = Pantalla.Opciones; break;
+                case Pantalla.Creditos:    PantallaActual = Pantalla.Opciones; break;
                 case Pantalla.Tutoriales:  PantallaActual = Pantalla.Menu; break;
                 // Pantalla.Menu: pantalla raíz, sin destino — no forzamos salir de
                 // la app, dejamos que el SO maneje el back (minimizar).

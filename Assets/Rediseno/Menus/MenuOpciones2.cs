@@ -126,6 +126,10 @@ namespace Rediseno.Menus
             _estadoMando = PiezasUI.Info(lista, "");
             lista.Add(PiezasUI.Boton(nav, "CONTROL (MANDO)", () => NightMenuUI.Instance?.AbrirControl()));
 
+            // Obligatorio por las licencias CC BY del audio (ver MenuCreditos2).
+            lista.Add(PiezasUI.Seccion("ACERCA DE"));
+            lista.Add(PiezasUI.Boton(nav, "CRÉDITOS", () => NightMenuUI.Instance?.AbrirCreditos()));
+
             // Herramientas de desarrollo: sólo en development build (ver CLAUDE.md, tiers).
             if (Debug.isDebugBuild)
             {

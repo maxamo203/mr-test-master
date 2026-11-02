@@ -4,6 +4,9 @@ El catálogo combina audio definitivo/preparado con algunos placeholders histór
 fuentes, licencias y modificaciones de la entrega del 13/10/2026 quedan registradas abajo;
 los assets de fuente, demostraciones y alternativas de revisión no forman parte del catálogo.
 
+> Los créditos obligatorios de este archivo se muestran en el juego en **Opciones → Créditos**
+> (`Assets/Rediseno/Menus/MenuCreditos2.cs`). Al sumar o quitar audio de terceros, actualizar los dos.
+
 ## Entrega integrada — 13/10/2026
 
 ### Créditos obligatorios
