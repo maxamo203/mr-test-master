@@ -723,6 +723,18 @@ public class NetworkManager : MonoBehaviour
 
     private void HandleClientConnected(uint clientId)
     {
+        // Sala llena (el host cuenta como uno): se le avisa y se corta el socket sin
+        // sumarlo a _connectedClients, así su baja posterior no toca nada y los
+        // mensajes que alcance a mandar se descartan en ServerTick.
+        if (_connectedClients.Count >= NetworkConfig.MaxPlayers - 1)
+        {
+            Debug.Log($"[Server] Cliente {clientId} rechazado: sala llena " +
+                      $"({NetworkConfig.MaxPlayers} jugadores).");
+            _srv.Send(clientId, MsgHelper.Frame(MessageType.RoomFull, Array.Empty<byte>()));
+            _srv.RemoveClient(clientId);
+            return;
+        }
+
         Debug.Log($"[Server] Cliente {clientId} conectado");
         _connectedClients.Add(clientId);
         _clientUltimoRecibido[clientId] = Time.realtimeSinceStartup;
@@ -1101,6 +1113,11 @@ public class NetworkManager : MonoBehaviour
                 PerderConexionConHost(hostCerro: true);
                 break;
 
+            case MessageType.RoomFull:
+                PerderConexionConHost(hostCerro: true,
+                    aviso: $"LA SALA ESTÁ LLENA (MÁXIMO {NetworkConfig.MaxPlayers} JUGADORES)");
+                break;
+
             case MessageType.Heartbeat:
                 break;   // alcanza con haber actualizado _ultimoRecibido
 
@@ -1184,18 +1201,19 @@ public class NetworkManager : MonoBehaviour
     // por SceneFlow.GoTo (la única salida válida: teardown de directores, reset de la
     // sesión AR, destrucción de singletons). Es seguro desde el propio Tick porque
     // Destroy es diferido; el flag evita repetirlo en los ticks que quedan del frame.
-    private void PerderConexionConHost(bool hostCerro)
+    private void PerderConexionConHost(bool hostCerro, string aviso = null)
     {
         if (_conexionPerdida) return;
         _conexionPerdida = true;
 
-        Debug.Log(hostCerro ? "[Client] El host cerró la sala"
-                            : "[Client] Se perdió la conexión con el host");
+        Debug.Log(aviso != null ? $"[Client] {aviso}"
+                : hostCerro     ? "[Client] El host cerró la sala"
+                                : "[Client] Se perdió la conexión con el host");
         _cli?.Disconnect();
 
-        Gameplay.GameSession.Ensure().AvisoSalida = hostCerro
+        Gameplay.GameSession.Ensure().AvisoSalida = aviso ?? (hostCerro
             ? "EL HOST CERRÓ LA SALA"
-            : "SE PERDIÓ LA CONEXIÓN CON EL HOST";
+            : "SE PERDIÓ LA CONEXIÓN CON EL HOST");
         SceneFlow.GoTo(SceneFlow.EscenaMenu);
     }
 

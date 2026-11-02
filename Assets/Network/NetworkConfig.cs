@@ -8,6 +8,10 @@ public static class NetworkConfig
     // con el puerto (ip:puerto) a mano.
     public const int DefaultPort = 7777;
 
+    // Tope de la sala, host incluido. El host rechaza al que llega con la sala llena
+    // (MessageType.RoomFull) y deja de anunciarse por LAN mientras no haya lugar.
+    public const int MaxPlayers = 4;
+
     // El host manda un Heartbeat cada HeartbeatInterval segundos (también en la sala,
     // antes de GameStarted). Si el cliente pasa HostTimeoutSeconds sin recibir NADA del
     // host, lo da por caído: cubre las caídas sin cierre limpio del socket (Wi-Fi que

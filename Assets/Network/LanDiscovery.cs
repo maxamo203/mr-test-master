@@ -69,6 +69,11 @@ public class LanDiscovery : MonoBehaviour
     private volatile bool _running;
     private byte[]    _advertisePacket;
 
+    // Mientras sea true el host no se anuncia (noche en curso o sala llena): la sala
+    // desaparece de las listas de los clientes al vencer _hostTtl. Lo maneja
+    // GameBootstrapper cada frame; el hilo sólo lo lee.
+    public volatile bool AnuncioEnPausa;
+
     // ── API publica ───────────────────────────────────────────────────────
 
     public void StartAdvertising(int gamePort, string hostName)
@@ -134,6 +139,12 @@ public class LanDiscovery : MonoBehaviour
 
             while (_running)
             {
+                if (AnuncioEnPausa)
+                {
+                    Thread.Sleep(sleepMs);
+                    continue;
+                }
+
                 try
                 {
                     _advertiser.Send(_advertisePacket, _advertisePacket.Length, ep);

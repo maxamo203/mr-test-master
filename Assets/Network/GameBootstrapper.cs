@@ -94,6 +94,12 @@ public class GameBootstrapper : MonoBehaviour
             _autoHostPendiente = false;
             StartHost(_autoHostMapa);
         }
+
+        // Una sala con la noche en curso o sin lugar no se ofrece en las listas LAN.
+        // Al volver a la sincronización (reintento) o liberarse un lugar, reaparece.
+        if (_isHost && _lan != null)
+            _lan.AnuncioEnPausa = _net.GameStarted ||
+                                  _net.ConnectedClients.Count >= NetworkConfig.MaxPlayers - 1;
     }
 
     private void OnGUI()

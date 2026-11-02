@@ -30,4 +30,5 @@ public enum MessageType : ushort
     LobbyStatus     = 28,  // server → all: jugadores en la sala y cuántos ya ubicaron el entorno (host incluido)
     AnchorUnresolved = 29, // client → server: volvió a ubicar el entorno (AJUSTAR / BUSCAR IMAGEN), ya no está listo
     AmbientAudio    = 30,  // server → all: falsa alarma ambiental compartida
+    RoomFull        = 31,  // server → client: la sala ya tiene NetworkConfig.MaxPlayers, se lo rechaza
 }
