@@ -11,7 +11,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8f1a2b3c4d5e4f708192a3b4c5d6e7f8, type: 3}
   m_Name: Noche 1
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   displayName: Noche 1
   briefing: El Sorken tantea los accesos. Tomate el tiempo de ubicar el ruido antes
     de alumbrar.
@@ -44,6 +44,7 @@ MonoBehaviour:
   arbmosCooldownMax: 50
   arbmosSpawnDistance: 2.5
   arbmosSpawnChancePerAttempt: 0.5
+  arbmosSpawnRetrySeconds: 2
   arbmosHideSeconds: 3
   arbmosExposureSeconds: 0.6
   arbmosExposureGraceSeconds: 0
@@ -60,7 +61,7 @@ MonoBehaviour:
   arbmosLethalMaxSeconds: 8
   arbmosLethalRepathSeconds: 0.3
   arbmosGrabRange: 1.2
-  bookActive: 1
+  bookActive: 0
   bookEventDelayMin: 50
   bookEventDelayMax: 75
   bookConsumeSeconds: 16

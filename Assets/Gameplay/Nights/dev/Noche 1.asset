@@ -59,7 +59,7 @@ MonoBehaviour:
   arbmosLethalMaxSeconds: 8
   arbmosLethalRepathSeconds: 0.3
   arbmosGrabRange: 1.2
-  bookActive: 1
+  bookActive: 0
   bookEventDelayMin: 30
   bookEventDelayMax: 50
   bookConsumeSeconds: 8
