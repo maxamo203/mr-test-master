@@ -242,19 +242,89 @@ public class NetworkManager : MonoBehaviour
 
         _cli?.Disconnect();
         _cli = null;
+        _cliPendiente?.Disconnect();
+        _cliPendiente = null;
 
         IsServer    = false;
         InSession   = false;
         GameStarted = false;
     }
 
+    // Client: intento de conexión en curso (todavía no es _cli: el tick del cliente
+    // trataría un socket sin conectar como "host perdido" y saldría al menú).
+    private TcpTransportClient _cliPendiente;
+    private string _cliPendienteHost;
+    private int    _cliPendientePort;
+
+    public bool ClienteConectando => _cliPendiente != null;
+
+    // Client: resultado del intento de StartClient. (ok, motivo legible si falló).
+    public event Action<bool, string> OnClientConnectResult;
+
+    // Arranca la conexión al host EN SEGUNDO PLANO (ver TcpTransportClient.ConnectAsync)
+    // y avisa por OnClientConnectResult. Antes era sincrónica: con una IP inalcanzable
+    // la app quedaba congelada decenas de segundos y la falla terminaba como "se perdió
+    // la conexión con el host", sin decir por qué.
     public void StartClient(string host, int port)
     {
-        if (_srv == null) IsServer = false;  // no sobreescribir si ya es servidor (host)
-        InSession = true;
-        _cli = new TcpTransportClient();
-        _cli.Connect(host, port);
-        _ultimoRecibido = Time.realtimeSinceStartup;
+        if (_cli != null || _cliPendiente != null) return;
+        _cliPendiente     = new TcpTransportClient();
+        _cliPendienteHost = host;
+        _cliPendientePort = port;
+        _cliPendiente.ConnectAsync(host, port, NetworkConfig.ConnectTimeoutMs);
+    }
+
+    private void PollConexionPendiente()
+    {
+        var p = _cliPendiente;
+        if (p == null) return;
+        switch (p.Estado)
+        {
+            case TcpTransportClient.EstadoConexion.Conectado:
+                _cliPendiente = null;
+                if (_srv == null) IsServer = false;  // no sobreescribir si ya es servidor (host)
+                InSession       = true;
+                _cli            = p;
+                _ultimoRecibido = Time.realtimeSinceStartup;
+                OnClientConnectResult?.Invoke(true, null);
+                break;
+            case TcpTransportClient.EstadoConexion.Fallo:
+                _cliPendiente = null;
+                OnClientConnectResult?.Invoke(false,
+                    MotivoFallaConexion(p.ErrorConexion, _cliPendienteHost, _cliPendientePort));
+                break;
+        }
+    }
+
+    // Texto para la pantalla UNIRSE según por qué no se pudo conectar.
+    public static string MotivoFallaConexion(System.Net.Sockets.SocketError e, string host, int port)
+    {
+        switch (e)
+        {
+            case System.Net.Sockets.SocketError.ConnectionRefused:
+                return $"{host} respondió, pero no hay una sala abierta en el puerto {port}. " +
+                       "¿El host ya está en la pantalla de SALA? ¿Cambió el puerto en AVANZADO?";
+            case System.Net.Sockets.SocketError.TimedOut:
+                return $"{host}:{port} no responde. Revisá que estén en la MISMA red (el mismo " +
+                       "Wi-Fi, o conectados al hotspot del otro) y que la IP sea la de la SALA del host.";
+            case System.Net.Sockets.SocketError.HostUnreachable:
+            case System.Net.Sockets.SocketError.NetworkUnreachable:
+            case System.Net.Sockets.SocketError.HostDown:
+            case System.Net.Sockets.SocketError.NetworkDown:
+#if UNITY_IOS && !UNITY_EDITOR
+                return $"No hay camino hasta {host}. Revisá que estén en la misma red y que " +
+                       $"{Application.productName} tenga permiso de Red local (Ajustes → " +
+                       $"{Application.productName} → Red local).";
+#else
+                return $"No hay camino hasta {host}: este celular no está en la misma red que el host.";
+#endif
+            case System.Net.Sockets.SocketError.HostNotFound:
+            case System.Net.Sockets.SocketError.NoData:
+            case System.Net.Sockets.SocketError.AddressNotAvailable:
+                return $"«{host}» no es una dirección válida. Escribí la IP tal como la muestra la SALA del host.";
+            default:
+                return $"No se pudo conectar a {host}:{port} ({e}).";
+        }
     }
 
     // Server: fijar el mapa elegido por el host. Se ANUNCIA (hash + nombre) a cada
@@ -647,6 +717,8 @@ public class NetworkManager : MonoBehaviour
 
     private void Update()
     {
+        PollConexionPendiente();
+
         // Tiempo NO escalado: cuando caen todos los jugadores LocalDeath congela el juego
         // con Time.timeScale = 0 en cada dispositivo. Con deltaTime la red se congelaba
         // también: el cliente nunca desencolaba el ResetNight del host y se quedaba en
@@ -731,7 +803,9 @@ public class NetworkManager : MonoBehaviour
             Debug.Log($"[Server] Cliente {clientId} rechazado: sala llena " +
                       $"({NetworkConfig.MaxPlayers} jugadores).");
             _srv.Send(clientId, MsgHelper.Frame(MessageType.RoomFull, Array.Empty<byte>()));
-            _srv.RemoveClient(clientId);
+            // Con la salida asíncrona, cerrar en el acto perdía el RoomFull todavía en
+            // cola: el cliente veía "se perdió la conexión" en vez de "sala llena".
+            _srv.RemoveClientTrasVaciar(clientId);
             return;
         }
 

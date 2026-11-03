@@ -155,8 +155,8 @@ public class ARLobbyManager : MonoBehaviour
         State = LobbyState.Scanning;
         FaseMapa(EstadoMapa.EsperandoAnuncio);   // overlay de carga hasta tener el mapa
         // El host tiene que saber de entrada si este cliente va a colocar anclas, para
-        // no habilitar INICIAR NOCHE antes de tiempo. TcpTransportClient.Connect es
-        // sincrónico, así que acá ya estamos conectados.
+        // no habilitar INICIAR NOCHE antes de tiempo. GameBootstrapper llama a esto
+        // recién cuando la conexión (asíncrona) se completó, así que el socket ya existe.
         ReportarAnclas();
     }
 

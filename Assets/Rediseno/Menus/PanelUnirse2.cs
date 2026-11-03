@@ -74,6 +74,7 @@ namespace Rediseno.Menus
             col.Add(PiezasUI.Encabezado("UNIRSE A SALA", out _volver));
             _estado = TemaUI.Texto("", TemaUI.Elite, 34, TemaUI.Muted);
             _estado.style.marginBottom = 20;
+            _estado.style.whiteSpace = WhiteSpace.Normal;   // el motivo de una falla es largo
             col.Add(_estado);
             var sv = PiezasUI.Lista();
             Desplazable = sv;
@@ -91,7 +92,23 @@ namespace Rediseno.Menus
 
             _spin += dt;
             string giro = new[] { "—", "\\", "|", "/" }[Mathf.FloorToInt(_spin * 6f) % 4];
-            _estado.text = n > 0 ? "Salas en tu red:" : $"Buscando salas en tu red… {giro}";
+            // Conectando / falla > lista. La conexión es asíncrona (ver GameBootstrapper):
+            // sin esto el toque parecía no hacer nada hasta que conectaba o fallaba.
+            if (gb.Conectando)
+            {
+                _estado.text = $"Conectando a {gb.DestinoConexion}… {giro}";
+                _estado.style.color = TemaUI.Cream;
+            }
+            else if (!string.IsNullOrEmpty(gb.ErrorConexion))
+            {
+                _estado.text = gb.ErrorConexion;
+                _estado.style.color = TemaUI.Red;
+            }
+            else
+            {
+                _estado.text = n > 0 ? "Salas en tu red:" : $"Buscando salas en tu red… {giro}";
+                _estado.style.color = TemaUI.Muted;
+            }
 
             // Rearmar sólo cuando cambia el conjunto de salas (o el visor).
             _sb.Clear().Append(EnVisor ? 'v' : 'p');
@@ -131,8 +148,13 @@ namespace Rediseno.Menus
                 _lista.Add(PiezasUI.Seccion("O INGRESÁ LA IP DEL HOST"));
                 _lista.Add(PiezasUI.Campo(gb.HostManual,
                     v => { if (GameBootstrapper.Instance != null) GameBootstrapper.Instance.HostManual = v; }));
-                var nota = TemaUI.Texto($"Ej: 192.168.1.42 — si no ponés puerto se usa el {NetworkConfig.DefaultPort} (o ip:puerto)",
+                // La IP propia ayuda a diagnosticar en el lugar: si los primeros números no
+                // coinciden con los del host, no están en la misma red.
+                string mia = string.IsNullOrEmpty(gb.MiIp) || gb.MiIp.StartsWith("?") ? "" :
+                             $"\nTu IP: {gb.MiIp} — la del host tiene que empezar igual (misma red).";
+                var nota = TemaUI.Texto($"Ej: 192.168.1.42 — si no ponés puerto se usa el {NetworkConfig.DefaultPort} (o ip:puerto){mia}",
                                         TemaUI.Mono, 22, TemaUI.Dim);
+                nota.style.whiteSpace = WhiteSpace.Normal;
                 nota.style.marginBottom = 18;
                 _lista.Add(nota);
                 _lista.Add(PiezasUI.Boton(Nav, "CONECTAR", () => GameBootstrapper.Instance?.ConectarManual()));
