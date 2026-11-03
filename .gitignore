@@ -121,3 +121,6 @@ InitTestScene*.unity*
 # Claves de firma de Android (nunca al repo)
 *.keystore
 *.jks
+
+# Archivos de bloqueo de LibreOffice (documento abierto)
+.~lock.*#

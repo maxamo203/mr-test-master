@@ -1,6 +1,6 @@
 # Informe: documentación (revisión 18/10/2026) vs. implementación
 
-**Documento revisado:** `Assets/Grupo112_Documentacion_revision_2026-10-18_anexos_I_II_III.docx` (texto completo, tablas, criterios, casos de prueba CP/IT, anexos y comentarios de revisión).
+**Documento revisado:** `docs/Grupo112_Documentacion_revision_2026-10-18_anexos_I_II_III.docx` (texto completo, tablas, criterios, casos de prueba CP/IT, anexos y comentarios de revisión).
 **Código revisado:** rama `main` @ `b2af40f` + cambios sin commitear (`Nights/dev|prod/Noche 1.asset`), ~60 k líneas de C#, escenas, assets de noches, `ProjectSettings`, `Packages`, plugins nativos.
 **Fecha:** 01/11/2026.
 

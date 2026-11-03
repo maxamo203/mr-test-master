@@ -10,13 +10,13 @@ Comments and identifiers are predominantly in Spanish; match that when editing e
 
 ## Source of Truth
 
-**`Assets/Documentacion Mortuorium v9.0.md`** is the single source of truth for all project decisions, architecture, requirements, and specifications. All code changes, features, and technical decisions must respect and comply with what is documented there.
+**`docs/Grupo112_Documentacion_revision_2026-11-03.docx`** is the single source of truth for all project decisions, architecture, requirements, and specifications (it replaces `Assets/Documentacion Mortuorium v9.0.md` and the earlier revisions). Each revision is a new dated copy `docs/Grupo112_Documentacion_revision_YYYY-MM-DD.docx`; see `CLAUDE.md` for the revision convention. All code changes, features, and technical decisions must respect and comply with what is documented there.
 
-**When a request conflicts with the documentation:** If asked to implement something that contradicts or deviates from what is specified in `Documentacion Mortuorium v9.0.md`, I will ask for clarification and confirmation before proceeding. This ensures alignment with the official project specification and prevents unintended design drift.
+**When a request conflicts with the documentation:** If asked to implement something that contradicts or deviates from what is specified in the documentation, I will ask for clarification and confirmation before proceeding. This ensures alignment with the official project specification and prevents unintended design drift.
 
 ### Pendientes de actualizar en la documentación
 
-Cambios ya hechos en el código que **todavía no están reflejados** en `Documentacion Mortuorium v9.0.md` (la fuente de verdad) y hay que incorporar:
+Cambios ya hechos en el código que **todavía no están reflejados** en la documentación (la fuente de verdad) y hay que incorporar:
 
 - **Licencias de assets de audio de terceros.** El juego ahora incluye clips de OpenGameArt bajo **CC-BY 3.0** y **CC0** — ver `Assets/Audio/ATTRIBUTIONS.md` para el detalle. La documentación sólo menciona genéricamente que "los assets de audio y 3D se obtienen de repositorios libres" (sección 2.5): falta dejar asentado **qué packs concretos se usan, bajo qué licencia, y que el pack CC-BY obliga a acreditar a Little Robot Sound Factory en los créditos del juego**. Mientras esos clips estén en el build, esa atribución es una obligación legal, no una cortesía.
 - **Historias de usuario de audio.** US-4.1, US-4.4, US-6.4, US-7.x y US-11.3 figuran como "Por hacer" y ya están implementadas (ver "Sistema de audio" más abajo); corresponde actualizar su estado y los criterios de aceptación.
