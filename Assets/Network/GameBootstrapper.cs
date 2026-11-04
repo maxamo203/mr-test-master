@@ -48,10 +48,12 @@ public class GameBootstrapper : MonoBehaviour
     {
         Instance = this;
         _net = GetComponent<NetworkManager>();
+        _net.OnClientConnectResult += AlResultadoConexion;
     }
 
     private void OnDestroy()
     {
+        if (_net != null) _net.OnClientConnectResult -= AlResultadoConexion;
         if (Instance == this) Instance = null;
     }
 
@@ -63,6 +65,17 @@ public class GameBootstrapper : MonoBehaviour
     public void ConectarManual() { ParseHostPort(_host, out var ip, out var pt); Conectar(ip, pt); }
     public void SalirUnirse() => SalirDeUnirse();
 
+    // Estado del intento de conexión, para PanelUnirse2. Mientras se conecta la pantalla
+    // sigue siendo UNIRSE (con el descubrimiento activo); si falla se queda ahí con el
+    // motivo, lista para reintentar.
+    public bool   Conectando      => _net != null && _net.ClienteConectando;
+    public string DestinoConexion { get; private set; }
+    public string ErrorConexion   { get; private set; }
+
+    // IP de este celular en la red, para comparar con la del host (misma red = mismos
+    // primeros números). Se calcula una vez al abrir UNIRSE.
+    public string MiIp { get; private set; }
+
     private void Start()
     {
         var s = Gameplay.GameSession.Instance;
@@ -70,6 +83,7 @@ public class GameBootstrapper : MonoBehaviour
         if (s == null || s.Mode == Gameplay.GameSession.SessionMode.MultiClient)
         {
             _pantalla = Pantalla.Unirse;
+            MiIp = LanAddress.BestLanIPv4();
             Lan().StartListening();
             return;
         }
@@ -130,7 +144,9 @@ public class GameBootstrapper : MonoBehaviour
     // "ip" o "ip:puerto" -> ip + puerto (por defecto NetworkConfig.DefaultPort).
     private static void ParseHostPort(string text, out string ip, out int port)
     {
-        ip   = (text ?? "").Trim();
+        ip   = (text ?? "").Trim().Replace(" ", "");
+        // Teclados numéricos en español ponen coma decimal: "192,168,1,42".
+        if (ip.IndexOf('.') < 0 && ip.IndexOf(',') >= 0) ip = ip.Replace(',', '.');
         port = NetworkConfig.DefaultPort;
         int c = ip.LastIndexOf(':');
         if (c > 0 && int.TryParse(ip.Substring(c + 1).Trim(), out int p) && p > 0 && p < 65536)
@@ -240,19 +256,42 @@ public class GameBootstrapper : MonoBehaviour
     }
 
     // Conecta como cliente a ip:port (usado por el autodescubrimiento y por la IP
-    // manual). Detiene la escucha de descubrimiento antes de conectar.
+    // manual). La conexión es asíncrona: la pantalla sigue en UNIRSE (con el
+    // descubrimiento escuchando) hasta AlResultadoConexion.
     private void Conectar(string ip, int port)
     {
-        if (string.IsNullOrEmpty(ip)) return;
-        _lan?.StopAll();
-        _host = ip;
+        if (_pantalla != Pantalla.Unirse || Conectando) return;
+        if (string.IsNullOrEmpty(ip))
+        {
+            ErrorConexion = "Escribí la IP que muestra la SALA del host (ej: 192.168.1.42).";
+            return;
+        }
+        DestinoConexion = $"{ip}:{port}";
+        ErrorConexion   = null;
         _port = port;
         _net.StartClient(ip, port);
-        ARLobbyManager.Instance?.BeginClientFlow();
+        Debug.Log($"[GameBootstrapper] Uniendose a {ip}:{port}");
+    }
+
+    private void AlResultadoConexion(bool ok, string motivo)
+    {
+        if (_pantalla != Pantalla.Unirse) return;
+        if (!ok)
+        {
+            ErrorConexion = motivo;
+            Debug.LogWarning($"[GameBootstrapper] Falló la conexión a {DestinoConexion}: {motivo}");
+            return;
+        }
+
+        _lan?.StopAll();
+        int c = DestinoConexion.LastIndexOf(':');
+        _host = c > 0 ? DestinoConexion.Substring(0, c) : DestinoConexion;
+        ErrorConexion = null;
         _isHost = false;
         // Un cliente siempre es multijugador (por si venía de una sesión solo).
         Gameplay.GameSession.Ensure().Mode = Gameplay.GameSession.SessionMode.MultiClient;
+        // Ya conectado: BeginClientFlow manda el estado de anclas por el socket.
+        ARLobbyManager.Instance?.BeginClientFlow();
         _pantalla = Pantalla.Sala;
-        Debug.Log($"[GameBootstrapper] Uniendose a {ip}:{port}");
     }
 }

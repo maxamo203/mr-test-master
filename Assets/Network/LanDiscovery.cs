@@ -20,6 +20,13 @@ using UnityEngine;
 //     un host iPhone nunca aparecia en la lista de los demas. Por eso en iOS el
 //     anuncio tambien sale por unicast a cada IP de la subred (ver Barrido), que
 //     solo necesita el permiso de red local.
+//   * Hotspot: el broadcast "limitado" (255.255.255.255) sale por la interfaz de la
+//     ruta por defecto. En un host que COMPARTE DATOS esa ruta es la de datos móviles,
+//     así que el anuncio nunca llegaba a los celulares colgados de su hotspot (la sala
+//     no aparecía en la lista). Por eso también se manda el broadcast DIRIGIDO de cada
+//     red local (p. ej. 192.168.43.255), que sale por la interfaz de esa red. Las
+//     interfaces se recalculan cada RefrescoDestinosMs: el hotspot puede prenderse con
+//     la sala ya abierta.
 public class LanDiscovery : MonoBehaviour
 {
     public const int DiscoveryPort = 47777;
@@ -58,6 +65,9 @@ public class LanDiscovery : MonoBehaviour
     // Tope de destinos por barrido: una subred mas grande que /24 se recorta a la
     // /24 propia (donde esta casi todo dispositivo de una red domestica).
     private const int MaxDestinosBarrido = 254;
+
+    // Cada cuánto se vuelven a leer las interfaces (broadcast dirigido y barrido).
+    private const int RefrescoDestinosMs = 10000;
 
     private readonly Dictionary<string, DiscoveredHost> _hosts   = new();
     private readonly Dictionary<string, DiscoveredHost> _pending = new();
@@ -131,9 +141,9 @@ public class LanDiscovery : MonoBehaviour
             var sleepMs = Mathf.Max(100, Mathf.RoundToInt(_advertiseInterval * 1000f));
             var sweepMs = Mathf.Max(sleepMs, Mathf.RoundToInt(_sweepInterval * 1000f));
 
-            List<IPEndPoint> destinos = BarridoUnicast ? DestinosBarrido() : null;
-            if (destinos != null)
-                Debug.Log($"[LanDiscovery] Barrido unicast a {destinos.Count} direcciones de la subred");
+            List<IPEndPoint> destinos   = null;
+            List<IPEndPoint> dirigidos  = null;
+            int  proximoRefresco  = Environment.TickCount;
             int  proximoBarrido   = Environment.TickCount;
             bool avisoBroadcast   = false;
 
@@ -143,6 +153,16 @@ public class LanDiscovery : MonoBehaviour
                 {
                     Thread.Sleep(sleepMs);
                     continue;
+                }
+
+                if (Environment.TickCount - proximoRefresco >= 0)
+                {
+                    proximoRefresco = Environment.TickCount + RefrescoDestinosMs;
+                    int antes = destinos?.Count ?? -1;
+                    dirigidos = BroadcastsDirigidos();
+                    if (BarridoUnicast) destinos = DestinosBarrido();
+                    if (destinos != null && destinos.Count != antes)
+                        Debug.Log($"[LanDiscovery] Barrido unicast a {destinos.Count} direcciones de la subred");
                 }
 
                 try
@@ -157,6 +177,15 @@ public class LanDiscovery : MonoBehaviour
                         Debug.LogWarning($"[LanDiscovery] send: {e.Message}");
                     avisoBroadcast = true;
                 }
+
+                // Broadcast dirigido de cada red local (ver nota de hotspot arriba). En
+                // iOS falla igual que el limitado: lo cubre el barrido.
+                if (dirigidos != null)
+                    foreach (var d in dirigidos)
+                    {
+                        try { _advertiser.Send(_advertisePacket, _advertisePacket.Length, d); }
+                        catch { }
+                    }
 
                 if (destinos != null && Environment.TickCount - proximoBarrido >= 0)
                 {
@@ -225,6 +254,59 @@ public class LanDiscovery : MonoBehaviour
     // Todas las IPs de host de las subredes privadas en las que esta el
     // dispositivo (Wi-Fi en0, hotspot propio bridge*), sin la propia ni las de
     // red/broadcast. Se calcula una vez al empezar a anunciar.
+
+    // Broadcast dirigido (red | ~máscara) de cada red local privada del dispositivo.
+    private static List<IPEndPoint> BroadcastsDirigidos()
+    {
+        var destinos = new List<IPEndPoint>();
+        var vistos   = new HashSet<uint>();
+        try
+        {
+            foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                if (ni.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback) continue;
+                if (LanAddress.EsInterfazCelular(ni.Name)) continue;
+
+                foreach (var ua in ni.GetIPProperties().UnicastAddresses)
+                {
+                    if (ua.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+                    var b = ua.Address.GetAddressBytes();
+                    bool privada = b[0] == 10 || (b[0] == 192 && b[1] == 168) ||
+                                   (b[0] == 172 && b[1] >= 16 && b[1] <= 31);
+                    if (!privada) continue;
+
+                    int prefijo = PrefijoDe(ua);
+                    if (prefijo < 8 || prefijo > 30) continue;
+                    uint masc  = 0xFFFFFFFFu << (32 - prefijo);
+                    uint bcast = (ToUInt(b) & masc) | ~masc;
+                    if (!vistos.Add(bcast)) continue;
+                    destinos.Add(new IPEndPoint(new IPAddress(new[]
+                    {
+                        (byte)(bcast >> 24), (byte)(bcast >> 16), (byte)(bcast >> 8), (byte)bcast,
+                    }), DiscoveryPort));
+                }
+            }
+        }
+        catch (Exception e) { Debug.LogWarning($"[LanDiscovery] broadcast dirigido: {e.Message}"); }
+        return destinos;
+    }
+
+    // Prefijo de la máscara real si la plataforma la da; si no, /24.
+    private static int PrefijoDe(System.Net.NetworkInformation.UnicastIPAddressInformation ua)
+    {
+        try
+        {
+            var m = ua.IPv4Mask;
+            if (m != null)
+            {
+                uint mascara = ToUInt(m.GetAddressBytes());
+                if (mascara != 0) return CountBits(mascara);
+            }
+        }
+        catch { /* IPv4Mask no implementado en la plataforma */ }
+        return 24;
+    }
 
     private static readonly string[] InterfacesExcluidas = { "pdp_ip", "utun", "ipsec", "awdl", "llw" };
 

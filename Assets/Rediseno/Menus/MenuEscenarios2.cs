@@ -5,8 +5,9 @@ using UnityEngine.UIElements;
 
 namespace Rediseno.Menus
 {
-    // MIS ESCENARIOS del Rediseño 2.0: los escaneos guardados, cada uno con EDITAR y BORRAR
-    // uno al lado del otro (←/→ pasan de uno al otro, ↑↓ cambian de escenario), y arriba
+    // MIS ESCENARIOS del Rediseño 2.0: los escaneos guardados, cada uno con EDITAR, COMPARTIR
+    // (.mscn; no con el visor puesto) y BORRAR uno al lado del otro (←/→ pasan de uno al
+    // otro, ↑↓ cambian de escenario), y arriba
     // NUEVO ESCANEO. El borrado se confirma dentro de la misma pantalla (CANCELAR primero,
     // así un → de más no borra nada).
     //
@@ -70,18 +71,38 @@ namespace Rediseno.Menus
                 var editar = Pastilla("EDITAR", TemaUI.Tan);
                 var borrar = Pastilla("BORRAR", TemaUI.Red);
                 fila.Add(editar);
+                // COMPARTIR abre la hoja de compartir del sistema, que no se puede usar con
+                // el visor puesto: ahí no se ofrece.
+                VisualElement compartir = null;
+                if (!EnVisor)
+                {
+                    compartir = Pastilla("COMPARTIR", TemaUI.Cream);
+                    fila.Add(compartir);
+                }
                 fila.Add(borrar);
                 lista.Add(fila);
 
-                nav.FilaHorizontal(
-                    nav.Agregar(editar, () => IrAlEscaner(nombre)),
-                    nav.Agregar(borrar, () =>
-                    {
-                        AudioManager.Sonar(c => c.uiAlerta);
-                        _borrando = nombre;
-                        Rearmar();
-                    }));
+                // Altas en el orden en que se ven (izquierda a derecha).
+                var oEditar = nav.Agregar(editar, () => IrAlEscaner(nombre));
+                var oCompartir = compartir != null ? nav.Agregar(compartir, () => Compartir(nombre)) : null;
+                var oBorrar = nav.Agregar(borrar, () =>
+                {
+                    AudioManager.Sonar(c => c.uiAlerta);
+                    _borrando = nombre;
+                    Rearmar();
+                });
+                if (oCompartir != null) nav.FilaHorizontal(oEditar, oCompartir, oBorrar);
+                else nav.FilaHorizontal(oEditar, oBorrar);
             }
+        }
+
+        // Exporta el escaneo a un .mscn (json + imagen de referencia) y abre la hoja de
+        // compartir del sistema. Lo importa otro teléfono con «Abrir con» (MscnReceiver).
+        private static void Compartir(string nombre)
+        {
+            var path = Scanner.ScanPackage.WriteTempFile(nombre);
+            if (string.IsNullOrEmpty(path)) { AudioManager.Sonar(c => c.uiAlerta); return; }
+            Scanner.MscnShare.Share(path);
         }
 
         private void ArmarConfirmacion(VisualElement lista, MenuNavegable nav)

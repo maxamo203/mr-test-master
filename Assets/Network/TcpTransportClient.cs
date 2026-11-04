@@ -14,10 +14,25 @@ public class TcpTransportClient
 
     private TcpClient     _tcp;
     private NetworkStream _stream;
+    private ColaSalida    _salida;
     private readonly ConcurrentQueue<IncomingMsg> _inbox = new();
     private volatile bool _connected;
 
     public bool IsConnected => _connected;
+
+    // ── Conexión asíncrona ──
+    // Antes Connect era sincrónico en el hilo principal y sin timeout propio: con una IP
+    // a la que no se llega (otra red, el hotspot que no enruta, un host que no responde)
+    // la app quedaba congelada hasta que el sistema se rendía (~20 s en Android, hasta
+    // ~75 s en iOS), y la excepción que tiraba al final dejaba la sesión a medio armar.
+    // Ahora el connect corre en un hilo con tope y el resultado se consulta por estado.
+    public enum EstadoConexion { SinIniciar, Conectando, Conectado, Fallo }
+
+    private volatile EstadoConexion _estado = EstadoConexion.SinIniciar;
+    public EstadoConexion Estado => _estado;
+
+    // Motivo de la falla (válido con Estado == Fallo). TimedOut si venció el tope.
+    public SocketError ErrorConexion { get; private set; } = SocketError.Success;
 
     // Frame que el hilo de lectura está recibiendo AHORA. Se escribe desde ese hilo y
     // se lee desde el principal sólo para UI: que los tres valores no sean atómicos
@@ -51,36 +66,85 @@ public class TcpTransportClient
         return _frameTipo == (int)tipo && leidos < total;
     }
 
-    public void Connect(string host, int port)
+    // Arranca la conexión en segundo plano. No bloquea: consultar Estado cada frame.
+    public void ConnectAsync(string host, int port, int timeoutMs)
     {
-        _tcp = new TcpClient();
+        if (_estado != EstadoConexion.SinIniciar) return;
+        _estado = EstadoConexion.Conectando;
+        var tcp = new TcpClient();
         // Ver TcpTransportServer: Nagle agruparía los frames de voz (30 ms) y sumaría
         // retardo perceptible a la conversación.
-        _tcp.NoDelay = true;
-        _tcp.Connect(host, port);
-        _stream    = _tcp.GetStream();
-        _connected = true;
-        new Thread(ReadLoop) { IsBackground = true }.Start();
-        Debug.Log($"[Client] Connected to {host}:{port}");
+        tcp.NoDelay = true;
+        _tcp = tcp;
+
+        new Thread(() =>
+        {
+            try
+            {
+                var tarea = tcp.ConnectAsync(host, port);
+                if (!tarea.Wait(timeoutMs))
+                {
+                    // Cerrar el socket aborta el connect pendiente.
+                    tarea.ContinueWith(t => { var _ = t.Exception; },
+                        System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
+                    tcp.Close();
+                    Fallar(SocketError.TimedOut, host, port);
+                    return;
+                }
+                if (_estado != EstadoConexion.Conectando) { tcp.Close(); return; }   // Disconnect() durante el intento
+
+                _stream = tcp.GetStream();
+                _salida = new ColaSalida(_stream,
+                    alFallar: () => _connected = false,
+                    alCerrar: null,
+                    nombre:   "Client-Send");
+                _connected = true;
+                _estado    = EstadoConexion.Conectado;
+                new Thread(ReadLoop) { IsBackground = true, Name = "Client-Read" }.Start();
+                Debug.Log($"[Client] Connected to {host}:{port}");
+            }
+            catch (Exception e)
+            {
+                tcp.Close();
+                Fallar(CodigoDe(e), host, port);
+            }
+        }) { IsBackground = true, Name = "Client-Connect" }.Start();
+    }
+
+    private void Fallar(SocketError codigo, string host, int port)
+    {
+        if (_estado != EstadoConexion.Conectando) return;
+        ErrorConexion = codigo;
+        _estado       = EstadoConexion.Fallo;
+        Debug.LogWarning($"[Client] No se pudo conectar a {host}:{port} ({codigo})");
+    }
+
+    private static SocketError CodigoDe(Exception e)
+    {
+        for (var x = e; x != null; x = x.InnerException)
+        {
+            if (x is SocketException se) return se.SocketErrorCode;
+            if (x is AggregateException ae && ae.InnerExceptions.Count > 0)
+                return CodigoDe(ae.InnerExceptions[0]);
+        }
+        return SocketError.SocketError;
     }
 
     public void Disconnect()
     {
         _connected = false;
+        if (_estado == EstadoConexion.Conectando) _estado = EstadoConexion.Fallo;
+        _salida?.Detener();
         _tcp?.Close();
     }
 
     public bool TryDequeue(out IncomingMsg msg) => _inbox.TryDequeue(out msg);
 
+    // No bloquea (ver ColaSalida). Si el socket muere escribiendo, IsConnected baja.
     public void Send(byte[] framed)
     {
         if (!_connected) return;
-        try { MessageFramer.Write(_stream, framed); }
-        catch (Exception e)
-        {
-            _connected = false;
-            Debug.LogWarning($"[Client] Send failed: {e.Message}");
-        }
+        _salida?.Encolar(framed);
     }
 
     private void ReadLoop()

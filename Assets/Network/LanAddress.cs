@@ -24,8 +24,40 @@ using UnityEngine;
 // un celular con datos móviles, esa interfaz es WiFi, con gateway (el celular) y
 // una IP privada (típicamente 192.168.x) ⇒ gana sin configurar nada. Las demás
 // personas se conectan a esa IP dentro de la red del hotspot.
+//
+// Caso "el host ES el celular que comparte datos": tiene dos IPs privadas, la de
+// datos móviles (pdp_ip0 en iPhone, rmnet* en Android; las operadoras usan CGNAT
+// 10.x, que puntuaba igual que la del hotspot) y la del hotspot (bridge100 =
+// 172.20.10.1 en iPhone; ap0 / swlan0 / wlan1 en Android). Con el empate la SALA
+// podía mostrar la de datos móviles, a la que nadie del hotspot llega: "ni con la IP
+// a mano entra". Las interfaces celulares se descartan y las de hotspot suman.
 public static class LanAddress
 {
+    // Prefijos de nombre de interfaz de datos móviles / túneles del sistema: nunca son
+    // la red local compartida con los demás jugadores.
+    private static readonly string[] PrefijosCelular =
+    {
+        "pdp_ip", "rmnet", "ccmni", "clat", "v4-", "wwan", "rev_rmnet", "seth_lte",
+        "dummy", "ipsec", "utun", "awdl", "llw", "ims",
+    };
+
+    // Prefijos de interfaz de hotspot (este dispositivo comparte su conexión): los demás
+    // jugadores están colgados de ella.
+    private static readonly string[] PrefijosHotspot =
+    {
+        "bridge", "ap", "swlan", "softap",
+    };
+
+    public static bool EsInterfazCelular(string nombre) => EmpiezaCon(nombre, PrefijosCelular);
+    public static bool EsInterfazHotspot(string nombre) => EmpiezaCon(nombre, PrefijosHotspot);
+
+    private static bool EmpiezaCon(string nombre, string[] prefijos)
+    {
+        string n = (nombre ?? "").ToLowerInvariant();
+        foreach (var pre in prefijos)
+            if (n.StartsWith(pre)) return true;
+        return false;
+    }
     private static readonly string[] VirtualKeywords =
     {
         "radmin", "hamachi", "zerotier", "vpn", "virtual", "vmware", "vbox",
@@ -54,6 +86,8 @@ public static class LanAddress
                 if (ni.OperationalStatus != OperationalStatus.Up) continue;
                 if (ni.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
                 if (ni.NetworkInterfaceType == NetworkInterfaceType.Tunnel)   continue;
+                if (EsInterfazCelular(ni.Name)) continue;
+                bool esHotspot = EsInterfazHotspot(ni.Name);
 
                 string tag = ((ni.Name ?? "") + " " + (ni.Description ?? "")).ToLowerInvariant();
                 bool esVirtual = false;
@@ -90,6 +124,7 @@ public static class LanAddress
                     if (tieneGateway) score += 50;
                     if (ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211) score += 45;
                     else if (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet) score += 40;
+                    if (esHotspot) score += 60;
                     if (esVirtual) score -= 120;
 
                     scored.Add((ip.ToString(), score));
