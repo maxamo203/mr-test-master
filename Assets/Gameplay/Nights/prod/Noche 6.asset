@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Noche 6
   m_EditorClassIdentifier:
   displayName: Noche 6
-  briefing: La ultima noche. Siete minutos, sin tregua y sin bateria de sobra.
+  briefing: La ultima noche. Cinco minutos, sin tregua y sin bateria de sobra.
   nightDurationSeconds: 300
   sorkenActive: 1
   attemptIntervalMin: 16

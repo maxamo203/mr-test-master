@@ -16,7 +16,7 @@ Comments and identifiers are predominantly in Spanish; match that when editing e
 
 ### Pendientes de actualizar en la documentación
 
-- **Composición de entidades por noche (datos PROD vs. documento).** El documento pide Sorken en N1‑N3 y Sorken + Veleth + Arbmos en N4‑N6. Hoy `Nights/prod` tiene el libro (y con él Veleth) activo en N2‑N3, N4 sin Sorken ni libro, `arbmosForceSpawnAfterCooldown` en 1 en N4‑N6 y el briefing de N6 dice "siete minutos" con 300 s. Pendiente de decisión del autor del proyecto ("después veo"): no tocar sin confirmar.
+- **Composición de entidades por noche (datos PROD vs. documento).** El documento pide Sorken en N1‑N3 y Sorken + Veleth + Arbmos en N4‑N6. Hoy `Nights/prod` tiene el libro (y con él Veleth) activo en N2‑N3, N4 sin Sorken ni libro, `arbmosForceSpawnAfterCooldown` en 1 en N4‑N6. Pendiente de decisión del autor del proyecto ("después veo"): no tocar sin confirmar.
 
 ## Build & run
 
