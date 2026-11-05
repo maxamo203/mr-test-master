@@ -119,10 +119,6 @@ namespace Gamepad
         public void Volver() => Back();
         public void AbrirPausa() { if (!_open) Toggle(); }
 
-        // Abrir la pausa manteniendo la ruedita ← (ver Update) y su anillo de progreso.
-        private const float SegundosParaPausa = 0.9f;
-        private float _mantenerPausa;
-
         private void Etiqueta(Rect r, string texto, GUIStyle st)
         {
             if (_soloModelo)
@@ -155,8 +151,6 @@ namespace Gamepad
             // franja oscura de arriba (GameBootstrapper.DrawSala) tapaba el botón de pausa,
             // que seguía andando al tocarlo. El filtro VHS va todavía más arriba (-100).
             GUI.depth = -10;
-            if (_mantenerPausa > 0.12f)
-                Rediseno.AnilloHud.Dibujar(_mantenerPausa / SegundosParaPausa, T.Cream, Rediseno.IconosMirada.Pausa);
             UIScale.Begin();
             EnsureStyles();
             _items.Clear();
@@ -831,7 +825,6 @@ namespace Gamepad
             if (PantallaFinal() || SaveLoadUI.EstaAbierto)
             {
                 if (_open) { _open = false; _page = Page.Main; _confirmSalir = false; }
-                _mantenerPausa = 0f;
                 return;
             }
 
@@ -841,33 +834,11 @@ namespace Gamepad
             if (gp != null && gp.startButton.wasPressedThisFrame)
                 Toggle();
 
-            // VR Box Mouse: la B ya NO abre el menú — en partida es el botón de la linterna
-            // (ContextActionController). Lo abre la A: en Android su clic llega como un TOQUE
-            // de un dedo donde está el cursor escondido, así que con el menú cerrado cualquier
-            // toque lo abre (ver el bloque de tap). Con el menú abierto la B sigue siendo
-            // "volver" (bloque de navegación más abajo).
+            // VR Box Mouse: la pausa la abre SÓLO la B (bloque de abajo). La A es el botón de
+            // acción en partida (ContextActionController) y la palanca maneja la linterna; ya no
+            // hay "mantener la palanca ←" para pausar. Con el menú abierto la B es "volver"
+            // (bloque de navegación más abajo).
             bool vrBoxMouse = GamepadManager.Instance != null && GamepadManager.Instance.UsesMouseInput;
-
-            // Del VR BOX sólo cuenta la ruedita. En plena partida, mantenerla hacia ← un
-            // momento abre la pausa (con un anillo que se llena). Tiene que ser "mantener" y
-            // no un toque para que no se abra sin querer.
-            // También en la sincronización (ahí ← no hace otra cosa): con el visor puesto es
-            // la única forma de llegar a la pausa (y a salir del visor).
-            if (!_open && vrBoxMouse &&
-                ((NetworkManager.Instance != null && NetworkManager.Instance.GameStarted) ||
-                 Rediseno.Menus.PanelSincronizacion2.Mostrando))
-            {
-                var st = VRBoxInput.SmoothedStick;
-                bool izq = st.x < -0.6f && Mathf.Abs(st.x) > Mathf.Abs(st.y);
-                _mantenerPausa = izq ? _mantenerPausa + Time.unscaledDeltaTime : 0f;
-                if (_mantenerPausa >= SegundosParaPausa)
-                {
-                    _mantenerPausa = 0f;
-                    Toggle();
-                    Rediseno.BloqueoNav.TrasAccion();   // que la misma ← no vuelva en la pausa
-                }
-            }
-            else _mantenerPausa = 0f;
 
             // La B del VR BOX abre la pausa en plena noche, en el escáner y en las pantallas
             // previas a la noche (sincronización, ubicar el entorno, anclas), donde la B no
