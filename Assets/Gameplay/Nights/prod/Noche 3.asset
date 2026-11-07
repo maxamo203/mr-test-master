@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Noche 3
   m_EditorClassIdentifier:
   displayName: Noche 3
-  briefing: Mas rapido, y el libro se apaga cada vez mas seguido. Elegi que salvas.
+  briefing: Mas rapido y mas seguido. El Sorken ya no te da respiro.
   nightDurationSeconds: 300
   sorkenActive: 1
   attemptIntervalMin: 22
@@ -59,7 +59,7 @@ MonoBehaviour:
   arbmosLethalMaxSeconds: 8
   arbmosLethalRepathSeconds: 0.3
   arbmosGrabRange: 1.2
-  bookActive: 1
+  bookActive: 0
   bookEventDelayMin: 38
   bookEventDelayMax: 58
   bookConsumeSeconds: 14

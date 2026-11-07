@@ -14,9 +14,9 @@ Comments and identifiers are predominantly in Spanish; match that when editing e
 
 **When a request conflicts with the documentation:** If asked to implement something that contradicts or deviates from what is specified in the documentation, I will ask for clarification and confirmation before proceeding. This ensures alignment with the official project specification and prevents unintended design drift.
 
-### Pendientes de actualizar en la documentación
+### Composición de entidades por noche
 
-- **Composición de entidades por noche (datos PROD vs. documento).** El documento pide Sorken en N1‑N3 y Sorken + Veleth + Arbmos en N4‑N6. Hoy `Nights/prod` tiene el libro (y con él Veleth) activo en N2‑N3, N4 sin Sorken ni libro, `arbmosForceSpawnAfterCooldown` en 1 en N4‑N6. Pendiente de decisión del autor del proyecto ("después veo"): no tocar sin confirmar.
+`Nights/prod` sigue al documento: Sorken solo en N1‑N3 (`bookActive: 0`, `arbmosActive: 0`) y Sorken + libro/Veleth + Arbmos en N4‑N6. Si se toca la composición, revisar también el `briefing` de esa noche (la doc exige que informe duración y composición). `arbmosForceSpawnAfterCooldown` sigue en 1 en N4‑N6 (la doc no lo menciona).
 
 ## Build & run
 

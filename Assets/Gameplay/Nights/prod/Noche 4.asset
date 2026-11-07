@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: Noche 4
   m_EditorClassIdentifier:
   displayName: Noche 4
-  briefing: Solo Arbmos te observa. Apaga la luz para ocultarte; iluminarlo lo provoca.
+  briefing: El Sorken sigue, el Arbmos te acecha y el libro reclama su luz.
   nightDurationSeconds: 300
-  sorkenActive: 0
+  sorkenActive: 1
   attemptIntervalMin: 19
   attemptIntervalMax: 30
   entryRepelSeconds: 3.5
@@ -59,7 +59,7 @@ MonoBehaviour:
   arbmosLethalMaxSeconds: 8
   arbmosLethalRepathSeconds: 0.3
   arbmosGrabRange: 1.2
-  bookActive: 0
+  bookActive: 1
   bookEventDelayMin: 33
   bookEventDelayMax: 50
   bookConsumeSeconds: 14
