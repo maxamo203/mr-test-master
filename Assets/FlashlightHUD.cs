@@ -21,6 +21,7 @@ public class FlashlightHUD : MonoBehaviour
         if (!showChargeBar || _fl == null) return;
         // Fuera de partida la linterna no opera: tampoco mostramos su barra.
         if (!_fl.Operational) return;
+        if (Gameplay.LocalDeath.OcultarHud) return;
 
         UIScale.Begin();
         float pct = _fl.Charge01;

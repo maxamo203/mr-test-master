@@ -44,6 +44,7 @@ namespace Gameplay
             // ── Barra (fila 1: encima de la batería) ──────────────────────────
             // En las prácticas donde nada baja la cordura (todas menos ARBMOS) esa fila la usa
             // el objetivo de la práctica (TutorialPilasReliquias / Sorken / Libro / Veleth).
+            if (LocalDeath.OcultarHud) return;   // visor con joystick: chocaba con los botones
             UIScale.Begin();
             float vw = UIScale.VirtualWidth, vh = UIScale.VirtualHeight;
             var tutorial = GameSession.Instance != null ? GameSession.Instance.Tutorial : TutorialTipo.Ninguno;

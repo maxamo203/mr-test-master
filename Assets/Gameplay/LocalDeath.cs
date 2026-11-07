@@ -19,6 +19,13 @@ namespace Gameplay
         public bool Espectando { get; private set; }
         public bool PuedeEspectar => IsDead && PresentationReady && !_nocheTerminada;
 
+        // Visor con joystick (menús quietos en el cuarto APAGADO): los menús de muerte quedan
+        // fijos delante de cada ojo, justo donde caen las barras del HUD (linterna / cordura /
+        // noche), y se superponían con sus botones. Muerto en ese modo, el HUD no se dibuja.
+        public static bool OcultarHud =>
+            Instance != null && Instance.IsDead &&
+            MRCardboardController.Activo && !GameOptions.MenusEnElCuarto;
+
         private bool _nocheTerminada;
         private bool _subscribed;
         private Camera _camera;
